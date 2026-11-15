@@ -7,11 +7,50 @@ use tokio_util::sync::CancellationToken;
 
 use crate::execution::Usage;
 use crate::ids::ExecutionId;
-use crate::message::{Message, ToolCallRequest};
+use crate::message::{Message, NativeTurn, ToolCallRequest};
 use crate::tool::ToolDefinition;
 
+/// How hard the model should think. Providers that have no such control ignore it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Effort {
+    /// Fastest and cheapest.
+    Low,
+    /// A balance.
+    Medium,
+    /// Thorough. A good default for tool loops.
+    High,
+    /// Very thorough.
+    XHigh,
+    /// As thorough as the model gets.
+    Max,
+}
+
+/// Settings for one model call that are not part of the conversation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GenerationParams {
+    /// Most tokens the model may write. `None` lets the adapter choose.
+    pub max_output_tokens: Option<u32>,
+    /// How hard to think. `None` lets the adapter choose.
+    pub effort: Option<Effort>,
+}
+
+/// Where in an execution a call happens. A route may use different models for different phases.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepPhase {
+    /// The first call: understanding the request.
+    #[default]
+    Start,
+    /// A later call, after tool results.
+    Continue,
+    /// The call is repeated after the answer was rejected.
+    Retry,
+}
+
 /// What is sent to a model.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct ModelRequest {
     /// The model, as the request named it.
     pub model: String,
@@ -24,6 +63,16 @@ pub struct ModelRequest {
     /// A JSON Schema the answer should follow, when it is structured.
     #[serde(default)]
     pub response_schema: Option<Value>,
+    /// Output size and effort.
+    #[serde(default)]
+    pub params: GenerationParams,
+    /// Where in the execution this call is.
+    #[serde(default)]
+    pub phase: StepPhase,
+    /// Earlier turns were left out to fit the context window. Adapters then send the portable form of the conversation,
+    /// without native turns, because a provider may refuse reasoning state whose prefix changed.
+    #[serde(default)]
+    pub history_edited: bool,
 }
 
 /// Why the model stopped.
@@ -36,6 +85,33 @@ pub enum FinishReason {
     ToolCalls,
     /// The model ran out of room.
     Length,
+    /// The provider declined to answer.
+    Refusal,
+}
+
+/// One candidate a router tried.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RouteAttempt {
+    /// The provider.
+    pub provider: String,
+    /// The model.
+    pub model: String,
+    /// `ok`, or why it was passed over (`rate_limited`, `unavailable`, `skipped: no tool support`…).
+    pub outcome: String,
+}
+
+/// What a router did to answer one call.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RouteTrace {
+    /// The candidates tried, in order. The last one answered.
+    pub attempts: Vec<RouteAttempt>,
+}
+
+impl RouteTrace {
+    /// True when something other than the first candidate answered.
+    pub fn fell_back(&self) -> bool {
+        self.attempts.len() > 1
+    }
 }
 
 /// What a model answered.
@@ -43,14 +119,84 @@ pub enum FinishReason {
 pub struct ModelResponse {
     /// The model that answered (it may differ from the one asked for, when a gateway routes).
     pub model: String,
+    /// The provider that answered, when there is one.
+    #[serde(default)]
+    pub provider: Option<String>,
     /// The text. May be empty when the model only asks for tools.
     pub text: String,
     /// The tools asked for, in order. Empty means the text is the final answer.
     pub tool_calls: Vec<ToolCallRequest>,
+    /// The provider's raw turn, to be replayed unchanged to the same model.
+    #[serde(default)]
+    pub native: Option<NativeTurn>,
     /// What the call consumed.
     pub usage: Usage,
     /// Why it stopped.
     pub finish: FinishReason,
+    /// What a router did, when one was involved.
+    #[serde(default)]
+    pub route: Option<RouteTrace>,
+}
+
+impl ModelResponse {
+    /// A response with no provider, native turn or route.
+    pub fn new(
+        model: impl Into<String>,
+        text: String,
+        tool_calls: Vec<ToolCallRequest>,
+        usage: Usage,
+        finish: FinishReason,
+    ) -> Self {
+        Self { model: model.into(), provider: None, text, tool_calls, native: None, usage, finish, route: None }
+    }
+}
+
+/// What kind of failure a model call had. Routers decide what to do from this.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelErrorKind {
+    /// The credentials are missing or wrong.
+    Auth,
+    /// The model or the endpoint does not exist (or is not available to this account).
+    NotFound,
+    /// The request does not fit the model's context window.
+    ContextTooLong,
+    /// Too many requests.
+    RateLimited,
+    /// The provider or the network failed, or is overloaded.
+    Unavailable,
+    /// The provider declined to answer.
+    Refused,
+    /// The request is wrong and cannot succeed as it is.
+    Invalid,
+    /// The call was cancelled.
+    Cancelled,
+}
+
+impl ModelErrorKind {
+    /// True when trying the same call again, a little later, may work.
+    pub fn is_temporary(&self) -> bool {
+        matches!(self, ModelErrorKind::RateLimited | ModelErrorKind::Unavailable)
+    }
+
+    /// True when another candidate model or provider may succeed where this one did not.
+    pub fn allows_fallback(&self) -> bool {
+        !matches!(self, ModelErrorKind::Invalid | ModelErrorKind::Cancelled)
+    }
+
+    /// The name used in events and traces.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ModelErrorKind::Auth => "auth",
+            ModelErrorKind::NotFound => "not_found",
+            ModelErrorKind::ContextTooLong => "context_too_long",
+            ModelErrorKind::RateLimited => "rate_limited",
+            ModelErrorKind::Unavailable => "unavailable",
+            ModelErrorKind::Refused => "refused",
+            ModelErrorKind::Invalid => "invalid",
+            ModelErrorKind::Cancelled => "cancelled",
+        }
+    }
 }
 
 /// Why a model call failed.
@@ -67,9 +213,49 @@ pub enum ModelError {
     /// The call cannot succeed as it is (bad credentials, unknown model, refused content).
     #[error("{0}")]
     Permanent(String),
+    /// A failure from a real provider, with its kind.
+    #[error("{message}")]
+    Provider {
+        /// What kind of failure.
+        kind: ModelErrorKind,
+        /// A sentence for a person. Never holds a secret.
+        message: String,
+        /// How long the provider asked us to wait, in milliseconds.
+        retry_after_ms: Option<u64>,
+    },
     /// The call was cancelled.
     #[error("The model call was cancelled.")]
     Cancelled,
+}
+
+impl ModelError {
+    /// A provider failure.
+    pub fn provider(kind: ModelErrorKind, message: impl Into<String>) -> Self {
+        ModelError::Provider { kind, message: message.into(), retry_after_ms: None }
+    }
+
+    /// What kind of failure this is. The older variants map to the nearest kind.
+    pub fn kind(&self) -> ModelErrorKind {
+        match self {
+            ModelError::Transient { .. } => ModelErrorKind::Unavailable,
+            ModelError::Permanent(_) => ModelErrorKind::Invalid,
+            ModelError::Provider { kind, .. } => *kind,
+            ModelError::Cancelled => ModelErrorKind::Cancelled,
+        }
+    }
+}
+
+/// What a gateway knows about a model it serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModelProfile {
+    /// The context window, in tokens.
+    pub context_window: u64,
+    /// The most tokens it can write in one answer.
+    pub max_output: u64,
+    /// It can ask for tools.
+    pub tools: bool,
+    /// It can read images.
+    pub vision: bool,
 }
 
 /// Something that turns a [`ModelRequest`] into a [`ModelResponse`].
@@ -77,4 +263,56 @@ pub enum ModelError {
 pub trait ModelGateway: Send + Sync {
     /// Make one call. It must stop early when `cancel` fires.
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError>;
+
+    /// What is known about `model`, for sizing the context. `None` means nothing is known.
+    fn describe(&self, _model: &str) -> Option<ModelProfile> {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_older_error_variants_map_to_kinds() {
+        assert_eq!(
+            ModelError::Transient { message: "x".into(), retry_after_ms: None }.kind(),
+            ModelErrorKind::Unavailable
+        );
+        assert_eq!(ModelError::Permanent("x".into()).kind(), ModelErrorKind::Invalid);
+        assert_eq!(ModelError::Cancelled.kind(), ModelErrorKind::Cancelled);
+        assert_eq!(ModelError::provider(ModelErrorKind::Auth, "no key").kind(), ModelErrorKind::Auth);
+    }
+
+    #[test]
+    fn what_may_be_retried_and_what_may_fall_back() {
+        use ModelErrorKind::*;
+        for kind in [RateLimited, Unavailable] {
+            assert!(kind.is_temporary() && kind.allows_fallback(), "{kind:?}");
+        }
+        for kind in [Auth, NotFound, ContextTooLong, Refused] {
+            assert!(!kind.is_temporary() && kind.allows_fallback(), "{kind:?}");
+        }
+        for kind in [Invalid, Cancelled] {
+            assert!(!kind.allows_fallback(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn a_request_from_version_0_1_loads_with_defaults() {
+        let old = format!(r#"{{"model":"m","execution_id":"{}","messages":[],"tools":[]}}"#, ExecutionId::new());
+        let request: ModelRequest = serde_json::from_str(&old).unwrap();
+        assert_eq!(
+            (request.phase, request.history_edited, request.params),
+            (StepPhase::Start, false, GenerationParams::default())
+        );
+    }
+
+    #[test]
+    fn a_trace_knows_when_it_fell_back() {
+        let attempt = |outcome: &str| RouteAttempt { provider: "p".into(), model: "m".into(), outcome: outcome.into() };
+        assert!(!RouteTrace { attempts: vec![attempt("ok")] }.fell_back());
+        assert!(RouteTrace { attempts: vec![attempt("rate_limited"), attempt("ok")] }.fell_back());
+    }
 }
