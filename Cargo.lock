@@ -5298,6 +5298,7 @@ dependencies = [
  "zorix-core",
  "zorix-runtime",
  "zorix-sim",
+ "zorix-tools",
 ]
 
 [[package]]
