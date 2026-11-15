@@ -41,7 +41,6 @@ jobs:
 
   desktop:
     name: Desktop app (${{ matrix.os }})
-    if: ${{ hashFiles('apps/desktop/package.json') != '' }}
     strategy:
       fail-fast: false
       matrix:
