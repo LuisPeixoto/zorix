@@ -29,6 +29,9 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - name: Check the documentation links
+        if: runner.os == 'Linux'
+        run: node tools/check-docs.mjs
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
