@@ -7,13 +7,8 @@
 //! The arguments of a tool call are kept as they are in the tool call record, because the tool needs them. They are
 //! redacted wherever they are *published* (events) or *written to logs*.
 
-use std::fmt;
-
-use serde::{Serialize, Serializer};
 use serde_json::Value;
-
-/// What replaces a secret.
-pub const REDACTED: &str = "[redacted]";
+use zorix_core::REDACTED;
 
 /// Key names that always hold a secret when they appear anywhere in the key.
 const SECRET_WORDS: &[&str] = &[
@@ -90,40 +85,6 @@ pub fn redact(value: Value) -> Value {
     }
 }
 
-/// A value that never shows itself: not in `Debug`, not in `Display`, not when serialised.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Secret(String);
-
-impl Secret {
-    /// Wrap a secret.
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    /// The secret itself. Call this only at the moment of use.
-    pub fn expose(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Debug for Secret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Secret(***)")
-    }
-}
-
-impl fmt::Display for Secret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("***")
-    }
-}
-
-impl Serialize for Secret {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(REDACTED)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -190,15 +151,5 @@ mod tests {
     #[test]
     fn spacing_and_newlines_are_preserved() {
         assert_eq!(redact_text("a  b\n\tc"), "a  b\n\tc");
-    }
-
-    #[test]
-    fn a_secret_never_shows_itself() {
-        let secret = Secret::new("hunter2");
-        assert_eq!(format!("{secret:?}"), "Secret(***)");
-        assert_eq!(format!("{secret}"), "***");
-        assert_eq!(serde_json::to_string(&secret).unwrap(), "\"[redacted]\"");
-        assert_eq!(secret.expose(), "hunter2");
-        assert!(!format!("{:?}", json!({"s": secret.expose().len()})).contains("hunter2"));
     }
 }
