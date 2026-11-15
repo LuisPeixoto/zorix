@@ -68,6 +68,15 @@ fn yes() -> bool {
     true
 }
 
+/// Well-known servers that speak the Chat Completions API: `(name, address, needs a key)`.
+pub const CHAT_PRESETS: &[(&str, &str, bool)] = &[
+    ("openrouter", "https://openrouter.ai/api/v1", true),
+    ("groq", "https://api.groq.com/openai/v1", true),
+    ("together", "https://api.together.xyz/v1", true),
+    ("lmstudio", "http://127.0.0.1:1234/v1", false),
+    ("vllm", "http://127.0.0.1:8000/v1", false),
+];
+
 /// One provider instance.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
