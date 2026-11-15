@@ -9,3 +9,20 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+zorix-core.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+jsonschema.workspace = true
+parking_lot.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[features]
+# Shared test helpers, used by the other crates' tests (`zorix-store` runs the same repository contract tests).
+testing = []
+
+[dev-dependencies]
+zorix-runtime = { path = ".", features = ["testing"] }
