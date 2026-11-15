@@ -1,0 +1,252 @@
+//! Helpers for tests, shared with the other crates (enable the `testing` feature).
+//!
+//! The repository contract tests live here so that every implementation, in memory or SQLite, is held to the same
+//! behaviour. Use [`repository_contract_tests!`](crate::repository_contract_tests) with an expression that makes a fresh
+//! repository.
+
+use serde_json::json;
+use zorix_core::{
+    Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, CreateOutcome, Error, EventKind, Execution, ExecutionId,
+    ExecutionRepository, ExecutionState, ListFilter, LoopState, Message, NewEvent, NewExecution, TaskRequest, TenantId,
+    Timestamp, ToolCallId, ToolCallRecord, ToolCallStatus, Trigger,
+};
+
+/// A valid execution for a tenant, optionally with an idempotency key.
+pub fn sample_execution(tenant: &str, key: Option<&str>) -> Execution {
+    let new = NewExecution {
+        tenant: Some(TenantId::new(tenant).expect("a valid tenant")),
+        request: TaskRequest { prompt: "do the thing".into(), model: "sim".into(), ..TaskRequest::default() },
+        idempotency_key: key.map(str::to_string),
+        ..NewExecution::default()
+    };
+    Execution::new(ExecutionId::new(), new, Timestamp(1_000))
+}
+
+/// An event with an empty payload.
+pub fn event(kind: EventKind) -> NewEvent {
+    NewEvent::new(kind, Timestamp(1_000), json!({}))
+}
+
+async fn stored<R: ExecutionRepository>(repo: &R, tenant: &str, key: Option<&str>) -> Execution {
+    match repo.create(sample_execution(tenant, key), vec![event(EventKind::Created)]).await.expect("create") {
+        CreateOutcome::Created(done) => done.execution,
+        CreateOutcome::Existing(_) => panic!("expected a new execution"),
+    }
+}
+
+/// Creating stores the execution at version 1 and numbers its events.
+pub async fn create_stores_and_numbers_events<R: ExecutionRepository>(repo: &R) {
+    let execution = sample_execution("acme", None);
+    let id = execution.id;
+    let outcome = repo.create(execution, vec![event(EventKind::Created), event(EventKind::Queued)]).await.unwrap();
+    let CreateOutcome::Created(done) = outcome else { panic!("expected Created") };
+    assert_eq!(done.execution.version, 1);
+    assert_eq!(done.events.len(), 2);
+    assert!(done.events[0].seq < done.events[1].seq);
+    assert_eq!(done.events[0].kind, EventKind::Created);
+    let tenant = TenantId::new("acme").unwrap();
+    assert_eq!(repo.get(&tenant, id).await.unwrap().unwrap().version, 1);
+}
+
+/// The same idempotency key gives back the same execution and stores nothing new.
+pub async fn idempotency_key_returns_the_existing_execution<R: ExecutionRepository>(repo: &R) {
+    let first = stored(repo, "acme", Some("k1")).await;
+    let again = repo.create(sample_execution("acme", Some("k1")), vec![event(EventKind::Created)]).await.unwrap();
+    let CreateOutcome::Existing(existing) = again else { panic!("expected Existing") };
+    assert_eq!(existing.id, first.id);
+    assert_eq!(repo.events(first.id, 0, 100).await.unwrap().len(), 1, "no second event");
+
+    // The key belongs to the tenant: another tenant using it gets its own execution.
+    let other = repo.create(sample_execution("globex", Some("k1")), vec![event(EventKind::Created)]).await.unwrap();
+    assert!(matches!(other, CreateOutcome::Created(_)));
+}
+
+/// A commit moves the version up by one, stores the change and appends events after the earlier ones.
+pub async fn commit_applies_changes_in_order<R: ExecutionRepository>(repo: &R) {
+    let mut execution = stored(repo, "acme", None).await;
+    let before = repo.events(execution.id, 0, 100).await.unwrap();
+    execution.apply(Trigger::Enqueue, Timestamp(2_000)).unwrap();
+    let mut commit = Commit::new(execution.clone(), 1);
+    commit.events = vec![event(EventKind::Queued), event(EventKind::Progress)];
+    let done = repo.commit(commit).await.unwrap();
+    assert_eq!(done.execution.version, 2);
+    assert_eq!(done.execution.state, ExecutionState::Queued);
+    let after = repo.events(execution.id, 0, 100).await.unwrap();
+    assert_eq!(after.len(), before.len() + 2);
+    assert!(after.windows(2).all(|pair| pair[0].seq < pair[1].seq), "sequence numbers strictly increase");
+}
+
+/// A commit that read an old version is refused and changes nothing, not even the events.
+pub async fn stale_commit_is_a_conflict_and_changes_nothing<R: ExecutionRepository>(repo: &R) {
+    let mut execution = stored(repo, "acme", None).await;
+    execution.apply(Trigger::Enqueue, Timestamp(2_000)).unwrap();
+    let mut commit = Commit::new(execution.clone(), 1);
+    commit.events = vec![event(EventKind::Queued)];
+    repo.commit(commit.clone()).await.unwrap();
+
+    let error = repo.commit(commit).await.unwrap_err();
+    assert_eq!(error, Error::Conflict(execution.id));
+    assert_eq!(repo.events(execution.id, 0, 100).await.unwrap().len(), 2, "the rejected commit added no event");
+    let tenant = TenantId::new("acme").unwrap();
+    assert_eq!(repo.get(&tenant, execution.id).await.unwrap().unwrap().version, 2);
+}
+
+/// Another tenant cannot see an execution, in `get` or in `list`.
+pub async fn tenants_are_isolated<R: ExecutionRepository>(repo: &R) {
+    let mine = stored(repo, "acme", None).await;
+    let theirs = stored(repo, "globex", None).await;
+    let acme = TenantId::new("acme").unwrap();
+    let globex = TenantId::new("globex").unwrap();
+    assert!(repo.get(&globex, mine.id).await.unwrap().is_none());
+    assert!(repo.get(&acme, theirs.id).await.unwrap().is_none());
+    let listed = repo.list(&acme, &ListFilter::default()).await.unwrap();
+    assert_eq!(listed.iter().map(|e| e.id).collect::<Vec<_>>(), vec![mine.id]);
+}
+
+/// Listing filters by state and returns the newest first.
+pub async fn list_filters_and_orders<R: ExecutionRepository>(repo: &R) {
+    let first = stored(repo, "acme", None).await;
+    let mut later = sample_execution("acme", None);
+    later.created_at = Timestamp(5_000);
+    repo.create(later.clone(), vec![event(EventKind::Created)]).await.unwrap();
+
+    let tenant = TenantId::new("acme").unwrap();
+    let all = repo.list(&tenant, &ListFilter::default()).await.unwrap();
+    assert_eq!(all.iter().map(|e| e.id).collect::<Vec<_>>(), vec![later.id, first.id]);
+
+    let queued =
+        repo.list(&tenant, &ListFilter { states: vec![ExecutionState::Queued], ..ListFilter::default() }).await;
+    assert!(queued.unwrap().is_empty());
+    let limited = repo.list(&tenant, &ListFilter { limit: 1, ..ListFilter::default() }).await.unwrap();
+    assert_eq!(limited.len(), 1);
+}
+
+/// `in_states` looks across tenants.
+pub async fn in_states_spans_tenants<R: ExecutionRepository>(repo: &R) {
+    stored(repo, "acme", None).await;
+    stored(repo, "globex", None).await;
+    assert_eq!(repo.in_states(&[ExecutionState::Created]).await.unwrap().len(), 2);
+    assert!(repo.in_states(&[ExecutionState::Running]).await.unwrap().is_empty());
+}
+
+/// Events can be read after a position and with a limit.
+pub async fn events_can_be_paged<R: ExecutionRepository>(repo: &R) {
+    let mut execution = stored(repo, "acme", None).await;
+    execution.apply(Trigger::Enqueue, Timestamp(2_000)).unwrap();
+    let mut commit = Commit::new(execution.clone(), 1);
+    commit.events = vec![event(EventKind::Queued), event(EventKind::Started), event(EventKind::Progress)];
+    repo.commit(commit).await.unwrap();
+
+    let all = repo.events(execution.id, 0, 100).await.unwrap();
+    assert_eq!(all.len(), 4);
+    let page = repo.events(execution.id, all[0].seq, 2).await.unwrap();
+    assert_eq!(page.iter().map(|e| e.seq).collect::<Vec<_>>(), vec![all[1].seq, all[2].seq]);
+    assert!(repo.events(execution.id, all[3].seq, 10).await.unwrap().is_empty());
+}
+
+/// The latest checkpoint wins; tool calls and approvals are replaced by id and keep their order.
+pub async fn records_are_replaced_by_id<R: ExecutionRepository>(repo: &R) {
+    let execution = stored(repo, "acme", None).await;
+    let id = execution.id;
+    let checkpoint = |step: u64, text: &str| Checkpoint {
+        execution_id: id,
+        step,
+        state: LoopState { transcript: vec![Message::user(text)], pending: vec![] },
+        created_at: Timestamp(step as i64),
+    };
+    let call = |n: &str, status| ToolCallRecord {
+        execution_id: id,
+        call_id: ToolCallId(n.into()),
+        tool: "clock.now".into(),
+        arguments: json!({}),
+        call_hash: "h".into(),
+        status,
+        result: None,
+        error: None,
+        attempts: 1,
+        idempotent: true,
+        requested_at: Timestamp(1),
+        started_at: None,
+        finished_at: None,
+    };
+    let approval_id = ApprovalId::new();
+    let approval = |status| Approval {
+        id: approval_id,
+        execution_id: id,
+        call_id: ToolCallId("a".into()),
+        tool: "files.write".into(),
+        arguments: json!({"path": "x"}),
+        call_hash: "h".into(),
+        reason: "writes".into(),
+        status,
+        requested_at: Timestamp(1),
+        decided_at: None,
+        decided_by: None,
+        note: None,
+    };
+
+    let mut first = Commit::new(execution.clone(), 1);
+    first.checkpoint = Some(checkpoint(1, "one"));
+    first.tool_calls = vec![call("a", ToolCallStatus::Requested), call("b", ToolCallStatus::Requested)];
+    first.approvals = vec![approval(ApprovalStatus::Pending)];
+    repo.commit(first).await.unwrap();
+
+    let mut second = Commit::new(execution.clone(), 2);
+    second.checkpoint = Some(checkpoint(2, "two"));
+    second.tool_calls = vec![call("a", ToolCallStatus::Succeeded)];
+    second.approvals = vec![approval(ApprovalStatus::Approved)];
+    repo.commit(second).await.unwrap();
+
+    assert_eq!(repo.checkpoint(id).await.unwrap().unwrap().step, 2);
+    let calls = repo.tool_calls(id).await.unwrap();
+    assert_eq!(
+        calls.iter().map(|c| (c.call_id.0.as_str(), c.status)).collect::<Vec<_>>(),
+        vec![("a", ToolCallStatus::Succeeded), ("b", ToolCallStatus::Requested)]
+    );
+    assert_eq!(repo.approvals(id).await.unwrap().len(), 1);
+    assert_eq!(repo.approval(approval_id).await.unwrap().unwrap().status, ApprovalStatus::Approved);
+    assert!(repo.approval(ApprovalId::new()).await.unwrap().is_none());
+}
+
+/// A lease keeps others out until it expires or is released; its owner can extend it.
+pub async fn leases_exclude_other_owners<R: ExecutionRepository>(repo: &R) {
+    let execution = stored(repo, "acme", None).await;
+    let id = execution.id;
+    let t = Timestamp(10_000);
+    assert!(repo.acquire_lease(id, "worker-1", t, 1_000).await.unwrap());
+    assert!(!repo.acquire_lease(id, "worker-2", t.plus_millis(500), 1_000).await.unwrap());
+    assert!(repo.acquire_lease(id, "worker-1", t.plus_millis(500), 1_000).await.unwrap(), "the owner may extend");
+    assert!(!repo.acquire_lease(id, "worker-2", t.plus_millis(1_200), 1_000).await.unwrap(), "extended to 1500");
+    assert!(repo.acquire_lease(id, "worker-2", t.plus_millis(1_600), 1_000).await.unwrap(), "expired");
+    repo.release_lease(id, "worker-1").await.unwrap();
+    assert!(
+        !repo.acquire_lease(id, "worker-1", t.plus_millis(1_700), 1_000).await.unwrap(),
+        "only the holder releases"
+    );
+    repo.release_lease(id, "worker-2").await.unwrap();
+    assert!(repo.acquire_lease(id, "worker-1", t.plus_millis(1_800), 1_000).await.unwrap());
+}
+
+/// Generates one `#[tokio::test]` per repository contract case. `$make` is an expression that builds a fresh repository.
+#[macro_export]
+macro_rules! repository_contract_tests {
+    ($make:expr) => {
+        $crate::repository_contract_tests!(@case $make, create_stores_and_numbers_events);
+        $crate::repository_contract_tests!(@case $make, idempotency_key_returns_the_existing_execution);
+        $crate::repository_contract_tests!(@case $make, commit_applies_changes_in_order);
+        $crate::repository_contract_tests!(@case $make, stale_commit_is_a_conflict_and_changes_nothing);
+        $crate::repository_contract_tests!(@case $make, tenants_are_isolated);
+        $crate::repository_contract_tests!(@case $make, list_filters_and_orders);
+        $crate::repository_contract_tests!(@case $make, in_states_spans_tenants);
+        $crate::repository_contract_tests!(@case $make, events_can_be_paged);
+        $crate::repository_contract_tests!(@case $make, records_are_replaced_by_id);
+        $crate::repository_contract_tests!(@case $make, leases_exclude_other_owners);
+    };
+    (@case $make:expr, $case:ident) => {
+        #[tokio::test]
+        async fn $case() {
+            let repository = $make;
+            $crate::testing::$case(&repository).await;
+        }
+    };
+}
