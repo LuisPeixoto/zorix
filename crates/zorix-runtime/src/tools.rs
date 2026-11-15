@@ -147,9 +147,16 @@ impl ToolExecutor {
             guard.cancel();
             return Err(CallError::TimedOut { tool: spec.id.clone(), timeout_ms: spec.timeout_ms });
         };
-        let value = result.map_err(|error| match error {
-            ToolError::Retryable(message) => CallError::Tool { message, retryable: true },
-            ToolError::Failed(message) => CallError::Tool { message, retryable: false },
+        let value = result.map_err(|error| {
+            // A tool that stops because the execution was cancelled reports an error of its own. That race must not
+            // look like a failure of the tool.
+            if ctx.cancel.is_cancelled() {
+                return CallError::Cancelled(spec.id.clone());
+            }
+            match error {
+                ToolError::Retryable(message) => CallError::Tool { message, retryable: true },
+                ToolError::Failed(message) => CallError::Tool { message, retryable: false },
+            }
         })?;
         if let Some(schema) = &spec.output_schema {
             let validator = jsonschema::validator_for(schema)
