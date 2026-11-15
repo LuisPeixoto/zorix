@@ -108,6 +108,10 @@ impl ExecutionRepository for MemoryRepository {
         Ok(Committed { execution: stored, events })
     }
 
+    async fn load(&self, id: ExecutionId) -> Result<Option<Execution>> {
+        Ok(self.inner.lock().executions.get(&id).cloned())
+    }
+
     async fn get(&self, tenant: &TenantId, id: ExecutionId) -> Result<Option<Execution>> {
         Ok(self.inner.lock().executions.get(&id).filter(|e| &e.tenant == tenant).cloned())
     }
