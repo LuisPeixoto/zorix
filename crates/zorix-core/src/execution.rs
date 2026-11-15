@@ -116,7 +116,8 @@ pub enum LimitKind {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Usage {
-    /// Tokens sent to models.
+    /// Tokens sent to models that were neither read from nor written to a provider's cache. Adapters normalise each
+    /// provider's numbers into this shape, so cost is computed the same way for all of them.
     pub input_tokens: u64,
     /// Tokens produced by models.
     pub output_tokens: u64,
