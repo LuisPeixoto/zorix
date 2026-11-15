@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 use zorix_core::{
     Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, Error, EventKind, Execution, ExecutionId,
     ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState, Message, ModelError, ModelRequest,
@@ -86,16 +87,23 @@ impl Engine {
         inner.runs.lock().insert(id, control.clone());
         let heartbeat = self.heartbeat(id);
 
-        match Run::load(self.clone(), id, control).await {
-            Ok(Some(mut run)) => match run.run().await {
-                Ok(()) | Err(Stop::Done) => {}
-                Err(Stop::Shutdown) => tracing::debug!(execution = %id, "stopped for shutdown"),
-                Err(Stop::Abandoned) => tracing::warn!(execution = %id, "changed by someone else; stepping aside"),
-                Err(Stop::Halt(why)) => tracing::error!(execution = %id, %why, "the run could not go on"),
-            },
-            Ok(None) => {}
-            Err(error) => tracing::error!(execution = %id, %error, "could not load the execution"),
-        }
+        // Span names and attributes follow the OpenTelemetry GenAI conventions, so an OTLP exporter can be added later
+        // without changing the runtime. Nothing a person or a model wrote (prompts, arguments, results) goes in them.
+        let span =
+            tracing::info_span!("invoke_agent", gen_ai.operation.name = "invoke_agent", zorix.execution.id = %id);
+        let drive = async {
+            match Run::load(self.clone(), id, control).await {
+                Ok(Some(mut run)) => match run.run().await {
+                    Ok(()) | Err(Stop::Done) => {}
+                    Err(Stop::Shutdown) => tracing::debug!("stopped for shutdown"),
+                    Err(Stop::Abandoned) => tracing::warn!("changed by someone else; stepping aside"),
+                    Err(Stop::Halt(why)) => tracing::error!(%why, "the run could not go on"),
+                },
+                Ok(None) => {}
+                Err(error) => tracing::error!(%error, "could not load the execution"),
+            }
+        };
+        drive.instrument(span).await;
 
         heartbeat.cancel();
         inner.runs.lock().remove(&id);
@@ -184,6 +192,7 @@ impl Run {
         }
         let done = self.engine.commit(commit).await?;
         self.exec = done.execution;
+        tracing::debug!(state = %self.exec.state, version = self.exec.version, "committed");
         Ok(())
     }
 
@@ -367,7 +376,13 @@ impl Run {
         let limits = self.exec.limits;
         let seed = self.exec.id.as_uuid().as_u128() as u64;
         for attempt in 1..=limits.max_model_attempts {
-            let call = self.engine.inner.model.generate(request.clone(), self.control.cancel.clone());
+            let span = tracing::info_span!(
+                "chat",
+                gen_ai.operation.name = "chat",
+                gen_ai.request.model = %request.model,
+                zorix.attempt = attempt
+            );
+            let call = self.engine.inner.model.generate(request.clone(), self.control.cancel.clone()).instrument(span);
             let outcome = tokio::time::timeout(Duration::from_millis(limits.model_timeout_ms), call).await;
             let (message, retry_after) = match outcome {
                 Ok(Ok(response)) => return Ok(response),
@@ -626,7 +641,14 @@ impl Run {
                 workspace_root: self.engine.inner.config.workspace_root.clone(),
             };
             let began = self.engine.now();
-            let outcome = ToolExecutor::run(tool.as_ref(), &context, call.arguments.clone()).await;
+            let span = tracing::info_span!(
+                "execute_tool",
+                gen_ai.operation.name = "execute_tool",
+                gen_ai.tool.name = %call.tool,
+                gen_ai.tool.call.id = %call.id,
+                zorix.attempt = attempt
+            );
+            let outcome = ToolExecutor::run(tool.as_ref(), &context, call.arguments.clone()).instrument(span).await;
             let took_ms = self.engine.now().since(began);
 
             let mut done = record;

@@ -11,6 +11,7 @@ mod redact;
 mod retry;
 mod run;
 mod scheduler;
+mod summary;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod tools;
@@ -26,6 +27,7 @@ pub use policy::{DefaultPolicy, Effect, Policy, Rule};
 pub use redact::{REDACTED, Secret, redact, redact_text};
 pub use retry::RetryPolicy;
 pub use scheduler::LocalScheduler;
+pub use summary::{ExecutionSummary, StepTiming, ToolSummary, summarize};
 pub use tools::{CallError, InMemoryToolRegistry, ToolExecutor, cap_output};
 pub use validators::{NonEmptyValidator, OutputSchemaValidator, parse_structured};
 

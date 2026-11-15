@@ -28,3 +28,4 @@ testing = []
 [dev-dependencies]
 zorix-runtime = { path = ".", features = ["testing"] }
 zorix-sim.workspace = true
+tracing-subscriber.workspace = true
