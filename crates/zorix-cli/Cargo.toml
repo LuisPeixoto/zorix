@@ -1,0 +1,15 @@
+[package]
+name = "zorix-cli"
+description = "The zorix command line."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "zorix"
+path = "src/main.rs"
+
+[dependencies]
