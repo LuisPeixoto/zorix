@@ -26,6 +26,7 @@ bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
 dirs = "6"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
+keyring = "4"
 jsonschema = { version = "0.61", default-features = false }
 parking_lot = "0.12"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "system-proxy", "stream", "json"] }
