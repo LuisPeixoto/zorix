@@ -159,6 +159,13 @@ async fn show(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> R
     println!("State      {}", e.state);
     println!("Task       {}", shorten(&e.request.prompt, 100));
     println!("Model      {}", summary.model);
+    if !summary.models.is_empty() {
+        println!(
+            "Served by  {}{}",
+            summary.models.join(", "),
+            if summary.fallbacks > 0 { format!(" ({} switch(es))", summary.fallbacks) } else { String::new() }
+        );
+    }
     println!("Steps      {} model call(s), {} retried", summary.model_calls, summary.model_retries);
     println!("Usage      {} tokens, {} tool call(s)", summary.usage.total_tokens(), summary.usage.tool_calls);
     if let Some(total) = summary.total_ms {
