@@ -13,3 +13,16 @@ name = "zorix"
 path = "src/main.rs"
 
 [dependencies]
+zorix-core.workspace = true
+zorix-runtime.workspace = true
+zorix-sim.workspace = true
+zorix-store.workspace = true
+zorix-tools.workspace = true
+clap.workspace = true
+futures-util.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

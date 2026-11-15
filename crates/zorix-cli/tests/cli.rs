@@ -1,0 +1,451 @@
+//! The command line, run as a real program against a throwaway data folder.
+
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::{Command, Output, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
+
+use serde_json::Value;
+
+struct Zorix {
+    dir: tempfile::TempDir,
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+impl Zorix {
+    fn new() -> Self {
+        Self { dir: tempfile::tempdir().unwrap() }
+    }
+
+    fn home(&self) -> PathBuf {
+        self.dir.path().join("home")
+    }
+
+    /// Run `zorix --home <home> <args>` and wait, but never forever.
+    fn run_with(&self, args: &[&str], stdin: &str) -> Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_zorix"));
+        command
+            .arg("--home")
+            .arg(self.home())
+            .args(args)
+            .env_remove("ZORIX_HOME")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command.spawn().expect("start zorix");
+        let mut pipe = child.stdin.take().unwrap();
+        let input = stdin.to_string();
+        std::thread::spawn(move || {
+            let _ = pipe.write_all(input.as_bytes());
+        });
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(child.wait_with_output());
+        });
+        receiver.recv_timeout(Duration::from_secs(60)).expect("zorix finished within a minute").expect("output")
+    }
+
+    fn run(&self, args: &[&str]) -> Output {
+        self.run_with(args, "")
+    }
+
+    /// The id of the newest execution.
+    fn newest_id(&self) -> String {
+        let out = self.run(&["list", "--json"]);
+        let list: Value = serde_json::from_slice(&out.stdout).expect("list json");
+        list[0]["id"].as_str().expect("an execution").to_string()
+    }
+
+    fn write_script(&self, turns: &str) -> String {
+        std::fs::create_dir_all(self.dir.path()).unwrap();
+        let path = self.dir.path().join("script.json");
+        std::fs::write(&path, turns).unwrap();
+        format!("script:{}", path.display())
+    }
+}
+
+fn code(output: &Output) -> i32 {
+    output.status.code().expect("exited normally")
+}
+
+#[test]
+fn data_dir_prints_the_folder() {
+    let z = Zorix::new();
+    let out = z.run(&["data-dir"]);
+    assert_eq!(code(&out), 0);
+    assert_eq!(text(&out.stdout).trim(), z.home().display().to_string());
+}
+
+#[test]
+fn a_bad_command_line_is_refused_before_the_data_folder_is_touched() {
+    let z = Zorix::new();
+    for args in [
+        vec!["show", "not-an-id"],
+        vec!["run", ""],
+        vec!["run", "x", "--max-iterations", "0"],
+        vec!["run", "x", "--allow", "bad tool"],
+        vec!["run", "x", "--allow-read", "../etc"],
+        vec!["run", "x", "--model", "gpt"],
+        vec!["list", "--state", "sleeping"],
+        vec!["approve", "xyz"],
+        vec!["--tenant", "a/b", "list"],
+    ] {
+        let out = z.run(&args);
+        assert_eq!(code(&out), 2, "{args:?}: {}", text(&out.stderr));
+    }
+    assert!(!z.home().exists(), "nothing was created");
+    let out = z.run(&["show", "not-an-id"]);
+    assert!(text(&out.stderr).contains("not a valid ExecutionId"), "{}", text(&out.stderr));
+}
+
+#[test]
+fn the_tools_are_listed_with_how_careful_they_are() {
+    let z = Zorix::new();
+    let out = z.run(&["tools"]);
+    assert_eq!(code(&out), 0);
+    let listing = text(&out.stdout);
+    assert!(listing.contains("math.evaluate") && listing.contains("read-only"));
+    let put = listing.lines().find(|l| l.starts_with("notes.put")).unwrap();
+    assert!(put.contains("asks first"), "{put}");
+    let json = z.run(&["--json", "tools"]);
+    assert_eq!(serde_json::from_slice::<Value>(&json.stdout).unwrap().as_array().unwrap().len(), 8);
+}
+
+#[test]
+fn a_run_that_needs_no_approval_prints_the_answer_and_the_story() {
+    let z = Zorix::new();
+    let out = z.run(&["run", "What is 17*23?", "--allow", "math.evaluate"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("391"), "{}", text(&out.stdout));
+    let story = text(&out.stderr);
+    for wanted in ["created", "model.requested", "tool.completed", "completed"] {
+        assert!(story.contains(wanted), "{wanted} in\n{story}");
+    }
+    assert!(!story.contains(" 0 tokens"), "token counts must survive redaction:\n{story}");
+}
+
+#[test]
+fn the_whole_acceptance_scenario_across_separate_processes() {
+    let z = Zorix::new();
+    // 1. The activity runs, calls a tool, then needs a person for the second tool.
+    let first = z.run(&[
+        "run",
+        "What is 17*23 and save it as result",
+        "--allow",
+        "math.evaluate",
+        "--allow",
+        "notes.put",
+        "--approve",
+        "never",
+    ]);
+    assert_eq!(code(&first), 3, "exit 3 means waiting for approval:\n{}", text(&first.stderr));
+    assert!(text(&first.stderr).contains("zorix approve"), "it says how to answer");
+    let id = z.newest_id();
+
+    let listed = text(&z.run(&["list"]).stdout);
+    assert!(listed.contains("waiting_for_approval") && listed.contains(&id), "{listed}");
+    let shown = text(&z.run(&["show", &id]).stdout);
+    assert!(shown.contains("Waiting    approval") && shown.contains("notes.put"), "{shown}");
+
+    // 2. A different process answers. The execution continues from the saved state.
+    let approved = z.run(&["approve", &id]);
+    assert_eq!(code(&approved), 0, "{}", text(&approved.stderr));
+    assert!(text(&approved.stdout).contains("Done.") && text(&approved.stdout).contains("notes.put"));
+
+    // 3. The record is complete and in order.
+    let events = text(&z.run(&["events", &id]).stdout);
+    let order = [
+        "created",
+        "queued",
+        "started",
+        "tool.completed",
+        "waiting_approval",
+        "approval.granted",
+        "tool.completed",
+        "completed",
+    ];
+    let mut at = 0;
+    for line in events.lines() {
+        if at < order.len() && line.contains(order[at]) {
+            at += 1;
+        }
+    }
+    assert_eq!(at, order.len(), "events out of order:\n{events}");
+
+    let json: Value = serde_json::from_slice(&z.run(&["--json", "show", &id]).stdout).unwrap();
+    assert_eq!(json["execution"]["state"], "completed");
+    assert_eq!(json["summary"]["tool_calls"].as_array().unwrap().len(), 2);
+    assert!(json["summary"]["usage"]["input_tokens"].as_u64().unwrap() > 0);
+
+    // 4. What was saved is still there for a later run.
+    let recall = z.run(&["run", "recall result", "--allow", "notes.get"]);
+    assert!(text(&recall.stdout).contains("17*23 = 391"), "{}", text(&recall.stdout));
+}
+
+#[test]
+fn refusing_an_approval_means_the_tool_never_runs() {
+    let z = Zorix::new();
+    z.run(&[
+        "run",
+        "What is 2+2 and save it as sum",
+        "--allow",
+        "math.evaluate",
+        "--allow",
+        "notes.put",
+        "--approve",
+        "never",
+    ]);
+    let id = z.newest_id();
+    let denied = z.run(&["deny", &id, "--note", "not today"]);
+    assert_eq!(code(&denied), 0, "{}", text(&denied.stderr));
+    assert!(text(&denied.stdout).contains("could not complete"), "{}", text(&denied.stdout));
+    assert!(text(&denied.stderr).contains("approval.denied"));
+    let recall = z.run(&["run", "recall sum", "--allow", "notes.get"]);
+    assert!(
+        text(&recall.stdout).contains("There is no note called sum"),
+        "nothing was saved:\n{}",
+        text(&recall.stdout)
+    );
+}
+
+#[test]
+fn approval_can_be_answered_on_the_terminal() {
+    for (answer, saved) in [("y\n", true), ("n\n", false), ("", false)] {
+        let z = Zorix::new();
+        let out = z.run_with(
+            &[
+                "run",
+                "What is 3+4 and save it as seven",
+                "--allow",
+                "math.evaluate",
+                "--allow",
+                "notes.put",
+                "--approve",
+                "ask",
+            ],
+            answer,
+        );
+        assert_eq!(code(&out), 0, "answer {answer:?}: {}", text(&out.stderr));
+        assert!(text(&out.stderr).contains("Allow this?"));
+        let recall = z.run(&["run", "recall seven", "--allow", "notes.get"]);
+        assert_eq!(text(&recall.stdout).contains("3+4 = 7"), saved, "answer {answer:?}");
+    }
+}
+
+#[test]
+fn automatic_modes_are_explicit() {
+    let z = Zorix::new();
+    let yes = z.run(&[
+        "run",
+        "What is 5+5 and save it as ten",
+        "--allow",
+        "math.evaluate",
+        "--allow",
+        "notes.put",
+        "--approve",
+        "yes",
+    ]);
+    assert_eq!(code(&yes), 0);
+    assert!(text(&yes.stderr).contains("approval.granted") && text(&yes.stderr).contains("cli:auto"));
+    let no = z.run(&[
+        "run",
+        "What is 6+6 and save it as twelve",
+        "--allow",
+        "math.evaluate",
+        "--allow",
+        "notes.put",
+        "--approve",
+        "no",
+    ]);
+    assert!(text(&no.stderr).contains("approval.denied"));
+}
+
+#[test]
+fn a_tool_the_execution_was_not_given_is_refused_even_when_the_model_asks() {
+    let z = Zorix::new();
+    let model = z.write_script(
+        r#"[{"call": {"calls": [{"tool": "math.evaluate", "arguments": {"expression": "1+1"}}]}}, {"say": "I was blocked."}]"#,
+    );
+    let out = z.run(&["run", "do math", "--model", &model]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let story = text(&out.stderr);
+    assert!(story.contains("tool.denied") && story.contains("no permission"), "{story}");
+    assert!(!story.contains("tool.completed"));
+}
+
+#[test]
+fn limits_stop_a_loop_and_the_exit_code_says_it_failed() {
+    let z = Zorix::new();
+    let call = r#"{"call": {"calls": [{"tool": "clock.now", "arguments": {}}]}}"#;
+    let model = z.write_script(&format!("[{}]", [call; 10].join(",")));
+    let out = z.run(&["run", "loop forever", "--model", &model, "--allow", "clock.now", "--max-iterations", "2"]);
+    assert_eq!(code(&out), 1);
+    assert!(text(&out.stderr).contains("Stopped after 2 model steps"), "{}", text(&out.stderr));
+}
+
+#[test]
+fn file_tools_stay_inside_the_workspace_and_need_permission_and_approval() {
+    let z = Zorix::new();
+    let workspace = z.dir.path().join("work");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let ws = workspace.to_str().unwrap();
+    let escape = z.dir.path().join("escape.txt");
+
+    let ok = z.run(&[
+        "run",
+        "Write \"hello\" to out.txt",
+        "--workspace",
+        ws,
+        "--allow",
+        "workspace.write",
+        "--allow-write",
+        "out.txt",
+        "--approve",
+        "yes",
+    ]);
+    assert_eq!(code(&ok), 0, "{}", text(&ok.stderr));
+    assert_eq!(std::fs::read_to_string(workspace.join("out.txt")).unwrap(), "hello");
+
+    let outside = z.run(&[
+        "run",
+        "Write \"x\" to ../escape.txt",
+        "--workspace",
+        ws,
+        "--allow",
+        "workspace.write",
+        "--allow-write",
+        "*",
+        "--approve",
+        "yes",
+    ]);
+    assert!(text(&outside.stderr).contains("may not go up"), "{}", text(&outside.stderr));
+    assert!(!escape.exists(), "nothing was written outside the workspace");
+
+    let no_grant = z.run(&[
+        "run",
+        "Write \"y\" to other.txt",
+        "--workspace",
+        ws,
+        "--allow",
+        "workspace.write",
+        "--approve",
+        "yes",
+    ]);
+    assert!(text(&no_grant.stderr).contains("no permission"), "{}", text(&no_grant.stderr));
+    assert!(!workspace.join("other.txt").exists());
+
+    let none = z.run(&[
+        "run",
+        "Write \"z\" to third.txt",
+        "--allow",
+        "workspace.write",
+        "--allow-write",
+        "*",
+        "--approve",
+        "yes",
+    ]);
+    assert!(text(&none.stderr).contains("No workspace folder"), "{}", text(&none.stderr));
+
+    let missing = z.run(&["run", "x", "--workspace", z.dir.path().join("nope").to_str().unwrap()]);
+    assert_eq!(code(&missing), 1);
+    assert!(text(&missing.stderr).contains("cannot be used"));
+}
+
+#[test]
+fn the_same_idempotency_key_runs_once() {
+    let z = Zorix::new();
+    let args = ["run", "What is 9*9?", "--allow", "math.evaluate", "--idempotency-key", "nine"];
+    let first = z.run(&args);
+    let second = z.run(&args);
+    assert_eq!((code(&first), code(&second)), (0, 0));
+    assert!(text(&second.stdout).contains("81"));
+    let list: Value = serde_json::from_slice(&z.run(&["list", "--json"]).stdout).unwrap();
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(text(&second.stderr).matches("model.requested").count(), 2, "the second run only replayed the record");
+}
+
+#[test]
+fn json_mode_prints_one_json_value_per_line_and_ends_with_the_result() {
+    let z = Zorix::new();
+    let out = z.run(&["--json", "run", "What is 2*21?", "--allow", "math.evaluate"]);
+    assert_eq!(code(&out), 0);
+    let lines: Vec<Value> = text(&out.stdout).lines().map(|l| serde_json::from_str(l).expect("a JSON line")).collect();
+    assert!(lines.len() > 5);
+    assert_eq!(lines.last().unwrap()["type"], "result");
+    assert_eq!(lines.last().unwrap()["execution"]["state"], "completed");
+    assert!(lines[..lines.len() - 1].iter().all(|l| l["kind"].as_str().unwrap().starts_with("execution.")));
+}
+
+#[test]
+fn a_waiting_execution_can_be_cancelled_and_events_can_be_followed_to_the_end() {
+    let z = Zorix::new();
+    z.run(&[
+        "run",
+        "What is 1+1 and save it as two",
+        "--allow",
+        "math.evaluate",
+        "--allow",
+        "notes.put",
+        "--approve",
+        "never",
+    ]);
+    let id = z.newest_id();
+    let follow = z.run(&["events", &id, "--follow"]);
+    assert_eq!(code(&follow), 0, "it stops when the execution waits for a person");
+    assert!(text(&follow.stdout).contains("waiting_approval"));
+
+    let cancelled = z.run(&["cancel", &id, "--reason", "changed my mind"]);
+    assert_eq!(code(&cancelled), 4, "{}", text(&cancelled.stderr));
+    let json: Value = serde_json::from_slice(&z.run(&["--json", "show", &id]).stdout).unwrap();
+    assert_eq!(json["execution"]["state"], "cancelled");
+    assert_eq!(json["execution"]["cancel_reason"], "changed my mind");
+    let again = z.run(&["cancel", &id]);
+    assert_eq!(code(&again), 1, "a finished execution cannot be cancelled again");
+}
+
+#[test]
+fn approving_something_that_is_not_waiting_explains_itself() {
+    let z = Zorix::new();
+    z.run(&["run", "What is 1+2?", "--allow", "math.evaluate"]);
+    let id = z.newest_id();
+    let out = z.run(&["approve", &id]);
+    assert_eq!(code(&out), 1);
+    assert!(text(&out.stderr).contains("not waiting for an approval"), "{}", text(&out.stderr));
+}
+
+#[test]
+fn recovery_with_nothing_to_do_says_so() {
+    let z = Zorix::new();
+    let out = z.run(&["recover"]);
+    assert_eq!(code(&out), 0);
+    assert!(text(&out.stderr).contains("Nothing to recover."));
+}
+
+#[test]
+fn only_one_zorix_program_works_on_a_data_folder_at_a_time() {
+    let z = Zorix::new();
+    let _held = zorix_store::DataDirLock::acquire(&z.home()).unwrap();
+    let out = z.run(&["run", "What is 1+1?", "--allow", "math.evaluate"]);
+    assert_eq!(code(&out), 1);
+    assert!(text(&out.stderr).contains("Another ZORIX program is using the data folder"), "{}", text(&out.stderr));
+    // Reading is allowed while someone else works.
+    assert_eq!(code(&z.run(&["list"])), 0);
+}
+
+#[test]
+fn another_tenant_sees_nothing() {
+    let z = Zorix::new();
+    z.run(&["--tenant", "acme", "run", "What is 4+4?", "--allow", "math.evaluate"]);
+    let mine = text(&z.run(&["--tenant", "acme", "list"]).stdout);
+    assert!(mine.contains("What is 4+4?"));
+    let theirs = z.run(&["--tenant", "globex", "list"]);
+    assert!(!text(&theirs.stdout).contains("4+4"));
+    let id = mine.split_whitespace().next().unwrap().to_string();
+    let peek = z.run(&["--tenant", "globex", "show", &id]);
+    assert_eq!(code(&peek), 1);
+    assert!(text(&peek.stderr).contains("was not found"));
+}
