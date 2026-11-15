@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use reqwest::header::{CONTENT_TYPE, HeaderName, HeaderValue, RETRY_AFTER};
 use reqwest::{StatusCode, Url};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ModelError, ModelErrorKind, Secret, redact_text};
 
@@ -289,6 +289,27 @@ fn detail_of(body: &str) -> String {
     } else {
         redacted
     }
+}
+
+/// Turn an `error` object carried inside a stream (HTTP 200, then a failure) into a [`ModelError`].
+pub fn classify_stream_error(provider: &str, error: &Value) -> ModelError {
+    let kind_name = error["type"].as_str().unwrap_or("");
+    let detail = detail_of(&error.to_string());
+    let lower = detail.to_lowercase();
+    let kind = match kind_name {
+        "authentication_error" | "permission_error" => ModelErrorKind::Auth,
+        "not_found_error" => ModelErrorKind::NotFound,
+        "rate_limit_error" => ModelErrorKind::RateLimited,
+        "overloaded_error" | "api_error" | "timeout_error" => ModelErrorKind::Unavailable,
+        "request_too_large" => ModelErrorKind::ContextTooLong,
+        "invalid_request_error" if TOO_LONG.iter().any(|needle| lower.contains(needle)) => {
+            ModelErrorKind::ContextTooLong
+        }
+        "invalid_request_error" => ModelErrorKind::Invalid,
+        _ => ModelErrorKind::Unavailable,
+    };
+    let text = error["message"].as_str().map(|m| detail_of(&json!({"message": m}).to_string())).unwrap_or(detail);
+    ModelError::provider(kind, format!("{provider}: the stream reported an error ({kind_name}): {text}"))
 }
 
 const TOO_LONG: &[&str] = &[
