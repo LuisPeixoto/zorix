@@ -306,28 +306,11 @@ fn parse_key(text: &str) -> Result<String, String> {
 }
 
 fn parse_tool_pattern(text: &str) -> Result<String, String> {
-    let ok = !text.is_empty()
-        && text.len() <= 64
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '*'));
-    if ok {
-        Ok(text.to_string())
-    } else {
-        Err("a tool id has letters, digits, '.', '_', '-' and an optional '*'".into())
-    }
+    zorix_core::validate_tool_pattern(text).map(|()| text.to_string())
 }
 
 fn parse_path_pattern(text: &str) -> Result<String, String> {
-    let bad = text.is_empty()
-        || text.starts_with('/')
-        || text.contains('\\')
-        || text.contains(':')
-        || text.split('/').any(|part| part == "..")
-        || text.chars().any(char::is_control);
-    if bad {
-        Err("use a relative pattern with forward slashes, such as `*` or `docs/*`, and no `..`".into())
-    } else {
-        Ok(text.to_string())
-    }
+    zorix_core::validate_workspace_pattern(text).map(|()| text.to_string())
 }
 
 #[cfg(test)]
