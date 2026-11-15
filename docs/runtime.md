@@ -1,0 +1,114 @@
+# The runtime
+
+The Harness Runtime runs **one activity from request to result, under control**. It does not care which model thinks,
+which interface asks, or which tools exist. This guide explains what it does and the rules it keeps. For the design
+reasons see [architecture](architecture.md) and the [ADRs](adr).
+
+## What an execution is
+
+An *execution* is one run of one activity, with an id, a state, limits, grants and a history. It is **not** a
+conversation: a conversation can start many executions, and they share nothing except what the client passes in.
+
+```rust
+let created = engine.create(NewExecution { request, grants, limits, ..Default::default() }).await?;
+engine.start(&tenant, created.id).await?;          // or engine.submit(...) for both
+let done = engine.settle(&tenant, created.id).await?; // wait until it finishes, waits for a person, or pauses
+```
+
+A runnable version is in [`crates/zorix-runtime/examples/embed.rs`](../crates/zorix-runtime/examples/embed.rs).
+
+## The lifecycle
+
+```
+Created ──► Queued ──► Running ◄──► WaitingForModel
+   │           │          │  ▲ ◄──► WaitingForTool
+   │           │          │  └────► WaitingForApproval
+   │           │          ├──────► Paused ──► Queued
+   ▼           ▼          ▼
+Cancelled   Cancelled   Completed | Failed | Cancelled      (terminal)
+```
+
+| State | Meaning |
+|---|---|
+| `created` | Stored, not asked to run |
+| `queued` | Waiting for a worker |
+| `running` | A worker is deciding the next step |
+| `waiting_for_model` | A model call is in flight |
+| `waiting_for_tool` | A tool call is in flight |
+| `waiting_for_approval` | Suspended until a person decides. No worker holds it; the process may exit |
+| `paused` | Stopped on request; resumable |
+| `completed`, `failed`, `cancelled` | Finished. Nothing can change them |
+
+Every change goes through one pure function, `transition(state, trigger)`, and the repository refuses a write made from
+an old version, so two workers can never move the same execution. `INITIALIZING` from the brief is not a state: building
+the context is a step inside `running`. Retrying is a counter on a step, not a state.
+
+## The loop
+
+Each iteration:
+
+1. **Check** shutdown, cancellation, pause and the limits.
+2. If tool calls from the last model answer are pending, handle the next one (below). Otherwise:
+3. **Build the context** from sources (system text, the task, history, extra sources) within a token budget.
+4. **Call the model** through `ModelGateway`, with a timeout. Temporary errors are retried with backoff.
+5. If the model answered with text only, **validate** it. If it asked for tools, remember the calls and checkpoint.
+
+A tool call goes through, in order: *find the tool* → *validate the arguments against its JSON Schema* → *ask the policy
+engine, now* → *suspend for approval if needed* → *run with a timeout and an output cap* → *add the result to the
+context as untrusted data* → *checkpoint*.
+
+Nothing here knows a provider. The loop talks to the `ModelGateway` trait; Phase 2 adds real providers behind it.
+
+## Limits
+
+Every execution has limits. They are checked on every iteration, and exceeding one fails the execution with a message
+that names it.
+
+| Limit | Default | Meaning |
+|---|---|---|
+| `max_iterations` | 12 | Model steps |
+| `max_tool_calls` | 24 | Tool calls requested |
+| `max_total_tokens` | none | Input plus output tokens (an estimate in this phase) |
+| `max_cost_micros` | none | Cost, in millionths of a dollar |
+| `max_active_ms` | 300 000 | Time spent working. Waiting for a person is **not** counted |
+| `model_timeout_ms` | 60 000 | One model call |
+| `max_model_attempts` | 3 | Tries for one model call that fails with a temporary error |
+| `max_validation_retries` | 1 | Times a rejected final answer goes back to the model |
+
+A call that crosses a token or cost limit completes; the execution stops right after it.
+
+## Failures and retries
+
+| What went wrong | What happens |
+|---|---|
+| Model: temporary error or timeout | Retried with backoff (doubling, capped, with jitter, honouring `retry_after`), up to `max_model_attempts`; each retry is an event |
+| Model: permanent error | The execution fails with the message |
+| Tool: invalid arguments, unknown tool, policy denial, tool error | The model receives an error result and can adapt. The execution does not fail |
+| Tool: temporary error | Retried (up to 3 starts) if the tool says so. A *timeout* is retried only for tools declared idempotent |
+| Final answer rejected by a validator | Sent back once with the reason, then the execution fails |
+| A limit is reached | The execution fails, naming the limit |
+
+## Cancel, pause, resume
+
+- `cancel` stops a model call or a tool call in flight, records the reason, and closes any open approval.
+- `pause` takes effect at the next step boundary. A paused execution keeps its checkpoint. `resume` queues it again.
+- Pausing an execution that is waiting for approval is refused: it is already suspended.
+- Closing the program (`shutdown`) is **not** a cancel: work stays where it was and `recover` continues it.
+
+## Structured answers
+
+If the request has `expected_output` (a JSON Schema), the final answer must be JSON that matches it (a Markdown code
+fence around it is accepted). Otherwise it is sent back once with the problem described.
+
+## Result validators
+
+Final answers pass through `ResultValidator`s. Two are always on (not empty; matches `expected_output`). Add your own
+with `EngineBuilder::validator`.
+
+## Using it
+
+- From Rust: `zorix-runtime`'s `Engine`, which implements the `ExecutionEngine` trait of `zorix-core`.
+- From a terminal: the [`zorix` command line](cli.md).
+- From the [desktop app](desktop.md).
+
+All three are thin faces over the same engine.
