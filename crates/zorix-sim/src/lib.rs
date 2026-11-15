@@ -1,1 +1,10 @@
 //! ZORIX sim: simulated models for tests, demos and development without a provider.
+
+mod demo;
+mod faulty;
+mod scripted;
+mod usage;
+
+pub use demo::DemoModel;
+pub use faulty::Faulty;
+pub use scripted::{Failure, ScriptedCall, ScriptedModel, Turn};

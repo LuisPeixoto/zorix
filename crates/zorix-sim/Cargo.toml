@@ -9,3 +9,10 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+zorix-core.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
