@@ -47,6 +47,7 @@ event_kinds! {
     ModelRequested => "execution.model.requested",
     ModelResponded => "execution.model.responded",
     ModelRetrying => "execution.model.retrying",
+    ModelFallback => "execution.model.fallback",
     ToolRequested => "execution.tool.requested",
     ToolDenied => "execution.tool.denied",
     ToolStarted => "execution.tool.started",
