@@ -55,4 +55,4 @@ The first releases are **not signed or notarized**. See [distribution](distribut
 ## I want to see exactly what happened
 
 `zorix events <id>` prints every event in order; `zorix show <id> --json` has the summary and timings. Set
-`ZORIX_LOG=debug` (desktop) or `RUST_LOG=debug` for logs; prompts, arguments and results are never written to logs.
+`ZORIX_LOG=debug` (command line and desktop app) for logs on stderr; prompts, arguments and results are never written to logs.
