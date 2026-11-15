@@ -7,9 +7,12 @@ mod events;
 mod memory;
 mod policy;
 mod redact;
+mod retry;
+mod scheduler;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod tools;
+mod validators;
 
 pub use context::{
     DefaultContextBuilder, HistorySource, PREAMBLE, StaticSource, SystemSource, TaskSource, wrap_untrusted,
@@ -18,7 +21,10 @@ pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
 pub use redact::{REDACTED, Secret, redact, redact_text};
+pub use retry::RetryPolicy;
+pub use scheduler::LocalScheduler;
 pub use tools::{CallError, InMemoryToolRegistry, ToolExecutor, cap_output};
+pub use validators::{NonEmptyValidator, OutputSchemaValidator, parse_structured};
 
 #[cfg(test)]
 mod memory_tests {
