@@ -6,6 +6,7 @@ mod context;
 mod events;
 mod memory;
 mod policy;
+mod redact;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod tools;
@@ -16,6 +17,7 @@ pub use context::{
 pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
+pub use redact::{REDACTED, Secret, redact, redact_text};
 pub use tools::{CallError, InMemoryToolRegistry, ToolExecutor, cap_output};
 
 #[cfg(test)]
