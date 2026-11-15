@@ -15,11 +15,11 @@ use serde_json::Value;
 /// What replaces a secret.
 pub const REDACTED: &str = "[redacted]";
 
-const SECRET_KEYS: &[&str] = &[
+/// Key names that always hold a secret when they appear anywhere in the key.
+const SECRET_WORDS: &[&str] = &[
     "api_key",
     "apikey",
     "api-key",
-    "token",
     "password",
     "passwd",
     "secret",
@@ -33,7 +33,11 @@ const SECRET_KEYS: &[&str] = &[
 
 fn is_secret_key(key: &str) -> bool {
     let key = key.to_ascii_lowercase();
-    SECRET_KEYS.iter().any(|needle| key.contains(needle))
+    if SECRET_WORDS.iter().any(|word| key.contains(word)) {
+        return true;
+    }
+    // A token is a secret, but a *count* of tokens is not: `input_tokens` and `max_total_tokens` must stay readable.
+    key == "token" || key.ends_with("_token") || key.ends_with("-token") || key.ends_with(".token")
 }
 
 fn looks_like_credential(word: &str) -> bool {
@@ -141,6 +145,24 @@ mod tests {
         assert_eq!(redacted["list"][0]["api_key"], REDACTED);
         assert_eq!(redacted["list"][1]["X-Auth-Token"], REDACTED);
         assert_eq!(redacted["password"], Value::Null, "nothing to hide");
+    }
+
+    #[test]
+    fn counts_of_tokens_are_not_secrets_but_tokens_are() {
+        let value = json!({
+            "usage": {"input_tokens": 40, "output_tokens": 2},
+            "limits": {"max_total_tokens": 1000},
+            "token": "abc",
+            "access_token": "abc",
+            "refresh-token": "abc",
+            "x-auth-token": "abc",
+        });
+        let redacted = redact(value);
+        assert_eq!(redacted["usage"], json!({"input_tokens": 40, "output_tokens": 2}));
+        assert_eq!(redacted["limits"]["max_total_tokens"], 1000);
+        for key in ["token", "access_token", "refresh-token", "x-auth-token"] {
+            assert_eq!(redacted[key], REDACTED, "{key}");
+        }
     }
 
     #[test]
