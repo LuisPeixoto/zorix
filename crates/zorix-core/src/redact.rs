@@ -7,8 +7,8 @@
 //! The arguments of a tool call are kept as they are in the tool call record, because the tool needs them. They are
 //! redacted wherever they are *published* (events) or *written to logs*.
 
+use crate::secret::REDACTED;
 use serde_json::Value;
-use zorix_core::REDACTED;
 
 /// Key names that always hold a secret when they appear anywhere in the key.
 const SECRET_WORDS: &[&str] = &[

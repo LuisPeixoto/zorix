@@ -24,11 +24,11 @@ use zorix_core::{
 use crate::context::DefaultContextBuilder;
 use crate::events::{EventBus, follow};
 use crate::policy::DefaultPolicy;
-use crate::redact::redact;
 use crate::retry::RetryPolicy;
 use crate::scheduler::LocalScheduler;
 use crate::tools::InMemoryToolRegistry;
 use crate::validators::{NonEmptyValidator, OutputSchemaValidator};
+use zorix_core::redact;
 
 /// Settings of an [`Engine`].
 #[derive(Clone, Debug)]

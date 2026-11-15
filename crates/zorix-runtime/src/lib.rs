@@ -7,7 +7,6 @@ mod engine;
 mod events;
 mod memory;
 mod policy;
-mod redact;
 mod retry;
 mod run;
 mod scheduler;
@@ -24,13 +23,12 @@ pub use engine::{Engine, EngineBuilder, EngineConfig};
 pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
-pub use redact::{redact, redact_text};
 pub use retry::RetryPolicy;
 pub use scheduler::LocalScheduler;
 pub use summary::{ExecutionSummary, StepTiming, ToolSummary, summarize};
 pub use tools::{CallError, InMemoryToolRegistry, ToolExecutor, cap_output};
 pub use validators::{NonEmptyValidator, OutputSchemaValidator, parse_structured};
-pub use zorix_core::{REDACTED, Secret};
+pub use zorix_core::{REDACTED, Secret, redact, redact_text};
 
 #[cfg(test)]
 mod memory_tests {
