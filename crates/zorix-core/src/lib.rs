@@ -30,7 +30,9 @@ pub use execution::{
 pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, TenantId, ToolCallId};
 pub use message::{Message, Provenance, Role, ToolCallRequest};
 pub use model::{FinishReason, ModelError, ModelGateway, ModelRequest, ModelResponse};
-pub use permission::{Action, Grants, Permission};
+pub use permission::{
+    Action, Grants, Permission, tool_grant, validate_tool_pattern, validate_workspace_pattern, workspace_grant,
+};
 pub use policy::{PolicyDecision, PolicyEngine, PolicyRequest};
 pub use ports::{EventPublisher, ExecutionScheduler, ResultValidator, Validation};
 pub use repository::{
