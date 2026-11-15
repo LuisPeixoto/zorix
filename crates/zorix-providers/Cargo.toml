@@ -1,0 +1,28 @@
+[package]
+name = "zorix-providers"
+description = "ZORIX providers: adapters that put real AI models behind the ModelGateway contract."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+wiremock.workspace = true
+tempfile.workspace = true
