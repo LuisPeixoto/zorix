@@ -5205,6 +5205,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tracing-subscriber",
  "zorix-core",
  "zorix-runtime",
  "zorix-sim",

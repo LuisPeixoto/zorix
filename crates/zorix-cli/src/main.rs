@@ -13,6 +13,11 @@ use clap::Parser;
 use crate::cli::Cli;
 
 fn run(cli: Cli) -> ExitCode {
+    // Logs go to stderr, so they never mix with the answer on stdout. Prompts, arguments and results are never logged.
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::try_from_env("ZORIX_LOG").unwrap_or_else(|_| "warn".into()))
+        .with_writer(std::io::stderr)
+        .init();
     let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
         Ok(runtime) => runtime,
         Err(error) => {
