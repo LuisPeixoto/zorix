@@ -11,7 +11,7 @@ const pairs = {
   "tauri-plugin-dialog": "@tauri-apps/plugin-dialog",
 };
 
-const crateVersion = (name) => lock.match(new RegExp(`name = "${name}"\\nversion = "([^"]+)"`))?.[1];
+const crateVersion = (name) => lock.match(new RegExp(`name = "${name}"\\r?\\nversion = "([^"]+)"`))?.[1];
 const npmVersion = (name) =>
   JSON.parse(readFileSync(root(`apps/desktop/node_modules/${name}/package.json`), "utf8")).version;
 const minor = (v) => v.split(".").slice(0, 2).join(".");
