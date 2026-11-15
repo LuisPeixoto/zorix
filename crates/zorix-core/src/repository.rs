@@ -167,6 +167,10 @@ pub trait ExecutionRepository: Send + Sync {
     /// Apply a change atomically. Fails with `Error::Conflict` when the version does not match.
     async fn commit(&self, commit: Commit) -> Result<Committed>;
 
+    /// One execution by id, whoever owns it. For the runtime's own workers, which only hold an id; interfaces must use
+    /// [`get`](Self::get) so tenants stay apart.
+    async fn load(&self, id: ExecutionId) -> Result<Option<Execution>>;
+
     /// One execution of this tenant.
     async fn get(&self, tenant: &TenantId, id: ExecutionId) -> Result<Option<Execution>>;
 
