@@ -1089,6 +1089,7 @@ dependencies = [
  "tracing",
  "zorix-core",
  "zorix-runtime",
+ "zorix-sim",
 ]
 
 [[package]]
