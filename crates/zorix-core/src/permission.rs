@@ -77,6 +77,43 @@ fn pattern_matches(pattern: &str, resource: &str) -> bool {
     }
 }
 
+/// Check the text of a tool pattern given by a person: a tool id, or a prefix ending in `*`.
+pub fn validate_tool_pattern(text: &str) -> Result<(), String> {
+    let ok = !text.is_empty()
+        && text.len() <= 64
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '*'));
+    if ok { Ok(()) } else { Err("a tool id has letters, digits, '.', '_', '-' and an optional '*'".into()) }
+}
+
+/// Check the text of a workspace path pattern given by a person: relative, with forward slashes, no `..`, such as `*`
+/// or `docs/*`.
+pub fn validate_workspace_pattern(text: &str) -> Result<(), String> {
+    let bad = text.is_empty()
+        || text.len() > 512
+        || text.starts_with('/')
+        || text.contains('\\')
+        || text.contains(':')
+        || text.split('/').any(|part| part == "..")
+        || text.chars().any(char::is_control);
+    if bad {
+        Err("use a relative pattern with forward slashes, such as `*` or `docs/*`, and no `..`".into())
+    } else {
+        Ok(())
+    }
+}
+
+/// The grant that lets an execution use the tools matching `pattern`.
+pub fn tool_grant(pattern: &str) -> Result<Permission, String> {
+    validate_tool_pattern(pattern)?;
+    Ok(Permission::use_tool(pattern))
+}
+
+/// The grant that lets file tools do `action` on workspace paths matching `pattern`.
+pub fn workspace_grant(action: Action, pattern: &str) -> Result<Permission, String> {
+    validate_workspace_pattern(pattern)?;
+    Ok(Permission::new(action, format!("workspace:{pattern}")))
+}
+
 /// What an execution is allowed to do. The default grants nothing.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -152,6 +189,20 @@ mod tests {
         let grants = Grants::none().with(Permission::new(Action::Read, "workspace:*"));
         let required = [Permission::new(Action::Read, "workspace:a"), Permission::new(Action::Write, "workspace:a")];
         assert_eq!(grants.missing(&required), vec![&required[1]]);
+    }
+
+    #[test]
+    fn patterns_given_by_people_are_checked() {
+        for good in ["math.evaluate", "files.*", "*", "a_b-c"] {
+            assert!(tool_grant(good).is_ok(), "{good}");
+        }
+        for bad in ["", "bad tool", "a/b", &"x".repeat(65)] {
+            assert!(tool_grant(bad).is_err(), "{bad:?}");
+        }
+        assert_eq!(workspace_grant(Action::Read, "docs/*").unwrap(), Permission::new(Action::Read, "workspace:docs/*"));
+        for bad in ["", "/etc/*", "../x", "a/../b", "a\\b", "C:/x", "tab\there"] {
+            assert!(workspace_grant(Action::Write, bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]
