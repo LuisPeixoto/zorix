@@ -51,6 +51,7 @@ pub fn event_line(event: &ExecutionEvent) -> String {
                 count(p, "delay_ms")
             )
         }
+        EventKind::ModelFallback => format!("{} → {} ({})", text(p, "from"), text(p, "to"), text(p, "reason")),
         EventKind::ToolRequested => format!("{} {}", text(p, "tool"), shorten(&p["arguments"].to_string(), 100)),
         EventKind::ToolStarted => format!("{} (attempt {})", text(p, "tool"), count(p, "attempt")),
         EventKind::ToolCompleted => format!("{} in {} ms", text(p, "tool"), count(p, "duration_ms")),
@@ -129,6 +130,11 @@ mod tests {
         let cases = [
             (EventKind::Created, json!({"model": "demo"}), "model demo"),
             (EventKind::Queued, json!({}), "queued"),
+            (
+                EventKind::ModelFallback,
+                json!({"from": "anthropic/claude-opus-5-5", "to": "ollama/qwen3", "reason": "rate_limited"}),
+                "anthropic/claude-opus-5-5 → ollama/qwen3 (rate_limited)",
+            ),
             (
                 EventKind::ModelRequested,
                 json!({"iteration": 1, "messages": 4, "tools": 2}),

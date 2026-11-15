@@ -43,6 +43,20 @@ pub struct ToolCallRequest {
     pub arguments: Value,
 }
 
+/// The provider's own record of an assistant turn: thinking blocks, thought signatures, reasoning items.
+///
+/// Some providers bind their reasoning state to the exact conversation, so the turn must be sent back unchanged. An
+/// adapter replays it only when the next call goes to the same provider and model (see ADR-0012).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NativeTurn {
+    /// The provider that produced it, such as `anthropic`.
+    pub provider: String,
+    /// The model that produced it.
+    pub model: String,
+    /// The provider's content, as the provider sent it.
+    pub content: Value,
+}
+
 /// One message.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Message {
@@ -61,6 +75,9 @@ pub struct Message {
     pub is_error: bool,
     /// How far to trust it.
     pub provenance: Provenance,
+    /// For an assistant message: the provider's raw turn, replayed unchanged to the same model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native: Option<NativeTurn>,
 }
 
 impl Message {
@@ -85,7 +102,21 @@ impl Message {
     }
 
     fn plain(role: Role, content: impl Into<String>, provenance: Provenance) -> Self {
-        Self { role, content: content.into(), tool_calls: Vec::new(), tool_call_id: None, is_error: false, provenance }
+        Self {
+            role,
+            content: content.into(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+            is_error: false,
+            provenance,
+            native: None,
+        }
+    }
+
+    /// This message with the provider's raw turn attached.
+    pub fn with_native(mut self, native: Option<NativeTurn>) -> Self {
+        self.native = native;
+        self
     }
 
     /// A rough size in tokens (characters divided by four, rounded up). Phase 2 replaces it per model.
@@ -115,6 +146,26 @@ mod tests {
     #[test]
     fn token_estimates_grow_with_the_text() {
         assert!(Message::user("a".repeat(400)).estimated_tokens() > Message::user("a").estimated_tokens());
+    }
+
+    #[test]
+    fn messages_from_version_0_1_load_without_a_native_turn() {
+        let old = r#"{"role":"assistant","content":"hi","tool_calls":[],"tool_call_id":null,"is_error":false,"provenance":"trusted"}"#;
+        let message: Message = serde_json::from_str(old).unwrap();
+        assert_eq!(message.native, None);
+        assert!(!serde_json::to_string(&message).unwrap().contains("native"), "nothing extra is written");
+    }
+
+    #[test]
+    fn a_native_turn_survives_a_round_trip() {
+        let native = NativeTurn {
+            provider: "anthropic".into(),
+            model: "m".into(),
+            content: serde_json::json!([{"type": "thinking"}]),
+        };
+        let message = Message::assistant("x", vec![]).with_native(Some(native.clone()));
+        let back: Message = serde_json::from_str(&serde_json::to_string(&message).unwrap()).unwrap();
+        assert_eq!(back.native, Some(native));
     }
 
     #[test]

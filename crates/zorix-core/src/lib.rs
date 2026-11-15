@@ -15,6 +15,7 @@ pub mod permission;
 pub mod policy;
 pub mod ports;
 pub mod repository;
+pub mod secret;
 pub mod state;
 pub mod time;
 pub mod tool;
@@ -28,8 +29,11 @@ pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
 };
 pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, TenantId, ToolCallId};
-pub use message::{Message, Provenance, Role, ToolCallRequest};
-pub use model::{FinishReason, ModelError, ModelGateway, ModelRequest, ModelResponse};
+pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
+pub use model::{
+    Effort, FinishReason, GenerationParams, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest,
+    ModelResponse, RouteAttempt, RouteTrace, StepPhase,
+};
 pub use permission::{
     Action, Grants, Permission, tool_grant, validate_tool_pattern, validate_workspace_pattern, workspace_grant,
 };
@@ -39,6 +43,7 @@ pub use repository::{
     Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, ListFilter, LoopState, ToolCallRecord,
     ToolCallStatus,
 };
+pub use secret::{REDACTED, Secret};
 pub use state::{ExecutionState, InvalidTransition, Trigger, transition};
 pub use time::{Clock, ManualClock, SystemClock, Timestamp};
 pub use tool::{Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolRegistry, ToolSpec};

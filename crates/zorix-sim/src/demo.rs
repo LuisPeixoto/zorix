@@ -229,7 +229,7 @@ impl ModelGateway for DemoModel {
             None => (answer(&prompt, &seen), Vec::new(), FinishReason::Stop),
         };
         let chars = text.chars().count() + tool_calls.iter().map(|c| c.arguments.to_string().len()).sum::<usize>();
-        Ok(ModelResponse { model: request.model.clone(), usage: usage_for(&request, chars), text, tool_calls, finish })
+        Ok(ModelResponse::new(request.model.clone(), text, tool_calls, usage_for(&request, chars), finish))
     }
 }
 
@@ -265,6 +265,7 @@ mod tests {
             .map(tool)
             .collect(),
             response_schema: None,
+            ..ModelRequest::default()
         }
     }
 

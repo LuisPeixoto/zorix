@@ -391,6 +391,12 @@ impl Run {
                     return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
                 }
                 Ok(Err(ModelError::Transient { message, retry_after_ms })) => (message, retry_after_ms),
+                Ok(Err(ModelError::Provider { kind, message, retry_after_ms })) if kind.is_temporary() => {
+                    (message, retry_after_ms)
+                }
+                Ok(Err(ModelError::Provider { message, .. })) => {
+                    return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
+                }
                 Err(_) => (format!("The model did not answer within {} ms.", limits.model_timeout_ms), None),
             };
             if attempt == limits.max_model_attempts {
