@@ -98,6 +98,8 @@ pub async fn tenants_are_isolated<R: ExecutionRepository>(repo: &R) {
     let acme = TenantId::new("acme").unwrap();
     let globex = TenantId::new("globex").unwrap();
     assert!(repo.get(&globex, mine.id).await.unwrap().is_none());
+    assert_eq!(repo.load(mine.id).await.unwrap().unwrap().id, mine.id, "load ignores tenants, for workers");
+    assert!(repo.load(ExecutionId::new()).await.unwrap().is_none());
     assert!(repo.get(&acme, theirs.id).await.unwrap().is_none());
     let listed = repo.list(&acme, &ListFilter::default()).await.unwrap();
     assert_eq!(listed.iter().map(|e| e.id).collect::<Vec<_>>(), vec![mine.id]);
