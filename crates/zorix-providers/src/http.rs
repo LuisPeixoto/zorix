@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ModelError, ModelErrorKind, Secret, redact_text};
 
+use crate::ndjson::NdjsonReader;
 use crate::sse::SseReader;
 
 /// Limits and timeouts for one provider's connection.
@@ -259,6 +260,11 @@ impl HttpClient {
         Ok(String::from_utf8_lossy(&body).into_owned())
     }
 
+    /// Read a streaming response as JSON lines.
+    pub fn ndjson(&self, response: reqwest::Response) -> NdjsonReader {
+        NdjsonReader::new(response, &self.provider, self.config.stream_idle_timeout, self.config.max_stream_bytes)
+    }
+
     /// Read a streaming response as events.
     pub fn sse(&self, response: reqwest::Response) -> SseReader {
         SseReader::new(response, &self.provider, self.config.stream_idle_timeout, self.config.max_stream_bytes)
@@ -315,7 +321,7 @@ pub fn classify_stream_error(provider: &str, error: &Value) -> ModelError {
     let kind = match kind_name {
         "authentication_error" | "permission_error" => ModelErrorKind::Auth,
         "not_found_error" => ModelErrorKind::NotFound,
-        "rate_limit_error" => ModelErrorKind::RateLimited,
+        name if name.contains("rate_limit") => ModelErrorKind::RateLimited,
         "overloaded_error" | "api_error" | "timeout_error" => ModelErrorKind::Unavailable,
         "request_too_large" => ModelErrorKind::ContextTooLong,
         "invalid_request_error" if TOO_LONG.iter().any(|needle| lower.contains(needle)) => {
