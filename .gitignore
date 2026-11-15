@@ -1,0 +1,18 @@
+# Build output
+/target
+apps/desktop/dist
+apps/desktop/src-tauri/gen
+
+# Dependencies
+node_modules
+
+# Local data
+.zorix/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Editors / OS / tooling
+.DS_Store
+.idea
+.vscode
