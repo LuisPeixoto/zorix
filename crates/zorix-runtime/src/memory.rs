@@ -172,6 +172,13 @@ impl ExecutionRepository for MemoryRepository {
         Ok(true)
     }
 
+    async fn release_all_leases(&self) -> Result<u64> {
+        let mut inner = self.inner.lock();
+        let count = inner.leases.len() as u64;
+        inner.leases.clear();
+        Ok(count)
+    }
+
     async fn release_lease(&self, id: ExecutionId, owner: &str) -> Result<()> {
         let mut inner = self.inner.lock();
         if inner.leases.get(&id).is_some_and(|(holder, _)| holder == owner) {

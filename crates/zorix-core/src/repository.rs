@@ -201,4 +201,8 @@ pub trait ExecutionRepository: Send + Sync {
 
     /// Give the lease back.
     async fn release_lease(&self, id: ExecutionId, owner: &str) -> Result<()>;
+
+    /// Drop every lease, whoever holds it. Only for a host that knows no other process uses this store (it holds the
+    /// data folder's lock), at start-up, when the leases left over belong to processes that are gone.
+    async fn release_all_leases(&self) -> Result<u64>;
 }

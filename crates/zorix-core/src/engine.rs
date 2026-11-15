@@ -31,6 +31,9 @@ pub struct RecoveryReport {
     pub needs_decision: Vec<ExecutionId>,
     /// How many executions were left as they were (waiting for approval, paused, queued).
     pub untouched: usize,
+    /// How many looked interrupted but are being worked on by a live engine (their lease is held), so were skipped.
+    #[serde(default)]
+    pub in_use: usize,
 }
 
 /// Starts, follows and controls executions.

@@ -229,6 +229,19 @@ pub async fn leases_exclude_other_owners<R: ExecutionRepository>(repo: &R) {
     assert!(repo.acquire_lease(id, "worker-1", t.plus_millis(1_800), 1_000).await.unwrap());
 }
 
+/// Dropping every lease lets a new owner in at once.
+pub async fn all_leases_can_be_dropped<R: ExecutionRepository>(repo: &R) {
+    let first = stored(repo, "acme", None).await;
+    let second = stored(repo, "acme", None).await;
+    let t = Timestamp(10_000);
+    assert!(repo.acquire_lease(first.id, "gone-1", t, 60_000).await.unwrap());
+    assert!(repo.acquire_lease(second.id, "gone-2", t, 60_000).await.unwrap());
+    assert_eq!(repo.release_all_leases().await.unwrap(), 2);
+    assert!(repo.acquire_lease(first.id, "new", t, 1_000).await.unwrap());
+    assert!(repo.acquire_lease(second.id, "new", t, 1_000).await.unwrap());
+    assert_eq!(repo.release_all_leases().await.unwrap(), 2);
+}
+
 /// Generates one `#[tokio::test]` per repository contract case. `$make` is an expression that builds a fresh repository.
 #[macro_export]
 macro_rules! repository_contract_tests {
@@ -243,6 +256,7 @@ macro_rules! repository_contract_tests {
         $crate::repository_contract_tests!(@case $make, events_can_be_paged);
         $crate::repository_contract_tests!(@case $make, records_are_replaced_by_id);
         $crate::repository_contract_tests!(@case $make, leases_exclude_other_owners);
+        $crate::repository_contract_tests!(@case $make, all_leases_can_be_dropped);
     };
     (@case $make:expr, $case:ident) => {
         #[tokio::test]
