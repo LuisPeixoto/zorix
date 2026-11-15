@@ -36,7 +36,7 @@
         <div><dt class="text-xs text-faint">Model steps</dt><dd class="text-lg font-semibold">{detail.summary.model_calls}</dd></div>
         <div><dt class="text-xs text-faint">Tool calls</dt><dd class="text-lg font-semibold">{run.usage.tool_calls}</dd></div>
         <div><dt class="text-xs text-faint">Tokens</dt><dd class="text-lg font-semibold">{tokens(run.usage)}</dd></div>
-        <div><dt class="text-xs text-faint">Time</dt><dd class="text-lg font-semibold">{duration(detail.summary.total_ms ?? run.active_ms)}</dd></div>
+        <div><dt class="text-xs text-faint" title="Time spent working; waiting for you is not counted">Work time</dt><dd class="text-lg font-semibold">{duration(run.active_ms)}</dd></div>
       </dl>
     </header>
 
