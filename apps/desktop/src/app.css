@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-elevated: var(--elevated);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-info: var(--info);
+  --font-sans: var(--ui-font-sans);
+  --font-mono: var(--ui-font-mono);
+}
+
+:root {
+  color-scheme: light dark;
+  --ui-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --ui-font-mono: "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+  --bg: #f4f5f8;
+  --panel: #ffffff;
+  --elevated: #ffffff;
+  --hover: #eceef4;
+  --line: #dfe2ea;
+  --fg: #171923;
+  --muted: #5b6275;
+  --faint: #8d94a6;
+  --accent: #5b4bdb;
+  --accent-fg: #ffffff;
+  --accent-soft: #e9e6fb;
+  --ok: #15803d;
+  --warn: #b45309;
+  --err: #b91c1c;
+  --info: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1117;
+    --panel: #161923;
+    --elevated: #1b1f2b;
+    --hover: #212636;
+    --line: #272c3b;
+    --fg: #e8eaf2;
+    --muted: #9aa2b8;
+    --faint: #6b7288;
+    --accent: #8b7bff;
+    --accent-fg: #0f1117;
+    --accent-soft: #272446;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --info: #7aa7ff;
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--ui-font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}

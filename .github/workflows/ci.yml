@@ -69,6 +69,9 @@ jobs:
       - name: Type-check the interface
         working-directory: apps/desktop
         run: npm run check
+      - name: Test the interface helpers
+        working-directory: apps/desktop
+        run: npm test
       - name: Build the interface
         working-directory: apps/desktop
         run: npm run build
