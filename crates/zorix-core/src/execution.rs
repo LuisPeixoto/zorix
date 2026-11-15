@@ -1,6 +1,7 @@
 //! The execution record: what was asked, under which limits and grants, and where it stands.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -211,6 +212,9 @@ pub struct NewExecution {
     /// What it may do. Nothing by default.
     #[serde(default)]
     pub grants: Grants,
+    /// The folder the file tools are confined to (an absolute path). Without one, file tools refuse every call.
+    #[serde(default)]
+    pub workspace: Option<PathBuf>,
     /// Sending the same key again returns the same execution instead of creating a second one.
     #[serde(default)]
     pub idempotency_key: Option<String>,
@@ -240,6 +244,11 @@ impl NewExecution {
         {
             return bad("The idempotency key must have 1 to 128 characters.");
         }
+        if let Some(workspace) = &self.workspace
+            && !workspace.is_absolute()
+        {
+            return bad("The workspace must be an absolute path.");
+        }
         self.limits.validate()
     }
 }
@@ -265,6 +274,9 @@ pub struct Execution {
     pub limits: Limits,
     /// What it may do.
     pub grants: Grants,
+    /// The folder its file tools are confined to.
+    #[serde(default)]
+    pub workspace: Option<PathBuf>,
     /// The idempotency key it was created with.
     pub idempotency_key: Option<String>,
     /// How many model-driven iterations have started.
@@ -306,6 +318,7 @@ impl Execution {
             version: 0,
             limits: new.limits,
             grants: new.grants,
+            workspace: new.workspace,
             idempotency_key: new.idempotency_key,
             iteration: 0,
             tool_calls_requested: 0,
@@ -403,6 +416,13 @@ mod tests {
         let mut limits = request();
         limits.limits.max_iterations = 0;
         assert!(limits.validate().is_err());
+
+        let mut relative = request();
+        relative.workspace = Some(PathBuf::from("docs"));
+        assert!(relative.validate().is_err(), "a workspace must be absolute");
+        let mut absolute = request();
+        absolute.workspace = Some(std::env::temp_dir());
+        assert!(absolute.validate().is_ok());
     }
 
     #[test]
