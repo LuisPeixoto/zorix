@@ -48,6 +48,18 @@ pub enum Header<'a> {
     Plain(&'a str),
     /// Never shown: sent marked sensitive.
     Secret(&'a Secret),
+    /// `Authorization: Bearer <secret>`, sent marked sensitive.
+    Bearer(&'a Secret),
+}
+
+impl Header<'_> {
+    fn text_and_sensitivity(&self) -> (String, bool) {
+        match self {
+            Header::Plain(text) => ((*text).to_string(), false),
+            Header::Secret(secret) => (secret.expose().to_string(), true),
+            Header::Bearer(secret) => (format!("Bearer {}", secret.expose()), true),
+        }
+    }
 }
 
 /// True for `localhost` and loopback addresses, where plain HTTP is allowed.
@@ -143,10 +155,7 @@ impl HttpClient {
             request = request.timeout(self.config.request_timeout);
         }
         for (name, value) in headers {
-            let (text, sensitive) = match value {
-                Header::Plain(text) => ((*text).to_string(), false),
-                Header::Secret(secret) => (secret.expose().to_string(), true),
-            };
+            let (text, sensitive) = value.text_and_sensitivity();
             let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_| {
                 ModelError::provider(ModelErrorKind::Invalid, format!("{}: a header name is not valid.", self.provider))
             })?;
@@ -181,10 +190,7 @@ impl HttpClient {
     ) -> Result<Value, ModelError> {
         let mut request = self.client.get(url.clone()).timeout(Duration::from_secs(30));
         for (name, value) in headers {
-            let (text, sensitive) = match value {
-                Header::Plain(text) => ((*text).to_string(), false),
-                Header::Secret(secret) => (secret.expose().to_string(), true),
-            };
+            let (text, sensitive) = value.text_and_sensitivity();
             if let (Ok(name), Ok(mut value)) = (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(&text)) {
                 value.set_sensitive(sensitive);
                 request = request.header(name, value);
@@ -421,6 +427,24 @@ mod tests {
         let value =
             post(&client(HttpConfig::default()), &url(&server, "/v1/x"), &Secret::new("k-secret-value")).await.unwrap();
         assert_eq!(value, json!({"ok": true}));
+    }
+
+    #[tokio::test]
+    async fn a_bearer_header_carries_the_key_and_the_word_bearer() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(header("authorization", "Bearer sk-bearer-test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": 1})))
+            .mount(&server)
+            .await;
+        let c = client(HttpConfig::default());
+        let key = Secret::new("sk-bearer-test");
+        let cancel = CancellationToken::new();
+        let response = c
+            .post_json(&url(&server, "/"), &[("authorization", Header::Bearer(&key))], &json!({}), false, &cancel)
+            .await
+            .unwrap();
+        assert_eq!(c.read_json(response, &cancel).await.unwrap(), json!({"ok": 1}));
     }
 
     #[tokio::test]
