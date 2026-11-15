@@ -19,13 +19,17 @@ zorix-runtime = { path = "crates/zorix-runtime" }
 zorix-store = { path = "crates/zorix-store" }
 zorix-sim = { path = "crates/zorix-sim" }
 zorix-tools = { path = "crates/zorix-tools" }
+zorix-providers = { path = "crates/zorix-providers" }
 
 async-trait = "0.1"
+bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
 dirs = "6"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 jsonschema = { version = "0.61", default-features = false }
 parking_lot = "0.12"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "system-proxy", "stream", "json"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -33,9 +37,10 @@ sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
 time = { version = "0.3", features = ["formatting", "macros"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "signal", "net"] }
 tokio-util = "0.7"
 tracing = "0.1"
+wiremock = "0.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v7", "serde"] }
 

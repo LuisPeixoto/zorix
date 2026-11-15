@@ -14,6 +14,7 @@ pub mod model;
 pub mod permission;
 pub mod policy;
 pub mod ports;
+pub mod redact;
 pub mod repository;
 pub mod secret;
 pub mod state;
@@ -39,6 +40,7 @@ pub use permission::{
 };
 pub use policy::{PolicyDecision, PolicyEngine, PolicyRequest};
 pub use ports::{EventPublisher, ExecutionScheduler, ResultValidator, Validation};
+pub use redact::{redact, redact_text};
 pub use repository::{
     Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, ListFilter, LoopState, ToolCallRecord,
     ToolCallStatus,
