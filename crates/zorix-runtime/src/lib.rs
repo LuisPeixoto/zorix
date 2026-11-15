@@ -6,9 +6,11 @@ mod events;
 mod memory;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
+mod tools;
 
 pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
+pub use tools::{CallError, InMemoryToolRegistry, ToolExecutor, cap_output};
 
 #[cfg(test)]
 mod memory_tests {
