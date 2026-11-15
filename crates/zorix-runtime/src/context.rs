@@ -145,21 +145,43 @@ impl ContextSource for StaticSource {
     }
 }
 
+/// The context budget when nothing is known about the model.
+pub const UNKNOWN_MODEL_BUDGET: u64 = 24_000;
+
+/// The most context sent to a model whose window is known, unless a cap is set: a bigger window is not a reason to pay
+/// for a bigger prompt on every step.
+pub const DEFAULT_MAX_CONTEXT: u64 = 100_000;
+
 /// Builds the request from an ordered list of sources and a token budget.
 pub struct DefaultContextBuilder {
     sources: Vec<Arc<dyn ContextSource>>,
-    budget_tokens: u64,
+    /// A cap chosen by the host. The model's own window (when known) can only lower it.
+    cap_tokens: Option<u64>,
 }
 
 impl DefaultContextBuilder {
-    /// The standard sources (system, task, history) and a budget of 24 000 estimated tokens.
+    /// The standard sources (system, task, history). The budget comes from the model's profile when known (at most
+    /// [`DEFAULT_MAX_CONTEXT`] tokens), otherwise [`UNKNOWN_MODEL_BUDGET`].
     pub fn new() -> Self {
-        Self::with_budget(24_000)
+        Self { sources: Self::standard(), cap_tokens: None }
     }
 
-    /// The standard sources and a chosen budget.
-    pub fn with_budget(budget_tokens: u64) -> Self {
-        Self { sources: vec![Arc::new(SystemSource), Arc::new(TaskSource), Arc::new(HistorySource)], budget_tokens }
+    /// The standard sources and a cap on the budget, whatever the model's window.
+    pub fn with_budget(cap_tokens: u64) -> Self {
+        Self { sources: Self::standard(), cap_tokens: Some(cap_tokens) }
+    }
+
+    fn standard() -> Vec<Arc<dyn ContextSource>> {
+        vec![Arc::new(SystemSource), Arc::new(TaskSource), Arc::new(HistorySource)]
+    }
+
+    fn budget_for(&self, view: &ExecutionView<'_>) -> u64 {
+        match (view.context_budget, self.cap_tokens) {
+            (Some(known), Some(cap)) => known.min(cap),
+            (Some(known), None) => known.min(DEFAULT_MAX_CONTEXT),
+            (None, Some(cap)) => cap,
+            (None, None) => UNKNOWN_MODEL_BUDGET,
+        }
     }
 
     /// Add a source after the standard ones. Memory and retrieval will arrive this way.
@@ -182,10 +204,11 @@ fn tokens(segment: &ContextSegment) -> u64 {
 }
 
 /// Drop the least important optional segments until the total fits. The first dropped place keeps a note.
-fn fit(mut segments: Vec<ContextSegment>, budget: u64) -> Vec<ContextSegment> {
+fn fit(mut segments: Vec<ContextSegment>, budget: u64) -> (Vec<ContextSegment>, bool) {
     let mut total: u64 = segments.iter().map(tokens).sum();
     let mut note_at: Option<usize> = None;
     let mut dropped = 0usize;
+    let mut dropped_history = false;
     while total > budget {
         let victim = segments
             .iter()
@@ -196,6 +219,7 @@ fn fit(mut segments: Vec<ContextSegment>, budget: u64) -> Vec<ContextSegment> {
         let Some(index) = victim else { break };
         total -= tokens(&segments[index]);
         dropped += segments[index].messages.len();
+        dropped_history |= segments[index].origin == "history";
         note_at = Some(note_at.map_or(index, |at| at.min(index)));
         segments.remove(index);
         if let Some(at) = note_at.as_mut()
@@ -214,7 +238,7 @@ fn fit(mut segments: Vec<ContextSegment>, budget: u64) -> Vec<ContextSegment> {
         };
         segments.insert(at.min(segments.len()), note);
     }
-    segments
+    (segments, dropped_history)
 }
 
 #[async_trait]
@@ -224,13 +248,15 @@ impl ContextBuilder for DefaultContextBuilder {
         for source in &self.sources {
             segments.extend(source.contribute(view).await?);
         }
-        let segments = fit(segments, self.budget_tokens);
+        let (segments, history_edited) = fit(segments, self.budget_for(view));
         Ok(ModelRequest {
             model: view.execution.request.model.clone(),
             execution_id: view.execution.id,
             messages: segments.into_iter().flat_map(|segment| segment.messages).collect(),
             tools: view.tools.iter().map(|spec| spec.definition()).collect(),
             response_schema: view.execution.request.expected_output.clone(),
+            params: view.execution.request.params,
+            history_edited,
             ..ModelRequest::default()
         })
     }
@@ -279,7 +305,10 @@ mod tests {
     async fn build(builder: &DefaultContextBuilder, transcript: &[Message]) -> ModelRequest {
         let execution = execution();
         let tools = vec![ToolSpec::new("clock.now", "Clock", "now", json!({"type": "object"}))];
-        builder.build(&ExecutionView { execution: &execution, transcript, tools: &tools }).await.unwrap()
+        builder
+            .build(&ExecutionView { execution: &execution, transcript, tools: &tools, context_budget: None })
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -344,6 +373,52 @@ mod tests {
         // The system text and the task are never dropped.
         assert_eq!(request.messages[0].content, PREAMBLE);
         assert!(text.contains(&"What time is it?"));
+    }
+
+    #[tokio::test]
+    async fn dropping_history_marks_the_request_as_edited_and_keeping_it_does_not() {
+        let mut transcript = Vec::new();
+        for n in 1..=5 {
+            transcript.extend(turn(n, 2_000));
+        }
+        assert!(build(&DefaultContextBuilder::with_budget(1_800), &transcript).await.history_edited);
+        assert!(!build(&DefaultContextBuilder::with_budget(1_000_000), &transcript).await.history_edited);
+        // Dropping something that is not history (extra knowledge) is not an edit of the conversation.
+        let builder = DefaultContextBuilder::with_budget(1_000_000).with_source(Arc::new(StaticSource::untrusted(
+            "knowledge",
+            "k ".repeat(100),
+            Priority::LOW,
+        )));
+        assert!(!build(&builder, &turn(1, 10)).await.history_edited);
+    }
+
+    #[tokio::test]
+    async fn the_budget_comes_from_the_model_profile_and_a_cap_can_only_lower_it() {
+        let execution = execution();
+        let tools: Vec<ToolSpec> = Vec::new();
+        let view =
+            |budget| ExecutionView { execution: &execution, transcript: &[], tools: &tools, context_budget: budget };
+        let default = DefaultContextBuilder::new();
+        assert_eq!(default.budget_for(&view(None)), UNKNOWN_MODEL_BUDGET);
+        assert_eq!(default.budget_for(&view(Some(5_000))), 5_000);
+        assert_eq!(default.budget_for(&view(Some(900_000))), DEFAULT_MAX_CONTEXT);
+        let capped = DefaultContextBuilder::with_budget(3_000);
+        assert_eq!(capped.budget_for(&view(Some(5_000))), 3_000);
+        assert_eq!(capped.budget_for(&view(Some(1_000))), 1_000);
+        assert_eq!(capped.budget_for(&view(None)), 3_000);
+    }
+
+    #[tokio::test]
+    async fn generation_params_travel_with_the_request() {
+        let mut execution = execution();
+        execution.request.params =
+            zorix_core::GenerationParams { max_output_tokens: Some(500), effort: Some(zorix_core::Effort::High) };
+        let request = DefaultContextBuilder::new()
+            .build(&ExecutionView { execution: &execution, transcript: &[], tools: &[], context_budget: None })
+            .await
+            .unwrap();
+        assert_eq!(request.params.max_output_tokens, Some(500));
+        assert_eq!(request.params.effort, Some(zorix_core::Effort::High));
     }
 
     #[tokio::test]
