@@ -101,6 +101,7 @@ mod tests {
             messages: vec![Message::user("hi")],
             tools: vec![],
             response_schema: None,
+            ..ModelRequest::default()
         }
     }
 

@@ -123,13 +123,7 @@ impl ModelGateway for ScriptedModel {
                 Turn::Fail(Failure::Permanent(message)) => return Err(ModelError::Permanent(message)),
                 Turn::Say(text) => {
                     let usage = usage_for(&request, text.chars().count());
-                    return Ok(ModelResponse {
-                        model: request.model,
-                        text,
-                        tool_calls: Vec::new(),
-                        usage,
-                        finish: FinishReason::Stop,
-                    });
+                    return Ok(ModelResponse::new(request.model, text, Vec::new(), usage, FinishReason::Stop));
                 }
                 Turn::Call { text, calls } => {
                     let tool_calls: Vec<ToolCallRequest> = calls
@@ -145,13 +139,7 @@ impl ModelGateway for ScriptedModel {
                     let chars =
                         text.chars().count() + tool_calls.iter().map(|c| c.arguments.to_string().len()).sum::<usize>();
                     let usage = usage_for(&request, chars);
-                    return Ok(ModelResponse {
-                        model: request.model,
-                        text,
-                        tool_calls,
-                        usage,
-                        finish: FinishReason::ToolCalls,
-                    });
+                    return Ok(ModelResponse::new(request.model, text, tool_calls, usage, FinishReason::ToolCalls));
                 }
             }
         }
@@ -172,6 +160,7 @@ mod tests {
             messages: vec![zorix_core::Message::user("hello")],
             tools: vec![],
             response_schema: None,
+            ..ModelRequest::default()
         }
     }
 
