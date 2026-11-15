@@ -231,6 +231,7 @@ impl ContextBuilder for DefaultContextBuilder {
             messages: segments.into_iter().flat_map(|segment| segment.messages).collect(),
             tools: view.tools.iter().map(|spec| spec.definition()).collect(),
             response_schema: view.execution.request.expected_output.clone(),
+            ..ModelRequest::default()
         })
     }
 }
