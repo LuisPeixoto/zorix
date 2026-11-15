@@ -17,6 +17,9 @@ pub struct ExecutionView<'a> {
     pub transcript: &'a [Message],
     /// The tools this execution may use.
     pub tools: &'a [ToolSpec],
+    /// How many tokens the model can be sent, from its profile: the window minus room for the answer and a margin.
+    /// `None` when nothing is known about the model.
+    pub context_budget: Option<u64>,
 }
 
 /// How important a segment is when the budget is short. Higher survives longer.

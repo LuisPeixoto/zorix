@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::error::{Error, Result};
 use crate::ids::{ConversationId, ExecutionId, TenantId};
+use crate::model::GenerationParams;
 use crate::permission::Grants;
 use crate::state::{ExecutionState, InvalidTransition, Trigger, transition};
 use crate::time::Timestamp;
@@ -31,6 +32,9 @@ pub struct TaskRequest {
     /// Free labels for the client (a task id, a screen). Never sent to the model.
     #[serde(default)]
     pub metadata: BTreeMap<String, String>,
+    /// Output size and effort for the model calls of this execution.
+    #[serde(default)]
+    pub params: GenerationParams,
 }
 
 /// What can go wrong with an execution, as numbers. Every limit is checked on every iteration.
