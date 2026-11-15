@@ -297,6 +297,16 @@ fn detail_of(body: &str) -> String {
     }
 }
 
+/// Shorten text to `max` characters, flattening line breaks.
+pub fn shorten(text: &str, max: usize) -> String {
+    let flat: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
+    if flat.chars().count() <= max {
+        flat
+    } else {
+        format!("{}…", flat.chars().take(max.saturating_sub(1)).collect::<String>())
+    }
+}
+
 /// Turn an `error` object carried inside a stream (HTTP 200, then a failure) into a [`ModelError`].
 pub fn classify_stream_error(provider: &str, error: &Value) -> ModelError {
     let kind_name = error["type"].as_str().unwrap_or("");
