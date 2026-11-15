@@ -638,7 +638,7 @@ impl Run {
                 call_id: call.id.clone(),
                 grants: self.exec.grants.clone(),
                 cancel: self.control.cancel.clone(),
-                workspace_root: self.engine.inner.config.workspace_root.clone(),
+                workspace_root: self.exec.workspace.clone().or_else(|| self.engine.inner.config.workspace_root.clone()),
             };
             let began = self.engine.now();
             let span = tracing::info_span!(

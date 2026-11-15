@@ -41,7 +41,7 @@ pub struct EngineConfig {
     pub retry: RetryPolicy,
     /// How many times one tool call is started when it fails with a temporary error.
     pub max_tool_attempts: u32,
-    /// The folder file tools are confined to. `None` means tools get no workspace.
+    /// The folder file tools are confined to when an execution does not name its own. `None` means no workspace.
     pub workspace_root: Option<PathBuf>,
     /// The host guarantees no other process uses this store (for example it holds the data folder's lock). Recovery
     /// then drops the leases that crashed processes left behind and takes over their work at once. Leave it off when
