@@ -13,8 +13,8 @@ use tracing::Instrument;
 use zorix_core::{
     Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, Error, EventKind, Execution, ExecutionId,
     ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState, Message, ModelError, ModelRequest,
-    ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Timestamp, Tool, ToolCallId, ToolCallRecord,
-    ToolCallRequest, ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash,
+    ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role, StepPhase, Timestamp, Tool, ToolCallId,
+    ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash,
 };
 
 use crate::engine::{Engine, RunControl};
@@ -44,6 +44,18 @@ impl From<Error> for Stop {
 }
 
 type Step<T = ()> = std::result::Result<T, Stop>;
+
+/// Room left for what is not conversation: the provider's own framing and the tool definitions.
+const CONTEXT_MARGIN_TOKENS: u64 = 1_024;
+
+/// The smallest context budget, so a tiny reported window cannot starve the required parts.
+const MIN_CONTEXT_TOKENS: u64 = 1_024;
+
+/// `events` followed by `last`.
+fn with(mut events: Vec<NewEvent>, last: NewEvent) -> Vec<NewEvent> {
+    events.push(last);
+    events
+}
 
 /// Records that travel with a commit.
 #[derive(Default)]
@@ -307,12 +319,27 @@ impl Run {
             return Err(self.fail(failure).await);
         }
         let tools = self.offered_tools();
+        let context_budget = self.engine.inner.model.describe(&self.exec.request.model).map(|profile| {
+            profile
+                .context_window
+                .saturating_sub(profile.max_output)
+                .saturating_sub(CONTEXT_MARGIN_TOKENS)
+                .max(MIN_CONTEXT_TOKENS)
+        });
         let built = {
-            let view = ExecutionView { execution: &self.exec, transcript: &self.state.transcript, tools: &tools };
+            let view = ExecutionView {
+                execution: &self.exec,
+                transcript: &self.state.transcript,
+                tools: &tools,
+                context_budget,
+            };
             self.engine.inner.context.build(&view).await
         };
         let request = match built {
-            Ok(request) => request,
+            Ok(mut request) => {
+                request.phase = self.phase();
+                request
+            }
             Err(error) => {
                 return Err(self
                     .fail(Failure::new(FailureKind::Internal, format!("Could not build the context: {error}")))
@@ -337,19 +364,23 @@ impl Run {
         usage.tool_calls = 0;
         self.exec.usage.add(&usage);
 
+        let mut events = self.fallback_events(&response);
         let responded = self.event(
             EventKind::ModelResponded,
             json!({
                 "iteration": self.exec.iteration,
                 "model": response.model,
+                "provider": response.provider,
+                "route": response.route,
                 "finish": response.finish,
                 "text_chars": response.text.chars().count(),
                 "tool_calls": response.tool_calls.len(),
                 "usage": usage,
             }),
         );
+        events.push(responded);
         if response.tool_calls.is_empty() {
-            return self.final_answer(response, responded).await;
+            return self.final_answer(response, events).await;
         }
 
         let iteration = self.exec.iteration;
@@ -362,13 +393,42 @@ impl Run {
                 call
             })
             .collect();
-        self.state.transcript.push(Message::assistant(response.text, calls.clone()));
+        self.state.transcript.push(Message::assistant(response.text, calls.clone()).with_native(response.native));
         self.state.pending = calls;
         let progress = self.event(
             EventKind::Progress,
             json!({ "iteration": iteration, "tool_calls_requested": self.exec.tool_calls_requested, "active_ms": self.exec.active_ms }),
         );
-        self.commit(&[Trigger::StepFinished], vec![responded, progress], Extras::checkpoint()).await
+        events.push(progress);
+        self.commit(&[Trigger::StepFinished], events, Extras::checkpoint()).await
+    }
+
+    /// Where in the execution a model call is: the first, a continuation after tool results, or a retry after a rejection.
+    fn phase(&self) -> StepPhase {
+        match self.state.transcript.last() {
+            None => StepPhase::Start,
+            Some(message) if message.role == Role::User => StepPhase::Retry,
+            Some(_) => StepPhase::Continue,
+        }
+    }
+
+    /// One event for each candidate a router passed over before the one that answered.
+    fn fallback_events(&self, response: &ModelResponse) -> Vec<NewEvent> {
+        let Some(route) = &response.route else { return Vec::new() };
+        route
+            .attempts
+            .windows(2)
+            .map(|pair| {
+                self.event(
+                    EventKind::ModelFallback,
+                    json!({
+                        "from": format!("{}/{}", pair[0].provider, pair[0].model),
+                        "to": format!("{}/{}", pair[1].provider, pair[1].model),
+                        "reason": pair[0].outcome,
+                    }),
+                )
+            })
+            .collect()
     }
 
     /// One model call with a timeout and retries for temporary errors.
@@ -415,7 +475,7 @@ impl Run {
         Err(self.fail(Failure::new(FailureKind::Internal, "The model was never called.")).await)
     }
 
-    async fn final_answer(&mut self, response: ModelResponse, responded: NewEvent) -> Step {
+    async fn final_answer(&mut self, response: ModelResponse, responded: Vec<NewEvent>) -> Step {
         let text = response.text.trim().to_string();
         let structured = self.exec.request.expected_output.as_ref().and_then(|_| parse_structured(&text));
         let result = ExecutionResult { text: text.clone(), structured };
@@ -443,7 +503,7 @@ impl Run {
                 self.state.pending.clear();
                 self.commit(
                     &[Trigger::StepFinished, Trigger::Complete],
-                    vec![responded, completed],
+                    with(responded, completed),
                     Extras::checkpoint(),
                 )
                 .await?;
@@ -455,17 +515,17 @@ impl Run {
                     json!({ "validator": validator, "reason": reason, "attempt": self.exec.validation_retries + 1 }),
                 );
                 if self.exec.validation_retries >= self.exec.limits.max_validation_retries {
-                    self.commit(&[Trigger::StepFinished], vec![responded, rejected], Extras::default()).await?;
+                    self.commit(&[Trigger::StepFinished], with(responded, rejected), Extras::default()).await?;
                     return Err(self
                         .fail(Failure::new(FailureKind::Validation, format!("The answer was rejected: {reason}")))
                         .await);
                 }
                 self.exec.validation_retries += 1;
-                self.state.transcript.push(Message::assistant(text, Vec::new()));
+                self.state.transcript.push(Message::assistant(text, Vec::new()).with_native(response.native.clone()));
                 self.state
                     .transcript
                     .push(Message::user(format!("Your answer was rejected: {reason} Answer again and fix this.")));
-                self.commit(&[Trigger::StepFinished], vec![responded, rejected], Extras::checkpoint()).await
+                self.commit(&[Trigger::StepFinished], with(responded, rejected), Extras::checkpoint()).await
             }
         }
     }
