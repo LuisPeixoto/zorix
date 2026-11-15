@@ -2,6 +2,7 @@
 //!
 //! The contracts live in `zorix-core`; this crate holds the default implementations.
 
+mod context;
 mod events;
 mod memory;
 mod policy;
@@ -9,6 +10,9 @@ mod policy;
 pub mod testing;
 mod tools;
 
+pub use context::{
+    DefaultContextBuilder, HistorySource, PREAMBLE, StaticSource, SystemSource, TaskSource, wrap_untrusted,
+};
 pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
