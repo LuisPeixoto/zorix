@@ -2,10 +2,12 @@
 //!
 //! The contracts live in `zorix-core`; this crate holds the default implementations.
 
+mod events;
 mod memory;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
+pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 
 #[cfg(test)]
