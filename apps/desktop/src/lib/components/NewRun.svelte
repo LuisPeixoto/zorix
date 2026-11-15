@@ -15,15 +15,12 @@
   let workspace = $state("");
   let allowRead = $state("*");
   let allowWrite = $state("");
-  let chosen = $state<Record<string, boolean>>({});
+  // What the person changed from the defaults. Offer the tools that need nothing more than a tool permission; file tools
+  // need a workspace, so they start off.
+  let overrides = $state<Record<string, boolean>>({});
   let pickError = $state<string | null>(null);
 
-  // Offer the tools that need nothing more than a tool permission; file tools need a workspace, so they start off.
-  $effect(() => {
-    if (Object.keys(chosen).length === 0 && store.tools.length > 0) {
-      chosen = Object.fromEntries(store.tools.map((t) => [t.id, !t.id.startsWith("workspace.")]));
-    }
-  });
+  const isOn = (id: string) => overrides[id] ?? !id.startsWith("workspace.");
 
   const how = (t: { requires_approval: boolean; annotations: { read_only: boolean } }) =>
     t.requires_approval ? "asks you first" : t.annotations.read_only ? "read-only" : "changes things";
@@ -44,7 +41,7 @@
     event.preventDefault();
     void store.start({
       prompt: prompt.trim(),
-      allow_tools: Object.entries(chosen).filter(([, on]) => on).map(([id]) => id),
+      allow_tools: store.tools.map((t) => t.id).filter(isOn),
       allow_read: workspace ? lines(allowRead) : [],
       allow_write: workspace ? lines(allowWrite) : [],
       workspace: workspace || undefined,
@@ -82,7 +79,12 @@
       {#each store.tools as tool (tool.id)}
         <li>
           <label class="flex cursor-pointer items-start gap-3 px-3 py-2 hover:bg-hover">
-            <input class="mt-1" type="checkbox" bind:checked={chosen[tool.id]} />
+            <input
+              class="mt-1"
+              type="checkbox"
+              checked={isOn(tool.id)}
+              onchange={(e) => (overrides[tool.id] = e.currentTarget.checked)}
+            />
             <span class="min-w-0 flex-1">
               <span class="font-mono text-xs">{tool.id}</span>
               <span class="ml-2 text-xs {tool.requires_approval ? 'text-warn' : 'text-faint'}">{how(tool)}</span>
