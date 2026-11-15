@@ -1,0 +1,37 @@
+[package]
+name = "zorix-desktop"
+description = "ZORIX desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "zorix_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "zorix-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+zorix-core.workspace = true
+zorix-runtime.workspace = true
+zorix-store.workspace = true
+zorix-sim.workspace = true
+zorix-tools.workspace = true
+futures-util.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
