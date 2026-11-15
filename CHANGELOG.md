@@ -32,7 +32,7 @@ runtime is driven by simulated models.
   `data-dir`, with JSON output and exit codes.
 - **Desktop app** (Tauri 2, Svelte 5): runs list, new run form, live run view with an approval card, pause, resume and cancel.
 - CI on Linux, macOS and Windows, and a release workflow for installers, command line archives and checksums.
-- Documentation, ten architecture decision records, and a comparison of the agent runtimes studied.
+- Documentation, eight architecture decision records, and a comparison of the agent runtimes studied.
 
 ### Known limits
 
