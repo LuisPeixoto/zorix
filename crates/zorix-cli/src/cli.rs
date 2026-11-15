@@ -9,7 +9,7 @@ use zorix_core::{ExecutionId, ExecutionState, TenantId};
 
 /// Run AI activities under control: permissions, approvals, limits, and a record of everything.
 #[derive(Debug, Parser)]
-#[command(name = "zorix", version, about, long_about = None)]
+#[command(name = "zorix", version, long_about = None)]
 pub struct Cli {
     /// The folder where ZORIX keeps its data.
     #[arg(long, global = true, env = "ZORIX_HOME", value_name = "DIR")]
