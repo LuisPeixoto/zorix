@@ -3,11 +3,13 @@
 //! The contracts live in `zorix-core`; this crate holds the default implementations.
 
 mod context;
+mod engine;
 mod events;
 mod memory;
 mod policy;
 mod redact;
 mod retry;
+mod run;
 mod scheduler;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
@@ -17,6 +19,7 @@ mod validators;
 pub use context::{
     DefaultContextBuilder, HistorySource, PREAMBLE, StaticSource, SystemSource, TaskSource, wrap_untrusted,
 };
+pub use engine::{Engine, EngineBuilder, EngineConfig};
 pub use events::{EventBus, follow, is_final};
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
