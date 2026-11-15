@@ -234,6 +234,13 @@ impl Engine {
         self.start(&tenant, created.id).await
     }
 
+    /// A readable summary of one execution: model, tools, step timings, usage and outcome.
+    pub async fn summary(&self, tenant: &TenantId, id: ExecutionId) -> Result<crate::summary::ExecutionSummary> {
+        let detail = self.detail(tenant, id).await?;
+        let events = self.events(tenant, id, 0).await?;
+        Ok(crate::summary::summarize(&detail, &events))
+    }
+
     /// The event bus, for subscribers that want every execution.
     pub fn bus(&self) -> &EventBus {
         &self.inner.bus
