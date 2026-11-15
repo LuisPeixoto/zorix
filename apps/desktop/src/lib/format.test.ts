@@ -63,6 +63,10 @@ test("events are described for people", () => {
   assert.equal(describeEvent(event("execution.tool.completed", { tool: "t", duration_ms: 3 })).detail, "3 ms");
   assert.equal(describeEvent(event("execution.model.responded", { tool_calls: 0 })).detail, "final answer");
   assert.equal(describeEvent(event("execution.model.responded", { tool_calls: 2 })).detail, "wants 2 tool calls");
+  assert.equal(
+    describeEvent(event("execution.model.fallback", { from: "a/x", to: "b/y", reason: "rate_limited" })).detail,
+    "a/x → b/y (rate_limited)",
+  );
   assert.equal(describeEvent(event("execution.future.thing")).title, "future.thing", "unknown kinds still show up");
 });
 

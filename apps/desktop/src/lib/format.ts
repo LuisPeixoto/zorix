@@ -105,6 +105,8 @@ export function describeEvent(event: ExecEvent): EventView {
     }
     case "execution.model.retrying":
       return { title: "Model failed, trying again", detail: `${p.error} (in ${p.delay_ms} ms)`, tone: "warn" };
+    case "execution.model.fallback":
+      return { title: "Switched model", detail: `${p.from} → ${p.to} (${p.reason})`, tone: "warn" };
     case "execution.tool.requested":
       return { title: `Tool requested: ${tool}`, detail: shorten(JSON.stringify(p.arguments ?? {}), 140), tone: "info" };
     case "execution.tool.started":
