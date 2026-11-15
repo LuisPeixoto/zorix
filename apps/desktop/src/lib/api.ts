@@ -78,10 +78,12 @@ export interface Summary {
   iterations: number;
   model_calls: number;
   model_retries: number;
+  models: string[];
+  fallbacks: number;
   total_ms: number | null;
   active_ms: number;
   usage: Usage;
-  steps: { kind: string; name: string; duration_ms: number }[];
+  steps: { kind: string; name: string; provider: string | null; duration_ms: number }[];
 }
 
 export interface RunDetail {

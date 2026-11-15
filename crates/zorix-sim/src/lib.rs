@@ -2,9 +2,11 @@
 
 mod demo;
 mod faulty;
+mod profiled;
 mod scripted;
 mod usage;
 
 pub use demo::DemoModel;
 pub use faulty::Faulty;
+pub use profiled::Profiled;
 pub use scripted::{Failure, ScriptedCall, ScriptedModel, Turn};

@@ -70,18 +70,25 @@ impl Turn {
 pub struct ScriptedModel {
     turns: Mutex<VecDeque<Turn>>,
     seen: Mutex<Vec<ModelRequest>>,
+    native_provider: Option<String>,
 }
 
 impl ScriptedModel {
     /// A model with this script.
     pub fn new(turns: impl IntoIterator<Item = Turn>) -> Self {
-        Self { turns: Mutex::new(turns.into_iter().collect()), seen: Mutex::new(Vec::new()) }
+        Self { turns: Mutex::new(turns.into_iter().collect()), seen: Mutex::new(Vec::new()), native_provider: None }
     }
 
     /// Read a script from JSON: a list of turns such as `[{"say": "hi"}]`.
     pub fn from_json(text: &str) -> Result<Self, String> {
         let turns: Vec<Turn> = serde_json::from_str(text).map_err(|e| format!("The script is not valid: {e}"))?;
         Ok(Self::new(turns))
+    }
+
+    /// Make every answer carry a native turn from this provider, as a real provider's thinking blocks would.
+    pub fn with_native(mut self, provider: &str) -> Self {
+        self.native_provider = Some(provider.to_string());
+        self
     }
 
     /// Every request received so far.
@@ -92,6 +99,28 @@ impl ScriptedModel {
     /// How many turns are left.
     pub fn remaining(&self) -> usize {
         self.turns.lock().len()
+    }
+}
+
+impl ScriptedModel {
+    fn answer(
+        &self,
+        model: String,
+        text: String,
+        tool_calls: Vec<ToolCallRequest>,
+        usage: zorix_core::Usage,
+        finish: FinishReason,
+    ) -> ModelResponse {
+        let mut response = ModelResponse::new(model.clone(), text.clone(), tool_calls, usage, finish);
+        if let Some(provider) = &self.native_provider {
+            response.provider = Some(provider.clone());
+            response.native = Some(zorix_core::NativeTurn {
+                provider: provider.clone(),
+                model,
+                content: serde_json::json!({ "text": text }),
+            });
+        }
+        response
     }
 }
 
@@ -123,7 +152,7 @@ impl ModelGateway for ScriptedModel {
                 Turn::Fail(Failure::Permanent(message)) => return Err(ModelError::Permanent(message)),
                 Turn::Say(text) => {
                     let usage = usage_for(&request, text.chars().count());
-                    return Ok(ModelResponse::new(request.model, text, Vec::new(), usage, FinishReason::Stop));
+                    return Ok(self.answer(request.model, text, Vec::new(), usage, FinishReason::Stop));
                 }
                 Turn::Call { text, calls } => {
                     let tool_calls: Vec<ToolCallRequest> = calls
@@ -139,7 +168,7 @@ impl ModelGateway for ScriptedModel {
                     let chars =
                         text.chars().count() + tool_calls.iter().map(|c| c.arguments.to_string().len()).sum::<usize>();
                     let usage = usage_for(&request, chars);
-                    return Ok(ModelResponse::new(request.model, text, tool_calls, usage, FinishReason::ToolCalls));
+                    return Ok(self.answer(request.model, text, tool_calls, usage, FinishReason::ToolCalls));
                 }
             }
         }

@@ -28,6 +28,9 @@ pub struct StepTiming {
     pub kind: String,
     /// The model or the tool.
     pub name: String,
+    /// The provider that served a model step.
+    #[serde(default)]
+    pub provider: Option<String>,
     /// Milliseconds from asking to answering, retries included.
     pub duration_ms: u64,
 }
@@ -47,6 +50,12 @@ pub struct ExecutionSummary {
     pub model_calls: u32,
     /// Retries of model calls.
     pub model_retries: u32,
+    /// The models that answered, as `provider/model`, in the order they first did.
+    #[serde(default)]
+    pub models: Vec<String>,
+    /// How many times a router passed over a model for another.
+    #[serde(default)]
+    pub fallbacks: u32,
     /// The tool calls, in order.
     pub tool_calls: Vec<ToolSummary>,
     /// Timing of every model and tool step, in order.
@@ -71,20 +80,36 @@ pub fn summarize(detail: &ExecutionDetail, events: &[ExecutionEvent]) -> Executi
     let mut steps = Vec::new();
     let mut model_started = None;
     let mut model_retries = 0;
+    let mut fallbacks = 0;
+    let mut models: Vec<String> = Vec::new();
     for event in events {
         match event.kind {
             EventKind::ModelRequested => model_started = Some(event.at),
             EventKind::ModelRetrying => model_retries += 1,
+            EventKind::ModelFallback => fallbacks += 1,
             EventKind::ModelResponded => {
                 if let Some(started) = model_started.take() {
                     let name = event.payload["model"].as_str().unwrap_or(&execution.request.model).to_string();
-                    steps.push(StepTiming { kind: "model".into(), name, duration_ms: event.at.since(started) });
+                    let provider = event.payload["provider"].as_str().map(str::to_string);
+                    let full = match &provider {
+                        Some(provider) => format!("{provider}/{name}"),
+                        None => name.clone(),
+                    };
+                    if !models.contains(&full) {
+                        models.push(full);
+                    }
+                    steps.push(StepTiming {
+                        kind: "model".into(),
+                        name,
+                        provider,
+                        duration_ms: event.at.since(started),
+                    });
                 }
             }
             EventKind::ToolCompleted | EventKind::ToolFailed => {
                 let name = event.payload["tool"].as_str().unwrap_or("?").to_string();
                 let duration_ms = event.payload["duration_ms"].as_u64().unwrap_or(0);
-                steps.push(StepTiming { kind: "tool".into(), name, duration_ms });
+                steps.push(StepTiming { kind: "tool".into(), name, provider: None, duration_ms });
             }
             _ => {}
         }
@@ -110,6 +135,8 @@ pub fn summarize(detail: &ExecutionDetail, events: &[ExecutionEvent]) -> Executi
         iterations: execution.iteration,
         model_calls: execution.usage.model_calls,
         model_retries,
+        models,
+        fallbacks,
         tool_calls,
         steps,
         total_ms: execution.finished_at.map(|end| end.since(execution.created_at)),
