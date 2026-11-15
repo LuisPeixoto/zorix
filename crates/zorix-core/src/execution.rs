@@ -116,8 +116,14 @@ pub struct Usage {
     pub input_tokens: u64,
     /// Tokens produced by models.
     pub output_tokens: u64,
-    /// Cost in millionths of a dollar.
+    /// Cost in millionths of a dollar. Zero when no price is known.
     pub cost_micros: u64,
+    /// Input tokens served from the provider's prompt cache.
+    pub cache_read_tokens: u64,
+    /// Input tokens written to the provider's prompt cache.
+    pub cache_write_tokens: u64,
+    /// Tokens the model spent thinking (when the provider reports them separately).
+    pub reasoning_tokens: u64,
     /// Model calls that returned.
     pub model_calls: u32,
     /// Tool calls that ran.
@@ -135,6 +141,9 @@ impl Usage {
         self.input_tokens = self.input_tokens.saturating_add(other.input_tokens);
         self.output_tokens = self.output_tokens.saturating_add(other.output_tokens);
         self.cost_micros = self.cost_micros.saturating_add(other.cost_micros);
+        self.cache_read_tokens = self.cache_read_tokens.saturating_add(other.cache_read_tokens);
+        self.cache_write_tokens = self.cache_write_tokens.saturating_add(other.cache_write_tokens);
+        self.reasoning_tokens = self.reasoning_tokens.saturating_add(other.reasoning_tokens);
         self.model_calls = self.model_calls.saturating_add(other.model_calls);
         self.tool_calls = self.tool_calls.saturating_add(other.tool_calls);
     }
@@ -428,10 +437,26 @@ mod tests {
     #[test]
     fn usage_adds_without_overflowing() {
         let mut total = Usage { input_tokens: u64::MAX, ..Usage::default() };
-        total.add(&Usage { input_tokens: 5, output_tokens: 7, cost_micros: 3, model_calls: 1, tool_calls: 2 });
+        total.add(&Usage {
+            input_tokens: 5,
+            output_tokens: 7,
+            cost_micros: 3,
+            model_calls: 1,
+            tool_calls: 2,
+            ..Usage::default()
+        });
         assert_eq!(total.input_tokens, u64::MAX);
         assert_eq!(total.output_tokens, 7);
         assert_eq!(total.total_tokens(), u64::MAX);
+    }
+
+    #[test]
+    fn usage_from_version_0_1_loads_with_the_new_counters_at_zero() {
+        let usage: Usage = serde_json::from_str(
+            r#"{"input_tokens":4,"output_tokens":2,"cost_micros":6,"model_calls":1,"tool_calls":0}"#,
+        )
+        .unwrap();
+        assert_eq!((usage.input_tokens, usage.cache_read_tokens, usage.reasoning_tokens), (4, 0, 0));
     }
 
     #[test]
