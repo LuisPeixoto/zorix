@@ -13,9 +13,13 @@
 
   onMount(() => {
     theme.init();
-    void store.init();
-    // For screenshots and reviews: open straight to the design system.
-    if (import.meta.env.VITE_START_VIEW === "design") store.showDesign();
+    void store.init().then(() => {
+      // For screenshots and reviews: open straight to a screen.
+      const start = import.meta.env.VITE_START_VIEW;
+      if (start === "design") store.showDesign();
+      if (start === "providers") store.showProviders();
+      if (start === "run" && store.runs[0]) void store.select(store.runs[0].id);
+    });
   });
 
   // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.

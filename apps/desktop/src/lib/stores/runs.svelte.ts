@@ -27,6 +27,7 @@ import {
   watchRun,
 } from "../api.ts";
 import { isFinished } from "../format.ts";
+import { toast } from "./toast.svelte.ts";
 
 class RunsStore {
   info = $state<AppInfo | null>(null);
@@ -40,7 +41,6 @@ class RunsStore {
   view = $state<"runs" | "providers" | "design">("runs");
   providers = $state<ProviderRow[]>([]);
   models = $state<ModelChoices | null>(null);
-  providerNote = $state<string | null>(null);
   now = $state(Date.now());
 
   #refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -75,7 +75,6 @@ class RunsStore {
 
   showProviders(): void {
     this.view = "providers";
-    this.providerNote = null;
     void this.refreshProviders();
   }
 
@@ -88,27 +87,24 @@ class RunsStore {
   }
 
   async saveKey(name: string, key: string): Promise<boolean> {
-    this.providerNote = null;
     const ok = await this.#act(() => setProviderKey(name, key));
-    if (ok) this.providerNote = `Key for ${name} saved in the system keychain.`;
+    if (ok) toast.ok(`Key for ${name} saved in the system keychain.`);
     await this.refreshProviders();
     return ok;
   }
 
   async deleteKey(name: string): Promise<void> {
-    this.providerNote = null;
     const ok = await this.#act(() => removeProviderKey(name));
-    if (ok) this.providerNote = `Key for ${name} removed.`;
+    if (ok) toast.ok(`Key for ${name} removed.`);
     await this.refreshProviders();
   }
 
   async check(name: string): Promise<void> {
-    this.providerNote = null;
     let count = 0;
     const ok = await this.#act(async () => {
       count = await testProvider(name);
     });
-    if (ok) this.providerNote = `${name} answered: ${count} model(s) available.`;
+    if (ok) toast.ok(`${name} answered: ${count} model(s) available.`);
     await this.refreshProviders();
   }
 

@@ -159,3 +159,23 @@ export function keyLabel(key: string): string {
       return "Keychain unavailable";
   }
 }
+
+/** The tone of a provider's key state, for its badge. */
+export function keyTone(key: string): Tone {
+  return key === "present" ? "ok" : key === "missing" ? "warn" : key === "unavailable" ? "err" : "muted";
+}
+
+/** An icon for each kind of event, so the timeline can be scanned. */
+export function eventIcon(kind: string): string {
+  if (kind.includes("fallback")) return "route";
+  if (kind.includes("approval") || kind.includes("waiting_approval")) return "shield";
+  if (kind.includes(".tool.")) return "wrench";
+  if (kind.includes(".model.")) return "cpu";
+  if (kind.endsWith(".completed")) return "check-circle";
+  if (kind.endsWith(".failed")) return "x-circle";
+  if (kind.endsWith(".cancelled")) return "stop";
+  if (kind.endsWith(".paused")) return "pause";
+  if (kind.endsWith(".resumed") || kind.endsWith(".recovered")) return "refresh";
+  if (kind.endsWith(".created") || kind.endsWith(".queued") || kind.endsWith(".started")) return "play";
+  return "info";
+}

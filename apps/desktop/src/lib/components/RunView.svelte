@@ -1,6 +1,8 @@
 <script lang="ts">
   import { duration, isFinished, isLive, shortId, tokens } from "../format.ts";
   import { store } from "../stores/runs.svelte.ts";
+  import { toast } from "../stores/toast.svelte.ts";
+  import { Badge, Button, Callout, Card, Icon, IconButton, List, ListRow, Stat } from "../ui/index.ts";
   import ApprovalCard from "./ApprovalCard.svelte";
   import StatusBadge from "./StatusBadge.svelte";
   import Timeline from "./Timeline.svelte";
@@ -8,96 +10,119 @@
   const detail = $derived(store.detail);
   const run = $derived(detail?.execution);
   const pending = $derived(detail?.approvals.filter((a) => a.status === "pending") ?? []);
+  const modelSteps = $derived(detail?.summary.steps.filter((s) => s.kind === "model") ?? []);
+
+  async function copyId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      toast.ok("Run id copied.");
+    } catch {
+      toast.err("Could not copy the id.");
+    }
+  }
+
+  const statusLabel = (status: string) => status.replace("_", " ");
+  const callTone = (status: string) =>
+    status === "succeeded" ? "ok" : status === "failed" ? "err" : status === "denied" ? "warn" : "muted";
 </script>
 
 {#if run && detail}
   <div class="flex h-full flex-col overflow-y-auto">
-    <header class="border-b border-line bg-panel px-6 py-4">
-      <div class="flex items-start justify-between gap-4">
+    <header class="relative shrink-0 overflow-hidden border-b border-line bg-panel px-6 py-5">
+      <span class="glow -top-24 -right-16 size-60" aria-hidden="true"></span>
+      <div class="relative flex items-start justify-between gap-4">
         <div class="min-w-0">
           <StatusBadge state={run.state} />
-          <h2 class="mt-1 text-2xl font-semibold leading-tight break-words">{run.request.prompt}</h2>
-          <p class="mt-1 font-mono text-xs text-faint">{run.id}</p>
+          <h2 class="selectable mt-2 text-2xl leading-tight font-semibold break-words">{run.request.prompt}</h2>
+          <p class="mt-1.5 flex items-center gap-1 text-xs text-faint">
+            <span class="mono selectable">{run.id}</span>
+            <IconButton label="Copy the run id" icon="copy" size="sm" onclick={() => copyId(run.id)} />
+          </p>
         </div>
         <div class="flex shrink-0 gap-2">
           {#if run.state === "paused"}
-            <button class="rounded-md bg-accent px-3 py-1.5 font-medium text-accent-fg" disabled={store.busy} onclick={() => store.resume()}>Resume</button>
+            <Button variant="primary" icon="play" disabled={store.busy} onclick={() => store.resume()}>Resume</Button>
           {/if}
           {#if isLive(run.state)}
-            <button class="rounded-md border border-line px-3 py-1.5 hover:bg-hover" disabled={store.busy} onclick={() => store.pause()}>Pause</button>
+            <Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>
           {/if}
           {#if !isFinished(run.state)}
-            <button class="rounded-md border border-line px-3 py-1.5 text-err hover:bg-hover" disabled={store.busy} onclick={() => store.cancel()}>Cancel</button>
+            <Button variant="danger" icon="stop" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>
           {/if}
         </div>
       </div>
 
-      <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-        <div><dt class="text-xs text-faint">Model steps</dt><dd class="text-lg font-semibold">{detail.summary.model_calls}</dd></div>
-        <div><dt class="text-xs text-faint">Tool calls</dt><dd class="text-lg font-semibold">{run.usage.tool_calls}</dd></div>
-        <div><dt class="text-xs text-faint">Tokens</dt><dd class="text-lg font-semibold">{tokens(run.usage)}</dd></div>
-        <div><dt class="text-xs text-faint" title="Time spent working; waiting for you is not counted">Work time</dt><dd class="text-lg font-semibold">{duration(run.active_ms)}</dd></div>
+      <dl class="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat icon="cpu" label="Model steps" value={detail.summary.model_calls} />
+        <Stat icon="wrench" label="Tool calls" value={run.usage.tool_calls} />
+        <Stat icon="sparkles" label="Tokens" value={tokens(run.usage)} />
+        <Stat icon="clock" label="Work time" value={duration(run.active_ms)} detail="Waiting for you is not counted" />
       </dl>
     </header>
 
-    <div class="space-y-5 p-6">
+    <div class="mx-auto w-full max-w-4xl shrink-0 space-y-5 p-6">
       {#each pending as approval (approval.id)}
         <ApprovalCard {approval} />
       {/each}
 
       {#if run.result}
-        <section class="rounded-lg border border-line bg-panel p-4" aria-label="Result">
-          <h3 class="text-base font-semibold text-ok">Result</h3>
-          <pre class="mt-2 font-sans whitespace-pre-wrap">{run.result.text}</pre>
-        </section>
+        <Card title="Result" icon="check-circle">
+          <pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>
+        </Card>
       {/if}
       {#if run.failure}
-        <section class="rounded-lg border border-err/60 bg-err/10 p-4" aria-label="Failure">
-          <h3 class="text-base font-semibold text-err">It did not finish</h3>
-          <p class="mt-1">{run.failure.message}</p>
-        </section>
+        <Callout tone="err" title="It did not finish"><span class="selectable">{run.failure.message}</span></Callout>
       {/if}
       {#if run.state === "cancelled"}
-        <p class="text-muted">Cancelled{run.cancel_reason ? `: ${run.cancel_reason}` : "."}</p>
+        <Callout tone="muted" icon="stop" title="Cancelled">{run.cancel_reason ?? ""}</Callout>
       {/if}
 
-      <section aria-label="Timeline">
-        <h3 class="mb-2 text-base font-semibold">What happened</h3>
+      <Card title="What happened" icon="history">
         <Timeline events={store.events} />
-      </section>
+      </Card>
 
       {#if detail.tool_calls.length}
-        <section aria-label="Tool calls">
-          <h3 class="mb-2 text-base font-semibold">Tools</h3>
-          <ul class="divide-y divide-line rounded-lg border border-line bg-panel">
+        <Card title="Tools" icon="wrench" padding="none">
+          <List class="rounded-none border-0 shadow-none" label="Tool calls">
             {#each detail.tool_calls as call (call.call_id)}
-              <li class="flex items-baseline gap-3 px-3 py-2">
-                <span class="font-mono text-xs">{call.tool}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-xs text-muted">{JSON.stringify(call.arguments)}</span>
-                <span class="text-xs text-muted">{call.status.replace("_", " ")}</span>
-              </li>
+              <ListRow>
+                <span class="mono shrink-0 text-sm font-medium">{call.tool}</span>
+                <span class="selectable mono min-w-0 flex-1 truncate text-xs text-muted">{JSON.stringify(call.arguments)}</span>
+                <Badge tone={callTone(call.status)} dot>{statusLabel(call.status)}</Badge>
+              </ListRow>
             {/each}
-          </ul>
-        </section>
+          </List>
+        </Card>
       {/if}
-      {#if detail.summary.steps.some((st) => st.kind === "model")}
-        <section aria-label="Models used">
-          <h3 class="mb-2 text-base font-semibold">Models used</h3>
-          <ul class="divide-y divide-line rounded-lg border border-line bg-panel">
-            {#each detail.summary.steps.filter((st) => st.kind === "model") as st, i (i)}
-              <li class="flex items-baseline gap-3 px-3 py-2">
+
+      {#if modelSteps.length}
+        <Card title="Models used" icon="cpu" padding="none">
+          <List class="rounded-none border-0 shadow-none" label="Models used">
+            {#each modelSteps as step, i (i)}
+              <ListRow>
                 <span class="text-xs text-faint">step {i + 1}</span>
-                <span class="min-w-0 flex-1 truncate font-mono text-xs">{st.provider ? `${st.provider}/${st.name}` : st.name}</span>
-                <span class="text-xs text-muted">{duration(st.duration_ms)}</span>
-              </li>
+                <span class="mono min-w-0 flex-1 truncate text-sm">{step.provider ? `${step.provider}/${step.name}` : step.name}</span>
+                <span class="mono text-xs text-muted tabular-nums">{duration(step.duration_ms)}</span>
+              </ListRow>
             {/each}
-          </ul>
-          {#if detail.summary.fallbacks > 0}<p class="mt-1 text-xs text-warn">Switched model {detail.summary.fallbacks} time(s) because one was unavailable.</p>{/if}
-        </section>
+          </List>
+          {#snippet footer()}
+            <span class="flex items-center gap-1.5 text-xs {detail.summary.fallbacks > 0 ? 'text-warn' : 'text-muted'}">
+              <Icon name={detail.summary.fallbacks > 0 ? "route" : "check"} size={13} />
+              {detail.summary.fallbacks > 0
+                ? `Switched model ${detail.summary.fallbacks} time(s) because one was unavailable.`
+                : "No fallback was needed."}
+            </span>
+          {/snippet}
+        </Card>
       {/if}
-      <p class="text-xs text-faint">Run {shortId(run.id)} · model {run.request.model}</p>
+      <p class="text-xs text-faint">Run {shortId(run.id)} · asked for <span class="mono">{run.request.model}</span></p>
     </div>
   </div>
 {:else}
-  <p class="p-6 text-muted">Loading…</p>
+  <div class="mx-auto max-w-4xl space-y-4 p-6" aria-busy="true" aria-label="Loading">
+    <div class="skeleton h-6 w-24"></div>
+    <div class="skeleton h-8 w-2/3"></div>
+    <div class="grid grid-cols-4 gap-3"><div class="skeleton h-20"></div><div class="skeleton h-20"></div><div class="skeleton h-20"></div><div class="skeleton h-20"></div></div>
+  </div>
 {/if}

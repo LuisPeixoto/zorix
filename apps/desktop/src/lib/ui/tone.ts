@@ -18,7 +18,7 @@ const MAP: Record<UiTone, Record<ToneKind, string>> = {
     soft: "bg-warn/14 text-warn",
     border: "border-warn/45",
     solid: "bg-warn text-bg",
-    callout: "border-warn/40 bg-warn/10",
+    callout: "border-warn/40 bg-warn/8",
   },
   err: {
     text: "text-err",
