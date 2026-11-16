@@ -13,6 +13,7 @@ pub mod ndjson;
 pub mod ollama;
 pub mod openai_chat;
 pub mod openai_responses;
+pub mod router;
 pub mod secrets;
 pub mod sse;
 
@@ -29,5 +30,6 @@ pub use ndjson::NdjsonReader;
 pub use ollama::{OllamaGateway, OllamaOptions};
 pub use openai_chat::{OpenAiChatGateway, OpenAiChatOptions};
 pub use openai_responses::{OpenAiOptions, OpenAiResponsesGateway};
+pub use router::{Candidate, ProviderEntry, Resolved, Router};
 pub use secrets::{ChainStore, EnvStore, KeychainStore, MemoryStore, SecretError, SecretStore, get_async};
 pub use sse::{SseEvent, SseParser, SseReader};
