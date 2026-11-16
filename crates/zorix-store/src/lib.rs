@@ -3,10 +3,12 @@
 //! [`SqliteRepository`] implements `ExecutionRepository`; [`paths`] says where the data lives and keeps two programs
 //! from using it at once.
 
+pub mod memory;
 pub mod paths;
 mod schema;
 mod sqlite;
 
+pub use memory::SqliteMemoryStore;
 pub use paths::{DataDirLock, HOME_VARIABLE, LockError, data_dir, database_path};
 pub use schema::LATEST as SCHEMA_VERSION;
 pub use sqlite::SqliteRepository;

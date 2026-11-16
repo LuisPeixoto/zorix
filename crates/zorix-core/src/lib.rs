@@ -35,7 +35,8 @@ pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, KnowledgeRootId,
 pub use memory::{
     ChunkView, Corpus, DocState, DocStatus, DocumentWrite, KnowledgeRoot, MemoryFilter, MemoryItem, MemoryKind,
     MemoryOptions, MemoryOrigin, MemoryPatch, MemorySettings, MemoryStatus, MemoryStore, NewChunk, NewMemory, NewRoot,
-    OperationRecord, RecallMode, RecallSnapshot, Remembered, Scope, TextHit, VectorHit, Visibility,
+    OperationRecord, RecallMode, RecallSnapshot, Remembered, Scope, TextHit, VectorHit, Visibility, chunk_key,
+    memory_key, operation_key, text_hash,
 };
 pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
 pub use model::{

@@ -8,10 +8,32 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use crate::error::Result;
 use crate::ids::{ApprovalId, ConversationId, ExecutionId, KnowledgeRootId, MemoryId, TenantId, ToolCallId};
 use crate::time::Timestamp;
+
+/// SHA-256 of a text, in lowercase hex. It keys vectors, so the same text is never embedded twice, and it detects
+/// duplicates. Callers pass the exact text that is embedded (trimmed).
+pub fn text_hash(text: &str) -> String {
+    Sha256::digest(text.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The key a snapshot uses for a long-term item.
+pub fn memory_key(id: MemoryId) -> String {
+    format!("m:{id}")
+}
+
+/// The key a snapshot uses for a document chunk.
+pub fn chunk_key(id: i64) -> String {
+    format!("k:{id}")
+}
+
+/// The key a snapshot uses for an operational record.
+pub fn operation_key(id: ExecutionId) -> String {
+    format!("o:{id}")
+}
 
 /// Where a memory applies.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -704,6 +726,16 @@ pub trait MemoryStore: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hashes_and_keys_are_stable() {
+        assert_eq!(text_hash("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        let id = MemoryId::new();
+        assert_eq!(memory_key(id), format!("m:{id}"));
+        assert_eq!(chunk_key(7), "k:7");
+        let e = ExecutionId::new();
+        assert_eq!(operation_key(e), format!("o:{e}"));
+    }
 
     #[test]
     fn scopes_round_trip_and_visibility_is_widest_first() {
