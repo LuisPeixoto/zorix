@@ -115,8 +115,44 @@ export interface StartRun {
   allow_write: string[];
   workspace?: string;
   max_iterations?: number;
+  /** `provider/model`, `route:name`, an alias or `demo`. Left out: the default. */
+  model?: string;
 }
 
+export interface ProviderRow {
+  name: string;
+  kind: string;
+  url: string;
+  local: boolean;
+  enabled: boolean;
+  key: "not_needed" | "present" | "missing" | "unavailable";
+  key_note: string | null;
+}
+
+export interface ModelRow {
+  reference: string;
+  name: string;
+  context_window: number;
+  tools: boolean;
+  vision: boolean;
+  local: boolean;
+  price_known: boolean;
+}
+
+export interface ModelChoices {
+  aliases: string[];
+  routes: string[];
+  models: ModelRow[];
+  /** What "default" means, or why it means nothing yet. */
+  default: { Ok: string } | { Err: string };
+}
+
+export const listProviders = () => invoke<ProviderRow[]>("list_providers");
+export const listModels = () => invoke<ModelChoices>("list_models");
+/** The key goes straight to the system keychain on the Rust side; nothing keeps it here. */
+export const setProviderKey = (name: string, key: string) => invoke<void>("set_provider_key", { name, key });
+export const removeProviderKey = (name: string) => invoke<boolean>("remove_provider_key", { name });
+export const testProvider = (name: string) => invoke<number>("test_provider", { name });
 export const appInfo = () => invoke<AppInfo>("app_info");
 export const listTools = () => invoke<ToolSpec[]>("list_tools");
 export const listRuns = (limit = 50) => invoke<Execution[]>("list_runs", { limit });

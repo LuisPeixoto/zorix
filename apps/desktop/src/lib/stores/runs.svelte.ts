@@ -2,6 +2,8 @@
 import {
   type AppInfo,
   type ExecEvent,
+  type ModelChoices,
+  type ProviderRow,
   type Execution,
   type RunDetail,
   type StartRun,
@@ -10,13 +12,18 @@ import {
   cancelRun,
   decideRun,
   errorText,
+  listModels,
+  listProviders,
   listRuns,
   listTools,
   pauseRun,
+  removeProviderKey,
   resumeRun,
   runDetail,
+  setProviderKey,
   startRun,
   stopWatch,
+  testProvider,
   watchRun,
 } from "../api.ts";
 import { isFinished } from "../format.ts";
@@ -30,6 +37,10 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
+  view = $state<"runs" | "providers">("runs");
+  providers = $state<ProviderRow[]>([]);
+  models = $state<ModelChoices | null>(null);
+  providerNote = $state<string | null>(null);
   now = $state(Date.now());
 
   #refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,6 +54,7 @@ class RunsStore {
       this.info = await appInfo();
       if (this.info.error) return;
       this.tools = await listTools();
+      await this.refreshProviders();
       await this.refreshList();
     } catch (e) {
       this.error = errorText(e);
@@ -51,6 +63,49 @@ class RunsStore {
       this.now = Date.now();
       if (!this.info?.error) void this.refreshList();
     }, 2000);
+  }
+
+  async refreshProviders(): Promise<void> {
+    try {
+      [this.providers, this.models] = await Promise.all([listProviders(), listModels()]);
+    } catch (e) {
+      this.error = errorText(e);
+    }
+  }
+
+  showProviders(): void {
+    this.view = "providers";
+    this.providerNote = null;
+    void this.refreshProviders();
+  }
+
+  showRuns(): void {
+    this.view = "runs";
+  }
+
+  async saveKey(name: string, key: string): Promise<boolean> {
+    this.providerNote = null;
+    const ok = await this.#act(() => setProviderKey(name, key));
+    if (ok) this.providerNote = `Key for ${name} saved in the system keychain.`;
+    await this.refreshProviders();
+    return ok;
+  }
+
+  async deleteKey(name: string): Promise<void> {
+    this.providerNote = null;
+    const ok = await this.#act(() => removeProviderKey(name));
+    if (ok) this.providerNote = `Key for ${name} removed.`;
+    await this.refreshProviders();
+  }
+
+  async check(name: string): Promise<void> {
+    this.providerNote = null;
+    let count = 0;
+    const ok = await this.#act(async () => {
+      count = await testProvider(name);
+    });
+    if (ok) this.providerNote = `${name} answered: ${count} model(s) available.`;
+    await this.refreshProviders();
   }
 
   async refreshList(): Promise<void> {

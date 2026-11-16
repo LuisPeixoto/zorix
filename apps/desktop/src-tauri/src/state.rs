@@ -7,6 +7,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ExecutionId, TenantId};
+use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::DemoModel;
 use zorix_store::{DataDirLock, SqliteRepository, database_path};
@@ -18,6 +19,12 @@ pub struct Services {
     pub engine: Engine,
     /// Whose data the app shows.
     pub tenant: TenantId,
+    /// Routes model references to providers. Keys are read when a call is made, so a new key works at once.
+    pub router: Arc<Router>,
+    /// Where keys are kept.
+    pub secrets: Arc<dyn SecretStore>,
+    /// The providers configuration read at start.
+    pub config: ProvidersConfig,
     _lock: DataDirLock,
 }
 
@@ -80,7 +87,11 @@ async fn open(home: &Path) -> Result<Services, String> {
     let registry = Arc::new(InMemoryToolRegistry::new());
     register_builtin(&*registry, &BuiltinConfig { notes_file: home.join("notes.json") }).map_err(|e| e.to_string())?;
     let config = EngineConfig { sole_owner: true, ..EngineConfig::default() };
-    let engine = Engine::builder(repository, Arc::new(DemoModel::new())).tools(registry).config(config).build();
+    let providers = ProvidersConfig::load(&config_path(home))?;
+    let keychain = std::env::var("ZORIX_SECRETS").map(|v| v != "env").unwrap_or(true);
+    let secrets = secrets_with(&providers, keychain);
+    let router = Arc::new(build_router(&providers, secrets.clone(), Some(Arc::new(DemoModel::new())), false)?);
+    let engine = Engine::builder(repository, router.clone()).tools(registry).config(config).build();
     match engine.recover().await {
         Ok(report) if !report.requeued.is_empty() || !report.needs_decision.is_empty() => {
             tracing::info!(requeued = report.requeued.len(), needs_decision = report.needs_decision.len(), "recovered");
@@ -88,5 +99,5 @@ async fn open(home: &Path) -> Result<Services, String> {
         Ok(_) => {}
         Err(error) => tracing::warn!(%error, "recovery failed"),
     }
-    Ok(Services { engine, tenant: TenantId::local(), _lock: lock })
+    Ok(Services { engine, tenant: TenantId::local(), router, secrets, config: providers, _lock: lock })
 }

@@ -80,6 +80,21 @@
           </ul>
         </section>
       {/if}
+      {#if detail.summary.steps.some((st) => st.kind === "model")}
+        <section aria-label="Models used">
+          <h3 class="mb-2 text-base font-semibold">Models used</h3>
+          <ul class="divide-y divide-line rounded-lg border border-line bg-panel">
+            {#each detail.summary.steps.filter((st) => st.kind === "model") as st, i (i)}
+              <li class="flex items-baseline gap-3 px-3 py-2">
+                <span class="text-xs text-faint">step {i + 1}</span>
+                <span class="min-w-0 flex-1 truncate font-mono text-xs">{st.provider ? `${st.provider}/${st.name}` : st.name}</span>
+                <span class="text-xs text-muted">{duration(st.duration_ms)}</span>
+              </li>
+            {/each}
+          </ul>
+          {#if detail.summary.fallbacks > 0}<p class="mt-1 text-xs text-warn">Switched model {detail.summary.fallbacks} time(s) because one was unavailable.</p>{/if}
+        </section>
+      {/if}
       <p class="text-xs text-faint">Run {shortId(run.id)} · model {run.request.model}</p>
     </div>
   </div>

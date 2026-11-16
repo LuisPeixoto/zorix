@@ -25,6 +25,7 @@ zorix-runtime.workspace = true
 zorix-store.workspace = true
 zorix-sim.workspace = true
 zorix-tools.workspace = true
+zorix-providers.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

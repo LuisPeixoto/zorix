@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { ExecEvent } from "./api.ts";
-import { ago, describeEvent, duration, isFinished, isLive, isNoise, shorten, stateLabel, stateTone, tokens } from "./format.ts";
+import { ago, describeEvent, duration, isFinished, isLive, isNoise, keyLabel, servedBy, shorten, stateLabel, stateTone, tokens } from "./format.ts";
 
 const event = (kind: string, payload: Record<string, unknown> = {}): ExecEvent => ({
   seq: 1,
@@ -73,4 +73,13 @@ test("events are described for people", () => {
 test("bookkeeping events are hidden from the timeline", () => {
   assert.ok(isNoise(event("execution.progress")));
   assert.ok(!isNoise(event("execution.tool.started")));
+});
+
+test("the model that answered is shown with its provider, and key states have words", () => {
+  const d = describeEvent(event("execution.model.responded", { tool_calls: 0, provider: "ollama", model: "qwen3:8b" }));
+  assert.equal(d.detail, "final answer · ollama/qwen3:8b");
+  assert.equal(describeEvent(event("execution.model.responded", { tool_calls: 2 })).detail, "wants 2 tool calls");
+  assert.equal(servedBy(["a/x", "b/y"]), "a/x, b/y");
+  assert.equal(keyLabel("missing"), "No key yet");
+  assert.equal(keyLabel("unavailable"), "Keychain unavailable");
 });
