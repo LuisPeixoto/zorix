@@ -1,64 +1,111 @@
 @import "tailwindcss";
 
+/* Dark is chosen by `data-theme="dark"` on <html> (see lib/theme.ts), never by the OS directly: the person's choice wins. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme inline {
   --color-bg: var(--bg);
   --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
   --color-elevated: var(--elevated);
   --color-hover: var(--hover);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+  --color-select: var(--select);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-err: var(--err);
   --color-info: var(--info);
+
   --font-sans: var(--ui-font-sans);
   --font-mono: var(--ui-font-mono);
+
+  /* A compact desktop scale. The body is 13px. */
+  --text-*: initial;
+  --text-2xs: 10.5px;
+  --text-xs: 11.5px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 13.5px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 28px;
+
+  --shadow-card: var(--sh-card);
+  --shadow-pop: var(--sh-pop);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Light is the default theme. */
 :root {
-  color-scheme: light dark;
-  --ui-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
-  --ui-font-mono: "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
-  --bg: #f4f5f8;
+  color-scheme: light;
+  --ui-font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --ui-font-mono: "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --bg: #f5f6fa;
   --panel: #ffffff;
+  --panel-2: #f9fafc;
   --elevated: #ffffff;
-  --hover: #eceef4;
-  --line: #dfe2ea;
-  --fg: #171923;
-  --muted: #5b6275;
-  --faint: #8d94a6;
-  --accent: #5b4bdb;
+  --hover: #eff1f6;
+  --line: #e5e8f0;
+  --line-strong: #d4d9e4;
+
+  --fg: #121621;
+  --muted: #566074;
+  --faint: #7d879b;
+
+  --accent: #5b45f5;
+  --accent-2: #0891b2;
   --accent-fg: #ffffff;
-  --accent-soft: #e9e6fb;
-  --ok: #15803d;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --select: color-mix(in srgb, var(--accent) 14%, transparent);
+
+  --ok: #047857;
   --warn: #b45309;
-  --err: #b91c1c;
-  --info: #1d4ed8;
+  --err: #d12020;
+  --info: #2563eb;
+
+  --sh-card: 0 1px 2px rgb(18 22 33 / 0.05), 0 4px 14px -6px rgb(18 22 33 / 0.08);
+  --sh-pop: 0 16px 44px -12px rgb(18 22 33 / 0.28), 0 2px 8px rgb(18 22 33 / 0.08);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1117;
-    --panel: #161923;
-    --elevated: #1b1f2b;
-    --hover: #212636;
-    --line: #272c3b;
-    --fg: #e8eaf2;
-    --muted: #9aa2b8;
-    --faint: #6b7288;
-    --accent: #8b7bff;
-    --accent-fg: #0f1117;
-    --accent-soft: #272446;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --err: #f87171;
-    --info: #7aa7ff;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #14161d;
+  --panel: #1b1e27;
+  --panel-2: #20242f;
+  --elevated: #262a36;
+  --hover: #2a2f3c;
+  --line: #2f3442;
+  --line-strong: #3c4253;
+
+  --fg: #eceef4;
+  --muted: #a5adbf;
+  --faint: #7f889e;
+
+  --accent: #9d87ff;
+  --accent-2: #2dd4ee;
+  --accent-fg: #14161d;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --select: color-mix(in srgb, var(--accent) 24%, transparent);
+
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --err: #f87171;
+  --info: #60a5fa;
+
+  --sh-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px -8px rgb(0 0 0 / 0.5);
+  --sh-pop: 0 18px 50px -12px rgb(0 0 0 / 0.7), 0 2px 10px rgb(0 0 0 / 0.35);
 }
 
 html,
@@ -73,14 +120,29 @@ body {
   color: var(--fg);
   font-family: var(--ui-font-sans);
   font-size: 13px;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  /* An app, not a page: text is not selected by accident. Use .selectable where people copy things. */
+  user-select: none;
+  cursor: default;
+}
+
+.selectable,
+.selectable * {
+  user-select: text;
+  cursor: text;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
 }
 
 button {
   cursor: pointer;
 }
-
 button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -90,7 +152,81 @@ button:disabled {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
 ::selection {
-  background: var(--accent-soft);
+  background: var(--select);
+}
+
+.mono {
+  font-family: var(--ui-font-mono);
+  font-variant-ligatures: none;
+}
+
+/* The brand gradient: the logo tile, hero tiles and the glow behind page headers. */
+.brand-gradient {
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 62%, #4f5bf0) 55%, var(--accent-2) 100%);
+}
+.glow {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 9999px;
+  filter: blur(64px);
+  opacity: 0.14;
+  background: var(--accent);
+}
+:root[data-theme="dark"] .glow {
+  opacity: 0.2;
+}
+
+/* A status dot with a pulsing ring, for something that is happening now. */
+.live-dot {
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--hover) 0px, var(--panel-2) 80px, var(--hover) 160px) 0 0 / 200px 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: 200px 0;
+  }
+}
+
+/* Slim scrollbars that sit inside the content. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
