@@ -4,7 +4,8 @@
   import { Icon, IconButton } from "../../ui/index.ts";
 
   // On macOS the window controls sit on top of this bar (titleBarStyle Overlay), so leave room for them.
-  const isMac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent);
+  const isMac =
+    typeof navigator !== "undefined" && "__TAURI_INTERNALS__" in window && /Mac/i.test(navigator.platform || navigator.userAgent);
   const modeIcon = $derived(theme.mode === "light" ? "sun" : theme.mode === "dark" ? "moon" : "monitor");
 </script>
 

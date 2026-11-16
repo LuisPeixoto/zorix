@@ -37,7 +37,7 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
-  view = $state<"runs" | "providers">("runs");
+  view = $state<"runs" | "providers" | "design">("runs");
   providers = $state<ProviderRow[]>([]);
   models = $state<ModelChoices | null>(null);
   providerNote = $state<string | null>(null);
@@ -77,6 +77,10 @@ class RunsStore {
     this.view = "providers";
     this.providerNote = null;
     void this.refreshProviders();
+  }
+
+  showDesign(): void {
+    this.view = "design";
   }
 
   showRuns(): void {
