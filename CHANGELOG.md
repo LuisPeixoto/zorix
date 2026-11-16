@@ -5,6 +5,11 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- **Design system** for the desktop app: tokens, Light (default), Dark and System themes, bundled Inter and JetBrains Mono,
+  a typed component kit, an app shell with a custom toolbar, and a Design system screen. See [docs/design-system.md](docs/design-system.md).
+
 ## [0.2.0] - 2026-11-15
 
 The **AI Provider Engine**: real models behind the same runtime.

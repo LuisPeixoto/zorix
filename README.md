@@ -113,6 +113,7 @@ cargo run -p zorix-runtime --example embed
 | [Providers, models and routing](docs/providers.md) | Anthropic, OpenAI, Gemini, Ollama; keys; routes and fallback |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
+| [Design system](docs/design-system.md) | Tokens, themes and the component kit |
 | [Architecture](docs/architecture.md) | Layers, contracts, decisions; the [ADRs](docs/adr) |
 | [Technology comparison](docs/research/runtime-landscape.md) | LangGraph, OpenAI Agents SDK, ADK, Temporal, MCP and others: what we took, what we built |
 | [Testing](docs/testing.md) | How each required case is proven |
