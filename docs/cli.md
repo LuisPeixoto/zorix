@@ -24,7 +24,8 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 
 | Option | Meaning |
 |---|---|
-| `--model demo\|script:<file>` | The model. `demo` is a rule-based simulator. A `script` is a JSON list of turns, for tests (its position lives in the process, so use it with `--approve ask\|yes\|no`) |
+| `--model <MODEL>` | `provider/model` (`anthropic/claude-opus-5-5`), `route:<name>`, an alias, `demo` or `script:<file>`. Default: the `default` alias, else Anthropic when it has a key, else `demo`. See [providers](providers.md#naming-a-model). A `script` is a JSON list of turns, for tests |
+| `--local-only` | Use only providers on this computer. Nothing is sent to the cloud |
 | `--instructions <TEXT>` | Standing instructions for the model |
 | `--allow <TOOL>` | Let the run use a tool (an id, or a prefix ending in `*`). Repeat for more |
 | `--allow-all-tools` | Let the run use every built-in tool. Tools that change things still ask first |
@@ -65,6 +66,22 @@ Continue a paused execution and follow it.
 
 Continue executions that a crash or a closed terminal left in the middle of a step. Executions whose last tool call may
 not be repeated are put in `waiting_for_approval` with an explanation. See [persistence](persistence.md#recovery).
+
+### `zorix models [--available]`
+
+Lists the models ZORIX knows, with context window, capabilities and price. `--available` first asks each provider that has
+a key (or runs here) what it offers.
+
+### `zorix provider list | set-key <NAME> [--stdin] | remove-key <NAME> | test <NAME>`
+
+`list` shows each provider, cloud or local, and whether it has a key. `set-key` stores a key in the system keychain, read
+from a hidden prompt (or one line of stdin with `--stdin`); it is never taken from an argument and never printed.
+`test` asks the provider for its models: it checks the key and the connection and sends no conversation. See
+[credentials](providers.md#credentials).
+
+### `zorix route list`
+
+Shows the aliases and routes from `providers.toml`.
 
 ### `zorix tools`
 

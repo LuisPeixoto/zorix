@@ -13,8 +13,10 @@ checkpoints and a complete record, whichever model does the thinking.</p>
 
 ![ZORIX waiting for your approval before a tool changes anything](docs/images/ui-approval.png)
 
-> **Status: early development.** Phase 1, the **Harness Runtime**, is done. Real model providers, memory, agents and
-> workflows come in later phases (see the [roadmap](docs/roadmap.md)). Today the runtime is driven by simulated models.
+> **Status: early development.** Phase 1 (the **Harness Runtime**) and Phase 2 (the **AI Provider Engine**) are done: ZORIX
+> runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local Ollama models. Memory, agents and workflows come in
+> later phases (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
+> `--local-only` to keep everything on your computer.
 
 A model can be powerful, but the real strength is in **integration, orchestration and control**. ZORIX is the
 infrastructure under that: it decides what a model may see, what it may do, when a person must say yes, and it records
@@ -30,7 +32,8 @@ everything. It is not tied to one model or provider, and the core does not know 
   finished tool is never run twice, and one that cannot safely be repeated asks you first.
 - **Everything is recorded.** Ordered, replayable events; a summary of model, tools, timings and usage; trace spans that
   follow the OpenTelemetry GenAI names; secrets redacted from events and logs.
-- **Model agnostic.** The loop talks to a small `ModelGateway` contract. Providers plug in behind it without touching the core.
+- **Model agnostic.** The loop talks to a small `ModelGateway` contract. [Anthropic, OpenAI, Gemini, compatible servers and
+  Ollama](docs/providers.md) plug in behind it; keys stay in your system keychain; routes fall back when a provider fails.
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
@@ -41,7 +44,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![New run](docs/images/ui-new-run.png) | ![Approval card](docs/images/ui-approval.png) |
 | Choose what a run may use. Anything that changes something says it asks first. | The tool, the exact arguments, why you are asked, and a fingerprint of the call. |
 
-## What is in Phase 1
+## What is in Phases 1 and 2
 
 | Area | What it does | Guide |
 |---|---|---|
@@ -54,7 +57,8 @@ everything. It is not tied to one model or provider, and the core does not know 
 | Persistence | SQLite, atomic commits, checkpoints, leases, idempotency, recovery | [Persistence](docs/persistence.md) |
 | Observability | Spans, redaction, execution summary | [Permissions](docs/permissions.md#credentials) |
 | Command line | `zorix run`, `approve`, `events`, `recover`… | [CLI](docs/cli.md) |
-| Desktop app | Runs, new run, live view, approval card | [Desktop](docs/desktop.md) |
+| Desktop app | Runs, new run, live view, approval card, providers and keys, model picker | [Desktop](docs/desktop.md) |
+| Providers | Anthropic, OpenAI, Gemini, compatible servers, Ollama; keychain keys; routes and fallback | [Providers](docs/providers.md) |
 
 ## Install
 
@@ -82,6 +86,14 @@ zorix approve <execution-id>                          # from another process; co
 zorix events  <execution-id>                          # the complete, ordered record
 ```
 
+With a real model (the conversation goes to that provider, or stays here with Ollama):
+
+```bash
+zorix provider set-key anthropic                      # hidden prompt; kept in the system keychain
+zorix run "What is 17*23?" --allow math.evaluate      # uses Anthropic when it has a key, else the demo model
+zorix run "What time is it?" --allow clock.now --model ollama/qwen3:1.7b --local-only
+```
+
 More in [getting started](docs/getting-started.md). To use the runtime from Rust:
 
 ```bash
@@ -98,6 +110,7 @@ cargo run -p zorix-runtime --example embed
 | [Tools](docs/tools.md) | The contract, the built-in tools, writing your own |
 | [Events](docs/events.md) | Every event and how to follow them |
 | [Persistence and recovery](docs/persistence.md) | What is saved, what happens after a crash |
+| [Providers, models and routing](docs/providers.md) | Anthropic, OpenAI, Gemini, Ollama; keys; routes and fallback |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Architecture](docs/architecture.md) | Layers, contracts, decisions; the [ADRs](docs/adr) |

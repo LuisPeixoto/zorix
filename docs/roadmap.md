@@ -14,12 +14,16 @@ redaction and an execution summary](permissions.md#credentials) · simulated mod
 [the `zorix` command line](cli.md) · [a minimal desktop app](desktop.md) · [CI on three operating systems and a release
 workflow](distribution.md) · [documentation, ADRs and a technology comparison](research/runtime-landscape.md).
 
-## Phase 2 — AI Provider Engine · v0.2.0
+## ✅ Phase 2 — AI Provider Engine · v0.2.0
 
-Real models behind `ModelGateway`: a model catalogue (provider, id, credentials, parameters, capabilities, limits, cost,
-latency, context window, tool and multimodal support), provider adapters (HTTP APIs, SDKs, local runtimes), a credential store
-backed by the operating system's keychain, per-model token counting and pricing, and **routing** by task, complexity, cost
-and speed, with fallbacks. Several models in one execution.
+Real models behind `ModelGateway`: [adapters for Anthropic, OpenAI (and compatible servers), Gemini and Ollama](providers.md)
+· a curated model catalogue with discovery · [credentials in the operating system's keychain](providers.md#credentials) ·
+[routes, aliases and fallback](providers.md#fallback) with cooldowns and `local_only` · the context budget taken from the model's
+real window · [native turn replay](adr/0012-native-turns-append-only.md) · token, cache and reasoning usage with cost when the price
+is known · the provider and model of every step · `zorix models`, `provider` and `route` and a providers screen in the desktop
+app · [live tests](testing.md#live-tests) against Ollama and, with your keys, the cloud.
+
+Not yet: live text while the model writes, a classifier-based router, embeddings, batch APIs.
 
 ## Phase 3 — Context & Memory Engine
 

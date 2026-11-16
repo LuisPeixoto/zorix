@@ -14,13 +14,16 @@ nothing: it asks the engine and shows what comes back. Permissions, approvals an
 | **Run view** | State, steps, tool calls, tokens and work time; the result or the failure; the timeline of events live |
 | **Approval card** | The tool, the exact arguments, why you are asked, and a fingerprint of the call. Approve or refuse, with an optional note |
 | **Controls** | Pause, resume and cancel |
+| **Providers & keys** | Which providers exist, whether each has a key, save or remove a key (straight to the system keychain), test a provider |
+| **Model picker** | In New run: the default, a route, an alias or a model, with a note when the conversation will be sent to the cloud |
+| **Models used** | In the run view: the provider and model of every step, and any switch |
 
 ![The new run form](images/ui-new-run.png)
 
 Nothing is allowed by default. The form preselects the demo tools that need only a tool permission; the file tools start
 off because they need a workspace. Tools that change things say **asks you first**.
 
-The app uses the built-in **demo model**; real providers arrive in Phase 2. The full interface (agents, workflows,
+Without a provider the app uses the built-in **demo model**. With a key under **Providers & keys** the default becomes Anthropic's model; routes and extra servers come from `providers.toml` ([providers](providers.md)). The full interface (agents, workflows,
 dashboards, settings) belongs to later phases.
 
 ## Running it

@@ -66,3 +66,15 @@ wrapper, and a rule-based demo model.
 The crates other than the desktop shell have no platform code and run in CI on Linux, macOS and Windows. The CLI runs its
 work on a thread with a 16 MB stack (the default 1 MB main thread is small on Windows). Unix-only tests (symbolic links)
 are marked `#[cfg(unix)]`. The desktop job type-checks and builds the interface and lints the shell on all three systems.
+
+## Live tests
+
+The adapters are tested against local mock servers, so the normal suite needs no network and no keys. Tests that talk to
+real providers are `#[ignore]`d and run with `tools/live-tests.sh`:
+
+- **Ollama** (`ollama serve` and `ollama pull qwen3:1.7b`): discovery, a plain answer, a tool call and a whole execution with
+  a real tool loop. A real `/api/show` answer is kept as a fixture.
+- **Anthropic, OpenAI, Gemini**: the same, when a key is stored (`zorix provider set-key <name>`); without one the test is
+  skipped. They cost a few cents. Models come from `ZORIX_LIVE_<NAME>_MODEL`.
+
+The tests print lengths, tool names and token counts, never a key or an answer.

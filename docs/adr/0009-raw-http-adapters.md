@@ -21,3 +21,12 @@ servers; live tests are opt-in.
 - We own the wire formats and must follow API changes; the catalogue and adapter tests make drift visible.
 - No dependency on a framework's abstraction of tools or messages.
 - Adding a provider means adding one adapter and a catalogue entry; the runtime does not change.
+
+## Addendum: Ollama uses its native API
+
+Ollama also serves the Chat Completions protocol, but its native `/api/chat` reports the real context length and
+capabilities through `/api/show`, lets a request fix the window with `num_ctx` (otherwise a small default silently
+truncates the conversation), and streams newline-delimited JSON. The adapter uses the native API, asks for at most
+32 768 tokens of context, and reports that number as the model's window so the runtime's budget matches what is loaded.
+Text is not streamed to the interface yet: adapters stream internally and return the complete answer.
+

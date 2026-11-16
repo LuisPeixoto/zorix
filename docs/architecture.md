@@ -101,6 +101,14 @@ in CI. The data folder comes from one function (`data_dir()`), overridable with 
 `std::path` and are tested with Windows-style inputs. Anything that will need a platform feature later (keychain,
 sandbox) goes behind a trait in its own module.
 
+## Providers (zorix-providers)
+
+The runtime sees one `ModelGateway`. Behind it a **router** resolves `provider/model`, aliases and routes, filters and orders
+candidates, falls back, and records which model answered. One adapter per API family (Anthropic, OpenAI Responses,
+Chat Completions, Ollama, Gemini) sits on a shared HTTP client (HTTPS, size and idle limits, no redirects, secret headers)
+and streaming parsers. A catalogue knows windows, capabilities and prices; a secret store reads keys when a call is made.
+See [providers](providers.md) and ADR-0009 to ADR-0012.
+
 ## What comes next
 
 | Phase | Plugs into |
