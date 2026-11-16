@@ -17,8 +17,8 @@ use zorix_core::{
     Approval, ApprovalDecision, ApprovalId, ApprovalStatus, Clock, Commit, ContextBuilder, CreateOutcome, Error,
     EventKind, EventPublisher, Execution, ExecutionDetail, ExecutionEngine, ExecutionEvent, ExecutionId,
     ExecutionRepository, ExecutionScheduler, ExecutionState, InvalidTransition, ListFilter, ModelGateway, NewEvent,
-    NewExecution, PolicyEngine, RecoveryReport, Result, ResultValidator, SystemClock, TenantId, Timestamp,
-    ToolCallRecord, ToolCallStatus, ToolRegistry, Trigger,
+    NewExecution, NoCalibration, PolicyEngine, RecoveryReport, Result, ResultValidator, SystemClock, TenantId,
+    Timestamp, TokenCalibration, ToolCallRecord, ToolCallStatus, ToolRegistry, Trigger,
 };
 
 use crate::context::DefaultContextBuilder;
@@ -75,6 +75,7 @@ pub(crate) struct Inner {
     pub tools: Arc<dyn ToolRegistry>,
     pub policy: Arc<dyn PolicyEngine>,
     pub context: Arc<dyn ContextBuilder>,
+    pub calibration: Arc<dyn TokenCalibration>,
     pub scheduler: Arc<dyn ExecutionScheduler>,
     pub clock: Arc<dyn Clock>,
     pub bus: EventBus,
@@ -94,6 +95,7 @@ pub struct EngineBuilder {
     tools: Option<Arc<dyn ToolRegistry>>,
     policy: Option<Arc<dyn PolicyEngine>>,
     context: Option<Arc<dyn ContextBuilder>>,
+    calibration: Option<Arc<dyn TokenCalibration>>,
     scheduler: Option<Arc<dyn ExecutionScheduler>>,
     clock: Option<Arc<dyn Clock>>,
     publishers: Vec<Arc<dyn EventPublisher>>,
@@ -110,6 +112,7 @@ impl EngineBuilder {
             tools: None,
             policy: None,
             context: None,
+            calibration: None,
             scheduler: None,
             clock: None,
             publishers: Vec::new(),
@@ -133,6 +136,12 @@ impl EngineBuilder {
     /// The context builder.
     pub fn context(mut self, context: Arc<dyn ContextBuilder>) -> Self {
         self.context = Some(context);
+        self
+    }
+
+    /// Where token estimates are corrected per model. Without one, estimates are used as they are.
+    pub fn calibration(mut self, calibration: Arc<dyn TokenCalibration>) -> Self {
+        self.calibration = Some(calibration);
         self
     }
 
@@ -177,6 +186,7 @@ impl EngineBuilder {
             tools: self.tools.unwrap_or_else(|| Arc::new(InMemoryToolRegistry::new())),
             policy: self.policy.unwrap_or_else(|| Arc::new(DefaultPolicy::default())),
             context: self.context.unwrap_or_else(|| Arc::new(DefaultContextBuilder::new())),
+            calibration: self.calibration.unwrap_or_else(|| Arc::new(NoCalibration)),
             scheduler: self.scheduler.unwrap_or_else(|| Arc::new(LocalScheduler::new())),
             clock: self.clock.unwrap_or_else(|| Arc::new(SystemClock)),
             bus: EventBus::new(),
