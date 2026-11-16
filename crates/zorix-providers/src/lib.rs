@@ -32,7 +32,8 @@ pub use ollama::{OllamaGateway, OllamaOptions};
 pub use openai_chat::{OpenAiChatGateway, OpenAiChatOptions};
 pub use openai_responses::{OpenAiOptions, OpenAiResponsesGateway};
 pub use registry::{
-    Discovered, KeyStatus, ProviderStatus, build_router, catalog_for, discover_all, provider_statuses, standard_secrets,
+    Discovered, KeyStatus, ProviderStatus, build_router, catalog_for, discover_all, provider_statuses, secrets_with,
+    standard_secrets,
 };
 pub use router::{Candidate, ProviderEntry, Resolved, Router};
 pub use secrets::{ChainStore, EnvStore, KeychainStore, MemoryStore, SecretError, SecretStore, get_async};

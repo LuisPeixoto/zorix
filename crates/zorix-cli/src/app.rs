@@ -3,13 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use zorix_core::ModelGateway;
+use zorix_core::{ModelGateway, StepPhase};
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::{DemoModel, ScriptedModel};
 use zorix_store::{DataDirLock, SqliteRepository, database_path};
 use zorix_tools::{BuiltinConfig, register_builtin};
 
-use crate::cli::ModelChoice;
+use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
+
+use crate::cli::{ModelArgs, ModelChoice};
 
 /// A failure the command line reports to a person, as one sentence.
 #[derive(Debug)]
@@ -54,6 +56,8 @@ pub fn home_dir(option: Option<PathBuf>) -> PathBuf {
 pub struct App {
     /// The engine.
     pub engine: Engine,
+    /// The model reference to record for a new execution.
+    pub model: String,
     _lock: DataDirLock,
 }
 
@@ -64,19 +68,44 @@ pub fn builtin_registry(home: &Path) -> Result<Arc<InMemoryToolRegistry>, CliErr
     Ok(registry)
 }
 
-fn gateway(choice: &ModelChoice) -> Result<Arc<dyn ModelGateway>, CliError> {
+/// The providers configuration of the data folder. A missing file is an empty one.
+pub fn load_config(home: &Path) -> Result<ProvidersConfig, CliError> {
+    ProvidersConfig::load(&config_path(home)).map_err(CliError)
+}
+
+/// Where keys are kept. `ZORIX_SECRETS=env` leaves the keychain out (servers, CI, tests).
+pub fn secrets(config: &ProvidersConfig) -> Arc<dyn SecretStore> {
+    secrets_with(config, std::env::var("ZORIX_SECRETS").map(|v| v != "env").unwrap_or(true))
+}
+
+fn sim(choice: Option<&ModelChoice>) -> Result<Arc<dyn ModelGateway>, CliError> {
     Ok(match choice {
-        ModelChoice::Demo => Arc::new(DemoModel::new()),
-        ModelChoice::Script(path) => {
+        Some(ModelChoice::Script(path)) => {
             let text = std::fs::read_to_string(path)
                 .map_err(|e| CliError(format!("Cannot read the script {}: {e}", path.display())))?;
             Arc::new(ScriptedModel::from_json(&text).map_err(CliError)?)
         }
+        _ => Arc::new(DemoModel::new()),
     })
 }
 
+/// The router for a command: providers from `providers.toml`, keys from the keychain, the simulated models.
+pub fn open_router(home: &Path, args: &ModelArgs) -> Result<Arc<Router>, CliError> {
+    let config = load_config(home)?;
+    let store = secrets(&config);
+    let router = build_router(&config, store, Some(sim(args.model.as_ref())?), args.local_only).map_err(CliError)?;
+    Ok(Arc::new(router))
+}
+
 /// Lock the data folder, open the store and start an engine on it.
-pub fn open_engine(home: &Path, model: &ModelChoice) -> Result<App, CliError> {
+pub fn open_engine(home: &Path, args: &ModelArgs) -> Result<App, CliError> {
+    let router = open_router(home, args)?;
+    let model = match &args.model {
+        Some(choice) => choice.label(),
+        // Nothing asked for: the default when it exists, otherwise the simulated model, as in 0.1.
+        None if router.resolve("default", StepPhase::Start).is_ok() => "default".to_string(),
+        None => "demo".to_string(),
+    };
     let lock = DataDirLock::acquire(home)?;
     let repository = Arc::new(SqliteRepository::open(&database_path(home))?);
     let config = EngineConfig {
@@ -84,8 +113,8 @@ pub fn open_engine(home: &Path, model: &ModelChoice) -> Result<App, CliError> {
         sole_owner: true,
         ..EngineConfig::default()
     };
-    let engine = Engine::builder(repository, gateway(model)?).tools(builtin_registry(home)?).config(config).build();
-    Ok(App { engine, _lock: lock })
+    let engine = Engine::builder(repository, router).tools(builtin_registry(home)?).config(config).build();
+    Ok(App { engine, model, _lock: lock })
 }
 
 /// Open the store for reading only. Takes no lock, so it works while another ZORIX program is running.
