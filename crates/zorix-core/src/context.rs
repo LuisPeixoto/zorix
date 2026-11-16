@@ -20,6 +20,9 @@ pub struct ExecutionView<'a> {
     /// How many tokens the model can be sent, from its profile: the window minus room for the answer and a margin.
     /// `None` when nothing is known about the model.
     pub context_budget: Option<u64>,
+    /// How many real tokens one estimated token is worth for this model (1.0 until calibrated). Sources multiply their
+    /// estimates by it so every budget is in real tokens (ADR-0016).
+    pub token_factor: f64,
 }
 
 /// How important a segment is when the budget is short. Higher survives longer.

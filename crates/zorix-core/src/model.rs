@@ -73,6 +73,27 @@ pub struct ModelRequest {
     /// without native turns, because a provider may refuse reasoning state whose prefix changed.
     #[serde(default)]
     pub history_edited: bool,
+    /// What each context segment contributed and whether it was kept. For events; never sent to a provider.
+    #[serde(default, skip)]
+    pub context_report: Vec<SegmentReport>,
+}
+
+impl ModelRequest {
+    /// A rough size of the tool definitions, in tokens (characters divided by four, plus a little per tool).
+    pub fn estimated_tool_tokens(&self) -> u64 {
+        self.tools.iter().map(|t| (t.description.len() + t.input_schema.to_string().len()) as u64 / 4 + 8).sum()
+    }
+}
+
+/// How one context segment fared when the context was built.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SegmentReport {
+    /// Where it came from (`system`, `long_term`, `knowledge`, `history`…).
+    pub origin: String,
+    /// Its size in calibrated tokens.
+    pub tokens: u64,
+    /// False when it was left out to fit the budget.
+    pub kept: bool,
 }
 
 /// Why the model stopped.

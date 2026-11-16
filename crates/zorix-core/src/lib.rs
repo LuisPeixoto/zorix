@@ -41,7 +41,7 @@ pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
 pub use model::{
     Effort, EmbedPurpose, EmbeddingProfile, EmbeddingRequest, EmbeddingResponse, FinishReason, GenerationParams,
     ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, RouteAttempt, RouteTrace,
-    StepPhase,
+    SegmentReport, StepPhase,
 };
 pub use permission::{
     Action, Grants, Permission, tool_grant, validate_tool_pattern, validate_workspace_pattern, workspace_grant,
