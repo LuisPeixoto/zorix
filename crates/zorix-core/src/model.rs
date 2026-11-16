@@ -171,6 +171,8 @@ pub enum ModelErrorKind {
     Invalid,
     /// The call was cancelled.
     Cancelled,
+    /// This provider or model cannot do what was asked (for example, Anthropic has no embeddings).
+    Unsupported,
 }
 
 impl ModelErrorKind {
@@ -195,6 +197,7 @@ impl ModelErrorKind {
             ModelErrorKind::Refused => "refused",
             ModelErrorKind::Invalid => "invalid",
             ModelErrorKind::Cancelled => "cancelled",
+            ModelErrorKind::Unsupported => "unsupported",
         }
     }
 }
@@ -268,6 +271,67 @@ pub trait ModelGateway: Send + Sync {
     fn describe(&self, _model: &str) -> Option<ModelProfile> {
         None
     }
+
+    /// Turn texts into vectors. Providers without embeddings answer `Unsupported`, which is the default.
+    async fn embed(
+        &self,
+        _request: EmbeddingRequest,
+        _cancel: CancellationToken,
+    ) -> Result<EmbeddingResponse, ModelError> {
+        Err(ModelError::provider(ModelErrorKind::Unsupported, "This provider has no embeddings."))
+    }
+
+    /// What is known about an embeddings model, for sizing batches. `None` means nothing is known.
+    fn embedding_profile(&self, _model: &str) -> Option<EmbeddingProfile> {
+        None
+    }
+}
+
+/// Why a text is being embedded. Some providers (and some models, through a prefix) treat the two differently.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbedPurpose {
+    /// A piece of a document or a memory, to be searched.
+    Document,
+    /// A question, to search with.
+    Query,
+}
+
+/// Texts to turn into vectors.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EmbeddingRequest {
+    /// The model, as the provider names it.
+    pub model: String,
+    /// The texts. One vector comes back per text, in the same order.
+    pub inputs: Vec<String>,
+    /// Document or query.
+    pub purpose: EmbedPurpose,
+    /// The size of the vectors, for models that allow choosing.
+    pub dimensions: Option<u32>,
+}
+
+/// The vectors.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EmbeddingResponse {
+    /// The model that answered.
+    pub model: String,
+    /// The provider that answered, when known.
+    pub provider: Option<String>,
+    /// One L2-normalised vector per input.
+    pub vectors: Vec<Vec<f32>>,
+    /// What the call used.
+    pub usage: Usage,
+}
+
+/// What a gateway knows about an embeddings model.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbeddingProfile {
+    /// The size of its vectors.
+    pub dimensions: u32,
+    /// The longest input, in tokens.
+    pub max_input_tokens: u64,
+    /// The most inputs in one call.
+    pub max_batch: usize,
 }
 
 #[cfg(test)]

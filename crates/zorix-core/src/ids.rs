@@ -146,6 +146,14 @@ uuid_id!(
     /// Identifies one approval request.
     ApprovalId
 );
+uuid_id!(
+    /// Identifies one long-term memory item.
+    MemoryId
+);
+uuid_id!(
+    /// Identifies one folder of indexed documents.
+    KnowledgeRootId
+);
 
 slug_id!(
     /// The organisation (or the local user) that owns an execution. Data never crosses tenants.

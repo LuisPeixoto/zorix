@@ -10,7 +10,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
-use crate::ids::{ExecutionId, TenantId, ToolCallId};
+use crate::ids::{ConversationId, ExecutionId, TenantId, ToolCallId};
 use crate::permission::{Grants, Permission};
 
 /// Hints about what a tool does. Like MCP's, they describe; they never grant anything.
@@ -146,6 +146,8 @@ pub struct ToolContext {
     pub cancel: CancellationToken,
     /// The folder file tools are confined to, when the host configured one.
     pub workspace_root: Option<PathBuf>,
+    /// The conversation the execution belongs to, if any. Memory tools use it for the conversation scope.
+    pub conversation: Option<ConversationId>,
 }
 
 /// A capability the model can ask for.

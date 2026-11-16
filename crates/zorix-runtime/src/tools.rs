@@ -236,6 +236,7 @@ mod tests {
             grants: Grants::none(),
             cancel: CancellationToken::new(),
             workspace_root: None,
+            conversation: None,
         }
     }
 

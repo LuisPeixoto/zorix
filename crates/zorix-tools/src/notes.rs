@@ -191,6 +191,7 @@ mod tests {
             grants: Grants::none(),
             cancel: tokio_util::sync::CancellationToken::new(),
             workspace_root: None,
+            conversation: None,
         }
     }
 

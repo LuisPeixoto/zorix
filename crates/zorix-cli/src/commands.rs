@@ -100,6 +100,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         grants: grants_from(&args),
         workspace,
         idempotency_key: args.idempotency_key.clone(),
+        memory: zorix_core::MemoryOptions::default(),
     };
     let engine = &app.engine;
     let created = engine.create(new).await?;

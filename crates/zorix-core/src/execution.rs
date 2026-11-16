@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::error::{Error, Result};
 use crate::ids::{ConversationId, ExecutionId, TenantId};
+use crate::memory::MemoryOptions;
 use crate::model::GenerationParams;
 use crate::permission::Grants;
 use crate::state::{ExecutionState, InvalidTransition, Trigger, transition};
@@ -232,6 +233,9 @@ pub struct NewExecution {
     /// Sending the same key again returns the same execution instead of creating a second one.
     #[serde(default)]
     pub idempotency_key: Option<String>,
+    /// What the execution may use from memory. Everything, by default.
+    #[serde(default)]
+    pub memory: MemoryOptions,
 }
 
 impl NewExecution {
@@ -293,6 +297,9 @@ pub struct Execution {
     pub workspace: Option<PathBuf>,
     /// The idempotency key it was created with.
     pub idempotency_key: Option<String>,
+    /// What it may use from memory. Executions stored by 0.2 have everything on.
+    #[serde(default)]
+    pub memory: MemoryOptions,
     /// How many model-driven iterations have started.
     pub iteration: u32,
     /// How many tool calls have been requested.
@@ -334,6 +341,7 @@ impl Execution {
             grants: new.grants,
             workspace: new.workspace,
             idempotency_key: new.idempotency_key,
+            memory: new.memory,
             iteration: 0,
             tool_calls_requested: 0,
             validation_retries: 0,
@@ -469,5 +477,36 @@ mod tests {
         let limits: Limits = serde_json::from_str(r#"{"max_iterations": 3}"#).unwrap();
         assert_eq!(limits.max_iterations, 3);
         assert_eq!(limits.max_tool_calls, Limits::default().max_tool_calls);
+    }
+}
+
+#[cfg(test)]
+mod memory_options_tests {
+    use super::*;
+
+    #[test]
+    fn an_execution_stored_before_memory_existed_still_loads_with_everything_on() {
+        let new = NewExecution {
+            request: TaskRequest { prompt: "hi".into(), ..TaskRequest::default() },
+            ..NewExecution::default()
+        };
+        let execution = Execution::new(ExecutionId::new(), new, Timestamp(1));
+        let mut json = serde_json::to_value(&execution).unwrap();
+        json.as_object_mut().unwrap().remove("memory").expect("the field is written");
+        let loaded: Execution = serde_json::from_value(json).unwrap();
+        assert_eq!(loaded.memory, MemoryOptions::default());
+        // and a request without the field is read the same way
+        let request: NewExecution = serde_json::from_str(r#"{"request":{"prompt":"hi","model":"demo"}}"#).unwrap();
+        assert_eq!(request.memory, MemoryOptions::default());
+    }
+
+    #[test]
+    fn what_a_run_chose_is_kept() {
+        let new = NewExecution {
+            request: TaskRequest { prompt: "hi".into(), ..TaskRequest::default() },
+            memory: MemoryOptions::none(),
+            ..NewExecution::default()
+        };
+        assert_eq!(Execution::new(ExecutionId::new(), new, Timestamp(1)).memory, MemoryOptions::none());
     }
 }

@@ -9,6 +9,7 @@ pub mod error;
 pub mod event;
 pub mod execution;
 pub mod ids;
+pub mod memory;
 pub mod message;
 pub mod model;
 pub mod permission;
@@ -19,6 +20,7 @@ pub mod repository;
 pub mod secret;
 pub mod state;
 pub mod time;
+pub mod tokens;
 pub mod tool;
 
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash};
@@ -29,11 +31,17 @@ pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
 };
-pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, TenantId, ToolCallId};
+pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, KnowledgeRootId, MemoryId, TenantId, ToolCallId};
+pub use memory::{
+    ChunkView, Corpus, DocState, DocStatus, DocumentWrite, KnowledgeRoot, MemoryFilter, MemoryItem, MemoryKind,
+    MemoryOptions, MemoryOrigin, MemoryPatch, MemorySettings, MemoryStatus, MemoryStore, NewChunk, NewMemory, NewRoot,
+    OperationRecord, RecallMode, RecallSnapshot, Remembered, Scope, TextHit, VectorHit, Visibility,
+};
 pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
 pub use model::{
-    Effort, FinishReason, GenerationParams, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest,
-    ModelResponse, RouteAttempt, RouteTrace, StepPhase,
+    Effort, EmbedPurpose, EmbeddingProfile, EmbeddingRequest, EmbeddingResponse, FinishReason, GenerationParams,
+    ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, RouteAttempt, RouteTrace,
+    StepPhase,
 };
 pub use permission::{
     Action, Grants, Permission, tool_grant, validate_tool_pattern, validate_workspace_pattern, workspace_grant,
@@ -48,4 +56,5 @@ pub use repository::{
 pub use secret::{REDACTED, Secret};
 pub use state::{ExecutionState, InvalidTransition, Trigger, transition};
 pub use time::{Clock, ManualClock, SystemClock, Timestamp};
+pub use tokens::{TokenCalibration, TokenSample};
 pub use tool::{Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolRegistry, ToolSpec};
