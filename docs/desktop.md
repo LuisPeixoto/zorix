@@ -20,6 +20,8 @@ nothing: it asks the engine and shows what comes back. Permissions, approvals an
 
 ![The new run form](images/ui-new-run.png)
 
+![Providers and keys](images/ui-providers.png)
+
 Nothing is allowed by default. The form preselects the demo tools that need only a tool permission; the file tools start
 off because they need a workspace. Tools that change things say **asks you first**.
 
