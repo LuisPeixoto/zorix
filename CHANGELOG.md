@@ -5,6 +5,44 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-15
+
+The **AI Provider Engine**: real models behind the same runtime.
+
+### Added
+
+- **Providers**: Anthropic (Messages API), OpenAI (Responses API), OpenAI-compatible servers (Chat Completions: OpenRouter,
+  Groq, vLLM, LM Studio) and Google Gemini, all over raw HTTPS, plus **Ollama** for local models (native API, real
+  context length and capabilities discovered).
+- **Credentials** in the system keychain (or environment variables); `zorix provider set-key` reads from a hidden prompt.
+  Keys never reach files, the database, events, logs or the interface.
+- **Routing**: `provider/model`, aliases and `route:<name>` from `providers.toml`, ordered candidates with capability and
+  context filters, **fallback** on provider failures with cooldowns, route phases (start, continue, retry) and `--local-only`.
+- **Catalogue** with context windows, limits, capabilities and prices (as of 2026-11-15), overridable in `providers.toml`.
+- **Runtime awareness**: the context budget comes from the model's window; usage counts cache and reasoning tokens; cost in
+  millionths of a dollar when the price is known; `execution.model.fallback` events; provider and model per step.
+- **Native turn replay** so providers that bind reasoning to the conversation (Anthropic thinking, Gemini thought
+  signatures, OpenAI reasoning items) keep working across tool calls.
+- **Command line**: `--model`, `--local-only`, `models [--available]`, `provider list|set-key|remove-key|test`, `route list`.
+- **Desktop app**: a model picker, a Providers & keys screen, and the model and provider of every step in the run view.
+- **Tests**: mock-server suites for every adapter (no network in CI) and opt-in live tests (`tools/live-tests.sh`).
+- Documentation: [providers guide](docs/providers.md), research and four new ADRs (0009 to 0012).
+
+### Changed
+
+- `--model` accepts any model reference, not only `demo` and `script:<file>`. With no `--model`, a run uses the `default`
+  alias, or Anthropic when it has a key, and the demo model otherwise, so 0.1 commands behave as before.
+- Secrets and redaction moved to `zorix-core` (still re-exported by `zorix-runtime`).
+
+### Known limits
+
+- **Data leaves the computer** when a cloud provider is used; `--local-only` forbids it.
+- Answers arrive complete; text is not shown live yet.
+- Verified against a real server only for Ollama (qwen3:1.7b, including a forced fallback and a whole tool loop). The
+  Anthropic, OpenAI and Gemini adapters are verified against mock servers built from their documentation, and their live
+  tests run when you store a key.
+- Installers are still **not signed or notarized**.
+
 ## [0.1.0] - 2026-11-15
 
 The first release: the **Harness Runtime**, a command line and a minimal desktop app. No real model provider yet; the

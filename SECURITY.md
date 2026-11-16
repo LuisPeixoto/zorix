@@ -22,7 +22,8 @@ release notes unless you prefer to stay anonymous.
   required approval
 - An approval that can be forged, replayed, or applied to a different tool call than the one shown to the user
 - A built-in tool reaching files outside its workspace root
-- Secrets (API keys, tokens) appearing in logs, events, traces or the database
+- Secrets (API keys, tokens) appearing in logs, events, traces, the database, `providers.toml` or the interface
+- A provider call that sends a key or a conversation somewhere other than the configured host, or ignores `--local-only`
 - Data from one tenant or execution becoming visible to another
 - Memory safety or parsing flaws in the persistence layer
 
@@ -51,8 +52,17 @@ These notes grow with each feature that handles data, files, network or permissi
   with no recognisable shape can slip through, so do not paste secrets into prompts. The arguments of a call are kept
   as they are in the local database, because the tool must receive them.
 - **Local data.** The database and the notes live in the data folder (`ZORIX_HOME`, or the platform default). They hold
-  prompts, tool arguments and results: treat the folder as sensitive. ZORIX has no telemetry and makes no network
-  connection of its own in this version; the desktop app's content security policy allows none.
+  prompts, tool arguments and results: treat the folder as sensitive. ZORIX has no telemetry. It connects only to the
+  providers you configure, and only when a run uses them; the desktop interface itself can make no network request (its
+  content security policy allows none), so every call goes through the Rust side.
+- **Data leaves the computer when a cloud provider is used.** The conversation, including tool results, is sent to that
+  provider. `--local-only` (or `local_only = true` in `providers.toml`) restricts routing to servers on loopback addresses.
+  Choosing a provider is a decision about where data goes; read the provider's terms.
+- **API keys** live in the operating system's keychain or an environment variable, are read when a call is made, and are
+  held in a type that prints as `[redacted]`. They are sent only in an authentication header, never in a URL or a log.
+  `providers.toml` is refused if it holds anything key-shaped. Provider error text is redacted before it reaches an event.
+  Base URLs must be `https://` unless they are loopback; redirects are not followed, so a key cannot be bounced to
+  another host. Response bodies and streams have size and idle limits.
 - **One program per data folder.** The command line and the desktop app lock the folder. A database written by a newer
   version is refused rather than risked.
 - **Tenants never mix.** Every read, event stream, approval and note is scoped to a tenant; another tenant gets "not found".

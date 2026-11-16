@@ -56,3 +56,28 @@ The first releases are **not signed or notarized**. See [distribution](distribut
 
 `zorix events <id>` prints every event in order; `zorix show <id> --json` has the summary and timings. Set
 `ZORIX_LOG=debug` (command line and desktop app) for logs on stderr; prompts, arguments and results are never written to logs.
+
+## "There is no default model" or runs use the demo model
+
+No provider has a key and no `default` alias is set. Store a key (`zorix provider set-key anthropic`), set
+`default = "ollama/<model>"` under `[alias]` in `providers.toml`, or pass `--model`.
+
+## `authentication` or "no key" for a provider
+
+`zorix provider list` shows which providers have a key. Store one with `zorix provider set-key <name>`; an environment
+variable such as `ANTHROPIC_API_KEY` is used first. On a server without a keychain set `ZORIX_SECRETS=env`.
+
+## "Is Ollama running?"
+
+Start it with `ollama serve` and fetch a model that supports tools, for example `ollama pull qwen3:1.7b`. `zorix provider test ollama`
+checks the connection. A model without tool support is skipped by routes that need tools.
+
+## Keychain unavailable
+
+On Linux the keychain needs a running Secret Service (GNOME Keyring or KWallet). Without one, use an environment variable
+and `ZORIX_SECRETS=env`.
+
+## A run switched models
+
+That is a fallback: the first candidate was unavailable, rate limited, refused or lacked the key. The `execution.model.fallback`
+event says why; `zorix show <id>` lists the models that served the run. A model named exactly (`provider/model`) never falls back.
