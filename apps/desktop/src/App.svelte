@@ -5,6 +5,7 @@
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
   import Providers from "./lib/components/Providers.svelte";
+  import DesignSystem from "./lib/views/DesignSystem.svelte";
   import RunView from "./lib/components/RunView.svelte";
   import Sidebar from "./lib/components/shell/Sidebar.svelte";
   import Toolbar from "./lib/components/shell/Toolbar.svelte";
@@ -13,8 +14,20 @@
   onMount(() => {
     theme.init();
     void store.init();
+    // For screenshots and reviews: open straight to the design system.
+    if (import.meta.env.VITE_START_VIEW === "design") store.showDesign();
   });
+
+  // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.
+  function onkey(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      store.showDesign();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onkey} />
 
 <div class="flex h-full flex-col">
   <Toolbar />
@@ -26,6 +39,8 @@
           <h2 class="text-2xl font-semibold text-err">ZORIX could not start</h2>
           <p class="selectable mt-2">{store.info.error}</p>
         </div>
+      {:else if store.view === "design"}
+        <DesignSystem />
       {:else if store.view === "providers"}
         <Providers />
       {:else if store.selectedId}

@@ -1,0 +1,279 @@
+<script lang="ts">
+  import { contrast } from "../contrast.ts";
+  import { theme } from "../stores/theme.svelte.ts";
+  import { toast } from "../stores/toast.svelte.ts";
+  import { MODE_LABEL, type Mode } from "../theme.ts";
+  import {
+    Badge, Button, Callout, Card, Checkbox, Chip, Dot, EmptyState, Field, ICON_NAMES, Icon, IconButton, Input, Kbd,
+    List, ListRow, Modal, PageHeader, Segmented, Select, Skeleton, Spinner, Stat, Switch, Tabs, Textarea,
+  } from "../ui/index.ts";
+  import { TONES } from "../ui/tone.ts";
+
+  const surfaces = ["bg", "panel", "panel-2", "elevated", "hover"];
+  const textTokens = ["fg", "muted", "faint"];
+  const accents = ["accent", "accent-2", "ok", "warn", "err", "info"];
+  const lines = ["line", "line-strong"];
+
+  // The values of the tokens in the theme being shown (read from the page, so this never drifts from app.css).
+  let values = $state<Record<string, string>>({});
+  $effect(() => {
+    void theme.resolved;
+    const style = getComputedStyle(document.documentElement);
+    const next: Record<string, string> = {};
+    for (const name of [...surfaces, ...textTokens, ...accents, ...lines, "accent-fg"]) next[name] = style.getPropertyValue(`--${name}`).trim();
+    values = next;
+  });
+  const ratio = (a: string, b: string) => {
+    try {
+      return contrast(values[a], values[b]).toFixed(1);
+    } catch {
+      return "–";
+    }
+  };
+
+  let mode = $state<Mode>(theme.mode);
+  $effect(() => {
+    if (mode !== theme.mode) theme.set(mode);
+  });
+
+  let tab = $state("overview");
+  let text = $state("");
+  let key = $state("");
+  let picked = $state("");
+  let notify = $state(true);
+  let remember = $state(false);
+  let chipOn = $state(true);
+  let modalOpen = $state(false);
+  let loading = $state(false);
+  function fakeLoad() {
+    loading = true;
+    setTimeout(() => (loading = false), 1400);
+  }
+
+  const sizes = [
+    ["text-4xl", "28 · Display"],
+    ["text-3xl", "24 · Page title"],
+    ["text-2xl", "20 · Section"],
+    ["text-xl", "17 · Dialog title"],
+    ["text-lg", "15 · Lead"],
+    ["text-md", "13.5 · Emphasis"],
+    ["text-base", "13 · Body"],
+    ["text-sm", "12 · Control"],
+    ["text-xs", "11.5 · Caption"],
+    ["text-2xs", "10.5 · Label"],
+  ];
+  const radii = [["rounded-md", "md · inputs in lists"], ["rounded-lg", "lg · buttons, fields"], ["rounded-xl", "xl · callouts, menus"], ["rounded-2xl", "2xl · cards, dialogs"], ["rounded-full", "full · chips, dots"]];
+</script>
+
+{#snippet swatch(name: string)}
+  <div class="flex items-center gap-3">
+    <span class="size-9 shrink-0 rounded-lg border border-line-strong" style:background="var(--{name})"></span>
+    <span class="min-w-0">
+      <span class="block text-sm font-medium">--{name}</span>
+      <span class="mono block text-2xs text-muted">{values[name] ?? ""}</span>
+    </span>
+  </div>
+{/snippet}
+
+<div class="selectable h-full overflow-y-auto">
+  <div class="mx-auto max-w-[1100px] p-8">
+    <PageHeader title="Design system" subtitle="The tokens and components every ZORIX screen is built from. Showing the {MODE_LABEL[theme.mode].toLowerCase()} theme." glow>
+      {#snippet actions()}
+        <Segmented
+          label="Theme"
+          bind:value={mode}
+          options={[
+            { value: "light", label: "Light", icon: "sun" },
+            { value: "dark", label: "Dark", icon: "moon" },
+            { value: "system", label: "System", icon: "monitor" },
+          ]}
+        />
+      {/snippet}
+    </PageHeader>
+
+    <div class="space-y-6">
+      <Card title="Colour" icon="sparkles">
+        <p class="mb-4 text-base text-muted">Surfaces stack from the window to dialogs. Accent is a tint for the selected thing and a solid fill only for the main button. Every text token passes WCAG AA on every surface; the number is the contrast ratio.</p>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {#each [...surfaces, ...lines] as name}{@render swatch(name)}{/each}
+        </div>
+        <div class="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {#each [...textTokens, ...accents] as name}{@render swatch(name)}{/each}
+        </div>
+        <div class="mt-5 overflow-x-auto rounded-xl border border-line">
+          <table class="w-full text-sm">
+            <thead class="bg-panel-2 text-left text-xs text-muted">
+              <tr><th class="px-3 py-2 font-medium">Text on →</th>{#each ["bg", "panel", "panel-2", "elevated"] as s}<th class="px-3 py-2 font-medium">{s}</th>{/each}</tr>
+            </thead>
+            <tbody>
+              {#each [...textTokens, "accent", "ok", "warn", "err", "info"] as t}
+                <tr class="border-t border-line">
+                  <td class="px-3 py-2 font-medium" style:color="var(--{t})">--{t}</td>
+                  {#each ["bg", "panel", "panel-2", "elevated"] as s}
+                    <td class="mono px-3 py-2 tabular-nums" style:background="var(--{s})" style:color="var(--{t})">{ratio(t, s)}</td>
+                  {/each}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div class="grid items-start gap-6 lg:grid-cols-2">
+        <Card title="Type" icon="list">
+          <p class="mb-3 text-xs text-muted">Inter for text, JetBrains Mono for ids, paths and numbers. Tabular figures on stats.</p>
+          <div class="space-y-1.5">
+            {#each sizes as [cls, label]}
+              <div class="flex items-baseline justify-between gap-3 border-b border-line/60 pb-1.5 last:border-0"><span class="{cls} truncate font-semibold tracking-tight">Run with control</span><span class="shrink-0 text-xs text-faint">{label}</span></div>
+            {/each}
+            <p class="mono pt-1 text-sm">exec_01a1e21c · anthropic/claude-opus-5-5 · 1 234 567</p>
+          </div>
+        </Card>
+        <Card title="Shape and depth" icon="layers">
+          <div class="grid grid-cols-5 gap-3">
+            {#each radii as [cls, label]}
+              <div class="text-center"><div class="{cls} mx-auto h-12 w-full border border-line-strong bg-panel-2"></div><p class="mt-1.5 text-2xs text-muted">{label}</p></div>
+            {/each}
+          </div>
+          <div class="mt-5 grid grid-cols-2 gap-4">
+            <div class="rounded-2xl border border-line bg-panel p-4 shadow-card"><p class="text-sm font-medium">shadow-card</p><p class="text-xs text-muted">Cards and lists</p></div>
+            <div class="rounded-2xl border border-line bg-elevated p-4 shadow-pop"><p class="text-sm font-medium">shadow-pop</p><p class="text-xs text-muted">Menus, dialogs, toasts</p></div>
+          </div>
+        </Card>
+      </div>
+
+      <Card title="Icons" icon="sparkles">
+        <div class="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">
+          {#each ICON_NAMES as name}
+            <div class="flex flex-col items-center gap-1.5 rounded-lg border border-line bg-panel-2 px-1 py-3 text-muted"><Icon {name} size={18} /><span class="max-w-full truncate text-2xs">{name}</span></div>
+          {/each}
+        </div>
+      </Card>
+
+      <Card title="Buttons" icon="play">
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <Button variant="primary" icon="play">Start run</Button>
+            <Button variant="secondary" icon="refresh">Refresh</Button>
+            <Button variant="subtle" icon="sparkles">Suggest</Button>
+            <Button variant="ghost" icon="copy">Copy</Button>
+            <Button variant="danger" icon="trash">Remove key</Button>
+            <Button variant="primary" loading={loading} onclick={fakeLoad}>Click to load</Button>
+            <Button variant="primary" disabled>Disabled</Button>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary">Small</Button>
+            <Button size="md" variant="secondary">Medium</Button>
+            <Button size="lg" variant="primary" iconRight="chevron-right">Large</Button>
+            <span class="mx-2 h-5 w-px bg-line"></span>
+            <IconButton label="Pause" icon="pause" />
+            <IconButton label="Settings" icon="sliders" variant="secondary" />
+            <IconButton label="Delete" icon="trash" variant="danger" />
+            <IconButton label="Small icon" icon="copy" size="sm" />
+            <span class="ml-2 inline-flex items-center gap-1.5 text-sm text-muted"><Spinner /> Loading</span>
+            <span class="inline-flex items-center gap-1 text-sm text-muted"><Kbd>⌘</Kbd><Kbd>⇧</Kbd><Kbd>D</Kbd></span>
+          </div>
+        </div>
+      </Card>
+
+      <div class="grid items-start gap-6 lg:grid-cols-2">
+        <Card title="Form controls" icon="wrench">
+          <div class="space-y-4">
+            <Field label="Prompt" hint="Say what you want done, in plain words.">
+              {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={text} placeholder="What is 17*23?" aria-describedby={f.describedby} />{/snippet}
+            </Field>
+            <Field label="API key" required hint="Stored in the system keychain, never in a file.">
+              {#snippet children(f)}<Input id={f.id} type="password" bind:value={key} placeholder="Paste the key" mono icon="key" aria-describedby={f.describedby} />{/snippet}
+            </Field>
+            <Field label="Workspace" error="That folder does not exist.">
+              {#snippet children(f)}<Input id={f.id} value="/Users/me/missing" invalid mono aria-describedby={f.describedby} />{/snippet}
+            </Field>
+            <Field label="Model">
+              {#snippet children(f)}
+                <Select id={f.id} bind:value={picked}>
+                  <option value="">Default</option><option value="demo">demo</option><option value="anthropic/claude-opus-5-5">anthropic/claude-opus-5-5</option>
+                </Select>
+              {/snippet}
+            </Field>
+            <div class="space-y-3">
+              <Checkbox bind:checked={remember} description="Allowed for this run only.">math.evaluate</Checkbox>
+              <Checkbox checked description="Changes things, so it asks first.">notes.put</Checkbox>
+              <Switch bind:checked={notify}>Notify me when a run needs approval</Switch>
+            </div>
+          </div>
+        </Card>
+
+        <div class="space-y-6">
+          <Card title="Badges, chips and tabs" icon="check-circle">
+            <div class="space-y-3">
+              <div class="flex flex-wrap gap-2">
+                {#each TONES as tone}<Badge {tone} dot>{tone}</Badge>{/each}
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <Badge tone="info" live>Running</Badge>
+                <Badge tone="ok" variant="outline">Completed</Badge>
+                <Badge tone="err" variant="solid">Failed</Badge>
+                <Badge tone="warn" variant="soft">Needs your approval</Badge>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <Chip selected={chipOn} onclick={() => (chipOn = !chipOn)}>Local only</Chip>
+                <Chip onclick={() => {}}>What time is it?</Chip>
+                <Chip onremove={() => toast.info("Removed")}>math.evaluate</Chip>
+                <span class="inline-flex items-center gap-1.5 text-sm text-muted"><Dot tone="ok" live /> online</span>
+              </div>
+              <Tabs bind:value={tab} tabs={[{ value: "overview", label: "Overview" }, { value: "events", label: "Events", count: 12 }, { value: "tools", label: "Tools", count: 3 }]} />
+            </div>
+          </Card>
+
+          <Card title="Callouts" icon="alert">
+            <div class="space-y-3">
+              <Callout tone="warn" title="notes.put wants to run">
+                It saves a note and asks first.
+                {#snippet actions()}<Button variant="primary" size="sm" icon="check">Approve</Button><Button size="sm">Refuse</Button>{/snippet}
+              </Callout>
+              <Callout tone="err" title="It did not finish">The provider answered 401: the key was refused.</Callout>
+              <Callout tone="info">Cloud providers receive the conversation of a run.</Callout>
+              <Callout tone="ok" title="Key saved" />
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-4">
+        <Stat icon="cpu" label="Model steps" value={4} detail="2 providers" />
+        <Stat icon="wrench" label="Tool calls" value={3} />
+        <Stat icon="sparkles" label="Tokens" value="12 408" detail="cache 9 120" />
+        <Stat icon="clock" label="Work time" value="8.4 s" />
+      </div>
+
+      <div class="grid items-start gap-6 lg:grid-cols-2">
+        <Card title="Lists" icon="list" padding="none">
+          <List class="rounded-none border-0 shadow-none" label="Providers">
+            <ListRow><Icon name="cloud" size={16} class="text-accent" /><span class="flex-1"><span class="block font-medium">anthropic</span><span class="block text-xs text-muted">api.anthropic.com</span></span><Badge tone="ok" dot>Key stored</Badge></ListRow>
+            <ListRow onclick={() => toast.ok("Selected openai")} active><Icon name="cloud" size={16} class="text-accent" /><span class="flex-1"><span class="block font-medium">openai</span><span class="block text-xs text-muted">api.openai.com</span></span><Badge tone="warn" dot>No key yet</Badge></ListRow>
+            <ListRow><Icon name="laptop" size={16} class="text-accent" /><span class="flex-1"><span class="block font-medium">ollama</span><span class="block text-xs text-muted">127.0.0.1:11434</span></span><Badge tone="muted">local</Badge></ListRow>
+          </List>
+        </Card>
+        <Card title="Dialogs, toasts and loading" icon="bell">
+          <div class="flex flex-wrap gap-2">
+            <Button onclick={() => (modalOpen = true)} icon="external">Open dialog</Button>
+            <Button onclick={() => toast.ok("Key for anthropic saved in the system keychain.")}>Success toast</Button>
+            <Button onclick={() => toast.err("anthropic: the key was refused (HTTP 401).")}>Error toast</Button>
+            <Button onclick={() => toast.info("Cloud providers receive the conversation.")}>Info toast</Button>
+          </div>
+          <div class="mt-4 space-y-2"><Skeleton class="h-4 w-2/3" /><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /></div>
+        </Card>
+      </div>
+
+      <Card padding="none"><EmptyState icon="bot" title="No runs yet" text="Describe an activity and ZORIX runs it under your rules, with every step recorded.">{#snippet actions()}<Button variant="primary" icon="plus">New run</Button><Button>Read the docs</Button>{/snippet}</EmptyState></Card>
+    </div>
+  </div>
+</div>
+
+<Modal bind:open={modalOpen} title="Remove the key?" icon="key" size="sm">
+  <p class="text-base text-muted">The key for <strong class="text-fg">anthropic</strong> is deleted from the system keychain. You can paste it again later.</p>
+  {#snippet footer()}
+    <Button onclick={() => (modalOpen = false)}>Cancel</Button>
+    <Button variant="danger" icon="trash" onclick={() => { modalOpen = false; toast.ok("Key removed."); }}>Remove key</Button>
+  {/snippet}
+</Modal>

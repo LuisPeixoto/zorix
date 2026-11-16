@@ -30,6 +30,9 @@ class ThemeStore {
     } catch {
       /* storage can be unavailable; the default stands */
     }
+    // For screenshots: VITE_START_THEME=dark at build time shows that theme without saving anything.
+    const forced = import.meta.env.VITE_START_THEME;
+    if (forced === "light" || forced === "dark" || forced === "system") this.mode = forced;
     if (typeof matchMedia === "function") {
       const query = matchMedia("(prefers-color-scheme: dark)");
       this.systemDark = query.matches;
@@ -61,9 +64,13 @@ class ThemeStore {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     // The window behind the page, so resizing never shows the wrong colour. Not available in a plain browser.
-    void getCurrentWindow()
-      .setBackgroundColor(WINDOW_BACKGROUND[theme])
-      .catch(() => {});
+    try {
+      void getCurrentWindow()
+        .setBackgroundColor(WINDOW_BACKGROUND[theme])
+        .catch(() => {});
+    } catch {
+      /* not inside the Tauri window (a browser, a test) */
+    }
   }
 }
 

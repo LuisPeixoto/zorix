@@ -32,6 +32,9 @@
 
   <div class="border-t border-line px-2 py-2">
     <NavItem icon="key" active={store.view === "providers"} onclick={() => store.showProviders()}>Providers &amp; keys</NavItem>
+    {#if import.meta.env.DEV}
+      <NavItem icon="layers" active={store.view === "design"} onclick={() => store.showDesign()}>Design system</NavItem>
+    {/if}
   </div>
   <footer class="border-t border-line px-4 py-2.5 text-xs text-faint">
     <p class="mono">v{store.info?.version ?? ""}</p>
