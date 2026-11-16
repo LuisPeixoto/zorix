@@ -101,7 +101,9 @@ export function describeEvent(event: ExecEvent): EventView {
       return { title: "Asked the model", detail: `step ${p.iteration}`, tone: "info" };
     case "execution.model.responded": {
       const calls = Number(p.tool_calls ?? 0);
-      return { title: "Model answered", detail: calls ? `wants ${calls} tool call${calls > 1 ? "s" : ""}` : "final answer", tone: "info" };
+      const what = calls ? `wants ${calls} tool call${calls > 1 ? "s" : ""}` : "final answer";
+      const who = p.provider ? ` · ${p.provider}/${p.model}` : "";
+      return { title: "Model answered", detail: what + who, tone: "info" };
     }
     case "execution.model.retrying":
       return { title: "Model failed, trying again", detail: `${p.error} (in ${p.delay_ms} ms)`, tone: "warn" };
@@ -138,3 +140,22 @@ export function describeEvent(event: ExecEvent): EventView {
 
 /** Events worth a row in the timeline. Bookkeeping is hidden to keep the story readable. */
 export const isNoise = (event: ExecEvent): boolean => ["execution.progress", "execution.checkpoint"].includes(event.kind);
+
+/** The names of the models that served a run, for display: `anthropic/claude-opus-5-5, ollama/qwen3:8b`. */
+export function servedBy(models: string[]): string {
+  return models.length ? models.join(", ") : "";
+}
+
+/** What a provider's key means to a person. */
+export function keyLabel(key: string): string {
+  switch (key) {
+    case "present":
+      return "Key stored";
+    case "missing":
+      return "No key yet";
+    case "not_needed":
+      return "No key needed";
+    default:
+      return "Keychain unavailable";
+  }
+}

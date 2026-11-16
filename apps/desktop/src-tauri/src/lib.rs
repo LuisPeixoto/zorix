@@ -32,6 +32,11 @@ pub fn run() {
             commands::cancel_run,
             commands::pause_run,
             commands::resume_run,
+            commands::list_providers,
+            commands::set_provider_key,
+            commands::remove_provider_key,
+            commands::test_provider,
+            commands::list_models,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the ZORIX app");

@@ -12,6 +12,8 @@
   ];
 
   let prompt = $state("");
+  // "" means: whatever the default is (shown below).
+  let model = $state("");
   let workspace = $state("");
   let allowRead = $state("*");
   let allowWrite = $state("");
@@ -45,6 +47,7 @@
       allow_read: workspace ? lines(allowRead) : [],
       allow_write: workspace ? lines(allowWrite) : [],
       workspace: workspace || undefined,
+      model: model || undefined,
     });
   }
 </script>
@@ -71,6 +74,27 @@
         <button type="button" class="rounded-full border border-line px-3 py-1 text-xs text-muted hover:bg-hover" onclick={() => (prompt = example)}>{example}</button>
       {/each}
     </div>
+  </div>
+
+  <div>
+    <label class="mb-1 block font-medium" for="model">Model</label>
+    <select id="model" class="w-full rounded-lg border border-line bg-panel p-2" bind:value={model}>
+      <option value="">
+        Default ({store.models && "Ok" in store.models.default ? store.models.default.Ok : "the built-in demo model"})
+      </option>
+      <option value="demo">demo (built-in, no network)</option>
+      {#each store.models?.routes ?? [] as r}<option value={"route:" + r}>route: {r}</option>{/each}
+      {#each store.models?.aliases ?? [] as a}<option value={a}>alias: {a}</option>{/each}
+      {#each store.models?.models ?? [] as m (m.reference)}
+        <option value={m.reference}>{m.reference}{m.local ? " · on this computer" : ""}</option>
+      {/each}
+    </select>
+    {#if store.models && "Err" in store.models.default && !model}
+      <p class="mt-1 text-xs text-muted">No provider is set up yet, so runs use the demo model. Add a key under Providers &amp; keys.</p>
+    {/if}
+    {#if model && model !== "demo" && !store.models?.models.find((m) => m.reference === model)?.local}
+      <p class="mt-1 text-xs text-warn">The conversation is sent to the provider.</p>
+    {/if}
   </div>
 
   <fieldset>

@@ -40,7 +40,7 @@ pub struct Candidate {
 }
 
 impl Candidate {
-    fn label(&self) -> String {
+    pub fn label(&self) -> String {
         format!("{}/{}", self.provider, self.model)
     }
 }

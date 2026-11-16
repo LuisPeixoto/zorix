@@ -88,6 +88,23 @@ pub struct StartRun {
     workspace: Option<String>,
     #[serde(default)]
     max_iterations: Option<u32>,
+    /// `provider/model`, `route:name`, an alias or `demo`. Empty means the default.
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// The model reference for a new run: what was chosen, else the default when there is one, else the simulated model.
+fn model_for(services: &Services, chosen: Option<&str>) -> Result<String, String> {
+    use zorix_core::StepPhase;
+    let chosen = chosen.map(str::trim).filter(|m| !m.is_empty());
+    let model = match chosen {
+        Some(model) => model.to_string(),
+        None if services.router.resolve("default", StepPhase::Start).is_ok() => "default".to_string(),
+        None => "demo".to_string(),
+    };
+    // Say now, in words, what a typo or an unknown provider means, instead of failing inside the run.
+    services.router.resolve(&model, StepPhase::Start)?;
+    Ok(model)
 }
 
 #[tauri::command]
@@ -118,7 +135,7 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
         request: TaskRequest {
             instructions: request.instructions.filter(|text| !text.trim().is_empty()),
             prompt: request.prompt,
-            model: "demo".into(),
+            model: model_for(services, request.model.as_deref())?,
             ..TaskRequest::default()
         },
         limits,
@@ -201,4 +218,147 @@ pub async fn pause_run(state: State<'_, AppState>, id: String) -> Result<Executi
 pub async fn resume_run(state: State<'_, AppState>, id: String) -> Result<Execution, String> {
     let services = services(&state)?;
     services.engine.resume(&services.tenant, id_of(&id)?).await.map_err(|e| e.to_string())
+}
+
+/// One provider as the settings screen shows it. Never carries a key.
+#[derive(Serialize)]
+pub struct ProviderRow {
+    name: String,
+    kind: String,
+    url: String,
+    local: bool,
+    enabled: bool,
+    /// `not_needed`, `present`, `missing` or `unavailable`.
+    key: String,
+    key_note: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderRow>, String> {
+    let services = services(&state)?;
+    let secrets = services.secrets.clone();
+    let config = services.config.clone();
+    // The keychain can be slow; keep it off the async threads.
+    tokio::task::spawn_blocking(move || {
+        zorix_providers::provider_statuses(&config, &secrets)
+            .into_iter()
+            .map(|s| {
+                use zorix_providers::KeyStatus::*;
+                let (key, key_note) = match s.key {
+                    NotNeeded => ("not_needed", None),
+                    Present => ("present", None),
+                    Missing => ("missing", None),
+                    Unavailable(why) => ("unavailable", Some(why)),
+                };
+                ProviderRow {
+                    name: s.name,
+                    kind: s.kind.as_str().into(),
+                    url: s.url,
+                    local: s.local,
+                    enabled: s.enabled,
+                    key: key.into(),
+                    key_note,
+                }
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+fn known_provider(services: &Services, name: &str) -> Result<(), String> {
+    zorix_providers::secrets::validate_name(name).map_err(|e| e.to_string())?;
+    if services.config.instances().iter().any(|p| p.name == name) {
+        Ok(())
+    } else {
+        Err(format!("There is no provider called “{name}”."))
+    }
+}
+
+/// The key goes from the field straight to the keychain. It is not stored in the interface, logged or returned.
+#[tauri::command]
+pub async fn set_provider_key(state: State<'_, AppState>, name: String, key: String) -> Result<(), String> {
+    let services = services(&state)?;
+    known_provider(services, &name)?;
+    let key = key.trim().to_string();
+    zorix_providers::secrets::validate_value(&key).map_err(|e| e.to_string())?;
+    let secrets = services.secrets.clone();
+    tokio::task::spawn_blocking(move || secrets.set(&name, &zorix_core::Secret::new(key)).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn remove_provider_key(state: State<'_, AppState>, name: String) -> Result<bool, String> {
+    let services = services(&state)?;
+    known_provider(services, &name)?;
+    let secrets = services.secrets.clone();
+    tokio::task::spawn_blocking(move || secrets.remove(&name).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// What a provider offers. Asks the provider (no conversation is sent) and teaches the router what it finds.
+#[tauri::command]
+pub async fn test_provider(state: State<'_, AppState>, name: String) -> Result<usize, String> {
+    let services = services(&state)?;
+    known_provider(services, &name)?;
+    let found = zorix_providers::discover_all(&services.router, &tokio_util::sync::CancellationToken::new()).await;
+    match found.into_iter().find(|d| d.provider == name) {
+        Some(d) => d.models.map(|m| m.len()),
+        None => Err(format!("{name} is turned off or cannot list its models.")),
+    }
+}
+
+/// A model for the picker.
+#[derive(Serialize)]
+pub struct ModelRow {
+    reference: String,
+    name: String,
+    context_window: u64,
+    tools: bool,
+    vision: bool,
+    local: bool,
+    price_known: bool,
+}
+
+/// The picker's choices: the aliases and routes from the configuration, then the known models.
+#[derive(Serialize)]
+pub struct ModelChoices {
+    aliases: Vec<String>,
+    routes: Vec<String>,
+    models: Vec<ModelRow>,
+    /// What “default” resolves to, or why it does not.
+    default: Result<String, String>,
+}
+
+#[tauri::command]
+pub fn list_models(state: State<'_, AppState>) -> Result<ModelChoices, String> {
+    use zorix_core::StepPhase;
+    let services = services(&state)?;
+    let router = &services.router;
+    let mut models: Vec<ModelRow> = router
+        .known_models()
+        .into_iter()
+        .filter(|m| m.tools)
+        .map(|m| ModelRow {
+            reference: format!("{}/{}", m.provider, m.id),
+            name: if m.display_name.is_empty() { m.id.clone() } else { m.display_name.clone() },
+            context_window: m.context_window,
+            tools: m.tools,
+            vision: m.vision,
+            local: router.provider(&m.provider).is_some_and(|p| p.local),
+            price_known: m.price.is_some(),
+        })
+        .collect();
+    models.sort_by(|a, b| a.reference.cmp(&b.reference));
+    let default = router
+        .resolve("default", StepPhase::Start)
+        .map(|r| r.candidates.first().map(|c| c.label()).unwrap_or_default());
+    Ok(ModelChoices {
+        aliases: services.config.alias.keys().cloned().collect(),
+        routes: services.config.routes.iter().map(|r| r.name.clone()).collect(),
+        models,
+        default,
+    })
 }
