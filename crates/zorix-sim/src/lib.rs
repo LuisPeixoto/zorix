@@ -1,6 +1,7 @@
 //! ZORIX sim: simulated models for tests, demos and development without a provider.
 
 mod demo;
+pub mod embed;
 mod faulty;
 mod profiled;
 mod scripted;

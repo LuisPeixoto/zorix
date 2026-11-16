@@ -479,6 +479,59 @@ impl ModelGateway for GeminiGateway {
         Ok(result)
     }
 
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        let key = resolve_key(&self.secrets, "gemini", &self.key_name).await?;
+        let model = request.model.trim_start_matches("models/").to_string();
+        let inputs = crate::embed::prepare_inputs("gemini", &request, "")?;
+        let task = match request.purpose {
+            zorix_core::EmbedPurpose::Query => "RETRIEVAL_QUERY",
+            zorix_core::EmbedPurpose::Document => "RETRIEVAL_DOCUMENT",
+        };
+        let max = crate::embed::lookup("gemini", &model).map_or(crate::embed::DEFAULT_BATCH, |m| m.max_batch);
+        let url = self.endpoint(&format!("models/{model}:batchEmbedContents"))?;
+        let headers = [("x-goog-api-key", Header::Secret(&key))];
+        let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(inputs.len());
+        for batch in crate::embed::batches(&inputs, max) {
+            let requests: Vec<Value> = batch
+                .iter()
+                .map(|text| {
+                    let mut item = json!({
+                        "model": format!("models/{model}"),
+                        "content": {"parts": [{"text": text}]},
+                        "taskType": task,
+                    });
+                    if let Some(dimensions) = request.dimensions {
+                        item["outputDimensionality"] = json!(dimensions);
+                    }
+                    item
+                })
+                .collect();
+            let response = self
+                .http
+                .post_json(&url, &headers, &json!({"requests": requests}), false, &cancel)
+                .await
+                .map_err(map_error)?;
+            let answer = self.http.read_json(response, &cancel).await?;
+            vectors.extend(
+                answer["embeddings"].as_array().into_iter().flatten().map(|e| crate::embed::floats(&e["values"])),
+            );
+        }
+        Ok(zorix_core::EmbeddingResponse {
+            model,
+            provider: Some(self.name.clone()),
+            vectors: crate::embed::finish_vectors("gemini", inputs.len(), vectors)?,
+            usage: Usage::default(),
+        })
+    }
+
+    fn embedding_profile(&self, model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        crate::embed::lookup("gemini", model).map(|m| m.profile())
+    }
+
     fn describe(&self, model: &str) -> Option<ModelProfile> {
         self.catalog.get(&self.name, model.trim_start_matches("models/")).map(|m| m.profile())
     }

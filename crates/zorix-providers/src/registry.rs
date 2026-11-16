@@ -236,3 +236,41 @@ pub async fn discover_all(router: &Router, cancel: &CancellationToken) -> Vec<Di
 pub fn describe_secret(secret: &Secret) -> String {
     format!("{} characters", secret.expose().chars().count())
 }
+
+/// The embeddings models a person can choose: what Ollama has installed, and the known models of the providers that have
+/// a key (those are only in the catalogue, and send text to the cloud). A provider that cannot be asked is reported, not hidden.
+pub async fn embedding_choices(
+    router: &Router,
+    cancel: &CancellationToken,
+) -> (Vec<crate::embed::EmbeddingChoice>, Vec<(String, String)>) {
+    let mut choices = Vec::new();
+    let mut problems = Vec::new();
+    let mut names: Vec<&str> = router.providers().map(|p| p.config.name.as_str()).collect();
+    names.sort_unstable();
+    for name in names {
+        let Some(entry) = router.provider(name) else { continue };
+        if !entry.config.enabled {
+            continue;
+        }
+        let kind = entry.config.kind.as_str();
+        if let Some(discover) = &entry.discover {
+            match discover.discover_embeddings(cancel).await {
+                Ok(found) => choices.extend(found),
+                Err(error) => problems.push((name.to_string(), error.to_string())),
+            }
+        }
+        if kind == "openai" || kind == "gemini" {
+            choices.extend(crate::embed::EMBEDDING_MODELS.iter().filter(|m| m.kind == kind).map(|m| {
+                crate::embed::EmbeddingChoice {
+                    provider: name.to_string(),
+                    id: m.id.to_string(),
+                    dimensions: Some(m.dimensions),
+                    max_input_tokens: Some(m.max_input_tokens),
+                    local: entry.local,
+                    installed: true,
+                }
+            }));
+        }
+    }
+    (choices, problems)
+}
