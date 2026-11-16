@@ -22,12 +22,21 @@ pub const DEFAULT_ANTHROPIC_MODEL: &str = "anthropic/claude-opus-5-5";
 
 /// The secret store the apps use: environment variables (including each provider's `api_key_env`), then the keychain.
 pub fn standard_secrets(config: &ProvidersConfig) -> Arc<dyn SecretStore> {
+    secrets_with(config, true)
+}
+
+/// The same, with the keychain left out when `keychain` is false (servers, CI and tests: `ZORIX_SECRETS=env`).
+pub fn secrets_with(config: &ProvidersConfig, keychain: bool) -> Arc<dyn SecretStore> {
     let env = config
         .instances()
         .iter()
         .filter_map(|p| p.api_key_env.as_ref().map(|var| (p.name.clone(), var.clone())))
         .fold(EnvStore::new(), |env, (name, var)| env.with_variable(&name, &var));
-    Arc::new(ChainStore::new(vec![Arc::new(env), Arc::new(KeychainStore::new())]))
+    let mut stores: Vec<Arc<dyn SecretStore>> = vec![Arc::new(env)];
+    if keychain {
+        stores.push(Arc::new(KeychainStore::new()));
+    }
+    Arc::new(ChainStore::new(stores))
 }
 
 /// The catalogue: what ships with ZORIX plus the models in the configuration.

@@ -89,7 +89,7 @@ fn a_bad_command_line_is_refused_before_the_data_folder_is_touched() {
         vec!["run", "x", "--max-iterations", "0"],
         vec!["run", "x", "--allow", "bad tool"],
         vec!["run", "x", "--allow-read", "../etc"],
-        vec!["run", "x", "--model", "gpt"],
+        vec!["run", "x", "--model", "GPT 5"],
         vec!["list", "--state", "sleeping"],
         vec!["approve", "xyz"],
         vec!["--tenant", "a/b", "list"],
@@ -448,4 +448,78 @@ fn another_tenant_sees_nothing() {
     let peek = z.run(&["--tenant", "globex", "show", &id]);
     assert_eq!(code(&peek), 1);
     assert!(text(&peek.stderr).contains("was not found"));
+}
+
+impl Zorix {
+    /// Like `run`, with only environment-variable keys (never the real keychain).
+    fn run_env(&self, args: &[&str], stdin: &str, vars: &[(&str, &str)]) -> Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_zorix"));
+        command
+            .arg("--home")
+            .arg(self.home())
+            .args(args)
+            .env_remove("ZORIX_HOME")
+            .env("ZORIX_SECRETS", "env")
+            .env_remove("ANTHROPIC_API_KEY")
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("GEMINI_API_KEY")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        for (k, v) in vars {
+            command.env(k, v);
+        }
+        let mut child = command.spawn().expect("start zorix");
+        let mut pipe = child.stdin.take().unwrap();
+        let input = stdin.to_string();
+        std::thread::spawn(move || {
+            let _ = pipe.write_all(input.as_bytes());
+        });
+        child.wait_with_output().expect("output")
+    }
+}
+
+#[test]
+fn providers_are_listed_with_their_key_state_and_a_key_is_never_printed() {
+    let z = Zorix::new();
+    let out = z.run_env(&["provider", "list"], "", &[("ANTHROPIC_API_KEY", "sk-ant-secret-0123456789abcdef")]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let listing = text(&out.stdout);
+    assert!(listing.lines().any(|l| l.starts_with("anthropic") && l.contains("key stored")), "{listing}");
+    assert!(listing.lines().any(|l| l.starts_with("ollama") && l.contains("local")), "{listing}");
+    assert!(!listing.contains("secret-0123") && !text(&out.stderr).contains("secret-0123"));
+}
+
+#[test]
+fn set_key_refuses_unknown_providers_and_bad_keys_without_echoing_them() {
+    let z = Zorix::new();
+    let out = z.run_env(&["provider", "set-key", "nobody", "--stdin"], "sk-x\n", &[]);
+    assert_eq!(code(&out), 1);
+    assert!(text(&out.stderr).contains("There is no provider called"), "{}", text(&out.stderr));
+    let out = z.run_env(&["provider", "set-key", "openai", "--stdin"], "two words\n", &[]);
+    assert_eq!(code(&out), 1);
+    assert!(text(&out.stderr).contains("paste only the key"), "{}", text(&out.stderr));
+    assert!(!text(&out.stderr).contains("two words"));
+}
+
+#[test]
+fn models_lists_the_catalogue_and_routes_are_empty_without_a_file() {
+    let z = Zorix::new();
+    let out = z.run_env(&["models"], "", &[]);
+    assert_eq!(code(&out), 0);
+    assert!(text(&out.stdout).contains("anthropic/claude-opus-5-5"), "{}", text(&out.stdout));
+    let out = z.run_env(&["route", "list"], "", &[]);
+    assert_eq!(code(&out), 0);
+    assert!(text(&out.stderr).contains("No routes or aliases"), "{}", text(&out.stderr));
+}
+
+#[test]
+fn a_run_with_an_unknown_provider_fails_clearly_and_demo_still_works() {
+    let z = Zorix::new();
+    let out = z.run_env(&["run", "hi", "--model", "nobody/x", "--approve", "never"], "", &[]);
+    assert_ne!(code(&out), 0, "{}", text(&out.stdout));
+    let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
+    assert!(all.contains("There is no provider called"), "{all}");
+    let out = z.run_env(&["run", "What is 2+2?", "--allow", "math.evaluate", "--approve", "never"], "", &[]);
+    assert_eq!(code(&out), 0, "{}{}", text(&out.stdout), text(&out.stderr));
 }

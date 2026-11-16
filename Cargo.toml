@@ -24,6 +24,7 @@ zorix-providers = { path = "crates/zorix-providers" }
 async-trait = "0.1"
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
+rpassword = "7"
 dirs = "6"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 keyring = "4"

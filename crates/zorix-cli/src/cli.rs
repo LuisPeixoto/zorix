@@ -50,6 +50,14 @@ pub enum Command {
     Recover(RecoverArgs),
     /// List the built-in tools.
     Tools,
+    /// List the models ZORIX knows, or (with --available) ask each provider what it offers.
+    Models(ModelsArgs),
+    /// Manage AI providers and their keys.
+    #[command(subcommand)]
+    Provider(ProviderCommand),
+    /// Show the routes and aliases from providers.toml.
+    #[command(subcommand)]
+    Route(RouteCommand),
     /// Print where ZORIX keeps its data.
     DataDir,
 }
@@ -61,28 +69,35 @@ pub enum ModelChoice {
     Demo,
     /// A scripted model read from a JSON file. Its position in the script lives in this process only.
     Script(PathBuf),
+    /// Anything the router resolves: `provider/model`, `route:name`, an alias or `default`.
+    Reference(String),
 }
 
 impl FromStr for ModelChoice {
     type Err = String;
 
     fn from_str(text: &str) -> Result<Self, String> {
-        match text {
-            "demo" => Ok(ModelChoice::Demo),
-            other => match other.strip_prefix("script:") {
-                Some(path) if !path.is_empty() => Ok(ModelChoice::Script(PathBuf::from(path))),
-                _ => Err("use “demo” or “script:<file.json>”".into()),
-            },
+        if text == "demo" {
+            return Ok(ModelChoice::Demo);
         }
+        if let Some(path) = text.strip_prefix("script:") {
+            return if path.is_empty() {
+                Err("use script:<file.json>".into())
+            } else {
+                Ok(ModelChoice::Script(PathBuf::from(path)))
+            };
+        }
+        zorix_providers::Selector::parse(text).map(|_| ModelChoice::Reference(text.to_string()))
     }
 }
 
 impl ModelChoice {
-    /// The name recorded in the execution.
-    pub fn label(&self) -> &'static str {
+    /// The reference recorded in the execution and given to the router.
+    pub fn label(&self) -> String {
         match self {
-            ModelChoice::Demo => "demo",
-            ModelChoice::Script(_) => "script",
+            ModelChoice::Demo => "demo".into(),
+            ModelChoice::Script(_) => "script".into(),
+            ModelChoice::Reference(text) => text.clone(),
         }
     }
 }
@@ -103,9 +118,21 @@ pub enum ApproveMode {
 /// Options that choose the model.
 #[derive(Debug, Args)]
 pub struct ModelArgs {
-    /// The model: `demo`, or `script:<file.json>` for a scripted one.
-    #[arg(long, default_value = "demo", value_name = "MODEL")]
-    pub model: ModelChoice,
+    /// The model: `provider/model` (for example `anthropic/claude-opus-5-5`), `route:<name>`, an alias, `demo`, or
+    /// `script:<file.json>`. Default: the `default` alias when one is set or Anthropic has a key, otherwise `demo`.
+    #[arg(long, value_name = "MODEL")]
+    pub model: Option<ModelChoice>,
+
+    /// Use only providers on this computer. Nothing is sent to the cloud.
+    #[arg(long)]
+    pub local_only: bool,
+}
+
+impl ModelArgs {
+    /// Options that leave the choice to the defaults.
+    pub fn default_demo() -> Self {
+        Self { model: None, local_only: false }
+    }
 }
 
 /// Options for `run`.
@@ -165,6 +192,52 @@ pub struct RunArgs {
     /// Running again with the same key returns the same execution instead of making a new one.
     #[arg(long, value_name = "KEY", value_parser = parse_key)]
     pub idempotency_key: Option<String>,
+}
+
+/// Options for `models`.
+#[derive(Debug, Args)]
+pub struct ModelsArgs {
+    /// Ask each provider that has a key (or runs here) which models it offers. Needs the network.
+    #[arg(long)]
+    pub available: bool,
+}
+
+/// What `zorix provider` does.
+#[derive(Debug, Subcommand)]
+pub enum ProviderCommand {
+    /// List providers, where they are and whether they have a key.
+    List,
+    /// Store a key in the system keychain. The key is read from a hidden prompt, never from the command line.
+    SetKey(KeyArgs),
+    /// Delete a stored key.
+    RemoveKey(NameArg),
+    /// Check a provider: key, connection and the models it lists. Sends no conversation and costs nothing.
+    Test(NameArg),
+}
+
+/// What `zorix route` does.
+#[derive(Debug, Subcommand)]
+pub enum RouteCommand {
+    /// List routes and aliases.
+    List,
+}
+
+/// A provider name.
+#[derive(Debug, Args)]
+pub struct NameArg {
+    /// The provider, as `zorix provider list` shows it.
+    pub name: String,
+}
+
+/// Options for `provider set-key`.
+#[derive(Debug, Args)]
+pub struct KeyArgs {
+    /// The provider, as `zorix provider list` shows it.
+    pub name: String,
+
+    /// Read the key from standard input (one line) instead of asking on the terminal. For scripts.
+    #[arg(long)]
+    pub stdin: bool,
 }
 
 /// Options for `list`.
@@ -328,7 +401,10 @@ mod tests {
     fn models_are_demo_or_a_script_file() {
         assert_eq!("demo".parse::<ModelChoice>().unwrap(), ModelChoice::Demo);
         assert_eq!("script:a/b.json".parse::<ModelChoice>().unwrap(), ModelChoice::Script("a/b.json".into()));
-        for bad in ["", "script:", "gpt", "Demo"] {
+        for good in ["anthropic/claude-opus-5-5", "route:fast", "default", "ollama/qwen3:8b"] {
+            assert_eq!(good.parse::<ModelChoice>().unwrap(), ModelChoice::Reference(good.into()), "{good}");
+        }
+        for bad in ["", "script:", "Demo", "a b", "route:"] {
             assert!(bad.parse::<ModelChoice>().is_err(), "{bad}");
         }
     }

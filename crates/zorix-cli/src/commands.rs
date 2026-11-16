@@ -11,8 +11,7 @@ use zorix_runtime::summarize;
 
 use crate::app::{CliError, builtin_registry, home_dir, open_engine, open_reader};
 use crate::cli::{
-    CancelArgs, Cli, Command, DecideArgs, EventsArgs, IdArg, ListArgs, ModelArgs, ModelChoice, RecoverArgs, ResumeArgs,
-    RunArgs,
+    CancelArgs, Cli, Command, DecideArgs, EventsArgs, IdArg, ListArgs, ModelArgs, RecoverArgs, ResumeArgs, RunArgs,
 };
 use crate::follow::{Exit, Printer, decider, default_mode, follow, hint_for_pending};
 use crate::render::{event_line, execution_row, shorten};
@@ -33,6 +32,9 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Resume(args) => resume(&home, tenant, printer, args).await,
         Command::Recover(args) => recover(&home, tenant, printer, args).await,
         Command::Tools => tools(&home, printer),
+        Command::Models(args) => crate::providers::models(&home, printer, args).await,
+        Command::Provider(command) => crate::providers::provider(&home, printer, command).await,
+        Command::Route(command) => crate::providers::route(&home, printer, command),
         Command::DataDir => {
             println!("{}", home.display());
             Ok(Exit::Done)
@@ -83,6 +85,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     if let Some(seconds) = args.max_seconds {
         limits.max_active_ms = seconds * 1_000;
     }
+    let app = open_engine(home, &args.model)?;
     let new = NewExecution {
         tenant: Some(tenant.clone()),
         conversation: args.conversation.clone(),
@@ -90,7 +93,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         request: TaskRequest {
             instructions: args.instructions.clone(),
             prompt: args.prompt.clone(),
-            model: args.model.model.label().to_string(),
+            model: app.model.clone(),
             ..TaskRequest::default()
         },
         limits,
@@ -98,7 +101,6 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         workspace,
         idempotency_key: args.idempotency_key.clone(),
     };
-    let app = open_engine(home, &args.model.model)?;
     let engine = &app.engine;
     let created = engine.create(new).await?;
     // Subscribe before starting, so no event is missed.
@@ -226,7 +228,7 @@ async fn decide(
     args: DecideArgs,
     approve: bool,
 ) -> Result<Exit, CliError> {
-    let app = open_engine(home, &args.model.model)?;
+    let app = open_engine(home, &args.model)?;
     let engine = &app.engine;
     let detail = engine.detail(&tenant, args.id).await?;
     if detail.execution.state != ExecutionState::WaitingForApproval {
@@ -268,7 +270,7 @@ async fn decide(
 }
 
 async fn cancel(home: &Path, tenant: TenantId, printer: Printer, args: CancelArgs) -> Result<Exit, CliError> {
-    let app = open_engine(home, &ModelChoice::Demo)?;
+    let app = open_engine(home, &ModelArgs::default_demo())?;
     let result = app.engine.cancel(&tenant, args.id, args.reason.clone()).await;
     app.engine.shutdown().await;
     let execution = result?;
@@ -281,7 +283,7 @@ async fn cancel(home: &Path, tenant: TenantId, printer: Printer, args: CancelArg
 }
 
 async fn resume(home: &Path, tenant: TenantId, printer: Printer, args: ResumeArgs) -> Result<Exit, CliError> {
-    let app = open_engine(home, &args.model.model)?;
+    let app = open_engine(home, &args.model)?;
     let engine = &app.engine;
     let after = last_seq(engine, &tenant, args.id).await?;
     let stream = engine.subscribe(&tenant, args.id, after).await?;
@@ -292,8 +294,7 @@ async fn resume(home: &Path, tenant: TenantId, printer: Printer, args: ResumeArg
 }
 
 async fn recover(home: &Path, tenant: TenantId, printer: Printer, args: RecoverArgs) -> Result<Exit, CliError> {
-    let ModelArgs { model } = &args.model;
-    let app = open_engine(home, model)?;
+    let app = open_engine(home, &args.model)?;
     let engine = &app.engine;
     let queued =
         engine.list(&tenant, &ListFilter { states: vec![ExecutionState::Queued], ..ListFilter::default() }).await?;
