@@ -336,6 +336,32 @@ impl ModelGateway for OpenAiChatGateway {
         Ok(result)
     }
 
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        let key = if self.key_required {
+            Some(resolve_key(&self.secrets, &self.name, &self.key_name).await?)
+        } else {
+            crate::secrets::get_async(self.secrets.clone(), self.key_name.clone()).await.unwrap_or_default()
+        };
+        if self.key_required && key.is_none() {
+            return Err(missing_key(&self.name, &self.key_name));
+        }
+        let url = crate::embed::sibling_url(&self.url, "/chat/completions");
+        crate::embed::openai_embed(
+            &self.http,
+            &url,
+            key.as_ref(),
+            &self.name,
+            &request,
+            crate::embed::DEFAULT_BATCH,
+            &cancel,
+        )
+        .await
+    }
+
     fn describe(&self, model: &str) -> Option<ModelProfile> {
         self.catalog.get(&self.name, model).map(|m| m.profile())
     }

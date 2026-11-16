@@ -94,6 +94,26 @@ impl OllamaGateway {
         Ok(found)
     }
 
+    /// The embeddings models installed: name, vector size and longest input, read from `/api/show`.
+    pub async fn embedding_models(&self, cancel: &CancellationToken) -> Result<Vec<EmbeddingModelInfo>, ModelError> {
+        let tags = self.http.get_json(&self.endpoint("api/tags"), &[], cancel).await.map_err(|e| self.hint(e))?;
+        let mut found = Vec::new();
+        for entry in tags["models"].as_array().into_iter().flatten().take(100) {
+            let Some(name) = entry["name"].as_str().or(entry["model"].as_str()) else { continue };
+            let response =
+                self.http.post_json(&self.endpoint("api/show"), &[], &json!({"model": name}), false, cancel).await;
+            let show = match response {
+                Ok(response) => self.http.read_json(response, cancel).await?,
+                Err(error) if error.kind() == ModelErrorKind::Cancelled => return Err(error),
+                Err(_) => continue,
+            };
+            if let Some(info) = parse_embedding_show(name, &show) {
+                found.push(info);
+            }
+        }
+        Ok(found)
+    }
+
     fn hint(&self, error: ModelError) -> ModelError {
         match error {
             ModelError::Provider { kind, message, retry_after_ms } if message.contains("could not connect") => {
@@ -235,10 +255,98 @@ impl Discover for OllamaGateway {
     async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<ModelInfo>, ModelError> {
         self.refresh(cancel).await
     }
+
+    async fn discover_embeddings(
+        &self,
+        cancel: &CancellationToken,
+    ) -> Result<Vec<crate::embed::EmbeddingChoice>, ModelError> {
+        Ok(self
+            .embedding_models(cancel)
+            .await?
+            .into_iter()
+            .map(|m| crate::embed::EmbeddingChoice {
+                provider: self.name.clone(),
+                dimensions: m.dimensions.or(crate::embed::lookup("ollama", &m.id).map(|k| k.dimensions)),
+                max_input_tokens: m.max_input_tokens,
+                local: true,
+                installed: true,
+                id: m.id,
+            })
+            .collect())
+    }
+}
+
+/// An embeddings model found on an Ollama server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EmbeddingModelInfo {
+    /// The name, as Ollama lists it (with its tag).
+    pub id: String,
+    /// The size of its vectors, when the model says.
+    pub dimensions: Option<u32>,
+    /// The longest input, in tokens, when the model says.
+    pub max_input_tokens: Option<u64>,
+}
+
+/// Read an `/api/show` answer for an embeddings model. `None` for models that are not embedding models.
+pub fn parse_embedding_show(name: &str, show: &Value) -> Option<EmbeddingModelInfo> {
+    let capabilities: Vec<&str> =
+        show["capabilities"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    let by_table = crate::embed::lookup("ollama", name).is_some();
+    if !capabilities.contains(&"embedding") && !(capabilities.is_empty() && by_table) {
+        return None;
+    }
+    let info = show["model_info"].as_object();
+    let number =
+        |suffix: &str| info.and_then(|i| i.iter().find(|(k, _)| k.ends_with(suffix)).and_then(|(_, v)| v.as_u64()));
+    Some(EmbeddingModelInfo {
+        id: name.to_string(),
+        dimensions: number(".embedding_length").map(|n| n as u32),
+        max_input_tokens: number(".context_length"),
+    })
 }
 
 #[async_trait]
 impl ModelGateway for OllamaGateway {
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        let known = crate::embed::lookup("ollama", &request.model);
+        let prefix = known.map_or("", |m| m.prefix(request.purpose));
+        let inputs = crate::embed::prepare_inputs(&self.name, &request, prefix)?;
+        let max = known.map_or(crate::embed::DEFAULT_BATCH, |m| m.max_batch);
+        let mut vectors: Vec<Vec<f32>> = Vec::with_capacity(inputs.len());
+        let mut used = 0u64;
+        for batch in crate::embed::batches(&inputs, max) {
+            let mut body = json!({"model": request.model, "input": batch, "truncate": true});
+            if let Some(dimensions) = request.dimensions {
+                body["dimensions"] = json!(dimensions);
+            }
+            let response = self
+                .http
+                .post_json(&self.endpoint("api/embed"), &[], &body, false, &cancel)
+                .await
+                .map_err(|e| self.hint(e))?;
+            let answer = self.http.read_json(response, &cancel).await?;
+            if let Some(error) = answer["error"].as_str() {
+                return Err(line_error(error));
+            }
+            vectors.extend(answer["embeddings"].as_array().into_iter().flatten().map(crate::embed::floats));
+            used += answer["prompt_eval_count"].as_u64().unwrap_or(0);
+        }
+        Ok(zorix_core::EmbeddingResponse {
+            model: request.model.clone(),
+            provider: Some(self.name.clone()),
+            vectors: crate::embed::finish_vectors(&self.name, inputs.len(), vectors)?,
+            usage: Usage { input_tokens: used, ..Usage::default() },
+        })
+    }
+
+    fn embedding_profile(&self, model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        crate::embed::lookup("ollama", model).map(|m| m.profile())
+    }
+
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
         let (body, names) = build_request(&request, self.num_ctx(&request.model));
         let response = self

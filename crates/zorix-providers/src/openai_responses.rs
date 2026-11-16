@@ -368,6 +368,21 @@ impl ModelGateway for OpenAiResponsesGateway {
         }
     }
 
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        let key = resolve_key(&self.secrets, "openai", &self.key_name).await?;
+        let url = crate::embed::sibling_url(&self.url, "responses");
+        let batch = crate::embed::lookup("openai", &request.model).map_or(crate::embed::DEFAULT_BATCH, |m| m.max_batch);
+        crate::embed::openai_embed(&self.http, &url, Some(&key), &self.name, &request, batch, &cancel).await
+    }
+
+    fn embedding_profile(&self, model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        crate::embed::lookup("openai", model).map(|m| m.profile())
+    }
+
     fn describe(&self, model: &str) -> Option<ModelProfile> {
         self.catalog.get(&self.name, model).map(|m| m.profile())
     }
