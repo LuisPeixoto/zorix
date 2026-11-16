@@ -126,6 +126,18 @@ impl ScriptedModel {
 
 #[async_trait]
 impl ModelGateway for ScriptedModel {
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        _cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        crate::embed::embed(&request)
+    }
+
+    fn embedding_profile(&self, _model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        Some(crate::embed::profile())
+    }
+
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
         self.seen.lock().push(request.clone());
         let mut turn = self

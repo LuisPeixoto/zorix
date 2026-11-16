@@ -190,6 +190,18 @@ fn answer(prompt: &str, seen: &[Seen]) -> String {
 
 #[async_trait]
 impl ModelGateway for DemoModel {
+    async fn embed(
+        &self,
+        request: zorix_core::EmbeddingRequest,
+        _cancel: CancellationToken,
+    ) -> Result<zorix_core::EmbeddingResponse, ModelError> {
+        crate::embed::embed(&request)
+    }
+
+    fn embedding_profile(&self, _model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        Some(crate::embed::profile())
+    }
+
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
         let prompt = prompt_of(&request.messages);
         if prompt.contains("[hang]") {
