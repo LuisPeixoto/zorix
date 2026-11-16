@@ -245,3 +245,14 @@ async fn a_length_stop_is_reported_and_the_last_line_without_a_newline_is_still_
     let response = call(&gateway(&server, OllamaOptions::default()), request(base())).await.unwrap();
     assert_eq!((response.finish, response.text.as_str()), (FinishReason::Length, "cut"));
 }
+
+#[test]
+fn a_real_api_show_answer_is_understood() {
+    // Captured from a real Ollama (0.35) with `ollama pull qwen3:1.7b`; the large token lists are removed.
+    let show: Value = serde_json::from_str(include_str!("fixtures/ollama_show_qwen3_1_7b.json")).unwrap();
+    let info = zorix_providers::ollama::parse_show("ollama", "qwen3:1.7b", &show, &OllamaOptions::default()).unwrap();
+    assert!(info.tools && info.thinking && !info.vision, "{info:?}");
+    assert!(!info.assumed, "the real answer states its context length");
+    assert_eq!(info.context_window, 32_768, "40 960 on disk, capped by max_context");
+    assert_eq!(info.tier, 1, "under four billion parameters");
+}

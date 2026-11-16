@@ -6324,7 +6324,9 @@ dependencies = [
  "tracing",
  "wiremock",
  "zorix-core",
+ "zorix-runtime",
  "zorix-sim",
+ "zorix-tools",
 ]
 
 [[package]]
