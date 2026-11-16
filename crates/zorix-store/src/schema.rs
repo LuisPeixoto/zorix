@@ -59,6 +59,155 @@ const MIGRATIONS: &[&str] = &[
         expires_at INTEGER NOT NULL
     );
     ",
+    // 2: memory (Phase 3). One full-text table per corpus, so BM25 statistics never mix. Vectors are keyed by the hash of
+    // the text, so the same text is never embedded twice. Written once, before the 0.3.0 release.
+    "
+    CREATE TABLE memory_items (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        scope_key TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL,
+        subject TEXT,
+        content TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        superseded_by TEXT,
+        origin TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        confirmed_at INTEGER NOT NULL,
+        valid_until INTEGER,
+        last_used_at INTEGER,
+        use_count INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX memory_by_scope ON memory_items (tenant, scope, scope_key, status);
+    CREATE UNIQUE INDEX memory_dedupe ON memory_items (tenant, scope, scope_key, content_hash) WHERE status = 'active';
+    CREATE INDEX memory_by_subject ON memory_items (tenant, scope, scope_key, subject) WHERE subject IS NOT NULL AND status = 'active';
+    CREATE VIRTUAL TABLE memory_fts USING fts5(
+        content, subject, content = 'memory_items', content_rowid = 'rowid',
+        tokenize = \"unicode61 remove_diacritics 2 tokenchars '_'\"
+    );
+    CREATE TRIGGER memory_ai AFTER INSERT ON memory_items BEGIN
+        INSERT INTO memory_fts (rowid, content, subject) VALUES (new.rowid, new.content, new.subject);
+    END;
+    CREATE TRIGGER memory_ad AFTER DELETE ON memory_items BEGIN
+        INSERT INTO memory_fts (memory_fts, rowid, content, subject) VALUES ('delete', old.rowid, old.content, old.subject);
+    END;
+    CREATE TRIGGER memory_au AFTER UPDATE ON memory_items BEGIN
+        INSERT INTO memory_fts (memory_fts, rowid, content, subject) VALUES ('delete', old.rowid, old.content, old.subject);
+        INSERT INTO memory_fts (rowid, content, subject) VALUES (new.rowid, new.content, new.subject);
+    END;
+
+    CREATE TABLE knowledge_roots (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        scope_key TEXT NOT NULL DEFAULT '',
+        path TEXT NOT NULL,
+        include TEXT NOT NULL DEFAULT '[]',
+        exclude TEXT NOT NULL DEFAULT '[]',
+        max_file_bytes INTEGER NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        auto_sync INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        last_sync_at INTEGER,
+        last_sync TEXT
+    );
+    CREATE UNIQUE INDEX roots_by_path ON knowledge_roots (tenant, path);
+    CREATE TABLE knowledge_documents (
+        id TEXT PRIMARY KEY,
+        root_id TEXT NOT NULL,
+        rel_path TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        mtime_ns INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        error TEXT,
+        chunks INTEGER NOT NULL DEFAULT 0,
+        indexed_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX documents_by_path ON knowledge_documents (root_id, rel_path);
+    CREATE TABLE knowledge_chunks (
+        id INTEGER PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        ord INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        text_hash TEXT NOT NULL,
+        heading TEXT,
+        line_start INTEGER,
+        line_end INTEGER,
+        page INTEGER,
+        tokens INTEGER NOT NULL
+    );
+    CREATE INDEX chunks_by_document ON knowledge_chunks (document_id, ord);
+    CREATE INDEX chunks_by_hash ON knowledge_chunks (text_hash);
+    CREATE VIRTUAL TABLE chunks_fts USING fts5(
+        text, heading, content = 'knowledge_chunks', content_rowid = 'id',
+        tokenize = \"unicode61 remove_diacritics 2 tokenchars '_'\"
+    );
+    CREATE TRIGGER chunks_ai AFTER INSERT ON knowledge_chunks BEGIN
+        INSERT INTO chunks_fts (rowid, text, heading) VALUES (new.id, new.text, new.heading);
+    END;
+    CREATE TRIGGER chunks_ad AFTER DELETE ON knowledge_chunks BEGIN
+        INSERT INTO chunks_fts (chunks_fts, rowid, text, heading) VALUES ('delete', old.id, old.text, old.heading);
+    END;
+
+    CREATE TABLE operations (
+        execution_id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        project TEXT,
+        conversation TEXT,
+        state TEXT NOT NULL,
+        finished_at INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        text_hash TEXT NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE INDEX operations_by_tenant ON operations (tenant, finished_at DESC);
+    CREATE VIRTUAL TABLE operations_fts USING fts5(
+        text, content = 'operations', content_rowid = 'rowid',
+        tokenize = \"unicode61 remove_diacritics 2 tokenchars '_'\"
+    );
+    CREATE TRIGGER operations_ai AFTER INSERT ON operations BEGIN
+        INSERT INTO operations_fts (rowid, text) VALUES (new.rowid, new.text);
+    END;
+    CREATE TRIGGER operations_ad AFTER DELETE ON operations BEGIN
+        INSERT INTO operations_fts (operations_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+    END;
+
+    CREATE TABLE vectors (
+        model TEXT NOT NULL,
+        text_hash TEXT NOT NULL,
+        dims INTEGER NOT NULL,
+        vector BLOB NOT NULL,
+        PRIMARY KEY (model, text_hash)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE context_snapshots (
+        execution_id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE TABLE snapshot_items (
+        execution_id TEXT NOT NULL,
+        item TEXT NOT NULL,
+        PRIMARY KEY (item, execution_id)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE token_calibration (
+        model TEXT PRIMARY KEY,
+        factor REAL NOT NULL,
+        samples INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE memory_settings (
+        tenant TEXT PRIMARY KEY,
+        doc TEXT NOT NULL
+    );
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -100,6 +249,27 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('executions','events','checkpoints','tool_calls','approvals','leases')", [], |r| r.get(0))
             .unwrap();
         assert_eq!(tables, 6);
+        let memory: u32 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('memory_items','knowledge_roots','knowledge_documents','knowledge_chunks','operations','vectors','context_snapshots','snapshot_items','token_calibration','memory_settings','memory_fts','chunks_fts','operations_fts')", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(memory, 13, "FTS5 is compiled into the bundled SQLite on every platform");
+    }
+
+    #[test]
+    fn a_database_from_zorix_0_2_is_upgraded_and_keeps_its_executions() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        conn.execute("INSERT INTO executions (id, tenant, state, version, created_at, doc) VALUES ('e1','local','completed',1,5,'{}')", []).unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let kept: u32 = conn.query_row("SELECT COUNT(*) FROM executions WHERE id = 'e1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 1);
+        conn.execute("INSERT INTO operations (execution_id, tenant, state, finished_at, text, text_hash, doc) VALUES ('e1','local','completed',9,'hello world','h','{}')", []).unwrap();
+        let found: u32 = conn
+            .query_row("SELECT COUNT(*) FROM operations_fts WHERE operations_fts MATCH '\"hello\"'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(found, 1);
     }
 
     #[test]
