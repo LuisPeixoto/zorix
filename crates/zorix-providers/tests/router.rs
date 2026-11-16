@@ -91,7 +91,7 @@ fn entry(name: &str, kind: ProviderKind, url: Option<&str>, gateway: Arc<dyn Mod
     let config =
         ProviderConfig { name: name.into(), kind, base_url: url.map(str::to_string), api_key_env: None, enabled: true };
     let local = config.is_local();
-    ProviderEntry { config, gateway, local }
+    ProviderEntry { config, gateway, local, discover: None }
 }
 
 fn catalog() -> Catalog {

@@ -26,6 +26,8 @@ pub struct ProviderEntry {
     pub gateway: Arc<dyn ModelGateway>,
     /// True when it runs on this computer.
     pub local: bool,
+    /// How to ask it which models it offers, when it can say.
+    pub discover: Option<Arc<dyn crate::adapter::Discover>>,
 }
 
 /// A candidate: a provider instance and one of its models.

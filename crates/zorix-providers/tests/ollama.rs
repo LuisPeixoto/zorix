@@ -179,7 +179,7 @@ async fn discovery_learns_the_context_and_capabilities_and_the_runtime_is_told_t
     let model = &found[0];
     assert_eq!(
         (model.id.as_str(), model.context_window, model.tools, model.thinking, model.vision, model.assumed),
-        ("qwen3:8b", 40_960, true, true, false, false)
+        ("qwen3:8b", 32_768, true, true, false, false) // 40 960 on disk, capped by max_context
     );
     assert_eq!(model.tier, 2);
     let profile = g.describe("qwen3:8b").unwrap();

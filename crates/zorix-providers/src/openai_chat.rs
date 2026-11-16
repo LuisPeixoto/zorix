@@ -15,7 +15,9 @@ use zorix_core::{
     ToolCallId, ToolCallRequest, Usage,
 };
 
-use crate::adapter::{ToolNameMap, missing_key, resolve_key, schema_instruction, simple_name_char};
+use crate::adapter::{
+    Discover, ToolNameMap, missing_key, parse_openai_models, resolve_key, schema_instruction, simple_name_char,
+};
 use crate::catalog::Catalog;
 use crate::http::{Header, HttpClient, is_loopback};
 use crate::secrets::SecretStore;
@@ -284,6 +286,24 @@ impl ChatAggregator {
         };
         let model = if self.model.is_empty() { requested_model.to_string() } else { self.model };
         Ok(ModelResponse::new(model, strip_think(&self.text), calls, usage, finish))
+    }
+}
+
+#[async_trait]
+impl Discover for OpenAiChatGateway {
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<crate::catalog::ModelInfo>, ModelError> {
+        let key = if self.key_required {
+            Some(resolve_key(&self.secrets, &self.name, &self.key_name).await?)
+        } else {
+            crate::secrets::get_async(self.secrets.clone(), self.key_name.clone()).await.unwrap_or_default()
+        };
+        let mut url = self.url.clone();
+        let path =
+            url.path().trim_end_matches('/').rsplit_once('/').map(|(head, _)| head.to_string()).unwrap_or_default();
+        url.set_path(&format!("{path}/models"));
+        let headers: Vec<(&str, Header)> = key.iter().map(|k| ("authorization", Header::Bearer(k))).collect();
+        let list = self.http.get_json(&url, &headers, cancel).await?;
+        Ok(parse_openai_models(self.name.as_str(), &list))
     }
 }
 

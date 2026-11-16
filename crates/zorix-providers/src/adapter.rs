@@ -6,7 +6,42 @@ use std::sync::Arc;
 use serde_json::Value;
 use zorix_core::{ModelError, ModelErrorKind, Secret, ToolDefinition};
 
+use crate::catalog::ModelInfo;
 use crate::secrets::{SecretError, SecretStore, get_async};
+
+/// Something that can ask its provider which models exist.
+#[async_trait::async_trait]
+pub trait Discover: Send + Sync {
+    /// The models the provider offers, with what it reports about them. Fields it does not report are assumed and flagged.
+    async fn discover(&self, cancel: &tokio_util::sync::CancellationToken) -> Result<Vec<ModelInfo>, ModelError>;
+}
+
+/// Read an OpenAI-style `GET /models` list into catalogue entries. Models that are clearly not chat models are left out.
+pub fn parse_openai_models(provider: &str, list: &Value) -> Vec<ModelInfo> {
+    const NOT_CHAT: &[&str] =
+        &["embedding", "whisper", "tts", "dall-e", "moderation", "transcribe", "image", "audio", "realtime", "rerank"];
+    list["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m["id"].as_str())
+        .filter(|id| !NOT_CHAT.iter().any(|needle| id.to_lowercase().contains(needle)))
+        .map(|id| ModelInfo {
+            provider: provider.to_string(),
+            id: id.to_string(),
+            display_name: id.to_string(),
+            context_window: 128_000,
+            max_output: 16_384,
+            tools: true,
+            vision: false,
+            thinking: false,
+            latency: crate::catalog::Latency::Standard,
+            tier: 3,
+            price: None,
+            assumed: true,
+        })
+        .collect()
+}
 
 /// How tool ids are written on the wire. ZORIX ids look like `math.evaluate`; providers allow fewer characters, and the
 /// model must see names it can use. The map is rebuilt for every request from the tool definitions, so it needs no storage.
@@ -92,6 +127,14 @@ mod tests {
 
     fn tool(id: &str) -> ToolDefinition {
         ToolDefinition { id: id.into(), description: String::new(), input_schema: json!({"type": "object"}) }
+    }
+
+    #[test]
+    fn an_openai_model_list_is_read_and_non_chat_models_are_left_out() {
+        let list = json!({"data": [{"id": "gpt-test"}, {"id": "text-embedding-3-small"}, {"id": "whisper-1"}, {"id": "meta/llama-test"}]});
+        let ids: Vec<String> = parse_openai_models("openai", &list).into_iter().map(|m| m.id).collect();
+        assert_eq!(ids, vec!["gpt-test", "meta/llama-test"]);
+        assert!(parse_openai_models("x", &list).iter().all(|m| m.assumed));
     }
 
     #[test]

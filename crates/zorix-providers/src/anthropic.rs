@@ -17,7 +17,7 @@ use zorix_core::{
     NativeTurn, Role, ToolCallId, ToolCallRequest, Usage,
 };
 
-use crate::adapter::{ToolNameMap, resolve_key, schema_instruction, simple_name_char};
+use crate::adapter::{Discover, ToolNameMap, resolve_key, schema_instruction, simple_name_char};
 use crate::catalog::Catalog;
 use crate::http::{Header, HttpClient, classify_stream_error};
 use crate::secrets::SecretStore;
@@ -394,6 +394,46 @@ impl Aggregator {
         response.provider = Some("anthropic".into());
         response.native = native;
         Ok(response)
+    }
+}
+
+#[async_trait]
+impl Discover for AnthropicGateway {
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<crate::catalog::ModelInfo>, ModelError> {
+        let key = resolve_key(&self.secrets, "anthropic", &self.key_name).await?;
+        let mut url = self.url.clone();
+        url.set_path("/v1/models");
+        url.set_query(Some("limit=100"));
+        let headers = [("x-api-key", Header::Secret(&key)), ("anthropic-version", Header::Plain(API_VERSION))];
+        let list = self.http.get_json(&url, &headers, cancel).await?;
+        Ok(list["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|m| {
+                let id = m["id"].as_str()?.to_string();
+                // What the catalogue already knows (with its price) wins over what the list reports.
+                if let Some(known) = self.catalog.get(&self.name, &id) {
+                    return Some(known.clone());
+                }
+                let context = m["max_input_tokens"].as_u64().filter(|n| *n > 0);
+                let window = context.unwrap_or(200_000);
+                Some(crate::catalog::ModelInfo {
+                    provider: self.name.clone(),
+                    display_name: m["display_name"].as_str().unwrap_or(&id).to_string(),
+                    max_output: m["max_tokens"].as_u64().filter(|n| *n > 0).unwrap_or(8_192).min(window),
+                    context_window: window,
+                    tools: true,
+                    vision: true,
+                    thinking: true,
+                    latency: crate::catalog::Latency::Standard,
+                    tier: 3,
+                    price: None,
+                    assumed: context.is_none(),
+                    id,
+                })
+            })
+            .collect())
     }
 }
 

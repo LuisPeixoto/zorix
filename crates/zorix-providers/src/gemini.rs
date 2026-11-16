@@ -16,7 +16,7 @@ use zorix_core::{
     Role, ToolCallId, ToolCallRequest, Usage,
 };
 
-use crate::adapter::{ToolNameMap, resolve_key, schema_instruction};
+use crate::adapter::{Discover, ToolNameMap, resolve_key, schema_instruction};
 use crate::catalog::{Catalog, Latency, ModelInfo};
 use crate::http::{Header, HttpClient};
 use crate::secrets::SecretStore;
@@ -448,6 +448,13 @@ fn map_error(error: ModelError) -> ModelError {
             ModelError::Provider { kind: ModelErrorKind::Auth, message, retry_after_ms }
         }
         other => other,
+    }
+}
+
+#[async_trait]
+impl Discover for GeminiGateway {
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<ModelInfo>, ModelError> {
+        GeminiGateway::discover(self, cancel).await
     }
 }
 
