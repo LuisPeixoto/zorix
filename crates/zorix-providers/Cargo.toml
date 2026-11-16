@@ -28,3 +28,4 @@ tracing.workspace = true
 [dev-dependencies]
 wiremock.workspace = true
 tempfile.workspace = true
+zorix-sim.workspace = true

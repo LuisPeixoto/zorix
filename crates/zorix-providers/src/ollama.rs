@@ -17,7 +17,7 @@ use zorix_core::{
     ToolCallId, ToolCallRequest, Usage,
 };
 
-use crate::adapter::{ToolNameMap, schema_instruction, simple_name_char};
+use crate::adapter::{Discover, ToolNameMap, schema_instruction, simple_name_char};
 use crate::catalog::{Catalog, Latency, ModelInfo};
 use crate::http::{HttpClient, shorten};
 use crate::openai_chat::strip_think;
@@ -119,7 +119,8 @@ pub fn parse_show(provider: &str, name: &str, show: &Value, options: &OllamaOpti
         .as_object()
         .and_then(|info| info.iter().find(|(key, _)| key.ends_with(".context_length")).and_then(|(_, v)| v.as_u64()));
     let assumed = context.is_none();
-    let context_window = context.unwrap_or(options.default_context);
+    // What Ollama will actually load, not what the model could do: the budget must match the request.
+    let context_window = context.unwrap_or(options.default_context).min(options.max_context);
     let size = show["details"]["parameter_size"].as_str().unwrap_or("");
     let billions: f64 = size.trim_end_matches(['B', 'b']).parse().unwrap_or(0.0);
     let tier = match billions {
@@ -227,6 +228,13 @@ fn line_error(message: &str) -> ModelError {
         ModelErrorKind::Unavailable
     };
     ModelError::provider(kind, format!("ollama: {}", shorten(&zorix_core::redact_text(message), 240)))
+}
+
+#[async_trait]
+impl Discover for OllamaGateway {
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<ModelInfo>, ModelError> {
+        self.refresh(cancel).await
+    }
 }
 
 #[async_trait]

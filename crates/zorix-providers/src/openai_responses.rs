@@ -15,7 +15,7 @@ use zorix_core::{
     NativeTurn, Role, ToolCallId, ToolCallRequest, Usage,
 };
 
-use crate::adapter::{ToolNameMap, resolve_key, schema_instruction, simple_name_char};
+use crate::adapter::{Discover, ToolNameMap, parse_openai_models, resolve_key, schema_instruction, simple_name_char};
 use crate::catalog::Catalog;
 use crate::http::{Header, HttpClient};
 use crate::secrets::SecretStore;
@@ -312,6 +312,20 @@ fn stream_error(code: &Value, message: &Value) -> ModelError {
         error_kind(code, &message),
         format!("openai: the stream reported an error ({code}): {message}"),
     )
+}
+
+#[async_trait]
+impl Discover for OpenAiResponsesGateway {
+    async fn discover(&self, cancel: &CancellationToken) -> Result<Vec<crate::catalog::ModelInfo>, ModelError> {
+        let key = Some(resolve_key(&self.secrets, "openai", &self.key_name).await?);
+        let mut url = self.url.clone();
+        let path =
+            url.path().trim_end_matches('/').rsplit_once('/').map(|(head, _)| head.to_string()).unwrap_or_default();
+        url.set_path(&format!("{path}/models"));
+        let headers: Vec<(&str, Header)> = key.iter().map(|k| ("authorization", Header::Bearer(k))).collect();
+        let list = self.http.get_json(&url, &headers, cancel).await?;
+        Ok(parse_openai_models("openai", &list))
+    }
 }
 
 #[async_trait]

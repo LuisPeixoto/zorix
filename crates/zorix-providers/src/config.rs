@@ -31,8 +31,10 @@ pub enum ProviderKind {
     OpenaiChat,
     /// Google's `generateContent` API.
     Gemini,
-    /// Ollama: Chat Completions plus its own discovery endpoints.
+    /// Ollama's native API, with discovery.
     Ollama,
+    /// The built-in simulated models. Reserved: it cannot be configured.
+    Sim,
 }
 
 impl ProviderKind {
@@ -44,12 +46,13 @@ impl ProviderKind {
             ProviderKind::OpenaiChat => "https://api.openai.com/v1",
             ProviderKind::Gemini => "https://generativelanguage.googleapis.com",
             ProviderKind::Ollama => "http://127.0.0.1:11434",
+            ProviderKind::Sim => "http://127.0.0.1",
         }
     }
 
     /// True when the provider normally needs an API key.
     pub fn needs_key(&self) -> bool {
-        !matches!(self, ProviderKind::Ollama)
+        !matches!(self, ProviderKind::Ollama | ProviderKind::Sim)
     }
 
     /// The name used in the file and in messages.
@@ -60,6 +63,7 @@ impl ProviderKind {
             ProviderKind::OpenaiChat => "openai-chat",
             ProviderKind::Gemini => "gemini",
             ProviderKind::Ollama => "ollama",
+            ProviderKind::Sim => "sim",
         }
     }
 }
@@ -326,7 +330,7 @@ impl ProvidersConfig {
         let mut names = BTreeSet::new();
         for provider in &self.providers {
             slug(&provider.name, "provider")?;
-            if provider.name == "sim" {
+            if provider.name == "sim" || provider.kind == ProviderKind::Sim {
                 return Err("“sim” is reserved for the built-in simulated models.".into());
             }
             if !names.insert(provider.name.clone()) {
@@ -494,6 +498,7 @@ continue = ["anthropic/claude-haiku-5-5"]
                 "listed twice",
             ),
             ("[[provider]]\nname = \"sim\"\nkind = \"openai\"\n", "reserved"),
+            ("[[provider]]\nname = \"mine\"\nkind = \"sim\"\n", "reserved"),
             ("[[provider]]\nname = \"Bad Name\"\nkind = \"openai\"\n", "not a valid provider name"),
             ("[[provider]]\nname = \"x\"\nkind = \"openai\"\nbase_url = \"http://example.com\"\n", "plain HTTP"),
             (
