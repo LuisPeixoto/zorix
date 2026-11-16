@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use parking_lot::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Clock, Message, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, RouteAttempt,
-    RouteTrace, StepPhase, SystemClock, Timestamp,
+    Clock, EmbeddingRequest, EmbeddingResponse, Message, ModelError, ModelErrorKind, ModelGateway, ModelProfile,
+    ModelRequest, ModelResponse, RouteAttempt, RouteTrace, StepPhase, SystemClock, Timestamp,
 };
 
 use crate::catalog::{Catalog, Latency, ModelInfo};
@@ -349,6 +349,47 @@ impl ModelGateway for Router {
             message: format!("No model could answer. Tried: {}.{detail}", tried.join(", ")),
             retry_after_ms,
         })
+    }
+
+    /// Embeddings go to exactly one explicit `provider/model` (or an alias that names one). Never a route, and never a
+    /// fallback: vectors of different models cannot be compared (ADR-0014). `local_only` is respected.
+    async fn embed(
+        &self,
+        request: EmbeddingRequest,
+        cancel: CancellationToken,
+    ) -> Result<EmbeddingResponse, ModelError> {
+        let invalid = |message: String| ModelError::provider(ModelErrorKind::Invalid, message);
+        let resolved = self.resolve(&request.model, StepPhase::Start).map_err(invalid)?;
+        let [candidate] = resolved.candidates.as_slice() else {
+            return Err(invalid(
+                "Embeddings need one model, such as ollama/all-minilm. A route is not used, because vectors of different models cannot be compared."
+                    .into(),
+            ));
+        };
+        let entry = self
+            .providers
+            .get(&candidate.provider)
+            .ok_or_else(|| invalid(format!("There is no provider called “{}”.", candidate.provider)))?;
+        if !entry.config.enabled {
+            return Err(invalid(format!("The provider “{}” is turned off.", candidate.provider)));
+        }
+        if (self.local_only || self.config.local_only) && !entry.local {
+            return Err(invalid(format!(
+                "{} is not on this computer, and only local providers are allowed (local only).",
+                candidate.provider
+            )));
+        }
+        let mut asked = request;
+        asked.model = candidate.model.clone();
+        let mut response = entry.gateway.embed(asked, cancel).await?;
+        response.provider = Some(candidate.provider.clone());
+        Ok(response)
+    }
+
+    fn embedding_profile(&self, model: &str) -> Option<zorix_core::EmbeddingProfile> {
+        let resolved = self.resolve(model, StepPhase::Start).ok()?;
+        let [candidate] = resolved.candidates.as_slice() else { return None };
+        self.providers.get(&candidate.provider)?.gateway.embedding_profile(&candidate.model)
     }
 
     fn describe(&self, model: &str) -> Option<ModelProfile> {
