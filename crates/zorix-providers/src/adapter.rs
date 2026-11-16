@@ -14,6 +14,14 @@ use crate::secrets::{SecretError, SecretStore, get_async};
 pub trait Discover: Send + Sync {
     /// The models the provider offers, with what it reports about them. Fields it does not report are assumed and flagged.
     async fn discover(&self, cancel: &tokio_util::sync::CancellationToken) -> Result<Vec<ModelInfo>, ModelError>;
+
+    /// The embeddings models it offers, when it can say. Providers that cannot (or have none) answer an empty list.
+    async fn discover_embeddings(
+        &self,
+        _cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<Vec<crate::embed::EmbeddingChoice>, ModelError> {
+        Ok(Vec::new())
+    }
 }
 
 /// Read an OpenAI-style `GET /models` list into catalogue entries. Models that are clearly not chat models are left out.
