@@ -332,6 +332,7 @@ impl Run {
                 transcript: &self.state.transcript,
                 tools: &tools,
                 context_budget,
+                token_factor: 1.0,
             };
             self.engine.inner.context.build(&view).await
         };
@@ -354,6 +355,9 @@ impl Run {
                 "messages": request.messages.len(),
                 "tools": request.tools.len(),
                 "estimated_input_tokens": request.messages.iter().map(Message::estimated_tokens).sum::<u64>(),
+                "estimated_tool_tokens": request.estimated_tool_tokens(),
+                "history_edited": request.history_edited,
+                "segments": request.context_report,
             }),
         );
         self.commit(&[Trigger::AwaitModel], vec![requested], Extras::default()).await?;

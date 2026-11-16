@@ -17,7 +17,7 @@ mod tools;
 mod validators;
 
 pub use context::{
-    DefaultContextBuilder, HistorySource, PREAMBLE, StaticSource, SystemSource, TaskSource, wrap_untrusted,
+    DefaultContextBuilder, HistorySource, PREAMBLE, Placement, StaticSource, SystemSource, TaskSource, wrap_untrusted,
 };
 pub use engine::{Engine, EngineBuilder, EngineConfig};
 pub use events::{EventBus, follow, is_final};
