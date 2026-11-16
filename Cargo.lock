@@ -6304,6 +6304,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorix-memory"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zorix-core",
+ "zorix-runtime",
+ "zorix-sim",
+ "zorix-store",
+]
+
+[[package]]
 name = "zorix-providers"
 version = "0.2.0"
 dependencies = [

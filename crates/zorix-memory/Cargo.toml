@@ -1,0 +1,26 @@
+[package]
+name = "zorix-memory"
+description = "ZORIX memory: conversation, long-term facts, knowledge and operational records, retrieved into the context."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-runtime.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+zorix-store.workspace = true
+zorix-sim.workspace = true
+tempfile.workspace = true
