@@ -23,7 +23,7 @@ and later modules follow executions through events, with one mechanism ([ADR-000
 | `execution.queued` | Waiting for a worker | |
 | `execution.started` / `execution.resumed` | A worker took it | |
 | `execution.progress` | After each model answer that asks for tools | `iteration`, `tool_calls_requested`, `active_ms` |
-| `execution.model.requested` | A model call starts | `iteration`, `model`, `messages`, `tools`, `estimated_input_tokens` |
+| `execution.model.requested` | A model call starts | `iteration`, `model`, `messages`, `tools`, `estimated_input_tokens`, `estimated_tool_tokens`, `history_edited`, `segments` (each context segment: `origin`, `tokens`, `kept`) |
 | `execution.model.responded` | The model answered | `iteration`, `model`, `finish`, `text_chars`, `tool_calls`, `usage` |
 | `execution.model.retrying` | A temporary model error | `attempt`, `delay_ms`, `error` |
 | `execution.tool.requested` | The model asked for a tool | `call_id`, `tool`, `arguments` (redacted), `call_hash` |
