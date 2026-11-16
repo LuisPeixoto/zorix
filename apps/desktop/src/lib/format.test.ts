@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { ExecEvent } from "./api.ts";
-import { ago, describeEvent, duration, isFinished, isLive, isNoise, keyLabel, servedBy, shorten, stateLabel, stateTone, tokens } from "./format.ts";
+import { ago, describeEvent, duration, eventIcon, isFinished, isLive, isNoise, keyLabel, keyTone, servedBy, shorten, stateLabel, stateTone, tokens } from "./format.ts";
 
 const event = (kind: string, payload: Record<string, unknown> = {}): ExecEvent => ({
   seq: 1,
@@ -82,4 +82,17 @@ test("the model that answered is shown with its provider, and key states have wo
   assert.equal(servedBy(["a/x", "b/y"]), "a/x, b/y");
   assert.equal(keyLabel("missing"), "No key yet");
   assert.equal(keyLabel("unavailable"), "Keychain unavailable");
+});
+
+test("a key state has a tone and each kind of event has an icon", () => {
+  assert.equal(keyTone("present"), "ok");
+  assert.equal(keyTone("missing"), "warn");
+  assert.equal(keyTone("unavailable"), "err");
+  assert.equal(keyTone("not_needed"), "muted");
+  assert.equal(eventIcon("execution.tool.completed"), "wrench");
+  assert.equal(eventIcon("execution.model.fallback"), "route");
+  assert.equal(eventIcon("execution.model.responded"), "cpu");
+  assert.equal(eventIcon("execution.approval.granted"), "shield");
+  assert.equal(eventIcon("execution.completed"), "check-circle");
+  assert.equal(eventIcon("execution.something.new"), "info");
 });
