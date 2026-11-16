@@ -13,8 +13,8 @@ use tracing::Instrument;
 use zorix_core::{
     Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, Error, EventKind, Execution, ExecutionId,
     ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState, Message, ModelError, ModelRequest,
-    ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role, StepPhase, Timestamp, Tool, ToolCallId,
-    ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash,
+    ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role, StepPhase, Timestamp, TokenSample, Tool,
+    ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash,
 };
 
 use crate::engine::{Engine, RunControl};
@@ -332,7 +332,7 @@ impl Run {
                 transcript: &self.state.transcript,
                 tools: &tools,
                 context_budget,
-                token_factor: 1.0,
+                token_factor: self.engine.inner.calibration.factor(&self.exec.request.model),
             };
             self.engine.inner.context.build(&view).await
         };
@@ -347,6 +347,11 @@ impl Run {
                     .await);
             }
         };
+        // The raw estimate (before any correction), so the ratio to the real count stays comparable across calls.
+        let estimated_messages: u64 = request.messages.iter().map(Message::estimated_tokens).sum();
+        let estimated_tools = request.estimated_tool_tokens();
+        let phase = request.phase;
+        let token_factor = self.engine.inner.calibration.factor(&self.exec.request.model);
         let requested = self.event(
             EventKind::ModelRequested,
             json!({
@@ -354,7 +359,8 @@ impl Run {
                 "model": request.model,
                 "messages": request.messages.len(),
                 "tools": request.tools.len(),
-                "estimated_input_tokens": request.messages.iter().map(Message::estimated_tokens).sum::<u64>(),
+                "token_factor": token_factor,
+                "estimated_input_tokens": estimated_messages,
                 "estimated_tool_tokens": request.estimated_tool_tokens(),
                 "history_edited": request.history_edited,
                 "segments": request.context_report,
@@ -363,6 +369,13 @@ impl Run {
         self.commit(&[Trigger::AwaitModel], vec![requested], Extras::default()).await?;
 
         let response = self.call_model(request).await?;
+        self.engine.inner.calibration.observe(TokenSample {
+            requested: self.exec.request.model.clone(),
+            answered: response.provider.as_ref().map(|provider| format!("{provider}/{}", response.model)),
+            estimated: estimated_messages + estimated_tools,
+            actual: response.usage.input_tokens + response.usage.cache_read_tokens + response.usage.cache_write_tokens,
+            phase,
+        });
         let mut usage = response.usage;
         usage.model_calls = usage.model_calls.max(1);
         usage.tool_calls = 0;
