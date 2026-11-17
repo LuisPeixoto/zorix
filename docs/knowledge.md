@@ -16,6 +16,8 @@ zorix knowledge remove <folder>                   # removes the index; the files
 In the desktop it is **Memory › Documents**: a card per folder with progress, **Sync**, **Stop**, the files that failed and why,
 and a *try a question* panel that shows which search found each hit.
 
+![Documents](screenshots-0.3.0/memory-documents.png)
+
 ## What is read
 
 | Kind | Files | Cut into pieces |
@@ -64,6 +66,8 @@ zorix embeddings off                           # keywords only again
 Providers: **Ollama** (`/api/embed`), **OpenAI** and compatible servers (`/v1/embeddings`), **Gemini** (`batchEmbedContents`).
 Anthropic has no embeddings. A vector is kept by *model and text*, so unchanged text is never embedded twice and changing the model
 only embeds what is missing.
+
+![The embeddings card](screenshots-0.3.0/embeddings.png)
 
 > **A cloud embeddings model receives your text**: the pieces of your documents, your facts and every question a run asks. For that
 > reason `embeddings set` refuses a cloud provider unless you add `--cloud` (a checkbox in the desktop), and `--local-only` runs

@@ -26,6 +26,8 @@ nothing: it asks the engine and shows what comes back. Permissions, approvals an
 
 ![Providers and keys](images/ui-providers.png)
 
+Memory, documents and embeddings (version 0.3) are shown in the [memory](memory.md) and [documents](knowledge.md) guides.
+
 A proposal from a run to remember something has its own approval card: the sentence, where it applies and what it would replace. No
 automatic mode approves it ([memory](memory.md)). New run has three switches (earlier runs of the conversation, remembered things and
 past work, documents); every desktop run belongs to a conversation, and **Continue** reuses it.

@@ -4,6 +4,8 @@ Until version 0.2 every execution started from nothing. From 0.3 ZORIX can remem
 Memory reaches a run through the same context builder as everything else ([ADR-0007](adr/0007-context-builder.md)); the
 runtime itself holds no memory logic.
 
+![The Memory screen](screenshots-0.3.0/memory-facts.png)
+
 ## Four kinds of memory
 
 | Kind | What it is | Who writes it | What a run sees |
@@ -37,6 +39,8 @@ Each memory has a **subject** (optional). A newer memory with the same subject a
 visible as *replaced* so nothing disappears silently. A memory can also expire (`--until 2027-01-31`). Memories not confirmed for
 180 days are shown as stale in the app and labelled so for the model; **Still true** (or `zorix memory confirm`) renews them.
 
+![A run proposes a fact and waits for you](screenshots-0.3.0/approval-remember.png)
+
 What the model is told about the facts: *remembered, approved by you, possibly out of date, and the current message wins.*
 
 ## How a run finds memory
@@ -62,6 +66,8 @@ What was retrieved is saved with the run (a **snapshot**, [ADR-0015](adr/0015-fr
 every resume after a crash renders the same text. Memory that changes while a run is going does not change that run. Open a run
 and look at **Context** (desktop) or `zorix show <id> --context`: you see the facts, earlier exchanges and document pieces that
 were used, which search found each, why search was degraded when it was, and the tokens each part took.
+
+![The Context panel of a run](screenshots-0.3.0/run-context.png)
 
 ## Untrusted data
 
