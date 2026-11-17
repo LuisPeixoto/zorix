@@ -58,6 +58,17 @@ pub enum Command {
     /// Show the routes and aliases from providers.toml.
     #[command(subcommand)]
     Route(RouteCommand),
+    /// What ZORIX remembers: facts and preferences you approved.
+    #[command(subcommand)]
+    Memory(MemoryCommand),
+    /// Folders of documents ZORIX can search and cite.
+    #[command(subcommand)]
+    Knowledge(KnowledgeCommand),
+    /// The model that turns text into vectors for search by meaning.
+    #[command(subcommand)]
+    Embeddings(EmbeddingsCommand),
+    /// How many real tokens ZORIX's estimates are worth, per model, learned from what providers report.
+    Calibration,
     /// Print where ZORIX keeps its data.
     DataDir,
 }
@@ -192,6 +203,276 @@ pub struct RunArgs {
     /// Running again with the same key returns the same execution instead of making a new one.
     #[arg(long, value_name = "KEY", value_parser = parse_key)]
     pub idempotency_key: Option<String>,
+
+    /// Do not use long-term memory or records of past work in this run.
+    #[arg(long)]
+    pub no_memory: bool,
+
+    /// Do not use indexed documents in this run.
+    #[arg(long)]
+    pub no_knowledge: bool,
+
+    /// Do not use earlier executions of the conversation in this run.
+    #[arg(long)]
+    pub no_conversation: bool,
+}
+
+/// A scope: where a memory or a folder applies.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScopeArg(pub zorix_core::Scope);
+
+impl FromStr for ScopeArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, String> {
+        match text.split_once(':') {
+            None if text == "global" => Ok(ScopeArg(zorix_core::Scope::Global)),
+            Some(("project", dir)) if !dir.is_empty() => {
+                let real =
+                    std::fs::canonicalize(dir).map_err(|e| format!("The project folder {dir} cannot be used: {e}"))?;
+                Ok(ScopeArg(zorix_core::Scope::Project(real.to_string_lossy().into_owned())))
+            }
+            Some(("conversation", id)) => zorix_core::ConversationId::new(id)
+                .map(|c| ScopeArg(zorix_core::Scope::Conversation(c)))
+                .map_err(|e| e.to_string()),
+            _ => Err("use global, project:<folder> or conversation:<id>".into()),
+        }
+    }
+}
+
+/// What `zorix memory` does.
+#[derive(Debug, Subcommand)]
+pub enum MemoryCommand {
+    /// List what is remembered.
+    List(MemoryListArgs),
+    /// Remember something yourself.
+    Add(MemoryAddArgs),
+    /// Change a memory.
+    Edit(MemoryEditArgs),
+    /// Say that a memory is still true.
+    Confirm(MemoryIdArg),
+    /// Delete a memory everywhere ZORIX keeps it.
+    Forget(MemoryForgetArgs),
+    /// Search memory, documents or past work.
+    Search(MemorySearchArgs),
+    /// Write every memory to a JSON file (or standard output).
+    Export(MemoryExportArgs),
+}
+
+/// Options for `memory list`.
+#[derive(Debug, Args)]
+pub struct MemoryListArgs {
+    /// Only this scope: global, project:<folder> or conversation:<id>. Default: every scope.
+    #[arg(long, value_name = "SCOPE")]
+    pub scope: Option<ScopeArg>,
+    /// Also list replaced and expired memories.
+    #[arg(long)]
+    pub all: bool,
+}
+
+/// What a memory is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum KindArg {
+    /// Something true.
+    Fact,
+    /// How you want things done.
+    Preference,
+}
+
+/// Options for `memory add`.
+#[derive(Debug, Args)]
+pub struct MemoryAddArgs {
+    /// What to remember, in one short sentence (500 characters at most).
+    pub text: String,
+    /// Fact or preference.
+    #[arg(long, value_enum, default_value = "fact")]
+    pub kind: KindArg,
+    /// Where it applies: global, project:<folder> or conversation:<id>.
+    #[arg(long, default_value = "global", value_name = "SCOPE")]
+    pub scope: ScopeArg,
+    /// What it is about. A newer memory about the same subject replaces this one.
+    #[arg(long)]
+    pub subject: Option<String>,
+    /// Forget it after this date (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE")]
+    pub until: Option<String>,
+}
+
+/// Options for `memory edit`.
+#[derive(Debug, Args)]
+pub struct MemoryEditArgs {
+    /// The memory id (m:… or the bare id).
+    pub id: String,
+    /// New text.
+    #[arg(long)]
+    pub text: Option<String>,
+    /// New subject.
+    #[arg(long)]
+    pub subject: Option<String>,
+    /// New expiry date (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE", conflicts_with = "no_until")]
+    pub until: Option<String>,
+    /// Remove the expiry.
+    #[arg(long)]
+    pub no_until: bool,
+    /// Move it to another scope.
+    #[arg(long, value_name = "SCOPE")]
+    pub scope: Option<ScopeArg>,
+}
+
+/// A memory id.
+#[derive(Debug, Args)]
+pub struct MemoryIdArg {
+    /// The memory id (m:… or the bare id).
+    pub id: String,
+}
+
+/// Options for `memory forget`.
+#[derive(Debug, Args)]
+pub struct MemoryForgetArgs {
+    /// The memory id (m:… or the bare id).
+    pub id: String,
+    /// Do not ask.
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Where `memory search` looks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum CorpusArg {
+    /// Facts and preferences.
+    Memory,
+    /// Indexed documents.
+    Knowledge,
+    /// Records of past work.
+    History,
+}
+
+/// Options for `memory search`.
+#[derive(Debug, Args)]
+pub struct MemorySearchArgs {
+    /// What to look for.
+    pub query: String,
+    /// Where to look.
+    #[arg(long = "in", value_enum, default_value = "memory")]
+    pub corpus: CorpusArg,
+    /// Look as this project (a folder).
+    #[arg(long, value_name = "FOLDER")]
+    pub project: Option<PathBuf>,
+}
+
+/// Options for `memory export`.
+#[derive(Debug, Args)]
+pub struct MemoryExportArgs {
+    /// The file to write. Default: standard output.
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
+}
+
+/// What `zorix knowledge` does.
+#[derive(Debug, Subcommand)]
+pub enum KnowledgeCommand {
+    /// Add a folder and index it.
+    Add(KnowledgeAddArgs),
+    /// List the folders.
+    List,
+    /// Bring the index of a folder (or all folders) up to date.
+    Sync(KnowledgeSyncArgs),
+    /// List the files of a folder, or only the ones that could not be indexed.
+    Files(KnowledgeFilesArgs),
+    /// Remove a folder from the index. The files are not touched.
+    Remove(KnowledgeRootArg),
+    /// Search the indexed documents.
+    Search(KnowledgeSearchArgs),
+}
+
+/// Options for `knowledge add`.
+#[derive(Debug, Args)]
+pub struct KnowledgeAddArgs {
+    /// The folder.
+    pub dir: PathBuf,
+    /// Only for runs in this project folder. Default: for every run.
+    #[arg(long, value_name = "FOLDER", conflicts_with = "global")]
+    pub project: Option<PathBuf>,
+    /// For every run (the default).
+    #[arg(long)]
+    pub global: bool,
+    /// Also index files matching this pattern (relative to the folder). Repeat for more.
+    #[arg(long, value_name = "GLOB")]
+    pub include: Vec<String>,
+    /// Leave out files matching this pattern. Repeat for more.
+    #[arg(long, value_name = "GLOB")]
+    pub exclude: Vec<String>,
+    /// Look for changes whenever the desktop app starts.
+    #[arg(long)]
+    pub auto_sync: bool,
+    /// Add it without indexing it now.
+    #[arg(long)]
+    pub no_sync: bool,
+}
+
+/// A folder, by id or path.
+#[derive(Debug, Args)]
+pub struct KnowledgeRootArg {
+    /// The folder: its id (or the start of it) or its path.
+    pub folder: String,
+}
+
+/// Options for `knowledge sync`.
+#[derive(Debug, Args)]
+pub struct KnowledgeSyncArgs {
+    /// The folder. Default: all of them.
+    pub folder: Option<String>,
+}
+
+/// Options for `knowledge files`.
+#[derive(Debug, Args)]
+pub struct KnowledgeFilesArgs {
+    /// The folder: its id (or the start of it) or its path.
+    pub folder: String,
+    /// Only the files that failed or were left out, with the reason.
+    #[arg(long)]
+    pub failed: bool,
+}
+
+/// Options for `knowledge search`.
+#[derive(Debug, Args)]
+pub struct KnowledgeSearchArgs {
+    /// What to look for.
+    pub query: String,
+    /// Look as this project (a folder).
+    #[arg(long, value_name = "FOLDER")]
+    pub project: Option<PathBuf>,
+}
+
+/// What `zorix embeddings` does.
+#[derive(Debug, Subcommand)]
+pub enum EmbeddingsCommand {
+    /// Show the model in use and how much is embedded.
+    Show,
+    /// List the models you can choose.
+    Models,
+    /// Choose the model, as provider/model (for example ollama/all-minilm).
+    Set(EmbeddingsSetArgs),
+    /// Go back to keyword search only.
+    Off,
+    /// Embed a short text with the chosen model.
+    Test,
+    /// Embed everything again with the chosen model and delete the vectors of any other.
+    Reembed,
+}
+
+/// Options for `embeddings set`.
+#[derive(Debug, Args)]
+pub struct EmbeddingsSetArgs {
+    /// The model: provider/model.
+    pub model: String,
+    /// The size of the vectors, for models that let you choose.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(16..=8192))]
+    pub dims: Option<u32>,
+    /// Allow a cloud provider. Your documents' text is sent to it to be embedded.
+    #[arg(long)]
+    pub cloud: bool,
 }
 
 /// Options for `models`.
@@ -258,6 +539,10 @@ pub struct IdArg {
     /// The execution id.
     #[arg(value_parser = parse_execution_id)]
     pub id: ExecutionId,
+
+    /// Also show what memory put into the context: facts, earlier exchanges, documents with their sources, and what each part cost.
+    #[arg(long)]
+    pub context: bool,
 }
 
 /// Options for `events`.

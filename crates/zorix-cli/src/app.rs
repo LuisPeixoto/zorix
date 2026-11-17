@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use zorix_core::{ModelGateway, StepPhase};
+use zorix_memory::MemoryStack;
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::{DemoModel, ScriptedModel};
-use zorix_store::{DataDirLock, SqliteRepository, database_path};
+use zorix_store::{DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path};
 use zorix_tools::{BuiltinConfig, register_builtin};
 
 use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
@@ -56,6 +57,8 @@ pub fn home_dir(option: Option<PathBuf>) -> PathBuf {
 pub struct App {
     /// The engine.
     pub engine: Engine,
+    /// Memory: tools, context sources and the recorder.
+    pub stack: Arc<MemoryStack>,
     /// The model reference to record for a new execution.
     pub model: String,
     _lock: DataDirLock,
@@ -113,8 +116,33 @@ pub fn open_engine(home: &Path, args: &ModelArgs) -> Result<App, CliError> {
         sole_owner: true,
         ..EngineConfig::default()
     };
-    let engine = Engine::builder(repository, router).tools(builtin_registry(home)?).config(config).build();
-    Ok(App { engine, model, _lock: lock })
+    let database = database_path(home);
+    let store = Arc::new(SqliteMemoryStore::open(&database)?);
+    let gateway: Arc<dyn ModelGateway> = router;
+    let stack = Arc::new(MemoryStack::new(store, repository.clone(), Some(gateway.clone())));
+    let registry = builtin_registry(home)?;
+    stack.register_tools(&*registry)?;
+    let calibration = Arc::new(SqliteCalibration::open(&database)?);
+    let engine = stack
+        .install(Engine::builder(repository, gateway).tools(registry).calibration(calibration.clone()).config(config))
+        .build();
+    // What was recorded before this version, or while a queue was full, is caught up in the background.
+    let background = stack.clone();
+    tokio::spawn(async move {
+        let _ = background.backfill_operations().await;
+    });
+    tokio::task::spawn_blocking(move || {
+        let _ = calibration.backfill();
+    });
+    Ok(App { engine, stack, model, _lock: lock })
+}
+
+impl App {
+    /// Stop the engine, then write the records of anything that finished while the command ran.
+    pub async fn shutdown(&self) {
+        self.engine.shutdown().await;
+        let _ = self.stack.backfill_operations().await;
+    }
 }
 
 /// Open the store for reading only. Takes no lock, so it works while another ZORIX program is running.

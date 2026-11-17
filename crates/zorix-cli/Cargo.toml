@@ -19,6 +19,7 @@ zorix-sim.workspace = true
 zorix-store.workspace = true
 zorix-tools.workspace = true
 zorix-providers.workspace = true
+zorix-memory.workspace = true
 tokio-util.workspace = true
 rpassword.workspace = true
 clap.workspace = true

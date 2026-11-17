@@ -59,7 +59,7 @@ pub fn decider() -> String {
     format!("cli:{user}")
 }
 
-async fn ask(question: String) -> bool {
+pub async fn ask(question: String) -> bool {
     tokio::task::spawn_blocking(move || {
         eprint!("{question} [y/N] ");
         let _ = std::io::stderr().flush();
