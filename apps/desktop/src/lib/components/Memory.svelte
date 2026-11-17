@@ -9,7 +9,7 @@
   import { store } from "../stores/runs.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Tabs, Textarea } from "../ui/index.ts";
 
-  let tab = $state("facts");
+  let tab = $state(store.startTab);
   let scope = $state("all");
   let query = $state("");
   let showOld = $state(false);

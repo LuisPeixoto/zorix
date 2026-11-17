@@ -29,6 +29,8 @@ pub struct AppInfo {
     data_dir: String,
     /// Set when the engine could not start.
     error: Option<String>,
+    /// For screenshots and reviews: a screen to open straight away (`ZORIX_START_VIEW`). Only debug builds honour it.
+    start_view: Option<String>,
 }
 
 #[tauri::command]
@@ -37,6 +39,7 @@ pub fn app_info(state: State<'_, AppState>) -> AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         data_dir: state.home.display().to_string(),
         error: state.services.as_ref().err().cloned(),
+        start_view: if cfg!(debug_assertions) { std::env::var("ZORIX_START_VIEW").ok() } else { None },
     }
 }
 

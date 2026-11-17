@@ -181,7 +181,7 @@
             {#if root.auto_sync}<Badge tone="muted">checked at start</Badge>{/if}
           </div>
           <p class="mt-1.5 text-xs text-faint">
-            {root.last_sync_at ? `Last checked ${ago(root.last_sync_at, now)}` : "Not indexed yet"}{root.last_sync ? ` · ${root.last_sync.chunks} pieces, ${root.last_sync.embedded} vectors` : ""}
+            {root.last_sync_at ? `Last checked ${ago(root.last_sync_at, now)}` : "Not indexed yet"}{root.last_sync ? ` · last pass: ${root.last_sync.indexed} read, ${root.last_sync.embedded} vectors made` : ""}
           </p>
           {#if root.last_sync?.degraded}<p class="mt-1 text-xs text-warn">{root.last_sync.degraded}</p>{/if}
           {#if root.last_sync?.too_many_files}<p class="mt-1 text-xs text-warn">The folder has more files than are looked at.</p>{/if}

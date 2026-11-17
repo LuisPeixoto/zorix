@@ -49,6 +49,8 @@ class RunsStore {
   busy = $state(false);
   view = $state<"runs" | "providers" | "memory" | "design">("runs");
   memory = $state<MemoryRow[]>([]);
+  /** The Memory tab to open first (for screenshots). */
+  startTab = $state("facts");
   /** A conversation the New run form should continue, set by the Continue button. */
   continuing = $state<{ id: string; prompt: string } | null>(null);
   context = $state<RunContext | null>(null);

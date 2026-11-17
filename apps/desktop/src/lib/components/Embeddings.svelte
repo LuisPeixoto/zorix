@@ -14,6 +14,7 @@
     setEmbeddings,
     testEmbeddings,
   } from "../api.ts";
+  import { store } from "../stores/runs.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
   import { Badge, Button, Callout, Card, Checkbox, Field, Select } from "../ui/index.ts";
 
@@ -47,6 +48,8 @@
   }
 
   onMount(async () => {
+    // For screenshots: the card sits below the providers, so a review can ask to see it.
+    if (store.startTab === "embeddings") setTimeout(() => document.getElementById("embeddings")?.scrollIntoView(), 600);
     await load();
     await loadModels();
     stop = await onKnowledge({
@@ -91,6 +94,7 @@
   });
 </script>
 
+<div id="embeddings">
 <Card title="Search by meaning" icon="sparkles">
   <p class="text-sm text-muted">
     Keyword search always works. An embeddings model also finds text that means the same with different words. Pick a model that runs on
@@ -113,13 +117,16 @@
       {#snippet children(f)}
         <Select id={f.id} bind:value={pick}>
           <option value="">Choose a model…</option>
+          {#if info?.model && !models.some((m) => m.reference === info?.model)}
+            <option value={info.model}>{info.model} · in use</option>
+          {/if}
           {#each models as m (m.reference)}
             <option value={m.reference}>{m.reference}{m.dimensions ? ` · ${m.dimensions} dims` : ""}{m.local ? " · on this computer" : " · cloud"}{m.installed ? "" : " · not installed"}</option>
           {/each}
         </Select>
       {/snippet}
     </Field>
-    <Button variant="primary" icon="check" loading={busy} disabled={!pick || (needsCloud && !cloud)} onclick={use}>Use it</Button>
+    <Button variant="primary" icon="check" loading={busy} disabled={!pick || (needsCloud && !cloud) || (pick === info?.model && cloud === info?.allow_cloud)} onclick={use}>Use it</Button>
   </div>
 
   {#if needsCloud}
@@ -146,3 +153,4 @@
     </div>
   {/if}
 </Card>
+</div>

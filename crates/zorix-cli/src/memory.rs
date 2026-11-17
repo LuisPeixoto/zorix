@@ -580,7 +580,11 @@ pub async fn embeddings(
             let ctx = open(home, false)?;
             let (choices, problems) = embedding_choices(&ctx.router, &CancellationToken::new()).await;
             for (provider, why) in &problems {
-                eprintln!("{provider}: {why}");
+                if why.starts_with(provider.as_str()) {
+                    eprintln!("{why}");
+                } else {
+                    eprintln!("{provider}: {why}");
+                }
             }
             if printer.json {
                 println!("{}", serde_json::to_string(&choices)?);

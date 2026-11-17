@@ -107,6 +107,7 @@ export interface AppInfo {
   version: string;
   data_dir: string;
   error: string | null;
+  start_view?: string | null;
 }
 
 export interface StartRun {

@@ -16,11 +16,18 @@
     theme.init();
     void store.init().then(() => {
       // For screenshots and reviews: open straight to a screen.
-      const start = import.meta.env.VITE_START_VIEW;
+      const [start, tab] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split(":");
       if (start === "design") store.showDesign();
-      if (start === "providers") store.showProviders();
-      if (start === "memory") store.showMemory();
-      if (start === "run" && store.runs[0]) void store.select(store.runs[0].id);
+      if (start === "providers") {
+        store.startTab = tab || "facts";
+        store.showProviders();
+      }
+      if (start === "memory") {
+        store.startTab = tab || "facts";
+        store.showMemory();
+      }
+      const shown = store.runs[Number(tab || 0)];
+      if (start === "run" && shown) void store.select(shown.id);
     });
   });
 
