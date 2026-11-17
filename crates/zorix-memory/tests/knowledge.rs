@@ -459,3 +459,70 @@ async fn a_link_that_points_outside_the_folder_is_never_followed() {
     assert_eq!(report.indexed, 1, "{report:?}");
     assert_eq!(count_hits(&env, "zebracorn").await, 0);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// PDFs
+
+/// A small valid PDF with one line of text per page, in Helvetica.
+pub fn make_pdf(pages: &[&str]) -> Vec<u8> {
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets: Vec<usize> = Vec::new();
+    let mut object = |out: &mut Vec<u8>, number: usize, body: String| {
+        offsets.push(out.len());
+        out.extend(format!("{number} 0 obj\n{body}\nendobj\n").into_bytes());
+    };
+    let count = pages.len();
+    object(&mut out, 1, "<< /Type /Catalog /Pages 2 0 R >>".into());
+    let kids: Vec<String> = (0..count).map(|i| format!("{} 0 R", 4 + i * 2)).collect();
+    object(&mut out, 2, format!("<< /Type /Pages /Kids [{}] /Count {count} >>", kids.join(" ")));
+    object(&mut out, 3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into());
+    for (i, text) in pages.iter().enumerate() {
+        let page = 4 + i * 2;
+        object(
+            &mut out,
+            page,
+            format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> >> >>",
+                page + 1
+            ),
+        );
+        let stream = format!("BT /F1 12 Tf 72 720 Td ({text}) Tj ET");
+        object(&mut out, page + 1, format!("<< /Length {} >>\nstream\n{stream}\nendstream", stream.len()));
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).into_bytes());
+    for offset in &offsets {
+        out.extend(format!("{offset:010} 00000 n \n").into_bytes());
+    }
+    out.extend(
+        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).into_bytes(),
+    );
+    out
+}
+
+#[tokio::test]
+async fn pdfs_are_indexed_by_page_and_cited_with_the_page_number() {
+    let env = env();
+    std::fs::write(
+        env.folder.join("manual.pdf"),
+        make_pdf(&["Introduction to the platform", "Deploys reach staging before production approval"]),
+    )
+    .unwrap();
+    std::fs::write(env.folder.join("scan.pdf"), make_pdf(&[""])).unwrap();
+    std::fs::write(env.folder.join("broken.pdf"), b"%PDF-1.4 this is not really a pdf").unwrap();
+    let indexer = Indexer::new(env.store.clone(), None);
+    let root = add(&env, &indexer).await;
+    let (report, _) = sync(&indexer, &root).await;
+    assert_eq!((report.indexed, report.skipped, report.failed), (1, 1, 1), "{report:?}");
+    let hit = env.store.text_search(&vis(), Corpus::Knowledge, &["staging".to_string()], 5).await.unwrap();
+    assert_eq!(hit.len(), 1);
+    let chunk = &env.store.chunks(&tenant(), &[hit[0].id.parse().unwrap()]).await.unwrap()[0];
+    assert_eq!((chunk.citation().as_str(), chunk.page), ("manual.pdf#page=2", Some(2)));
+    let problems = env.store.problem_documents(root.id).await.unwrap();
+    assert_eq!(problems.len(), 2);
+    assert!(
+        problems.iter().any(|(f, s, why)| f == "scan.pdf" && *s == DocStatus::Skipped && why.contains("no text")),
+        "{problems:?}"
+    );
+    assert!(problems.iter().any(|(f, s, _)| f == "broken.pdf" && *s == DocStatus::Failed), "{problems:?}");
+}

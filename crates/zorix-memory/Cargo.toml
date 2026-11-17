@@ -9,9 +9,9 @@ authors.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["html"]
+default = ["html", "pdf"]
 html = ["dep:html2text"]
-pdf = []
+pdf = ["dep:pdf-extract"]
 
 [dependencies]
 zorix-core.workspace = true
@@ -19,6 +19,7 @@ zorix-runtime.workspace = true
 async-trait.workspace = true
 globset.workspace = true
 html2text = { workspace = true, optional = true }
+pdf-extract = { workspace = true, optional = true }
 ignore.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
