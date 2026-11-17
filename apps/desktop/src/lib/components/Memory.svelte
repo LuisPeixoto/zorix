@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import History from "./History.svelte";
+  import Knowledge from "./Knowledge.svelte";
+
   import { type MemoryRow, errorText, memoryUsage } from "../api.ts";
   import { ago } from "../format.ts";
   import { store } from "../stores/runs.svelte.ts";
@@ -126,11 +129,23 @@
     {/snippet}
   </PageHeader>
 
-  <Tabs tabs={[{ value: "facts", label: "Facts and preferences", count: activeCount }]} bind:value={tab} label="Memory" />
+  <Tabs
+    tabs={[
+      { value: "facts", label: "Facts and preferences", count: activeCount },
+      { value: "knowledge", label: "Documents" },
+      { value: "history", label: "Past work" },
+    ]}
+    bind:value={tab}
+    label="Memory"
+  />
 
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
-  {#if tab === "facts"}
+  {#if tab === "knowledge"}
+    <Knowledge />
+  {:else if tab === "history"}
+    <History />
+  {:else}
     <div class="flex flex-wrap items-center gap-3">
       <Input class="min-w-56 flex-1" bind:value={query} placeholder="Search what is remembered" aria-label="Search what is remembered" />
       <Segmented

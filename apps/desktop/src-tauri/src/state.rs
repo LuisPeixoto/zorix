@@ -32,6 +32,8 @@ pub struct Services {
     pub memory_store: Arc<SqliteMemoryStore>,
     /// Knowledge syncs that are running, so they can be cancelled.
     pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
+    /// The job that embeds everything again, when one is running.
+    pub reembed_job: Mutex<Option<CancellationToken>>,
     _lock: DataDirLock,
 }
 
@@ -40,7 +42,7 @@ pub struct AppState {
     /// The data folder.
     pub home: PathBuf,
     /// The engine, or why it could not start (for example another ZORIX program holds the data folder).
-    pub services: Result<Services, String>,
+    pub services: Result<Arc<Services>, String>,
     watchers: Mutex<HashMap<ExecutionId, CancellationToken>>,
 }
 
@@ -57,7 +59,12 @@ impl AppState {
 
     /// The engine, or the reason there is none.
     pub fn services(&self) -> Result<&Services, String> {
-        self.services.as_ref().map_err(Clone::clone)
+        self.services.as_deref().map_err(Clone::clone)
+    }
+
+    /// The same, for work that goes on after the command returns.
+    pub fn services_arc(&self) -> Result<Arc<Services>, String> {
+        self.services.clone()
     }
 
     /// Register a watcher for an execution, replacing (and stopping) an earlier one.
@@ -85,13 +92,16 @@ impl AppState {
             for (_, token) in services.syncs.lock().drain() {
                 token.cancel();
             }
+            if let Some(token) = services.reembed_job.lock().take() {
+                token.cancel();
+            }
             services.engine.shutdown().await;
             let _ = services.memory.backfill_operations().await;
         }
     }
 }
 
-async fn open(home: &Path) -> Result<Services, String> {
+async fn open(home: &Path) -> Result<Arc<Services>, String> {
     use zorix_core::ExecutionEngine;
     let lock = DataDirLock::acquire(home).map_err(|e| e.to_string())?;
     let repository = Arc::new(SqliteRepository::open(&database_path(home)).map_err(|e| e.to_string())?);
@@ -128,7 +138,7 @@ async fn open(home: &Path) -> Result<Services, String> {
         Ok(_) => {}
         Err(error) => tracing::warn!(%error, "recovery failed"),
     }
-    Ok(Services {
+    Ok(Arc::new(Services {
         engine,
         tenant: TenantId::local(),
         router,
@@ -137,6 +147,7 @@ async fn open(home: &Path) -> Result<Services, String> {
         memory,
         memory_store,
         syncs: Mutex::new(HashMap::new()),
+        reembed_job: Mutex::new(None),
         _lock: lock,
-    })
+    }))
 }
