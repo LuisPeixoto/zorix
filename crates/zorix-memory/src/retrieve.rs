@@ -517,3 +517,38 @@ fn merge_neighbours(chosen: Vec<(ChunkView, &Fused)>) -> Vec<RecallItem> {
     items.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.id.cmp(&b.id)));
     items
 }
+
+/// What a search found.
+pub struct Found {
+    /// Relevant hits, best first.
+    pub hits: Vec<Fused>,
+    /// Why vectors did not take part, when they should have.
+    pub degraded: Option<String>,
+}
+
+/// Keyword search, plus vectors when an embeddings model is set, fused and gated. Used by the search tools; retrieval for
+/// the context does the same steps with its own budgets.
+pub async fn hybrid_search(
+    store: &dyn MemoryStore,
+    embedder: Option<&Embedder>,
+    visibility: &Visibility,
+    corpus: Corpus,
+    query: &str,
+) -> zorix_core::Result<Found> {
+    let query = query_text(query, None);
+    let words = terms(&query);
+    let keyword = store.text_search(visibility, corpus, &words, LIST_SIZE).await?;
+    let mut by_vector = Vec::new();
+    let mut degraded = None;
+    let settings = store.settings(&visibility.tenant).await?;
+    let mut min_similarity = crate::fusion::DEFAULT_MIN_SIMILARITY;
+    if let (Some(embedder), Some(model)) = (embedder, settings.embedding_model) {
+        min_similarity = embedder.min_similarity();
+        match embedder.embed_query(&model, settings.embedding_dimensions, &query).await {
+            Ok((vector, _)) => by_vector = store.vector_search(visibility, corpus, &model, &vector, LIST_SIZE).await?,
+            Err(error) => degraded = Some(format!("embeddings unavailable: {error}")),
+        }
+    }
+    let hits = fuse(&keyword, &by_vector).into_iter().filter(|h| relevant(h, words.len(), min_similarity)).collect();
+    Ok(Found { hits, degraded })
+}

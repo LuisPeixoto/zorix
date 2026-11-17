@@ -12,6 +12,7 @@ pub mod retrieve;
 pub mod sources;
 pub mod stack;
 pub mod text;
+pub mod tools;
 
 /// What can go wrong while memory is read or filled.
 #[derive(Debug, thiserror::Error)]
@@ -32,3 +33,4 @@ pub use embedder::Embedder;
 pub use recall::Recall;
 pub use sources::{ConversationSource, KnowledgeSource, LongTermSource, OperationsSource};
 pub use stack::MemoryStack;
+pub use tools::MemoryTools;

@@ -9,10 +9,13 @@ use crate::embedder::Embedder;
 use crate::recall::Recall;
 use crate::retrieve::{Retriever, Shares};
 use crate::sources::{ConversationSource, KnowledgeSource, LongTermSource, OperationsSource};
+use crate::tools::MemoryTools;
 
 /// Memory: a store, a way to find things in it, and the context sources that put them in front of the model.
 pub struct MemoryStack {
     store: Arc<dyn MemoryStore>,
+    repository: Arc<dyn ExecutionRepository>,
+    clock: Arc<dyn Clock>,
     recall: Arc<Recall>,
     embedder: Option<Arc<Embedder>>,
 }
@@ -37,9 +40,10 @@ impl MemoryStack {
         shares: Shares,
     ) -> Self {
         let embedder = embeddings.map(|gateway| Arc::new(Embedder::new(gateway)));
-        let retriever = Retriever::new(store.clone(), repository, embedder.clone(), clock.clone()).with_shares(shares);
-        let recall = Arc::new(Recall::new(store.clone(), retriever, clock));
-        Self { store, recall, embedder }
+        let retriever =
+            Retriever::new(store.clone(), repository.clone(), embedder.clone(), clock.clone()).with_shares(shares);
+        let recall = Arc::new(Recall::new(store.clone(), retriever, clock.clone()));
+        Self { store, repository, clock, recall, embedder }
     }
 
     /// The store.
@@ -65,6 +69,16 @@ impl MemoryStack {
             .with_source_at(Placement::BeforeTask, Arc::new(ConversationSource(self.recall.clone())))
             .with_source_at(Placement::BeforeTask, Arc::new(KnowledgeSource(self.recall.clone())))
             .with_source_at(Placement::BeforeTask, Arc::new(OperationsSource(self.recall.clone())))
+    }
+
+    /// The tools through which a model reads and proposes memory.
+    pub fn tools(&self) -> MemoryTools {
+        MemoryTools::new(self.store.clone(), self.repository.clone(), self.embedder.clone(), self.clock.clone())
+    }
+
+    /// Register the memory tools. Call it before building the engine, with the registry the engine will use.
+    pub fn register_tools(&self, registry: &dyn zorix_core::ToolRegistry) -> zorix_core::Result<()> {
+        self.tools().register(registry)
     }
 
     /// Put memory into an engine: its context builder.
