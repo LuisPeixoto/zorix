@@ -25,10 +25,15 @@ app · [live tests](testing.md#live-tests) against Ollama and, with your keys, t
 
 Not yet: live text while the model writes, a classifier-based router, embeddings, batch APIs.
 
-## Phase 3 — Context & Memory Engine
+## ✅ Phase 3 — Context & Memory Engine · v0.3.0
 
-Memory as new `ContextSource`s: short-term (the execution), long-term, operational (what was done and decided), knowledge
-(documents) and shared memory, with retrieval, freshness, conflict handling and user control. Real token budgeting per model.
+Memory as new context sources: the **conversation**, **facts and preferences** that a person approves, **documents** (text, code,
+HTML and PDF folders, with citations) and **past work**, found by keyword search (SQLite FTS5) and, when you choose an embeddings
+model, by meaning (Ollama, OpenAI, Gemini). What was retrieved is frozen per execution. Token counts are learned per model from the
+usage providers report. Scopes: global, project, conversation. Guides: [memory](memory.md), [knowledge](knowledge.md).
+
+Not yet: summarising long conversations, a file watcher, OCR, memory shared between people, an on-disk vector index for very
+large collections.
 
 ## Phase 4 — Tool & Integration Engine
 

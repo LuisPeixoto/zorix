@@ -33,7 +33,8 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 | `--allow-read <PATTERN>`, `--allow-write <PATTERN>` | Paths file tools may read or write, relative to the workspace (`*`, `docs/*`) |
 | `--approve ask\|never\|yes\|no` | What to do when a call needs approval. `ask` prompts on the terminal; `never` leaves it waiting and exits; `yes` and `no` answer automatically (for demos and tests). Default: `ask` on a terminal, `never` otherwise |
 | `--max-iterations N` (1–1000), `--max-tool-calls N`, `--max-seconds N` | Limits |
-| `--conversation ID` | Group executions of one conversation |
+| `--conversation ID` | The conversation this run belongs to. Earlier runs of the same conversation are given to the model ([memory](memory.md)) |
+| `--no-memory`, `--no-knowledge`, `--no-conversation` | Do not give this run facts and past work, indexed documents, or the earlier runs of the conversation |
 | `--idempotency-key KEY` | Running again with the same key returns the same execution instead of making a new one |
 
 Ctrl-C **pauses** at the next step (continue with `zorix resume`). A second Ctrl-C stops at once; continue later with `zorix recover`.
@@ -42,9 +43,9 @@ Ctrl-C **pauses** at the next step (continue with `zorix resume`). A second Ctrl
 
 Executions, newest first.
 
-### `zorix show <ID>`
+### `zorix show <ID> [--context]`
 
-Model, steps, tool calls with timings, usage, pending approvals, failure or result. `--json` prints `{summary, execution, approvals}`.
+Model, steps, tool calls with timings, usage, pending approvals, failure or result. `--context` adds what memory put into the run (facts, earlier exchanges, document pieces with their sources, which search found each) and what each part of the first request cost in tokens. `--json` prints `{summary, execution, approvals, context}` (`context` is `null` without `--context`).
 
 ### `zorix events <ID> [--follow] [--after SEQ]`
 
@@ -82,6 +83,27 @@ from a hidden prompt (or one line of stdin with `--stdin`); it is never taken fr
 ### `zorix route list`
 
 Shows the aliases and routes from `providers.toml`.
+
+### `zorix memory …`
+
+`list [--scope global|project:<folder>|conversation:<id>] [--all]`, `add <TEXT> [--kind fact|preference] [--scope …] [--subject S] [--until YYYY-MM-DD]`,
+`edit <ID> [--text T] [--subject S] [--until D | --no-until] [--scope …]`, `confirm <ID>`, `forget <ID> [--yes]`,
+`search <QUERY> [--in memory|knowledge|history] [--project <folder>]` and `export [--out FILE]`. Ids look like `m:<id>`; the bare id works too.
+Text that looks like a credential is refused. `forget` asks unless `--yes` is given, and refuses to run without a terminal. See [memory](memory.md).
+
+### `zorix knowledge …`
+
+`add <DIR> [--project <folder> | --global] [--include GLOB] [--exclude GLOB] [--auto-sync] [--no-sync]`, `list`, `sync [<FOLDER>]`,
+`files <FOLDER> [--failed]`, `remove <FOLDER>` and `search <QUERY>`. A folder is named by its path or the start of its id. Ctrl-C during a sync
+stops it between files and exits with code 4; what was done stays indexed. See [knowledge](knowledge.md).
+
+### `zorix embeddings …`
+
+`show`, `models`, `set <PROVIDER/MODEL> [--dims N] [--cloud]`, `off`, `test` and `reembed`. A cloud provider needs `--cloud`: your text is sent to it.
+
+### `zorix calibration`
+
+Shows the factor learned for each model (how many real tokens an estimated token is worth) and how many samples it rests on.
 
 ### `zorix tools`
 

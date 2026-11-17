@@ -81,3 +81,28 @@ and `ZORIX_SECRETS=env`.
 
 That is a fallback: the first candidate was unavailable, rate limited, refused or lacked the key. The `execution.model.fallback`
 event says why; `zorix show <id>` lists the models that served the run. A model named exactly (`provider/model`) never falls back.
+
+## A run did not use something I told it to remember
+
+Look at `zorix show <id> --context` (or **Context** in the run view). Memory is chosen once, when the run starts: a fact added
+afterwards is not in a run that was already going. Check that the run was not started with `--no-memory`, that the fact's scope
+reaches the run (a *project* fact needs a run whose workspace is that folder), and that it has not expired or been replaced.
+
+## "Waiting for a person" after `--approve yes` on a memory proposal
+
+Intended: `memory.remember` can only be approved by a person. Approve it from the desktop or with `zorix approve <id>`.
+
+## Documents are not found, or a file is "left out"
+
+`zorix knowledge files <folder> --failed` says why for each file: ignored by `.gitignore`, too big, binary, a scanned PDF with
+no text, or private (`.env`, keys). Add patterns with `--include`. Sync again after editing files; there is no file watcher.
+
+## Search by meaning does nothing, or "search was weaker than usual"
+
+`zorix embeddings show` names the model and how many texts have vectors; `zorix embeddings test` tries it. With Ollama run
+`ollama pull all-minilm` first. After choosing a model run `zorix embeddings reembed`. When the model cannot be reached a run
+continues with keyword search and its context says so.
+
+## `zorix memory` or `zorix knowledge sync` says the data folder is in use
+
+Writing commands need the data folder to themselves, so they fail while the desktop app is open. Close it, or use the app.

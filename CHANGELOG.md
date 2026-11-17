@@ -5,10 +5,41 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
+The **Context & Memory Engine**: ZORIX remembers, and you decide what.
+
 ### Added
 
-- **Design system** for the desktop app: tokens, Light (default), Dark and System themes, bundled Inter and JetBrains Mono,
-  a typed component kit, an app shell with a custom toolbar, and a Design system screen. See [docs/design-system.md](docs/design-system.md).
+- **Memory** in four kinds: the **conversation** (earlier runs of the same conversation), **facts and preferences**, **documents**
+  and **past work**, each with its own share of the context budget. Scopes: global, project, conversation. See [memory](docs/memory.md).
+- **A model proposes, a person approves.** `memory.remember` can never be approved automatically (the engine refuses it, so
+  `--approve yes` leaves the run waiting); `memory.search`, `knowledge.search` and `history.search` are read-only.
+- **Hybrid search**: SQLite FTS5 (BM25) always, plus vectors when an embeddings model is chosen (Ollama, OpenAI, Gemini), fused by
+  reciprocal rank fusion with a relevance gate so unrelated questions find nothing.
+- **Frozen recall per run**: what was retrieved is saved and every step and resume sends the same text; the run view and
+  `zorix show --context` show the facts, exchanges and document pieces used and what each part cost.
+- **Documents**: folders of text, code, HTML and PDF (text layer; no OCR), respecting `.gitignore`, skipping private files,
+  cut into pieces with citations, synced on demand with progress, cancel and resume. See [documents](docs/knowledge.md).
+- **Token calibration**: real usage from providers teaches a factor per model, replacing characters ÷ 4 (`zorix calibration`).
+- **Command line**: `memory`, `knowledge`, `embeddings`, `calibration`, `show --context`, and `run --no-memory --no-knowledge
+  --no-conversation`; `--conversation` now carries earlier runs forward.
+- **Desktop app**: a Memory screen (facts, documents, past work), a layout for approving a proposal, memory switches and Continue,
+  a Context panel in the run view and an Embeddings card in Providers & keys.
+- **Design system** for the desktop app: tokens, Light (default), Dark and System themes, bundled Inter and JetBrains Mono, a typed
+  component kit, an app shell with a custom toolbar, and a Design system screen. See [design system](docs/design-system.md).
+- Research, five ADRs (0013 to 0017) and opt-in live tests (`tools/live-tests.sh embeddings`).
+
+### Changed
+
+- The context builder keeps the start of the prompt stable: when any part is dropped while provider-native turns are being
+  replayed, the history is treated as edited (fixes a latent cache and signature problem).
+- Database schema 2 (opening a 0.2 database upgrades it). The demo model picks the task, not memory messages.
+
+### Security
+
+- Memory never enters without approval; retrieved text is untrusted data; a cloud embeddings model needs an explicit opt-in and
+  receives your text; deleting a fact or folder removes it from every table and saved context (not from transcripts or providers).
 
 ## [0.2.0] - 2026-11-15
 

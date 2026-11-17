@@ -16,7 +16,7 @@ Set `ZORIX_HOME` (or `--home`) to use another folder. Tests, demos and screensho
 | File | Holds |
 |---|---|
 | `zorix.sqlite` (+ `-wal`, `-shm`) | Executions, events, checkpoints, tool calls, approvals, leases |
-| `notes.json` | The built-in notebook (demo tool) |
+| `notes.json` | The built-in notebook (demo tool). Superseded by memory ([memory](memory.md)), kept for compatibility |
 | `zorix.lock` | The lock that keeps two ZORIX programs from using the folder at once |
 
 ## The database
@@ -38,6 +38,21 @@ risked.
 tool call and approval records together. Each commit names the version it read; if the stored version differs, it fails
 with a conflict and changes nothing. That is what prevents two workers (or the UI and a worker) from overwriting each
 other.
+
+### Memory tables (schema 2)
+
+| Table | Holds |
+|---|---|
+| `memory_items` (+ `memory_fts`) | Facts and preferences: scope, kind, subject, content, who proposed and who approved, dates, expiry |
+| `knowledge_roots`, `knowledge_documents`, `knowledge_chunks` (+ `chunks_fts`) | Indexed folders, their files with a hash and a status, and the pieces |
+| `operations` (+ `operations_fts`) | The record of every finished run |
+| `vectors` | One L2-normalised vector per (model, text hash), so unchanged text is never embedded twice |
+| `context_snapshots`, `snapshot_items` | What each run was given, frozen ([ADR-0015](adr/0015-frozen-recall-snapshot.md)) |
+| `token_calibration`, `memory_settings` | The learned token factor per model; the embeddings model |
+
+Each search index is its own FTS5 table, kept in step by triggers. Opening a 0.2 database upgrades it in one transaction. Deleting a
+memory or a folder removes its rows, search entries and vectors, scrubs the snapshots and overwrites the freed pages
+(`secure_delete`).
 
 ## What a checkpoint holds
 

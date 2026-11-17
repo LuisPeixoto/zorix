@@ -77,4 +77,9 @@ real providers are `#[ignore]`d and run with `tools/live-tests.sh`:
 - **Anthropic, OpenAI, Gemini**: the same, when a key is stored (`zorix provider set-key <name>`); without one the test is
   skipped. They cost a few cents. Models come from `ZORIX_LIVE_<NAME>_MODEL`.
 
+- **Embeddings and memory** (`tools/live-tests.sh embeddings`; `ollama pull all-minilm`): stable dimensions and similar text
+  scoring higher; this repository's `docs/` indexed, with differently worded questions finding the right file and an unrelated
+  question finding nothing; and `qwen3:1.7b` answering from an indexed runbook, checked against the recorded context. OpenAI and
+  Gemini embeddings run when a key is stored.
+
 The tests print lengths, tool names and token counts, never a key or an answer.

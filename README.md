@@ -34,6 +34,9 @@ everything. It is not tied to one model or provider, and the core does not know 
   follow the OpenTelemetry GenAI names; secrets redacted from events and logs.
 - **Model agnostic.** The loop talks to a small `ModelGateway` contract. [Anthropic, OpenAI, Gemini, compatible servers and
   Ollama](docs/providers.md) plug in behind it; keys stay in your system keychain; routes fall back when a provider fails.
+- **Memory you control.** Facts and preferences that a person approves (a model can only propose), the earlier runs of a
+  conversation, folders of documents that runs cite, and a record of past work, found by keyword and, if you choose a model, by
+  meaning. What a run was given is recorded and shown. See [memory](docs/memory.md).
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
@@ -44,13 +47,13 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![New run](docs/images/ui-new-run.png) | ![Approval card](docs/images/ui-approval.png) |
 | Choose what a run may use. Anything that changes something says it asks first. | The tool, the exact arguments, why you are asked, and a fingerprint of the call. |
 
-## What is in Phases 1 and 2
+## What is in Phases 1 to 3
 
 | Area | What it does | Guide |
 |---|---|---|
 | Execution engine and lifecycle | Create, start, pause, resume, cancel, recover. Ten states, validated transitions | [Runtime](docs/runtime.md) |
 | The loop | Context, model call, tool calls, validation, limits, retries, timeouts | [Runtime](docs/runtime.md) |
-| Context builder | Ordered, budgeted sources; extensible for memory later | [ADR-0007](docs/adr/0007-context-builder.md) |
+| Context builder | Ordered, budgeted sources; memory plugs in through it | [ADR-0007](docs/adr/0007-context-builder.md) |
 | Tools | MCP-shaped contract, schema validation, timeouts, output caps, eight demo tools | [Tools](docs/tools.md) |
 | Permissions and policy | Grants, rules, approvals, prompt-injection containment, tenants | [Permissions](docs/permissions.md) |
 | Events | Versioned, persisted, replayable, followed live | [Events](docs/events.md) |
@@ -59,6 +62,8 @@ everything. It is not tied to one model or provider, and the core does not know 
 | Command line | `zorix run`, `approve`, `events`, `recover`… | [CLI](docs/cli.md) |
 | Desktop app | Runs, new run, live view, approval card, providers and keys, model picker | [Desktop](docs/desktop.md) |
 | Providers | Anthropic, OpenAI, Gemini, compatible servers, Ollama; keychain keys; routes and fallback | [Providers](docs/providers.md) |
+| Memory | Conversation, approved facts, past work, scopes, frozen recall, calibrated token budgets | [Memory](docs/memory.md) |
+| Documents | Folders of text, code, HTML and PDF; citations; keyword and embeddings search | [Documents](docs/knowledge.md) |
 
 ## Install
 
@@ -111,6 +116,8 @@ cargo run -p zorix-runtime --example embed
 | [Events](docs/events.md) | Every event and how to follow them |
 | [Persistence and recovery](docs/persistence.md) | What is saved, what happens after a crash |
 | [Providers, models and routing](docs/providers.md) | Anthropic, OpenAI, Gemini, Ollama; keys; routes and fallback |
+| [Memory](docs/memory.md) | What ZORIX remembers, who writes it, how a run finds it, how to forget |
+| [Documents](docs/knowledge.md) | Indexing folders, citations, embeddings |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |
