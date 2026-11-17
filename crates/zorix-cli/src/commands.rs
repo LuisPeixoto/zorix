@@ -263,6 +263,7 @@ async fn decide(
         decided_by: decider(),
         note: args.note.clone(),
         call_hash: Some(approval.call_hash.clone()),
+        automatic: false,
     };
     engine.decide(&tenant, args.id, approval.id, decision).await?;
     let exit = follow(engine, &tenant, args.id, stream, args.then, printer).await;

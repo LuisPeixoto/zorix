@@ -658,6 +658,7 @@ impl Run {
                 "arguments": approval.arguments,
                 "call_hash": approval.call_hash,
                 "reason": approval.reason,
+                "person_only": self.engine.inner.tools.get(&approval.tool).is_some_and(|t| t.spec().approval_by_person_only),
             }),
         );
         let checkpoint = self.event(EventKind::Checkpoint, json!({ "step": self.step + 1 }));

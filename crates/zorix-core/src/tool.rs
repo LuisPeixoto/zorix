@@ -64,6 +64,10 @@ pub struct ToolSpec {
     /// The author asks for a person's approval on every call.
     #[serde(default)]
     pub requires_approval: bool,
+    /// The approval must come from a person looking at the call. Automatic modes (`--approve yes`) cannot give it. Used
+    /// for tools that change what ZORIX remembers.
+    #[serde(default)]
+    pub approval_by_person_only: bool,
     /// How long one call may run, in milliseconds.
     pub timeout_ms: u64,
     /// The most bytes of result kept; more is cut and marked.
@@ -87,6 +91,7 @@ impl ToolSpec {
             annotations: ToolAnnotations::default(),
             required_permissions: Vec::new(),
             requires_approval: false,
+            approval_by_person_only: false,
             timeout_ms: 10_000,
             max_output_bytes: 64 * 1024,
         }

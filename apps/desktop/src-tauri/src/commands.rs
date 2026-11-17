@@ -198,6 +198,7 @@ pub async fn decide_run(
         decided_by: "desktop".into(),
         note: note.filter(|n| !n.trim().is_empty()),
         call_hash,
+        automatic: false,
     };
     services.engine.decide(&services.tenant, id_of(&id)?, approval, decision).await.map_err(|e| e.to_string())
 }

@@ -35,6 +35,10 @@ pub struct ApprovalDecision {
     /// different call than the one on screen.
     #[serde(default)]
     pub call_hash: Option<String>,
+    /// True when no person looked at this: an automatic mode answered. A tool that must be approved by a person
+    /// (`ToolSpec::approval_by_person_only`) refuses an automatic approval.
+    #[serde(default)]
+    pub automatic: bool,
 }
 
 /// A request for a person's decision.

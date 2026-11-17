@@ -77,6 +77,7 @@ async fn the_scenario_from_the_brief() {
         decided_by: "reviewer".into(),
         note: None,
         call_hash: Some(approval.call_hash.clone()),
+        automatic: false,
     };
     second.decide(&tenant, created.id, approval.id, decision).await.unwrap();
     let done = settle(&second, created.id).await;
