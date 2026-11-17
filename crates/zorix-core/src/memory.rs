@@ -620,6 +620,8 @@ pub trait MemoryStore: Send + Sync {
     async fn remember(&self, tenant: &TenantId, new: NewMemory, now: Timestamp) -> Result<Remembered>;
     /// One item.
     async fn memory(&self, tenant: &TenantId, id: MemoryId) -> Result<Option<MemoryItem>>;
+    /// Every item of the tenant in every scope, newest first. For management (export, listing everything), never for a run.
+    async fn all_memory(&self, tenant: &TenantId, filter: &MemoryFilter, now: Timestamp) -> Result<Vec<MemoryItem>>;
     /// Items visible to `visibility`, newest first.
     async fn list_memory(
         &self,
@@ -668,6 +670,9 @@ pub trait MemoryStore: Send + Sync {
     async fn put_vectors(&self, model: &str, vectors: Vec<(String, Vec<f32>)>) -> Result<()>;
     /// Delete the vectors of models other than `keep` and any vector no text refers to. Returns how many.
     async fn gc_vectors(&self, keep: Option<&str>) -> Result<u64>;
+    /// Facts and past-work records of the tenant that have no vector for `model`, as (hash, text).
+    async fn texts_without_vector(&self, tenant: &TenantId, model: &str, limit: usize)
+    -> Result<Vec<(String, String)>>;
     /// How many texts have a vector for `model`, and how many texts there are.
     async fn vector_coverage(&self, tenant: &TenantId, model: &str) -> Result<(u64, u64)>;
 
