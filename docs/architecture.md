@@ -109,12 +109,21 @@ Chat Completions, Ollama, Gemini) sits on a shared HTTP client (HTTPS, size and 
 and streaming parsers. A catalogue knows windows, capabilities and prices; a secret store reads keys when a call is made.
 See [providers](providers.md) and ADR-0009 to ADR-0012.
 
+## Memory (zorix-memory)
+
+Memory plugs in through the `ContextSource` seam and the tool registry, and nothing in the runtime knows about it. The
+`zorix-memory` crate holds retrieval (keyword, vector, fusion and the relevance gate), the recall that is frozen per
+execution, the four context sources, the memory tools, the recorder of past work and the folder indexer; `MemoryStack` is the one
+wiring both the CLI and the desktop use. The store is behind a `MemoryStore` trait in `zorix-core`, implemented on SQLite in
+`zorix-store`, and embeddings are one more method on `ModelGateway`, so any provider can supply them. Token counts are
+calibrated from real usage in the runtime. See [memory](memory.md), [knowledge](knowledge.md) and ADR-0013 to ADR-0017.
+
 ## What comes next
 
 | Phase | Plugs into |
 |---|---|
 | 2 AI Provider Engine | `ModelGateway` implementations, model catalogue, routing |
-| 3 Context & Memory | New `ContextSource`s; memory stores |
+| 3 Context & Memory ✅ | New `ContextSource`s; memory stores |
 | 4 Tool & Integration | `ToolRegistry` sources: MCP, HTTP, integrations; credentials |
 | 5 AI Agent Engine | Agent definitions that create executions with instructions, tools, grants |
 | 6 Multi-Agent | Executions that create child executions (parent id is already part of the model) |

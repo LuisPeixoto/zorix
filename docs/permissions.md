@@ -59,6 +59,10 @@ What keeps an approval honest:
 - A cancelled execution closes its open approval as denied by the system.
 - The policy is evaluated again when the call actually runs. An approval does not bypass a denial that appeared since.
 
+- **Some approvals cannot be automated.** A tool can declare that only a person may approve it (`memory.remember`, because what is
+  remembered is shown to every later run). The engine refuses an approval marked automatic for such a tool, so `--approve yes`
+  leaves the run waiting. An automatic *refusal* is still fine.
+
 When refused, the model is told: *"Denied: a person refused this call (your note)."*
 
 ## Prompt injection
@@ -72,6 +76,10 @@ runtime does not rely on the model resisting:
   there.
 - **A persuaded model still cannot act.** The test `text_inside_a_tool_result_cannot_unlock_another_tool` shows a model that
   falls for an injected instruction and calls a tool it was not granted: the call is denied.
+
+- **Retrieved memory is data too.** Document pieces and past work are wrapped (`<document … untrusted="true">`,
+  `<past_work … untrusted="true">`) like tool results, and are never put in the system prompt. Facts are the exception: a person
+  approved each one. See [memory](memory.md#untrusted-data).
 
 What injection *can* still do is persuade a model to **ask** for something it is allowed to ask for. That is why
 destructive tools ask a person first.

@@ -63,6 +63,18 @@ These notes grow with each feature that handles data, files, network or permissi
   `providers.toml` is refused if it holds anything key-shaped. Provider error text is redacted before it reaches an event.
   Base URLs must be `https://` unless they are loopback; redirects are not followed, so a key cannot be bounced to
   another host. Response bodies and streams have size and idle limits.
+- **Memory is written only with a person's approval.** A model can propose a fact with `memory.remember`; the approval cannot be
+  automatic (the engine refuses it), shows the exact text, and credential-shaped text is refused. Approved facts are labelled to the
+  model as possibly out of date. Memory is scoped per tenant, and a project's memory is visible only to runs in that folder.
+- **Retrieved documents and past work are untrusted data.** They are wrapped, their closing tags defused, and never placed in the
+  system prompt. Indexing reads files only: `.gitignore`, hidden files, links and credential-like files (`.env*`, keys,
+  `credentials*`) are skipped, text that looks like a secret is removed from pieces before storage, and PDFs are parsed on an
+  isolated thread with size, page and time limits.
+- **A cloud embeddings model receives text.** The pieces of your documents, your facts and the questions of runs are sent to it,
+  so it needs an explicit opt-in, is never used by a `--local-only` run, and never replaces another model silently.
+- **Deleting is real, with limits.** Forgetting a fact or a folder deletes its rows, search entries and vectors, scrubs saved
+  run contexts, and overwrites freed pages. It cannot reach the transcript of a run that already used it, a backup you made, or
+  what a cloud provider received.
 - **One program per data folder.** The command line and the desktop app lock the folder. A database written by a newer
   version is refused rather than risked.
 - **Tenants never mix.** Every read, event stream, approval and note is scoped to a tenant; another tenant gets "not found".

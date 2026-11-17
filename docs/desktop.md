@@ -17,10 +17,20 @@ nothing: it asks the engine and shows what comes back. Permissions, approvals an
 | **Providers & keys** | Which providers exist, whether each has a key, save or remove a key (straight to the system keychain), test a provider |
 | **Model picker** | In New run: the default, a route, an alias or a model, with a note when the conversation will be sent to the cloud |
 | **Models used** | In the run view: the provider and model of every step, and any switch |
+| **Memory** | Facts and preferences (search, add, edit, *still true*, forget with the runs that used it listed); **Documents** (folders, sync with progress and Stop, files that failed, try a question); **Past work** (search, open the run) |
+| **Context** | In the run view: the facts, earlier exchanges and document pieces the run was given, which search found each, and what each part of the request cost |
+| **Continue** | On a finished run: start another run in the same conversation |
+| **Embeddings** | In Providers & keys: choose the model, test it, see how much is embedded, embed everything, turn off. A cloud model needs a checkbox: your text is sent to it |
 
 ![The new run form](images/ui-new-run.png)
 
 ![Providers and keys](images/ui-providers.png)
+
+Memory, documents and embeddings (version 0.3) are shown in the [memory](memory.md) and [documents](knowledge.md) guides.
+
+A proposal from a run to remember something has its own approval card: the sentence, where it applies and what it would replace. No
+automatic mode approves it ([memory](memory.md)). New run has three switches (earlier runs of the conversation, remembered things and
+past work, documents); every desktop run belongs to a conversation, and **Continue** reuses it.
 
 Nothing is allowed by default. The form preselects the demo tools that need only a tool permission; the file tools start
 off because they need a workspace. Tools that change things say **asks you first**.

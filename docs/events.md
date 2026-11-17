@@ -31,7 +31,7 @@ and later modules follow executions through events, with one mechanism ([ADR-000
 | `execution.tool.started` | A tool run begins | `call_id`, `tool`, `attempt` |
 | `execution.tool.completed` | It returned | `call_id`, `tool`, `duration_ms`, `output_bytes` |
 | `execution.tool.failed` | Invalid arguments or the tool failed | `call_id`, `tool`, `error` |
-| `execution.waiting_approval` | Suspended for a person | `approval_id`, `call_id`, `tool`, `arguments`, `call_hash`, `reason` (`outcome_unknown: true` after a crash) |
+| `execution.waiting_approval` | Suspended for a person | `approval_id`, `call_id`, `tool`, `arguments`, `call_hash`, `reason`, `person_only` (true: only a person may answer, as for `memory.remember`), `outcome_unknown: true` after a crash |
 | `execution.approval.granted` / `.denied` | A person answered | `approval_id`, `tool`, `decided_by`, `note` |
 | `execution.result.rejected` | A validator rejected the answer | `validator`, `reason`, `attempt` |
 | `execution.checkpoint` | A durability point before suspending | `step` |

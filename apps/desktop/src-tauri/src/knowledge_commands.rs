@@ -369,7 +369,7 @@ pub async fn embedding_models(state: State<'_, AppState>) -> Result<(Vec<Embeddi
                 installed: c.installed,
             })
             .collect(),
-        problems.into_iter().map(|(p, why)| format!("{p}: {why}")).collect(),
+        problems.into_iter().map(|(p, why)| if why.starts_with(&p) { why } else { format!("{p}: {why}") }).collect(),
     ))
 }
 
