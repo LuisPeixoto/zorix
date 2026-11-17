@@ -33,4 +33,5 @@ tracing.workspace = true
 zorix-store.workspace = true
 zorix-sim.workspace = true
 zorix-tools.workspace = true
+zorix-providers.workspace = true
 tempfile.workspace = true

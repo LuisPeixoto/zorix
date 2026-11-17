@@ -165,3 +165,37 @@ async fn openai_plain_answer_and_tool_call() {
 async fn gemini_plain_answer_and_tool_call() {
     cloud("gemini", "gemini-3-flash").await;
 }
+
+/// Embed two texts with a cloud model and check the vectors are usable.
+async fn cloud_embeddings(name: &str, default_model: &str) {
+    let router = router();
+    let status = zorix_providers::provider_statuses(router.config(), &standard_secrets(router.config()));
+    if !status.iter().any(|s| s.name == name && s.key == zorix_providers::KeyStatus::Present) {
+        eprintln!("{name}: no key stored (zorix provider set-key {name}), skipped");
+        return;
+    }
+    let model = std::env::var(format!("ZORIX_LIVE_{}_EMBED_MODEL", name.to_uppercase()))
+        .unwrap_or_else(|_| default_model.to_string());
+    let request = zorix_core::EmbeddingRequest {
+        model: format!("{name}/{model}"),
+        inputs: vec!["Deploys reach staging first.".into(), "The cafeteria serves lunch at noon.".into()],
+        purpose: zorix_core::EmbedPurpose::Document,
+        dimensions: None,
+    };
+    let response = router.embed(request, CancellationToken::new()).await.unwrap_or_else(|e| panic!("{name}: {e}"));
+    assert_eq!(response.vectors.len(), 2);
+    assert!(response.vectors[0].len() >= 256 && response.vectors[0].len() == response.vectors[1].len());
+    eprintln!("{name}/{model}: {} dimensions", response.vectors[0].len());
+}
+
+#[tokio::test]
+#[ignore = "needs an OpenAI key and spends a very little"]
+async fn openai_embeddings_work() {
+    cloud_embeddings("openai", "text-embedding-3-small").await;
+}
+
+#[tokio::test]
+#[ignore = "needs a Gemini key and spends a very little"]
+async fn gemini_embeddings_work() {
+    cloud_embeddings("gemini", "gemini-embedding-001").await;
+}
