@@ -4,6 +4,7 @@
   import { store } from "./lib/stores/runs.svelte.ts";
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
+  import Memory from "./lib/components/Memory.svelte";
   import Providers from "./lib/components/Providers.svelte";
   import DesignSystem from "./lib/views/DesignSystem.svelte";
   import RunView from "./lib/components/RunView.svelte";
@@ -18,6 +19,7 @@
       const start = import.meta.env.VITE_START_VIEW;
       if (start === "design") store.showDesign();
       if (start === "providers") store.showProviders();
+      if (start === "memory") store.showMemory();
       if (start === "run" && store.runs[0]) void store.select(store.runs[0].id);
     });
   });
@@ -45,6 +47,8 @@
         </div>
       {:else if store.view === "design"}
         <DesignSystem />
+      {:else if store.view === "memory"}
+        <Memory />
       {:else if store.view === "providers"}
         <Providers />
       {:else if store.selectedId}

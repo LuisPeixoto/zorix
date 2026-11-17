@@ -12,6 +12,16 @@
   const pending = $derived(detail?.approvals.filter((a) => a.status === "pending") ?? []);
   const modelSteps = $derived(detail?.summary.steps.filter((s) => s.kind === "model") ?? []);
 
+  // The context is read again when the run changes state: the recall is made when the first model step starts.
+  const runId = $derived(run?.id);
+  const runState = $derived(run?.state);
+  $effect(() => {
+    if (runId && runState) void store.loadContext(runId);
+  });
+  const context = $derived(store.context);
+  const kindLabel: Record<string, string> = { fact: "remembered", exchange: "earlier in this conversation", chunk: "document", past_work: "past work" };
+  const used = $derived(context?.recall?.items ?? []);
+
   async function copyId(id: string) {
     try {
       await navigator.clipboard.writeText(id);
@@ -46,6 +56,9 @@
           {#if isLive(run.state)}
             <Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>
           {/if}
+          {#if isFinished(run.state) && run.conversation}
+            <Button icon="history" onclick={() => store.continueConversation()}>Continue</Button>
+          {/if}
           {#if !isFinished(run.state)}
             <Button variant="danger" icon="stop" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>
           {/if}
@@ -75,6 +88,42 @@
       {/if}
       {#if run.state === "cancelled"}
         <Callout tone="muted" icon="stop" title="Cancelled">{run.cancel_reason ?? ""}</Callout>
+      {/if}
+
+      {#if context?.recall || context?.segments}
+        <Card title="Context" icon="book">
+          {#if context.recall?.degraded}
+            <Callout tone="warn" class="mb-3">Search was weaker than usual: {context.recall.degraded}</Callout>
+          {/if}
+          {#if context.recall?.scrubbed}
+            <p class="mb-3 text-xs text-faint">Something this run used was deleted afterwards, so it is no longer listed here.</p>
+          {/if}
+          {#if used.length}
+            <ul class="space-y-2">
+              {#each used as item (item.id + item.kind)}
+                <li class="rounded-lg border border-line bg-panel p-3">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={item.kind === "fact" ? "accent" : item.kind === "chunk" ? "info" : "muted"}>{kindLabel[item.kind]}</Badge>
+                    <span class="selectable mono truncate text-xs text-muted">{item.label}</span>
+                    {#each item.found_by as by}<Badge tone="muted" class="h-5">{by}</Badge>{/each}
+                    <span class="ml-auto text-xs text-faint tabular-nums">{item.tokens} tokens</span>
+                  </div>
+                  <p class="selectable mt-1.5 line-clamp-3 text-sm text-fg/90">{item.text}</p>
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="text-sm text-muted">Memory added nothing to this run: nothing relevant was found, or it was switched off.</p>
+          {/if}
+          {#if context.segments?.length}
+            <p class="mt-4 mb-1.5 text-xs font-medium text-muted">What the first request held{context.token_factor && context.token_factor !== 1 ? ` (tokens × ${context.token_factor.toFixed(2)}, learned from this model)` : ""}</p>
+            <div class="flex flex-wrap gap-1.5">
+              {#each context.segments as segment, i (i)}
+                <Badge tone={segment.kept ? "muted" : "warn"}>{segment.origin} · {segment.tokens}{segment.kept ? "" : " · left out"}</Badge>
+              {/each}
+            </div>
+          {/if}
+        </Card>
       {/if}
 
       <Card title="What happened" icon="history">

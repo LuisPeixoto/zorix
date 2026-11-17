@@ -3,7 +3,7 @@
 
   import { errorText } from "../api.ts";
   import { store } from "../stores/runs.svelte.ts";
-  import { Badge, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Textarea } from "../ui/index.ts";
+  import { Badge, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Switch, Textarea } from "../ui/index.ts";
 
   const examples = [
     "What is 17*23 and save it as result",
@@ -22,6 +22,12 @@
   // need a workspace, so they start off.
   let overrides = $state<Record<string, boolean>>({});
   let pickError = $state<string | null>(null);
+  // What the run may use from memory. All on by default; each can be switched off for one run.
+  let useConversation = $state(true);
+  let useMemory = $state(true);
+  let useKnowledge = $state(true);
+  // Continuing a conversation from the Run view (the Continue button) or starting a new one.
+  const continuing = $derived(store.continuing);
 
   const isOn = (id: string) => overrides[id] ?? !id.startsWith("workspace.");
 
@@ -55,6 +61,8 @@
       allow_write: workspace ? lines(allowWrite) : [],
       workspace: workspace || undefined,
       model: model || undefined,
+      conversation: continuing?.id,
+      memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
     });
   }
 </script>
@@ -74,6 +82,23 @@
         <Chip onclick={() => (prompt = example)}>{example}</Chip>
       {/each}
     </div>
+  </Card>
+
+  <Card title="Memory" icon="book">
+    {#if continuing}
+      <Callout tone="info" icon="history">
+        Continuing a conversation that began with “{continuing.prompt.length > 70 ? continuing.prompt.slice(0, 70) + "…" : continuing.prompt}”.
+        <button type="button" class="ml-1 underline" onclick={() => (store.continuing = null)}>Start a new one instead</button>
+      </Callout>
+    {:else}
+      <p class="text-sm text-muted">This starts a new conversation. Use Continue on a finished run to add to one.</p>
+    {/if}
+    <div class="mt-3 space-y-2.5">
+      <Switch bind:checked={useConversation}>Earlier runs of this conversation</Switch>
+      <Switch bind:checked={useMemory}>Things you asked it to remember, and past work</Switch>
+      <Switch bind:checked={useKnowledge}>Indexed documents</Switch>
+    </div>
+    <p class="mt-3 text-xs text-faint">What is used is chosen once, when the run starts, and shown on the run under Context.</p>
   </Card>
 
   <Card title="Model" icon="cpu">
