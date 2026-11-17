@@ -86,6 +86,7 @@ impl MemoryTools {
             Arc::new(Remember { tools: self.shared() }),
             Arc::new(Search { tools: self.shared(), spec: search_spec() }),
             Arc::new(History { tools: self.shared(), spec: history_spec() }),
+            Arc::new(Knowledge { tools: self.shared(), spec: knowledge_spec() }),
         ]
     }
 
@@ -393,6 +394,67 @@ impl Tool for History {
             }
             if results.len() == limit {
                 break;
+            }
+        }
+        Ok(json!({"results": results, "count": results.len(), "note": found.degraded}))
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct Knowledge {
+    tools: Shared,
+    spec: ToolSpec,
+}
+
+fn knowledge_spec() -> ToolSpec {
+    let mut spec = ToolSpec::new(
+        "knowledge.search",
+        "Search documents",
+        "Search the documents the user has indexed (this project's and the shared ones). Returns passages with their source, \
+         such as guide/deploy.md:L10-L42 or manual.pdf#page=3. Cite the source when you rely on a passage.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "minLength": 1, "maxLength": 500},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    );
+    spec.annotations = ToolAnnotations::safe_read();
+    spec
+}
+
+#[async_trait]
+impl Tool for Knowledge {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+
+    async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
+        let t = &self.tools;
+        let vis = visibility(ctx);
+        let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, MAX_RESULTS as u64) as usize;
+        let query = args["query"].as_str().unwrap_or("").trim().to_string();
+        if query.is_empty() {
+            return Err(failed("Say what to look for."));
+        }
+        let found = hybrid_search(&*t.store, t.embedder.as_deref(), &vis, zorix_core::Corpus::Knowledge, &query)
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        let ids: Vec<i64> = found.hits.iter().take(limit).filter_map(|h| h.id.parse().ok()).collect();
+        let chunks = t.store.chunks(&ctx.tenant, &ids).await.map_err(|e| failed(e.to_string()))?;
+        let mut results = Vec::new();
+        for id in &ids {
+            if let Some(chunk) = chunks.iter().find(|c| c.id == *id) {
+                results.push(json!({
+                    "source": chunk.citation(),
+                    "folder": chunk.root_path,
+                    "heading": chunk.heading,
+                    "text": cut(&redact_text(&chunk.text), 900),
+                }));
             }
         }
         Ok(json!({"results": results, "count": results.len(), "note": found.degraded}))
