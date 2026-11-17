@@ -2,6 +2,8 @@
 
 pub mod chunk;
 pub mod extract;
+#[cfg(feature = "pdf")]
+pub mod pdf;
 pub mod sync;
 pub mod walk;
 
