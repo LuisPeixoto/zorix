@@ -8,10 +8,18 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["html"]
+html = ["dep:html2text"]
+pdf = []
+
 [dependencies]
 zorix-core.workspace = true
 zorix-runtime.workspace = true
 async-trait.workspace = true
+globset.workspace = true
+html2text = { workspace = true, optional = true }
+ignore.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true

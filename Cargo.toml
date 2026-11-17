@@ -23,6 +23,9 @@ zorix-providers = { path = "crates/zorix-providers" }
 zorix-memory = { path = "crates/zorix-memory" }
 
 async-trait = "0.1"
+globset = "0.4"
+html2text = "0.17"
+ignore = "0.4"
 bytes = "1"
 clap = { version = "4", features = ["derive", "env"] }
 rpassword = "7"

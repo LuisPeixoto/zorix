@@ -7,6 +7,7 @@
 pub mod doc;
 pub mod embedder;
 pub mod fusion;
+pub mod index;
 pub mod ops;
 pub mod recall;
 pub mod retrieve;

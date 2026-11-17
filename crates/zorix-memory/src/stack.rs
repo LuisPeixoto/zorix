@@ -82,6 +82,11 @@ impl MemoryStack {
         self.tools().register(registry)
     }
 
+    /// The indexer for knowledge folders.
+    pub fn indexer(&self) -> crate::index::Indexer {
+        crate::index::Indexer::new(self.store.clone(), self.embedder.clone())
+    }
+
     /// Put memory into an engine: its context builder, and the recorder that keeps a record of every execution that ends.
     /// Call it inside a Tokio runtime (the recorder starts a background task).
     pub fn install(&self, builder: EngineBuilder) -> EngineBuilder {

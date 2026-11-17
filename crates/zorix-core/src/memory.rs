@@ -20,6 +20,11 @@ pub fn text_hash(text: &str) -> String {
     Sha256::digest(text.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// SHA-256 of bytes, in lowercase hex (the content hash of a file).
+pub fn bytes_hash(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 /// The key a snapshot uses for a long-term item.
 pub fn memory_key(id: MemoryId) -> String {
     format!("m:{id}")
@@ -729,6 +734,7 @@ mod tests {
 
     #[test]
     fn hashes_and_keys_are_stable() {
+        assert_eq!(bytes_hash(b"abc"), text_hash("abc"));
         assert_eq!(text_hash("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
         let id = MemoryId::new();
         assert_eq!(memory_key(id), format!("m:{id}"));
