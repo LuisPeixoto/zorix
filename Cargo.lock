@@ -6595,7 +6595,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zorix-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "futures-util",
@@ -6617,7 +6617,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -6632,7 +6632,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-desktop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "futures-util",
  "parking_lot",
@@ -6656,7 +6656,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-memory"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "globset",
@@ -6681,7 +6681,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-providers"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -6707,7 +6707,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-runtime"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -6727,7 +6727,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-sim"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "parking_lot",
@@ -6740,7 +6740,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-store"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "dirs 6.0.0",
@@ -6759,7 +6759,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-tools"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "parking_lot",
