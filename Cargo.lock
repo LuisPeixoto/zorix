@@ -6607,6 +6607,7 @@ dependencies = [
  "tokio-util",
  "tracing-subscriber",
  "zorix-core",
+ "zorix-memory",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sim",

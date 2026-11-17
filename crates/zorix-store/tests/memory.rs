@@ -666,3 +666,27 @@ async fn too_many_active_items_are_refused_but_replacing_one_is_allowed_at_the_l
     swap.replaces = vec![first];
     assert!(matches!(f.store.remember(&t, swap, NOW).await.unwrap(), Remembered::Replaced { .. }));
 }
+
+#[tokio::test]
+async fn everything_of_a_tenant_can_be_listed_and_the_texts_missing_a_vector_found() {
+    let f = fixture();
+    let t = tenant("a");
+    f.store.remember(&t, new(Scope::Global, "global fact about invoices", None), NOW).await.unwrap();
+    f.store.remember(&t, new(Scope::Project("/p".into()), "project fact about billing", None), NOW).await.unwrap();
+    f.store.remember(&tenant("b"), new(Scope::Global, "someone else", None), NOW).await.unwrap();
+    let old = f.store.remember(&t, new(Scope::Global, "old plan", Some("plan")), NOW).await.unwrap().item().id;
+    f.store.remember(&t, new(Scope::Global, "new plan", Some("plan")), NOW).await.unwrap();
+    let active = f.store.all_memory(&t, &MemoryFilter::default(), NOW).await.unwrap();
+    assert_eq!(active.len(), 3, "every scope of the tenant, nothing of another, no replaced item");
+    let all =
+        f.store.all_memory(&t, &MemoryFilter { include_inactive: true, ..Default::default() }, NOW).await.unwrap();
+    assert_eq!(all.len(), 4);
+    assert!(all.iter().any(|i| i.id == old));
+    f.store.record_operation(record(ExecutionId::new(), "a", None, "migrated the billing database")).await.unwrap();
+    let missing = f.store.texts_without_vector(&t, "m", 100).await.unwrap();
+    assert_eq!(missing.len(), 4, "three facts and one record: {missing:?}");
+    f.store.put_vectors("m", vec![(text_hash("global fact about invoices"), unit(&[1.0, 0.0]))]).await.unwrap();
+    assert_eq!(f.store.texts_without_vector(&t, "m", 100).await.unwrap().len(), 3);
+    assert_eq!(f.store.texts_without_vector(&t, "m", 1).await.unwrap().len(), 1, "limit applies");
+    assert!(f.store.texts_without_vector(&tenant("nobody"), "m", 10).await.unwrap().is_empty());
+}

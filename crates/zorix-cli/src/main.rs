@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod commands;
 mod follow;
+mod memory;
 mod providers;
 mod render;
 

@@ -427,6 +427,31 @@ impl MemoryStore for SqliteMemoryStore {
         self.run(move |conn| load_item(conn, &tenant, id)).await
     }
 
+    async fn all_memory(&self, tenant: &TenantId, filter: &MemoryFilter, now: Timestamp) -> Result<Vec<MemoryItem>> {
+        let (tenant, filter) = (tenant.clone(), filter.clone());
+        self.run(move |conn| {
+            let mut args: Vec<Sql> = vec![Sql::Text(tenant.to_string())];
+            let mut sql = format!("SELECT {ITEM_COLUMNS} FROM memory_items m WHERE m.tenant = ?1");
+            if !filter.include_inactive {
+                args.push(Sql::Integer(now.millis()));
+                sql.push_str(&format!(
+                    " AND m.status = 'active' AND (m.valid_until IS NULL OR m.valid_until > ?{})",
+                    args.len()
+                ));
+            }
+            if let Some(kind) = filter.kind {
+                args.push(Sql::Text(kind.as_str().into()));
+                sql.push_str(&format!(" AND m.kind = ?{}", args.len()));
+            }
+            let limit = if filter.limit == 0 { DEFAULT_LIMIT * 25 } else { filter.limit };
+            sql.push_str(&format!(" ORDER BY m.created_at DESC, m.id DESC LIMIT {limit}"));
+            let mut stmt = conn.prepare(&sql).map_err(storage)?;
+            let rows = stmt.query_map(params_from_iter(args), item_from).map_err(storage)?;
+            rows.map(|r| r.map_err(storage)).collect()
+        })
+        .await
+    }
+
     async fn list_memory(
         &self,
         visibility: &Visibility,
@@ -751,6 +776,32 @@ impl MemoryStore for SqliteMemoryStore {
                 .map_err(storage)?;
             tx.commit().map_err(storage)?;
             Ok(removed as u64)
+        })
+        .await
+    }
+
+    async fn texts_without_vector(
+        &self,
+        tenant: &TenantId,
+        model: &str,
+        limit: usize,
+    ) -> Result<Vec<(String, String)>> {
+        let (tenant, model) = (tenant.clone(), model.to_string());
+        self.run(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT m.content_hash, m.content FROM memory_items m
+                       WHERE m.tenant = ?1 AND m.status = 'active' AND NOT EXISTS (SELECT 1 FROM vectors v WHERE v.model = ?2 AND v.text_hash = m.content_hash)
+                     UNION
+                     SELECT o.text_hash, o.text FROM operations o
+                       WHERE o.tenant = ?1 AND NOT EXISTS (SELECT 1 FROM vectors v WHERE v.model = ?2 AND v.text_hash = o.text_hash)
+                     LIMIT ?3",
+                )
+                .map_err(storage)?;
+            let rows = stmt
+                .query_map(params![tenant.as_str(), model, limit as i64], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                .map_err(storage)?;
+            rows.map(|r| r.map_err(storage)).collect()
         })
         .await
     }

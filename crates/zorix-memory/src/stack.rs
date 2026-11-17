@@ -82,6 +82,60 @@ impl MemoryStack {
         self.tools().register(registry)
     }
 
+    /// Make vectors for the facts and past-work records that have none, with the model chosen in the settings. Returns how
+    /// many were made. Without an embeddings model this does nothing.
+    pub async fn embed_missing(
+        &self,
+        tenant: &zorix_core::TenantId,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::Result<usize> {
+        let Some(embedder) = &self.embedder else { return Ok(0) };
+        let settings = self.store.settings(tenant).await?;
+        let Some(model) = settings.embedding_model else { return Ok(0) };
+        let mut total = 0;
+        while !cancel.is_cancelled() {
+            let batch = self.store.texts_without_vector(tenant, &model, 64).await?;
+            if batch.is_empty() {
+                break;
+            }
+            let stored = embedder.fill(&*self.store, &model, settings.embedding_dimensions, batch, cancel).await?;
+            if stored == 0 {
+                break;
+            }
+            total += stored;
+        }
+        Ok(total)
+    }
+
+    /// Start over with the embeddings model in the settings: sync every folder (which embeds what lacks a vector), embed the
+    /// facts and past work, then delete the vectors of any other model. Returns what each folder did and how many facts and
+    /// records were embedded.
+    pub async fn reembed(
+        &self,
+        tenant: &zorix_core::TenantId,
+        progress: &(dyn Fn(&zorix_core::KnowledgeRoot, crate::index::Progress) + Send + Sync),
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> crate::Result<(Vec<(zorix_core::KnowledgeRoot, crate::index::SyncReport)>, usize)> {
+        let indexer = self.indexer();
+        let mut reports = Vec::new();
+        for root in self.store.all_roots(tenant).await? {
+            if cancel.is_cancelled() {
+                break;
+            }
+            if !root.enabled {
+                continue;
+            }
+            let report = indexer.sync(&root, &|p| progress(&root, p), cancel).await?;
+            reports.push((root, report));
+        }
+        let memory = self.embed_missing(tenant, cancel).await?;
+        if !cancel.is_cancelled() {
+            let settings = self.store.settings(tenant).await?;
+            self.store.gc_vectors(settings.embedding_model.as_deref()).await?;
+        }
+        Ok((reports, memory))
+    }
+
     /// The indexer for knowledge folders.
     pub fn indexer(&self) -> crate::index::Indexer {
         crate::index::Indexer::new(self.store.clone(), self.embedder.clone())

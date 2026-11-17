@@ -28,6 +28,10 @@ pub struct SqliteCalibration {
 impl SqliteCalibration {
     /// Open the database at `path`, load what was learned and start the writer.
     pub fn open(path: &Path) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| Error::Storage(format!("could not create {}: {e}", parent.display())))?;
+        }
         let mut conn = Connection::open(path).map_err(storage)?;
         conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(storage)?;
         crate::schema::migrate(&mut conn).map_err(Error::Storage)?;

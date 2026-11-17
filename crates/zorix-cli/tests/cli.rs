@@ -523,3 +523,246 @@ fn a_run_with_an_unknown_provider_fails_clearly_and_demo_still_works() {
     let out = z.run_env(&["run", "What is 2+2?", "--allow", "math.evaluate", "--approve", "never"], "", &[]);
     assert_eq!(code(&out), 0, "{}{}", text(&out.stdout), text(&out.stderr));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// memory, knowledge, embeddings
+
+impl Zorix {
+    /// Run a command that needs no keychain and read what it printed.
+    fn env_run(&self, args: &[&str]) -> Output {
+        self.run_env(args, "", &[])
+    }
+
+    fn docs(&self) -> PathBuf {
+        let docs = self.dir.path().join("docs");
+        std::fs::create_dir_all(docs.join("guide")).unwrap();
+        std::fs::write(docs.join("guide/deploy.md"), "# Deploys\nDeploys reach staging first, then production.\n")
+            .unwrap();
+        std::fs::write(docs.join("notes.txt"), "The cafeteria serves lunch at noon.").unwrap();
+        std::fs::write(docs.join(".env"), "KEY=sk-abcdefghijklmnopqrstuvwxyz0123456789").unwrap();
+        docs
+    }
+}
+
+fn first_id(output: &Output) -> String {
+    let all = format!("{}{}", text(&output.stdout), text(&output.stderr));
+    let start = all.find("m:").expect("a memory id");
+    all[start..].split(|c: char| c.is_whitespace() || c == '.' || c == ',').next().unwrap().to_string()
+}
+
+#[test]
+fn memory_can_be_added_listed_changed_confirmed_and_forgotten() {
+    let z = Zorix::new();
+    let added = z.env_run(&["memory", "add", "Answer in Portuguese.", "--kind", "preference", "--subject", "language"]);
+    assert_eq!(code(&added), 0, "{}", text(&added.stderr));
+    let id = first_id(&added);
+    let listed = z.env_run(&["memory", "list"]);
+    assert!(
+        text(&listed.stdout).contains(&id)
+            && text(&listed.stdout).contains("preference")
+            && text(&listed.stdout).contains("Answer in Portuguese."),
+        "{}",
+        text(&listed.stdout)
+    );
+    // The same text again changes nothing.
+    assert!(text(&z.env_run(&["memory", "add", "Answer in Portuguese."]).stderr).contains("Already remembered"));
+    // A newer memory about the same subject replaces it.
+    let newer = z.env_run(&["memory", "add", "Answer in English.", "--kind", "preference", "--subject", "language"]);
+    assert!(text(&newer.stderr).contains("replacing"), "{}", text(&newer.stderr));
+    let json: Value = serde_json::from_slice(&z.env_run(&["--json", "memory", "list"]).stdout).unwrap();
+    assert_eq!(json.as_array().unwrap().len(), 1, "only the one in force");
+    assert_eq!(json[0]["content"], "Answer in English.");
+    let all = text(&z.env_run(&["memory", "list", "--all"]).stdout);
+    assert!(all.contains("(replaced by m:") && all.contains("Answer in Portuguese."), "{all}");
+    // Edit, confirm, expiry.
+    let new_id = json[0]["id"].as_str().unwrap().to_string();
+    let edited =
+        z.env_run(&["memory", "edit", &format!("m:{new_id}"), "--text", "Answer in Spanish.", "--until", "2099-12-31"]);
+    assert_eq!(code(&edited), 0, "{}", text(&edited.stderr));
+    assert!(text(&edited.stdout).contains("Answer in Spanish.") && text(&edited.stdout).contains("(until 2099-12-31)"));
+    assert_eq!(code(&z.env_run(&["memory", "confirm", &new_id])), 0, "a bare id works too");
+    assert_eq!(code(&z.env_run(&["memory", "edit", &new_id])), 1, "nothing to change");
+    // Forgetting needs a yes when nobody is there to ask.
+    let refused = z.env_run(&["memory", "forget", &new_id]);
+    assert_eq!(code(&refused), 1);
+    assert!(text(&refused.stderr).contains("--yes"));
+    assert_eq!(code(&z.env_run(&["memory", "forget", &new_id, "--yes"])), 0);
+    assert!(!text(&z.env_run(&["memory", "list"]).stdout).contains("Spanish"));
+    assert_eq!(code(&z.env_run(&["memory", "forget", &new_id, "--yes"])), 1, "already gone");
+}
+
+#[test]
+fn memory_refuses_secrets_bad_dates_and_bad_ids_with_a_reason() {
+    let z = Zorix::new();
+    let secret = z.env_run(&["memory", "add", "The key is sk-abcdefghijklmnopqrstuvwxyz0123456789"]);
+    assert_eq!(code(&secret), 1);
+    assert!(text(&secret.stderr).contains("credential") && !text(&secret.stderr).contains("sk-abcdef"));
+    assert!(text(&z.env_run(&["memory", "add", "x", "--until", "2001-01-01"]).stderr).contains("past"));
+    assert!(text(&z.env_run(&["memory", "add", "x", "--until", "tomorrow"]).stderr).contains("YYYY-MM-DD"));
+    assert!(text(&z.env_run(&["memory", "forget", "nope", "--yes"]).stderr).contains("not a memory id"));
+    assert_eq!(
+        code(&z.env_run(&["memory", "add", "x", "--scope", "planet"])),
+        2,
+        "the scope is checked before anything is touched"
+    );
+    assert!(text(&z.env_run(&["memory", "list"]).stderr).contains("Nothing is remembered"));
+}
+
+#[test]
+fn memory_scopes_and_export_work() {
+    let z = Zorix::new();
+    let project = z.dir.path().join("proj");
+    std::fs::create_dir_all(&project).unwrap();
+    let scope = format!("project:{}", project.display());
+    z.env_run(&["memory", "add", "Global fact."]);
+    z.env_run(&["memory", "add", "Project fact.", "--scope", &scope]);
+    let only_project = text(&z.env_run(&["memory", "list", "--scope", &scope]).stdout);
+    assert!(only_project.contains("Project fact.") && !only_project.contains("Global fact."), "{only_project}");
+    let out = z.dir.path().join("memories.json");
+    let exported = z.env_run(&["memory", "export", "--out", out.to_str().unwrap()]);
+    assert_eq!(code(&exported), 0);
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(out).unwrap()).unwrap();
+    assert_eq!(file.as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn a_folder_is_added_indexed_searched_listed_and_removed() {
+    let z = Zorix::new();
+    let docs = z.docs();
+    let added = z.env_run(&["knowledge", "add", docs.to_str().unwrap()]);
+    assert_eq!(code(&added), 0, "{}", text(&added.stderr));
+    assert!(text(&added.stderr).contains("2 indexed"), "the private file is not read: {}", text(&added.stderr));
+    let found = text(&z.env_run(&["knowledge", "search", "staging production"]).stdout);
+    assert!(found.contains("guide/deploy.md:L1-L2") && found.contains("Deploys reach staging"), "{found}");
+    assert!(
+        text(&z.env_run(&["knowledge", "search", "abcdefghijklmnopqrstuvwxyz0123456789"]).stderr)
+            .contains("Nothing found")
+    );
+    let list = text(&z.env_run(&["knowledge", "list"]).stdout);
+    assert!(list.contains("2 files") && list.contains("global"), "{list}");
+    let files = text(&z.env_run(&["knowledge", "files", docs.to_str().unwrap()]).stdout);
+    assert!(files.contains("indexed  guide/deploy.md") && !files.contains(".env"), "{files}");
+    // Nothing changed: a sync does nothing.
+    assert!(text(&z.env_run(&["knowledge", "sync"]).stderr).contains("0 indexed, 2 unchanged"));
+    // Adding it twice, and a pattern that is not valid, are refused.
+    assert_eq!(code(&z.env_run(&["knowledge", "add", docs.to_str().unwrap()])), 1);
+    let removed = z.env_run(&["knowledge", "remove", docs.to_str().unwrap()]);
+    assert_eq!(code(&removed), 0);
+    assert!(docs.join("guide/deploy.md").exists(), "the files stay");
+    assert!(text(&z.env_run(&["knowledge", "search", "staging"]).stderr).contains("Nothing found"));
+    assert_eq!(code(&z.env_run(&["knowledge", "sync", "nowhere"])), 1);
+}
+
+#[test]
+fn embeddings_are_chosen_tried_used_and_turned_off() {
+    let z = Zorix::new();
+    assert!(text(&z.env_run(&["embeddings", "show"]).stdout).contains("keywords only"));
+    // A cloud provider needs a deliberate yes, because document text goes to it.
+    let cloud = z.env_run(&["embeddings", "set", "openai/text-embedding-3-small"]);
+    assert_eq!(code(&cloud), 1);
+    assert!(
+        text(&cloud.stderr).contains("--cloud") && text(&cloud.stderr).contains("sent to it"),
+        "{}",
+        text(&cloud.stderr)
+    );
+    assert_eq!(code(&z.env_run(&["embeddings", "set", "all-minilm"])), 1, "it must be provider/model");
+    assert_eq!(code(&z.env_run(&["embeddings", "test"])), 1, "nothing is set yet");
+    let docs = z.docs();
+    z.env_run(&["knowledge", "add", docs.to_str().unwrap()]);
+    let set = z.env_run(&["embeddings", "set", "sim/hash-embed"]);
+    assert_eq!(code(&set), 0, "{}", text(&set.stderr));
+    assert!(text(&set.stderr).contains("64 dimensions"));
+    assert!(text(&z.env_run(&["embeddings", "show"]).stdout).contains("0 of 2 texts"));
+    let again = z.env_run(&["embeddings", "reembed"]);
+    assert_eq!(code(&again), 0, "{}", text(&again.stderr));
+    let show = text(&z.env_run(&["embeddings", "show"]).stdout);
+    assert!(show.contains("sim/hash-embed") && show.contains("2 of 2 texts") && show.contains("not allowed"), "{show}");
+    let tried = text(&z.env_run(&["embeddings", "test"]).stdout);
+    assert!(tried.contains("64 dimensions"), "{tried}");
+    assert_eq!(code(&z.env_run(&["embeddings", "off"])), 0);
+    assert!(text(&z.env_run(&["embeddings", "show"]).stdout).contains("keywords only"));
+    // The list of models never fails because one server is down.
+    assert_eq!(code(&z.env_run(&["embeddings", "models"])), 0);
+}
+
+#[test]
+fn a_conversation_carries_over_and_show_context_says_what_memory_added() {
+    let z = Zorix::new();
+    z.env_run(&["memory", "add", "The team is called Platform."]);
+    let first = z.env_run(&[
+        "run",
+        "What is 2+2?",
+        "--allow",
+        "math.evaluate",
+        "--approve",
+        "never",
+        "--conversation",
+        "chat-1",
+    ]);
+    assert_eq!(code(&first), 0, "{}", text(&first.stderr));
+    let second = z.env_run(&[
+        "run",
+        "And what is 3+3?",
+        "--allow",
+        "math.evaluate",
+        "--approve",
+        "never",
+        "--conversation",
+        "chat-1",
+    ]);
+    assert_eq!(code(&second), 0);
+    let id = z.newest_id();
+    let shown = text(&z.env_run(&["show", &id, "--context"]).stdout);
+    assert!(shown.contains("Context") && shown.contains("earlier"), "{shown}");
+    assert!(shown.contains("fact") && shown.contains("The team is called Platform."), "{shown}");
+    assert!(shown.contains("conversation") && shown.contains("long_term") && shown.contains("kept"), "{shown}");
+    // Switching things off leaves them out.
+    z.env_run(&[
+        "run",
+        "And 4+4?",
+        "--allow",
+        "math.evaluate",
+        "--approve",
+        "never",
+        "--conversation",
+        "chat-1",
+        "--no-memory",
+        "--no-conversation",
+        "--no-knowledge",
+    ]);
+    let bare = text(&z.env_run(&["show", &z.newest_id(), "--context"]).stdout);
+    assert!(bare.contains("Memory was not used"), "{bare}");
+    let json: Value = serde_json::from_slice(&z.env_run(&["--json", "show", &id, "--context"]).stdout).unwrap();
+    assert!(json["context"]["recall"]["items"].as_array().unwrap().iter().any(|i| i["kind"] == "exchange"));
+}
+
+#[test]
+fn a_proposal_to_remember_waits_for_a_person_even_with_approve_yes() {
+    let z = Zorix::new();
+    let model = z.write_script(r#"[{"call": {"calls": [{"tool": "memory.remember", "arguments": {"content": "Releases happen on Thursdays.", "kind": "fact", "scope": "global"}}]}}, {"say": "Noted."}]"#);
+    let out = z.env_run(&[
+        "run",
+        "Remember when we release",
+        "--model",
+        &model,
+        "--allow",
+        "memory.remember",
+        "--approve",
+        "yes",
+    ]);
+    assert_eq!(code(&out), 3, "it is waiting: {}", text(&out.stderr));
+    assert!(text(&out.stderr).contains("must be approved by a person"), "{}", text(&out.stderr));
+    assert!(text(&z.env_run(&["memory", "list"]).stderr).contains("Nothing is remembered"));
+    // A person approves it, and then it is remembered.
+    let id = z.newest_id();
+    let approved = z.env_run(&["approve", &id, "--model", "demo"]);
+    assert_eq!(code(&approved), 0, "{}", text(&approved.stderr));
+    assert!(text(&z.env_run(&["memory", "list"]).stdout).contains("Releases happen on Thursdays."));
+}
+
+#[test]
+fn calibration_starts_empty_and_says_so() {
+    let z = Zorix::new();
+    assert!(text(&z.env_run(&["calibration"]).stderr).contains("Nothing learned yet"));
+    assert_eq!(code(&z.env_run(&["--json", "calibration"])), 0);
+}

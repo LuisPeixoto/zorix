@@ -39,10 +39,18 @@ impl DemoModel {
     }
 }
 
+/// The task: the last trusted user message that is not the input data or a rejection notice. Earlier user messages are
+/// memory (earlier prompts of the conversation, documents, past work) and must not be mistaken for it.
 fn prompt_of(messages: &[Message]) -> String {
     messages
         .iter()
-        .find(|m| m.role == Role::User && !m.content.starts_with("Input data supplied"))
+        .rev()
+        .find(|m| {
+            m.role == Role::User
+                && m.provenance == zorix_core::Provenance::Trusted
+                && !m.content.starts_with("Input data supplied")
+                && !m.content.starts_with("Your answer was rejected")
+        })
         .map(|m| m.content.clone())
         .unwrap_or_default()
 }

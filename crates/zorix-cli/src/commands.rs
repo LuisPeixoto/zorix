@@ -35,6 +35,10 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Models(args) => crate::providers::models(&home, printer, args).await,
         Command::Provider(command) => crate::providers::provider(&home, printer, command).await,
         Command::Route(command) => crate::providers::route(&home, printer, command),
+        Command::Memory(command) => crate::memory::memory(&home, &tenant, printer, command).await,
+        Command::Knowledge(command) => crate::memory::knowledge(&home, &tenant, printer, command).await,
+        Command::Embeddings(command) => crate::memory::embeddings(&home, &tenant, printer, command).await,
+        Command::Calibration => crate::memory::calibration(&home, printer),
         Command::DataDir => {
             println!("{}", home.display());
             Ok(Exit::Done)
@@ -100,7 +104,12 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         grants: grants_from(&args),
         workspace,
         idempotency_key: args.idempotency_key.clone(),
-        memory: zorix_core::MemoryOptions::default(),
+        memory: zorix_core::MemoryOptions {
+            conversation: !args.no_conversation,
+            long_term: !args.no_memory,
+            knowledge: if args.no_knowledge { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
+            operations: if args.no_memory { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
+        },
     };
     let engine = &app.engine;
     let created = engine.create(new).await?;
@@ -111,7 +120,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     }
     let mode = args.approve.unwrap_or_else(default_mode);
     let exit = follow(engine, &tenant, created.id, stream, mode, printer).await;
-    engine.shutdown().await;
+    app.shutdown().await;
     exit
 }
 
@@ -150,10 +159,11 @@ async fn show(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> R
     let detail = detail_of(&repository, tenant, arg.id).await?;
     let events = repository.events(arg.id, 0, 100_000).await?;
     let summary = summarize(&detail, &events);
+    let context = if arg.context { Some(crate::memory::context_of(home, arg.id, &events).await?) } else { None };
     if printer.json {
         println!(
             "{}",
-            serde_json::json!({ "summary": summary, "execution": detail.execution, "approvals": detail.approvals })
+            serde_json::json!({ "summary": summary, "execution": detail.execution, "approvals": detail.approvals, "context": context })
         );
         return Ok(Exit::Done);
     }
@@ -191,6 +201,9 @@ async fn show(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> R
     }
     if let Some(result) = &e.result {
         println!("\n{}", result.text);
+    }
+    if let Some(context) = &context {
+        crate::memory::print_context(context);
     }
     Ok(Exit::Done)
 }
@@ -233,7 +246,7 @@ async fn decide(
     let engine = &app.engine;
     let detail = engine.detail(&tenant, args.id).await?;
     if detail.execution.state != ExecutionState::WaitingForApproval {
-        engine.shutdown().await;
+        app.shutdown().await;
         return Err(CliError(format!(
             "Execution {} is {}, not waiting for an approval.",
             args.id, detail.execution.state
@@ -246,7 +259,7 @@ async fn decide(
         (None, _) => None,
     };
     let Some(approval) = chosen else {
-        engine.shutdown().await;
+        app.shutdown().await;
         let ids: Vec<String> = pending.iter().map(|a| a.id.to_string()).collect();
         return Err(CliError(format!("Say which approval to answer. Pending: {}", ids.join(", "))));
     };
@@ -267,14 +280,14 @@ async fn decide(
     };
     engine.decide(&tenant, args.id, approval.id, decision).await?;
     let exit = follow(engine, &tenant, args.id, stream, args.then, printer).await;
-    engine.shutdown().await;
+    app.shutdown().await;
     exit
 }
 
 async fn cancel(home: &Path, tenant: TenantId, printer: Printer, args: CancelArgs) -> Result<Exit, CliError> {
     let app = open_engine(home, &ModelArgs::default_demo())?;
     let result = app.engine.cancel(&tenant, args.id, args.reason.clone()).await;
-    app.engine.shutdown().await;
+    app.shutdown().await;
     let execution = result?;
     if printer.json {
         println!("{}", serde_json::to_string(&execution)?);
@@ -291,7 +304,7 @@ async fn resume(home: &Path, tenant: TenantId, printer: Printer, args: ResumeArg
     let stream = engine.subscribe(&tenant, args.id, after).await?;
     engine.resume(&tenant, args.id).await?;
     let exit = follow(engine, &tenant, args.id, stream, args.then, printer).await;
-    engine.shutdown().await;
+    app.shutdown().await;
     exit
 }
 
@@ -336,7 +349,7 @@ async fn recover(home: &Path, tenant: TenantId, printer: Printer, args: RecoverA
             }
         }
     }
-    engine.shutdown().await;
+    app.shutdown().await;
     Ok(worst)
 }
 
