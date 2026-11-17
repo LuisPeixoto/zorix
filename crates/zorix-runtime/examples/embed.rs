@@ -81,6 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         decided_by: "you".into(),
         note: None,
         call_hash: Some(approval.call_hash.clone()),
+        automatic: false,
     };
     engine.decide(&tenant, started.id, approval.id, decision).await?;
 

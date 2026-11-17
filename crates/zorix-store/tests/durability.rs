@@ -176,6 +176,7 @@ async fn a_whole_run_with_an_approval_is_stored_and_can_be_read_back_by_another_
         decided_by: "tester".into(),
         note: None,
         call_hash: Some(approvals[0].call_hash.clone()),
+        automatic: false,
     };
     engine.decide(&local(), waiting.id, approvals[0].id, decision).await.unwrap();
     let done =

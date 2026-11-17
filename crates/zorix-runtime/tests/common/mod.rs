@@ -210,6 +210,7 @@ pub async fn answer(engine: &Engine, id: ExecutionId, approve: bool, note: Optio
         decided_by: "tester".into(),
         note: note.map(str::to_string),
         call_hash: Some(approval.call_hash.clone()),
+        automatic: false,
     };
     engine.decide(&local(), id, approval.id, decision).await.expect("decide")
 }

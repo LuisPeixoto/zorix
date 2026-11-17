@@ -540,6 +540,15 @@ impl ExecutionEngine for Engine {
         if decision.call_hash.as_ref().is_some_and(|hash| *hash != pending.call_hash) {
             return Err(Error::InvalidInput("The answer was given for a different call than the one waiting.".into()));
         }
+        if decision.approve
+            && decision.automatic
+            && self.inner.tools.get(&pending.tool).is_some_and(|tool| tool.spec().approval_by_person_only)
+        {
+            return Err(Error::InvalidInput(format!(
+                "{} must be approved by a person who has seen it; an automatic mode cannot approve it.",
+                pending.tool
+            )));
+        }
         let decided = self
             .update(id, |execution, now| {
                 execution.apply(Trigger::ApprovalResolved, now)?;

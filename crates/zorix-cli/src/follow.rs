@@ -115,7 +115,14 @@ pub async fn follow(
                         let payload = &event.payload;
                         let approval: Option<ApprovalId> = payload["approval_id"].as_str().and_then(|t| t.parse().ok());
                         let Some(approval) = approval else { continue };
+                        // A call that changes what ZORIX remembers is never answered by an automatic mode.
+                        let person_only = payload["person_only"].as_bool().unwrap_or(false);
                         let approve = match mode {
+                            ApproveMode::Yes if person_only => {
+                                eprintln!("This call must be approved by a person, so --approve yes leaves it waiting.");
+                                hint_for_pending(id, payload);
+                                return finish(engine, tenant, id, printer).await;
+                            }
                             ApproveMode::Never => {
                                 hint_for_pending(id, payload);
                                 return finish(engine, tenant, id, printer).await;
@@ -132,6 +139,7 @@ pub async fn follow(
                             decided_by: if mode == ApproveMode::Ask { decider() } else { "cli:auto".into() },
                             note: None,
                             call_hash: payload["call_hash"].as_str().map(str::to_string),
+                            automatic: mode != ApproveMode::Ask,
                         };
                         engine.decide(tenant, id, approval, decision).await?;
                     }
