@@ -1,6 +1,7 @@
 //! Tauri shell: starts the engine and exposes it to the interface as commands. It holds no rules of its own.
 
 mod commands;
+mod memory_commands;
 mod state;
 
 use tauri::{Manager, RunEvent};
@@ -37,6 +38,12 @@ pub fn run() {
             commands::remove_provider_key,
             commands::test_provider,
             commands::list_models,
+            memory_commands::list_memory,
+            memory_commands::add_memory,
+            memory_commands::update_memory,
+            memory_commands::memory_usage,
+            memory_commands::forget_memory,
+            memory_commands::run_context,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the ZORIX app");

@@ -91,6 +91,21 @@ pub struct StartRun {
     /// `provider/model`, `route:name`, an alias or `demo`. Empty means the default.
     #[serde(default)]
     model: Option<String>,
+    /// The conversation this run continues. Left out: a new conversation is started.
+    #[serde(default)]
+    conversation: Option<String>,
+    /// What the run may use from memory. Left out: everything.
+    #[serde(default)]
+    memory: Option<MemoryChoice>,
+}
+
+/// The switches of the New run form.
+#[derive(Deserialize)]
+pub struct MemoryChoice {
+    conversation: bool,
+    long_term: bool,
+    knowledge: bool,
+    operations: bool,
 }
 
 /// The model reference for a new run: what was chosen, else the default when there is one, else the simulated model.
@@ -141,6 +156,21 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
         limits,
         grants,
         workspace,
+        // The desktop always has a conversation, so "Continue" can pick it up.
+        conversation: Some(match request.conversation.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            Some(id) => zorix_core::ConversationId::new(id).map_err(|e| e.to_string())?,
+            None => zorix_core::ConversationId::new(format!("chat-{}", &ExecutionId::new().to_string()[24..]))
+                .map_err(|e| e.to_string())?,
+        }),
+        memory: match request.memory {
+            Some(m) => zorix_core::MemoryOptions {
+                conversation: m.conversation,
+                long_term: m.long_term,
+                knowledge: if m.knowledge { zorix_core::RecallMode::Auto } else { zorix_core::RecallMode::Off },
+                operations: if m.operations { zorix_core::RecallMode::Auto } else { zorix_core::RecallMode::Off },
+            },
+            None => zorix_core::MemoryOptions::default(),
+        },
         ..NewExecution::default()
     };
     let created = services.engine.create(new).await.map_err(|e| e.to_string())?;
