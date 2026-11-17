@@ -18,6 +18,7 @@ pub struct MemoryStack {
     clock: Arc<dyn Clock>,
     recall: Arc<Recall>,
     embedder: Option<Arc<Embedder>>,
+    recorder: parking_lot::Mutex<Option<Arc<crate::ops::OperationRecorder>>>,
 }
 
 impl MemoryStack {
@@ -43,7 +44,7 @@ impl MemoryStack {
         let retriever =
             Retriever::new(store.clone(), repository.clone(), embedder.clone(), clock.clone()).with_shares(shares);
         let recall = Arc::new(Recall::new(store.clone(), retriever, clock.clone()));
-        Self { store, repository, clock, recall, embedder }
+        Self { store, repository, clock, recall, embedder, recorder: parking_lot::Mutex::new(None) }
     }
 
     /// The store.
@@ -81,8 +82,21 @@ impl MemoryStack {
         self.tools().register(registry)
     }
 
-    /// Put memory into an engine: its context builder.
+    /// Put memory into an engine: its context builder, and the recorder that keeps a record of every execution that ends.
+    /// Call it inside a Tokio runtime (the recorder starts a background task).
     pub fn install(&self, builder: EngineBuilder) -> EngineBuilder {
-        builder.context(Arc::new(self.context_builder()))
+        let recorder =
+            crate::ops::OperationRecorder::start(self.store.clone(), self.repository.clone(), self.embedder.clone());
+        *self.recorder.lock() = Some(recorder.clone());
+        builder.context(Arc::new(self.context_builder())).publisher(recorder)
+    }
+
+    /// Write the records of finished executions that have none. Returns how many were written.
+    pub async fn backfill_operations(&self) -> zorix_core::Result<usize> {
+        let recorder = self.recorder.lock().clone();
+        match recorder {
+            Some(recorder) => recorder.backfill(200).await,
+            None => Ok(0),
+        }
     }
 }

@@ -7,6 +7,7 @@
 pub mod doc;
 pub mod embedder;
 pub mod fusion;
+pub mod ops;
 pub mod recall;
 pub mod retrieve;
 pub mod sources;
@@ -30,6 +31,7 @@ pub type Result<T, E = MemoryError> = std::result::Result<T, E>;
 
 pub use doc::{ItemKind, RecallDoc, RecallItem};
 pub use embedder::Embedder;
+pub use ops::OperationRecorder;
 pub use recall::Recall;
 pub use sources::{ConversationSource, KnowledgeSource, LongTermSource, OperationsSource};
 pub use stack::MemoryStack;

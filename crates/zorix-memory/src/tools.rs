@@ -8,9 +8,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use zorix_core::{
-    ApprovalStatus, Clock, ExecutionRepository, MemoryFilter, MemoryId, MemoryKind, MemoryOrigin, MemoryStore,
-    NewMemory, Remembered, Scope, Timestamp, Tool, ToolAnnotations, ToolCallStatus, ToolContext, ToolError,
-    ToolRegistry, ToolSpec, Visibility, redact_text,
+    ApprovalStatus, Clock, ExecutionId, ExecutionRepository, MemoryFilter, MemoryId, MemoryKind, MemoryOrigin,
+    MemoryStore, NewMemory, Remembered, Scope, Timestamp, Tool, ToolAnnotations, ToolCallStatus, ToolContext,
+    ToolError, ToolRegistry, ToolSpec, Visibility, redact_text,
 };
 
 use crate::embedder::Embedder;
@@ -85,6 +85,7 @@ impl MemoryTools {
         vec![
             Arc::new(Remember { tools: self.shared() }),
             Arc::new(Search { tools: self.shared(), spec: search_spec() }),
+            Arc::new(History { tools: self.shared(), spec: history_spec() }),
         ]
     }
 
@@ -329,6 +330,72 @@ impl Tool for Search {
             })
             .collect();
         Ok(json!({"results": results, "count": results.len(), "note": degraded}))
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct History {
+    tools: Shared,
+    spec: ToolSpec,
+}
+
+fn history_spec() -> ToolSpec {
+    let mut spec = ToolSpec::new(
+        "history.search",
+        "Search past work",
+        "Search records of what was done in earlier executions of this project (what was asked, what happened, which tools ran, \
+         who approved what). Use it to avoid repeating work or to learn what was decided before.",
+        json!({
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "minLength": 1, "maxLength": 500},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10}
+            },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    );
+    spec.annotations = ToolAnnotations::safe_read();
+    spec
+}
+
+#[async_trait]
+impl Tool for History {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+
+    async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
+        let t = &self.tools;
+        let vis = visibility(ctx);
+        let limit = args["limit"].as_u64().unwrap_or(5).clamp(1, MAX_RESULTS as u64) as usize;
+        let query = args["query"].as_str().unwrap_or("").trim().to_string();
+        if query.is_empty() {
+            return Err(failed("Say what to look for."));
+        }
+        let found = hybrid_search(&*t.store, t.embedder.as_deref(), &vis, zorix_core::Corpus::Operations, &query)
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        let mut results = Vec::new();
+        for hit in found.hits.iter().take(limit + 1) {
+            let Ok(id) = hit.id.parse::<ExecutionId>() else { continue };
+            if id == ctx.execution_id {
+                continue;
+            }
+            if let Ok(Some(record)) = t.store.operation(&ctx.tenant, id).await {
+                results.push(json!({
+                    "execution": id.to_string(),
+                    "state": record.state,
+                    "finished": date(record.finished_at),
+                    "summary": cut(&record.text, 600),
+                }));
+            }
+            if results.len() == limit {
+                break;
+            }
+        }
+        Ok(json!({"results": results, "count": results.len(), "note": found.degraded}))
     }
 }
 

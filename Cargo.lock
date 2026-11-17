@@ -6320,6 +6320,7 @@ dependencies = [
  "zorix-runtime",
  "zorix-sim",
  "zorix-store",
+ "zorix-tools",
 ]
 
 [[package]]
