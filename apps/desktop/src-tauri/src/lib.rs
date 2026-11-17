@@ -1,6 +1,7 @@
 //! Tauri shell: starts the engine and exposes it to the interface as commands. It holds no rules of its own.
 
 mod commands;
+mod knowledge_commands;
 mod memory_commands;
 mod state;
 
@@ -19,6 +20,9 @@ pub fn run() {
             // The engine starts workers on the async runtime, so it must be created inside it.
             let state = tauri::async_runtime::block_on(AppState::start());
             app.manage(state);
+            // Folders marked "check at start" are brought up to date in the background.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { crate::knowledge_commands::sync_at_start(handle).await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -44,6 +48,20 @@ pub fn run() {
             memory_commands::memory_usage,
             memory_commands::forget_memory,
             memory_commands::run_context,
+            knowledge_commands::list_roots,
+            knowledge_commands::add_root,
+            knowledge_commands::sync_root,
+            knowledge_commands::cancel_sync,
+            knowledge_commands::remove_root,
+            knowledge_commands::root_files,
+            knowledge_commands::try_query,
+            knowledge_commands::embeddings_info,
+            knowledge_commands::embedding_models,
+            knowledge_commands::set_embeddings,
+            knowledge_commands::embeddings_off,
+            knowledge_commands::test_embeddings,
+            knowledge_commands::reembed,
+            knowledge_commands::reembedding,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the ZORIX app");
