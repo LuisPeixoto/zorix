@@ -37,6 +37,11 @@ fn env(turns: Vec<Turn>) -> Env {
     Env { _dir: dir, store, engine, model }
 }
 
+/// An absolute path that exists on no machine and is valid on every system ("/work/one" is not absolute on Windows).
+fn project_path(name: &str) -> String {
+    std::env::temp_dir().join("zorix-work").join(name).to_string_lossy().into_owned()
+}
+
 fn new_run(prompt: &str, conversation: Option<&str>, workspace: Option<&str>) -> NewExecution {
     NewExecution {
         conversation: conversation.map(|c| ConversationId::new(c).unwrap()),
@@ -209,28 +214,28 @@ async fn scopes_need_what_they_name_and_stay_where_they_were_put() {
     decide(&env.engine, no_project.id, true, false).await.unwrap();
     settle(&env.engine, no_project.id).await;
     // No conversation: same for a conversation memory.
-    let no_chat = start(&env, new_run("two", None, Some("/work/one"))).await;
+    let no_chat = start(&env, new_run("two", None, Some(project_path("one").as_str()))).await;
     decide(&env.engine, no_chat.id, true, false).await.unwrap();
     settle(&env.engine, no_chat.id).await;
     assert!(facts(&env).await.is_empty());
     // With both, they are stored and are visible only to their own project and conversation.
-    let run = start(&env, new_run("three", Some("chat-a"), Some("/work/one"))).await;
+    let run = start(&env, new_run("three", Some("chat-a"), Some(project_path("one").as_str()))).await;
     decide(&env.engine, run.id, true, false).await.unwrap();
     settle(&env.engine, run.id).await;
-    let run = start(&env, new_run("four", Some("chat-a"), Some("/work/one"))).await;
+    let run = start(&env, new_run("four", Some("chat-a"), Some(project_path("one").as_str()))).await;
     decide(&env.engine, run.id, true, false).await.unwrap();
     settle(&env.engine, run.id).await;
     assert_eq!(facts(&env).await.len(), 0, "global visibility alone sees neither");
     let both = Visibility {
         tenant: TenantId::local(),
-        project: Some("/work/one".into()),
+        project: Some(project_path("one")),
         conversation: Some(ConversationId::new("chat-a").unwrap()),
     };
     let seen = env.store.list_memory(&both, &MemoryFilter::default(), Timestamp(i64::MAX / 2)).await.unwrap();
     let mut contents: Vec<&str> = seen.iter().map(|i| i.content.as_str()).collect();
     contents.sort();
     assert_eq!(contents, ["Chat fact.", "Project fact."]);
-    let other_project = Visibility { project: Some("/work/two".into()), ..both.clone() };
+    let other_project = Visibility { project: Some(project_path("two")), ..both.clone() };
     assert_eq!(
         env.store.list_memory(&other_project, &MemoryFilter::default(), Timestamp(i64::MAX / 2)).await.unwrap().len(),
         1,

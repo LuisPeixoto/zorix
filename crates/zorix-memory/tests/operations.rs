@@ -44,6 +44,11 @@ fn env(turns: Vec<Turn>) -> Env {
     Env { _dir: dir, repository, store, engine, model }
 }
 
+/// An absolute path that exists on no machine and is valid on every system ("/work/one" is not absolute on Windows).
+fn project_path(name: &str) -> String {
+    std::env::temp_dir().join("zorix-work").join(name).to_string_lossy().into_owned()
+}
+
 fn new_run(prompt: &str, workspace: Option<&str>, conversation: Option<&str>) -> NewExecution {
     NewExecution {
         conversation: conversation.map(|c| ConversationId::new(c).unwrap()),
@@ -89,12 +94,16 @@ async fn a_finished_execution_is_recorded_with_its_tools_and_found_by_later_work
     ]);
     let first = run(
         &env,
-        new_run("Calculate seventeen times twenty three for the invoice total", Some("/work/one"), Some("chat-a")),
+        new_run(
+            "Calculate seventeen times twenty three for the invoice total",
+            Some(project_path("one").as_str()),
+            Some("chat-a"),
+        ),
     )
     .await;
     assert_eq!(first.state, S::Completed);
     let record = recorded(&env, first.id).await;
-    assert_eq!((record.state.as_str(), record.project.as_deref()), ("completed", Some("/work/one")));
+    assert_eq!((record.state.as_str(), record.project.as_deref()), ("completed", Some(project_path("one").as_str())));
     assert!(
         record.text.contains("invoice total")
             && record.text.contains("It is 391.")
@@ -103,7 +112,11 @@ async fn a_finished_execution_is_recorded_with_its_tools_and_found_by_later_work
         record.text
     );
     // A later execution of the same project, in another conversation, is told about it as past work.
-    let second = run(&env, new_run("What was the invoice total calculation?", Some("/work/one"), Some("chat-b"))).await;
+    let second = run(
+        &env,
+        new_run("What was the invoice total calculation?", Some(project_path("one").as_str()), Some("chat-b")),
+    )
+    .await;
     assert_eq!(second.state, S::Completed);
     let seen = &env.model.requests()[2];
     let work = seen.messages.iter().find(|m| m.content.starts_with("<past_work")).expect("past work in the context");
@@ -115,7 +128,7 @@ async fn a_finished_execution_is_recorded_with_its_tools_and_found_by_later_work
     // Another project does not see it.
     assert!(
         env.store
-            .text_search(&vis(Some("/work/two")), Corpus::Operations, &["invoice".into()], 5)
+            .text_search(&vis(Some(project_path("two").as_str())), Corpus::Operations, &["invoice".into()], 5)
             .await
             .unwrap()
             .is_empty()
@@ -235,11 +248,16 @@ async fn history_search_returns_past_work_of_this_project_only() {
         Turn::call("history.search", json!({"query": "staging credentials"})),
         Turn::Say("found it".into()),
     ]);
-    let a = run(&env, new_run("Rotate the staging credentials for the deploy", Some("/work/one"), None)).await;
+    let a =
+        run(&env, new_run("Rotate the staging credentials for the deploy", Some(project_path("one").as_str()), None))
+            .await;
     recorded(&env, a.id).await;
-    let b = run(&env, new_run("Update the production dashboards for the deploy", Some("/work/two"), None)).await;
+    let b =
+        run(&env, new_run("Update the production dashboards for the deploy", Some(project_path("two").as_str()), None))
+            .await;
     recorded(&env, b.id).await;
-    let asking = run(&env, new_run("Did we rotate the staging credentials?", Some("/work/one"), None)).await;
+    let asking =
+        run(&env, new_run("Did we rotate the staging credentials?", Some(project_path("one").as_str()), None)).await;
     assert_eq!(asking.state, S::Completed);
     let result = env
         .model
