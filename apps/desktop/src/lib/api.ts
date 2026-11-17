@@ -31,6 +31,7 @@ export interface Execution {
   tool_calls_requested: number;
   active_ms: number;
   usage: Usage;
+  conversation?: string | null;
   result: { text: string; structured: unknown } | null;
   failure: { kind: string; message: string; limit: string | null } | null;
   cancel_reason: string | null;
@@ -117,6 +118,70 @@ export interface StartRun {
   max_iterations?: number;
   /** `provider/model`, `route:name`, an alias or `demo`. Left out: the default. */
   model?: string;
+  /** Continue this conversation. Left out: a new one starts. */
+  conversation?: string;
+  /** What the run may use from memory. Left out: everything. */
+  memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
+}
+
+export interface MemoryRow {
+  id: string;
+  kind: "fact" | "preference";
+  /** `global`, `project:<folder>` or `conversation:<id>`. */
+  scope: string;
+  scope_label: string;
+  subject: string | null;
+  content: string;
+  status: "active" | "replaced" | "expired";
+  replaced_by: string | null;
+  by: string;
+  proposed_in: string | null;
+  created_at: number;
+  confirmed_at: number;
+  valid_until: number | null;
+  stale_days: number | null;
+  use_count: number;
+}
+
+export interface NewFact {
+  content: string;
+  kind: "fact" | "preference";
+  scope: string;
+  subject?: string;
+  valid_until?: string;
+}
+
+export interface MemoryChange {
+  id: string;
+  content?: string;
+  subject?: string;
+  clear_subject?: boolean;
+  valid_until?: string;
+  clear_valid_until?: boolean;
+  scope?: string;
+  confirm?: boolean;
+}
+
+export interface RecallItem {
+  id: string;
+  kind: "fact" | "exchange" | "chunk" | "past_work";
+  text: string;
+  label: string;
+  score: number;
+  found_by: string[];
+  tokens: number;
+}
+
+export interface RunContext {
+  recall: {
+    query: string;
+    degraded: string | null;
+    embedding_model: string | null;
+    scrubbed: boolean;
+    items: RecallItem[];
+  } | null;
+  segments: { origin: string; tokens: number; kept: boolean }[] | null;
+  token_factor: number | null;
 }
 
 export interface ProviderRow {
@@ -147,6 +212,12 @@ export interface ModelChoices {
   default: { Ok: string } | { Err: string };
 }
 
+export const listMemory = (includeInactive: boolean) => invoke<MemoryRow[]>("list_memory", { includeInactive });
+export const addMemory = (fact: NewFact) => invoke<string>("add_memory", { fact });
+export const updateMemory = (change: MemoryChange) => invoke<MemoryRow>("update_memory", { change });
+export const memoryUsage = (id: string) => invoke<string[]>("memory_usage", { id });
+export const forgetMemory = (id: string) => invoke<boolean>("forget_memory", { id });
+export const runContext = (id: string) => invoke<RunContext>("run_context", { id });
 export const listProviders = () => invoke<ProviderRow[]>("list_providers");
 export const listModels = () => invoke<ModelChoices>("list_models");
 /** The key goes straight to the system keychain on the Rust side; nothing keeps it here. */

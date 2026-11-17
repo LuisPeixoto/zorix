@@ -7,10 +7,11 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ExecutionId, TenantId};
+use zorix_memory::MemoryStack;
 use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::DemoModel;
-use zorix_store::{DataDirLock, SqliteRepository, database_path};
+use zorix_store::{DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path};
 use zorix_tools::{BuiltinConfig, register_builtin};
 
 /// The running engine.
@@ -25,6 +26,12 @@ pub struct Services {
     pub secrets: Arc<dyn SecretStore>,
     /// The providers configuration read at start.
     pub config: ProvidersConfig,
+    /// Memory: tools, context sources, the recorder and the indexer.
+    pub memory: Arc<MemoryStack>,
+    /// Where memory is kept.
+    pub memory_store: Arc<SqliteMemoryStore>,
+    /// Knowledge syncs that are running, so they can be cancelled.
+    pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
     _lock: DataDirLock,
 }
 
@@ -75,7 +82,11 @@ impl AppState {
             token.cancel();
         }
         if let Ok(services) = &self.services {
+            for (_, token) in services.syncs.lock().drain() {
+                token.cancel();
+            }
             services.engine.shutdown().await;
+            let _ = services.memory.backfill_operations().await;
         }
     }
 }
@@ -91,7 +102,25 @@ async fn open(home: &Path) -> Result<Services, String> {
     let keychain = std::env::var("ZORIX_SECRETS").map(|v| v != "env").unwrap_or(true);
     let secrets = secrets_with(&providers, keychain);
     let router = Arc::new(build_router(&providers, secrets.clone(), Some(Arc::new(DemoModel::new())), false)?);
-    let engine = Engine::builder(repository, router.clone()).tools(registry).config(config).build();
+    let database = database_path(home);
+    let memory_store = Arc::new(SqliteMemoryStore::open(&database).map_err(|e| e.to_string())?);
+    let gateway: Arc<dyn zorix_core::ModelGateway> = router.clone();
+    let memory = Arc::new(MemoryStack::new(memory_store.clone(), repository.clone(), Some(gateway.clone())));
+    memory.register_tools(&*registry).map_err(|e| e.to_string())?;
+    let calibration = Arc::new(SqliteCalibration::open(&database).map_err(|e| e.to_string())?);
+    let engine = memory
+        .install(Engine::builder(repository, gateway).tools(registry).calibration(calibration.clone()).config(config))
+        .build();
+    {
+        // What was recorded before this version, or while a queue was full, is caught up in the background.
+        let background = memory.clone();
+        tokio::spawn(async move {
+            let _ = background.backfill_operations().await;
+        });
+        tokio::task::spawn_blocking(move || {
+            let _ = calibration.backfill();
+        });
+    }
     match engine.recover().await {
         Ok(report) if !report.requeued.is_empty() || !report.needs_decision.is_empty() => {
             tracing::info!(requeued = report.requeued.len(), needs_decision = report.needs_decision.len(), "recovered");
@@ -99,5 +128,15 @@ async fn open(home: &Path) -> Result<Services, String> {
         Ok(_) => {}
         Err(error) => tracing::warn!(%error, "recovery failed"),
     }
-    Ok(Services { engine, tenant: TenantId::local(), router, secrets, config: providers, _lock: lock })
+    Ok(Services {
+        engine,
+        tenant: TenantId::local(),
+        router,
+        secrets,
+        config: providers,
+        memory,
+        memory_store,
+        syncs: Mutex::new(HashMap::new()),
+        _lock: lock,
+    })
 }

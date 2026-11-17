@@ -8,7 +8,7 @@
 
 <aside class="flex w-64 shrink-0 flex-col border-r border-line bg-panel-2">
   <div class="p-3">
-    <Button variant="primary" icon="plus" class="w-full" onclick={() => { store.showRuns(); store.showForm(); }}>New run</Button>
+    <Button variant="primary" icon="plus" class="w-full" onclick={() => { store.continuing = null; store.showRuns(); store.showForm(); }}>New run</Button>
   </div>
 
   <p class="px-5 pt-2 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Runs</p>
@@ -31,6 +31,7 @@
   </nav>
 
   <div class="border-t border-line px-2 py-2">
+    <NavItem icon="book" active={store.view === "memory"} onclick={() => store.showMemory()}>Memory</NavItem>
     <NavItem icon="key" active={store.view === "providers"} onclick={() => store.showProviders()}>Providers &amp; keys</NavItem>
     {#if import.meta.env.DEV}
       <NavItem icon="layers" active={store.view === "design"} onclick={() => store.showDesign()}>Design system</NavItem>

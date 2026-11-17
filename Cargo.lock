@@ -6646,6 +6646,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zorix-core",
+ "zorix-memory",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sim",

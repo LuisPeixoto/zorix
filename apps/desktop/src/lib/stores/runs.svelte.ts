@@ -6,12 +6,19 @@ import {
   type ProviderRow,
   type Execution,
   type RunDetail,
+  type MemoryChange,
+  type MemoryRow,
+  type NewFact,
+  type RunContext,
   type StartRun,
   type ToolSpec,
+  addMemory,
   appInfo,
   cancelRun,
   decideRun,
   errorText,
+  forgetMemory,
+  listMemory,
   listModels,
   listProviders,
   listRuns,
@@ -19,7 +26,9 @@ import {
   pauseRun,
   removeProviderKey,
   resumeRun,
+  runContext,
   runDetail,
+  updateMemory,
   setProviderKey,
   startRun,
   stopWatch,
@@ -38,7 +47,11 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
-  view = $state<"runs" | "providers" | "design">("runs");
+  view = $state<"runs" | "providers" | "memory" | "design">("runs");
+  memory = $state<MemoryRow[]>([]);
+  /** A conversation the New run form should continue, set by the Continue button. */
+  continuing = $state<{ id: string; prompt: string } | null>(null);
+  context = $state<RunContext | null>(null);
   providers = $state<ProviderRow[]>([]);
   models = $state<ModelChoices | null>(null);
   now = $state(Date.now());
@@ -76,6 +89,58 @@ class RunsStore {
   showProviders(): void {
     this.view = "providers";
     void this.refreshProviders();
+  }
+
+  showMemory(): void {
+    this.view = "memory";
+    void this.refreshMemory(true);
+  }
+
+  async refreshMemory(includeInactive: boolean): Promise<void> {
+    try {
+      this.memory = await listMemory(includeInactive);
+    } catch (e) {
+      this.error = errorText(e);
+    }
+  }
+
+  async addFact(fact: NewFact, includeInactive: boolean): Promise<boolean> {
+    let message = "";
+    const ok = await this.#act(async () => {
+      message = await addMemory(fact);
+    });
+    if (ok) toast.ok(message);
+    await this.refreshMemory(includeInactive);
+    return ok;
+  }
+
+  async changeFact(change: MemoryChange, includeInactive: boolean): Promise<boolean> {
+    const ok = await this.#act(() => updateMemory(change));
+    await this.refreshMemory(includeInactive);
+    return ok;
+  }
+
+  async deleteFact(id: string, includeInactive: boolean): Promise<void> {
+    const ok = await this.#act(() => forgetMemory(id));
+    if (ok) toast.ok("Forgotten.");
+    await this.refreshMemory(includeInactive);
+  }
+
+  /** Start a new run in the conversation of the run on screen. */
+  continueConversation(): void {
+    const run = this.detail?.execution;
+    if (!run?.conversation) return;
+    this.continuing = { id: run.conversation, prompt: run.request.prompt };
+    this.showForm();
+  }
+
+  async loadContext(id: string): Promise<void> {
+    try {
+      const context = await runContext(id);
+      if (this.selectedId === id) this.context = context;
+    } catch (e) {
+      this.error = errorText(e);
+    }
   }
 
   showDesign(): void {
@@ -133,7 +198,9 @@ class RunsStore {
     this.detail = null;
     this.events = [];
     this.error = null;
+    this.context = null;
     await this.#loadDetail(id);
+    void this.loadContext(id);
     void watchRun(id, 0, (event) => {
       if (this.selectedId !== id) return;
       if (!this.events.some((e) => e.seq === event.seq)) this.events = [...this.events, event];
@@ -180,6 +247,7 @@ class RunsStore {
       created = await startRun(request);
     });
     if (ok && created) {
+      this.continuing = null;
       await this.refreshList();
       await this.select((created as Execution).id);
     }
