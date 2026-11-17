@@ -1,5 +1,6 @@
 // The only file that talks to the Rust side. Types mirror what the engine sends (serde JSON).
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 
 export type ExecutionState =
   | "created"
@@ -218,6 +219,121 @@ export const updateMemory = (change: MemoryChange) => invoke<MemoryRow>("update_
 export const memoryUsage = (id: string) => invoke<string[]>("memory_usage", { id });
 export const forgetMemory = (id: string) => invoke<boolean>("forget_memory", { id });
 export const runContext = (id: string) => invoke<RunContext>("run_context", { id });
+export interface SyncCounts {
+  scanned: number;
+  indexed: number;
+  unchanged: number;
+  skipped: number;
+  failed: number;
+  removed: number;
+  chunks: number;
+  embedded: number;
+  cancelled: boolean;
+  degraded: string | null;
+  too_many_files: boolean;
+}
+
+export interface RootRow {
+  id: string;
+  path: string;
+  scope: string;
+  enabled: boolean;
+  auto_sync: boolean;
+  include: string[];
+  exclude: string[];
+  last_sync_at: number | null;
+  last_sync: SyncCounts | null;
+  indexed: number;
+  skipped: number;
+  failed: number;
+  syncing: boolean;
+}
+
+export interface NewRoot {
+  path: string;
+  project?: string;
+  include?: string[];
+  exclude?: string[];
+  auto_sync?: boolean;
+}
+
+export interface FileRow {
+  file: string;
+  status: "indexed" | "failed" | "skipped";
+  reason: string | null;
+}
+
+export interface Hit {
+  title: string;
+  text: string;
+  keyword_rank: number | null;
+  vector_rank: number | null;
+  cosine: number | null;
+  execution: string | null;
+  state: string | null;
+}
+
+export interface Found {
+  hits: Hit[];
+  degraded: string | null;
+}
+
+export interface EmbeddingsState {
+  model: string | null;
+  dimensions: number | null;
+  allow_cloud: boolean;
+  embedded: number;
+  texts: number;
+}
+
+export interface EmbeddingModel {
+  reference: string;
+  dimensions: number | null;
+  local: boolean;
+  installed: boolean;
+}
+
+export interface SyncProgress {
+  root: string;
+  progress: { phase: "scanning" | "indexing" | "embedding" | "done"; done: number; total: number; file: string | null; errors: number };
+}
+
+export interface SyncDone {
+  root: string;
+  report: SyncCounts | null;
+  error: string | null;
+}
+
+export const listRoots = () => invoke<RootRow[]>("list_roots");
+export const addRoot = (root: NewRoot) => invoke<RootRow>("add_root", { root });
+export const syncRoot = (id: string) => invoke<boolean>("sync_root", { id });
+export const cancelSync = (id: string) => invoke<void>("cancel_sync", { id });
+export const removeRoot = (id: string) => invoke<boolean>("remove_root", { id });
+export const rootFiles = (id: string, problemsOnly: boolean) => invoke<FileRow[]>("root_files", { id, problemsOnly });
+export const tryQuery = (query: string, corpus: "knowledge" | "history", project?: string) =>
+  invoke<Found>("try_query", { query, corpus, project });
+export const embeddingsInfo = () => invoke<EmbeddingsState>("embeddings_info");
+export const embeddingModels = () => invoke<[EmbeddingModel[], string[]]>("embedding_models");
+export const setEmbeddings = (model: string, dimensions: number | undefined, cloud: boolean) =>
+  invoke<number>("set_embeddings", { model, dimensions, cloud });
+export const embeddingsOff = () => invoke<void>("embeddings_off");
+export const testEmbeddings = () => invoke<[number, number]>("test_embeddings");
+export const reembed = () => invoke<boolean>("reembed");
+export const reembedding = () => invoke<boolean>("reembedding");
+
+/** Follow the background jobs of the knowledge index. Returns a function that stops listening. */
+export async function onKnowledge(handlers: {
+  progress?: (p: SyncProgress) => void;
+  done?: (d: SyncDone) => void;
+  embedded?: (d: { facts: number; error: string | null }) => void;
+}): Promise<() => void> {
+  const stops: UnlistenFn[] = [];
+  if (handlers.progress) stops.push(await listen<SyncProgress>("knowledge://progress", (e) => handlers.progress?.(e.payload)));
+  if (handlers.done) stops.push(await listen<SyncDone>("knowledge://done", (e) => handlers.done?.(e.payload)));
+  if (handlers.embedded) stops.push(await listen<{ facts: number; error: string | null }>("knowledge://embedded", (e) => handlers.embedded?.(e.payload)));
+  return () => stops.forEach((stop) => stop());
+}
+
 export const listProviders = () => invoke<ProviderRow[]>("list_providers");
 export const listModels = () => invoke<ModelChoices>("list_models");
 /** The key goes straight to the system keychain on the Rust side; nothing keeps it here. */

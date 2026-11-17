@@ -1,5 +1,6 @@
 <script lang="ts">
   import { keyLabel, keyTone } from "../format.ts";
+  import Embeddings from "./Embeddings.svelte";
   import { store } from "../stores/runs.svelte.ts";
   import { Badge, Button, Callout, Card, Icon, Input, Modal, PageHeader } from "../ui/index.ts";
 
@@ -80,6 +81,8 @@
       </Card>
     {/each}
   </div>
+
+  <Embeddings />
 
   <p class="flex items-start gap-2 text-xs text-faint">
     <Icon name="info" size={14} class="mt-px" />
