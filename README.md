@@ -13,8 +13,8 @@ checkpoints and a complete record, whichever model does the thinking.</p>
 
 ![ZORIX waiting for your approval before a tool changes anything](docs/images/ui-approval.png)
 
-> **Status: early development.** Phase 1 (the **Harness Runtime**) and Phase 2 (the **AI Provider Engine**) are done: ZORIX
-> runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local Ollama models. Memory, agents and workflows come in
+> **Status: early development.** Phases 1 to 5 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, and now
+> **agents**. ZORIX runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local Ollama models. Orchestration and workflows come in
 > later phases (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
 > `--local-only` to keep everything on your computer.
 
