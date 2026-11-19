@@ -337,7 +337,7 @@ fn as_metadata_urls(issuer: &Url) -> Vec<Url> {
 
 /// Follow the discovery chain from a server's challenge to its authorization server's endpoints.
 pub async fn discover(http: &Client, server: &Url, challenge: &Challenge) -> Result<Discovered, McpError> {
-    let resource = canonical_resource(server);
+    let ours = canonical_resource(server);
     let mut prm = None;
     for url in prm_urls(server, challenge) {
         if let Some(found) = get_json(http, &url).await? {
@@ -348,16 +348,22 @@ pub async fn discover(http: &Client, server: &Url, challenge: &Challenge) -> Res
     let prm = prm.ok_or_else(|| {
         McpError::Protocol("the server does not publish its sign-in details (protected-resource metadata)".into())
     })?;
-    // The metadata must be about this server, or it could be a different resource's.
-    if let Some(declared) = prm.get("resource").and_then(Value::as_str) {
-        let declared_url = Url::parse(declared)
-            .map_err(|_| McpError::Protocol("the server's metadata names an invalid resource".into()))?;
-        if canonical_resource(&declared_url) != resource {
-            return Err(McpError::Protocol(format!(
-                "the server's sign-in metadata is for {declared}, not for {resource}"
-            )));
+    // The metadata must be about this server, or it could be a different resource's. A server may name itself by its origin
+    // (or any parent path of its endpoint); the name it gives is the one used for the `resource` parameter, as RFC 9728 says.
+    let resource = match prm.get("resource").and_then(Value::as_str) {
+        Some(declared) => {
+            let declared_url = Url::parse(declared)
+                .map_err(|_| McpError::Protocol("the server's metadata names an invalid resource".into()))?;
+            let theirs = canonical_resource(&declared_url);
+            if theirs != ours && !ours.starts_with(&format!("{theirs}/")) {
+                return Err(McpError::Protocol(format!(
+                    "the server's sign-in metadata is for {declared}, not for {ours}"
+                )));
+            }
+            declared.to_string()
         }
-    }
+        None => ours,
+    };
     let issuer_text = prm
         .get("authorization_servers")
         .and_then(Value::as_array)

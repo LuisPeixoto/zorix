@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "checked": "2026-11-19",
+  "entries": [
+    {
+      "id": "github",
+      "name": "GitHub",
+      "summary": "Repositories, issues, pull requests and code search on GitHub, from GitHub's own server.",
+      "category": "Code",
+      "homepage": "https://github.com/github/github-mcp-server",
+      "logo": "github",
+      "default_name": "github",
+      "transport": {"kind": "http", "url": "https://api.githubcopilot.com/mcp/", "auth": "bearer"},
+      "token_help": "Paste a personal access token (github.com/settings/personal-access-tokens). Give it only the repositories and permissions you want runs to have.",
+      "notes": "GitHub's sign-in does not register clients by itself, so a token is the simplest way. For finer control over what a run may do on a repository, use ZORIX's own GitHub connection."
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "summary": "Issues, projects and cycles in Linear.",
+      "category": "Projects",
+      "homepage": "https://linear.app/docs/mcp",
+      "logo": "linear",
+      "default_name": "linear",
+      "transport": {"kind": "http", "url": "https://mcp.linear.app/mcp", "auth": "oauth"}
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "summary": "Search and read pages and databases in your Notion workspace.",
+      "category": "Documents",
+      "homepage": "https://developers.notion.com/docs/mcp",
+      "logo": "notion",
+      "default_name": "notion",
+      "transport": {"kind": "http", "url": "https://mcp.notion.com/mcp", "auth": "oauth"}
+    },
+    {
+      "id": "atlassian",
+      "name": "Atlassian",
+      "summary": "Jira and Confluence: issues, pages and search.",
+      "category": "Projects",
+      "homepage": "https://www.atlassian.com/platform/remote-mcp-server",
+      "logo": "atlassian",
+      "default_name": "atlassian",
+      "transport": {"kind": "http", "url": "https://mcp.atlassian.com/v2/mcp", "auth": "oauth"},
+      "notes": "This is the current endpoint; the older /v1/mcp one is being retired."
+    },
+    {
+      "id": "sentry",
+      "name": "Sentry",
+      "summary": "Errors, issues and traces from Sentry.",
+      "category": "Code",
+      "homepage": "https://docs.sentry.io/product/sentry-mcp/",
+      "logo": "sentry",
+      "default_name": "sentry",
+      "transport": {"kind": "http", "url": "https://mcp.sentry.dev/mcp", "auth": "oauth"}
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "summary": "Read designs and components from Figma files.",
+      "category": "Design",
+      "homepage": "https://help.figma.com/hc/en-us/articles/32132100833559",
+      "logo": "figma",
+      "default_name": "figma",
+      "transport": {"kind": "http", "url": "https://mcp.figma.com/mcp", "auth": "oauth"}
+    },
+    {
+      "id": "deepwiki",
+      "name": "DeepWiki",
+      "summary": "Documentation and answers about public GitHub repositories. Needs no account.",
+      "category": "Reference",
+      "homepage": "https://deepwiki.com",
+      "logo": "deepwiki",
+      "default_name": "deepwiki",
+      "transport": {"kind": "http", "url": "https://mcp.deepwiki.com/mcp", "auth": "none"},
+      "notes": "Public and read-only. Questions you ask are sent to DeepWiki."
+    },
+    {
+      "id": "cloudflare-docs",
+      "name": "Cloudflare Docs",
+      "summary": "Search Cloudflare's documentation. Needs no account.",
+      "category": "Reference",
+      "homepage": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
+      "logo": "cloudflare",
+      "default_name": "cloudflare-docs",
+      "transport": {"kind": "http", "url": "https://docs.mcp.cloudflare.com/mcp", "auth": "none"},
+      "notes": "Public and read-only. Questions you ask are sent to Cloudflare."
+    },
+    {
+      "id": "filesystem",
+      "name": "Filesystem",
+      "summary": "Read and write files in a folder you choose, through the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "logo": "folder",
+      "default_name": "files",
+      "transport": {
+        "kind": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "{folder}"],
+        "env": [],
+        "inputs": [{"name": "folder", "label": "The folder it may use", "kind": "folder"}]
+      },
+      "requires": "Node.js (npx)",
+      "notes": "It runs as you. ZORIX's own workspace tools are confined to one folder per run and ask before writing; this server decides for itself."
+    },
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "summary": "Fetch a web page and turn it into text, through the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+      "logo": "globe",
+      "default_name": "fetch",
+      "transport": {"kind": "stdio", "command": "uvx", "args": ["mcp-server-fetch"], "env": [], "inputs": []},
+      "requires": "uv (uvx)",
+      "notes": "It can reach any address your computer can, including private ones. ZORIX's own web tool refuses those."
+    },
+    {
+      "id": "playwright",
+      "name": "Playwright",
+      "summary": "Drive a real browser: open pages, click, read what is there.",
+      "category": "Local",
+      "homepage": "https://github.com/microsoft/playwright-mcp",
+      "logo": "playwright",
+      "default_name": "browser",
+      "transport": {"kind": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"], "env": [], "inputs": []},
+      "requires": "Node.js (npx)",
+      "notes": "A browser can sign in as you wherever you are signed in. Run it only for tasks that need it."
+    }
+  ]
+}

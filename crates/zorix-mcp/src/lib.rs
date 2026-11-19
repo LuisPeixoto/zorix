@@ -2,10 +2,12 @@
 //! that pins what a server's tools say.
 
 pub mod auth;
+pub mod catalog;
 pub mod client;
 pub mod error;
 pub mod headers;
 pub mod http;
+pub mod import;
 pub mod manager;
 pub mod oauth;
 pub mod protocol;
@@ -15,6 +17,7 @@ pub mod transport;
 pub mod wire;
 
 pub use auth::{AuthProvider, NoAuth, StaticBearer};
+pub use catalog::{Catalog, CatalogEntry, catalog};
 pub use client::{CallOutput, McpClient, McpToolDef, ServerInfo, ToolListing, valid_tool_name};
 pub use error::McpError;
 pub use http::HttpTransport;
