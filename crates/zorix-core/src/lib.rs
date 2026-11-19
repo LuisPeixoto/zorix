@@ -9,6 +9,7 @@ pub mod error;
 pub mod event;
 pub mod execution;
 pub mod ids;
+pub mod integrations;
 pub mod memory;
 pub mod message;
 pub mod model;
@@ -31,7 +32,15 @@ pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
 };
-pub use ids::{ApprovalId, ConversationId, ExecutionId, IdError, KnowledgeRootId, MemoryId, TenantId, ToolCallId};
+pub use ids::{
+    ApprovalId, ConnectionId, ConversationId, ExecutionId, IdError, KnowledgeRootId, McpServerId, MemoryId, TenantId,
+    ToolCallId,
+};
+pub use integrations::{
+    Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
+    McpServer, McpToolPin, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, ToolTrust,
+    valid_name,
+};
 pub use memory::{
     ChunkView, Corpus, DocState, DocStatus, DocumentWrite, KnowledgeRoot, MemoryFilter, MemoryItem, MemoryKind,
     MemoryOptions, MemoryOrigin, MemoryPatch, MemorySettings, MemoryStatus, MemoryStore, NewChunk, NewMemory, NewRoot,

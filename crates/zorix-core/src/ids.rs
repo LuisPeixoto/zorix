@@ -154,6 +154,14 @@ uuid_id!(
     /// Identifies one folder of indexed documents.
     KnowledgeRootId
 );
+uuid_id!(
+    /// Identifies one MCP server a person added.
+    McpServerId
+);
+uuid_id!(
+    /// Identifies one connection to an outside service (a Git host, a database, a chat workspace…).
+    ConnectionId
+);
 
 slug_id!(
     /// The organisation (or the local user) that owns an execution. Data never crosses tenants.
