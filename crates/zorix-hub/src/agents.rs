@@ -166,6 +166,16 @@ impl Hub {
             }
         }
         let mut spec = parsed.into_spec(|name| current.get(name).cloned()).map_err(HubError)?;
+        // A pinned skill whose files are not here would fail at the first run: say so now.
+        for pin in &spec.skills {
+            if !self.skills.has(&pin.hash) {
+                return Err(HubError(format!(
+                    "The skill {} ({}) is not in the library. Import its folder first (`zorix skill import`), or give the folder with `zorix agent import FILE --skills DIR`.",
+                    pin.name,
+                    &pin.hash[..pin.hash.len().min(8)]
+                )));
+            }
+        }
         if let Some(rename) = rename {
             spec.slug = AgentSlug::new(rename).map_err(HubError)?;
         }
@@ -188,6 +198,54 @@ impl Hub {
         }
     }
 
+    /// Hide an agent from lists and pickers, or show it again. Its history and memory stay.
+    pub async fn archive_agent(&self, slug: &str, archived: bool) -> Result<Agent, HubError> {
+        let (agent, _) = self.agent(slug).await?;
+        self.agents.set_archived(&self.tenant, agent.id, archived).await?;
+        Ok(Agent { archived, ..agent })
+    }
+
+    /// Delete an agent with its versions and evaluation cases. What it remembered stays until a person forgets it.
+    pub async fn remove_agent(&self, slug: &str) -> Result<(), HubError> {
+        let (agent, _) = self.agent(slug).await?;
+        self.agents.remove_agent(&self.tenant, agent.id).await?;
+        Ok(())
+    }
+
+    /// Copy the files of every skill an agent version pins into `dir/<name>/`, so the agent file can travel with them.
+    /// Returns the names written.
+    pub async fn export_skills(&self, slug: &str, version: Option<u32>, dir: &Path) -> Result<Vec<String>, HubError> {
+        let (_, found) = self.agent_version(slug, version).await?;
+        let mut written = Vec::new();
+        for pin in &found.spec.skills {
+            if !self.skills.has(&pin.hash) {
+                return Err(HubError(format!(
+                    "The files of the skill {} are not in the library any more (they were cleaned up).",
+                    pin.name
+                )));
+            }
+            let target = dir.join(&pin.name);
+            if target.exists() {
+                return Err(HubError(format!("{} already exists. Choose an empty folder.", target.display())));
+            }
+            let record = self.agents.skill_version(&self.tenant, &pin.name, &pin.hash).await?;
+            let files: Vec<String> = match record {
+                Some(r) => r.files.into_iter().map(|f| f.path).collect(),
+                None => return Err(HubError(format!("The skill {} is not known here.", pin.name))),
+            };
+            for rel in files {
+                let bytes = self.skills.read(&pin.hash, &rel, 20 * 1024 * 1024).map_err(|e| HubError(e.to_string()))?;
+                let out = target.join(&rel);
+                if let Some(parent) = out.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| HubError(e.to_string()))?;
+                }
+                std::fs::write(&out, bytes).map_err(|e| HubError(e.to_string()))?;
+            }
+            written.push(pin.name.clone());
+        }
+        Ok(written)
+    }
+
     /// An agent version as a Markdown file.
     pub async fn export_agent(&self, slug: &str, version: Option<u32>) -> Result<String, HubError> {
         let (_, found) = self.agent_version(slug, version).await?;
@@ -204,6 +262,12 @@ impl Hub {
     /// Write a new version that copies an older one.
     pub async fn rollback_agent(&self, slug: &str, to: u32) -> Result<AgentVersion, HubError> {
         let (agent, _) = self.agent(slug).await?;
+        if self.agents.version(&self.tenant, agent.id, to).await?.is_none() {
+            return Err(HubError(format!(
+                "{} has no version {to}. `zorix agent versions {}` lists them.",
+                agent.slug, agent.slug
+            )));
+        }
         Ok(self.agents.rollback(&self.tenant, agent.id, to, SystemClock.now()).await?)
     }
 

@@ -77,25 +77,38 @@ async fn a_skill_named_in_a_file_is_pinned_to_the_librarys_current_version_or_th
     let error = hub.import_agent(&with_skill, None, None).await.unwrap_err().to_string();
     assert!(error.contains("checklist") && error.contains("not in the library"), "{error}");
 
+    // A record whose files are not in the library does not count: a run would fail on it.
     let hash = "a".repeat(64);
-    hub.agents
-        .record_skill(
-            hub.tenant(),
-            SkillRecord {
-                name: "checklist".into(),
-                hash: hash.clone(),
-                description: "A checklist.".into(),
-                files: vec![SkillFile { path: "SKILL.md".into(), size: 1, sha256: hash.clone() }],
-                license: None,
-                compatibility: None,
-                metadata: Default::default(),
-                allowed_tools: vec![],
-                source: None,
-                imported_at: Timestamp(1),
-            },
+    let fake = SkillRecord {
+        name: "checklist".into(),
+        hash: hash.clone(),
+        description: "A checklist.".into(),
+        files: vec![SkillFile { path: "SKILL.md".into(), size: 1, sha256: hash.clone() }],
+        license: None,
+        compatibility: None,
+        metadata: Default::default(),
+        allowed_tools: vec![],
+        source: None,
+        imported_at: Timestamp(1),
+    };
+    hub.agents.record_skill(hub.tenant(), fake).await.unwrap_or_else(|_| panic!("record"));
+    let error = hub.import_agent(&with_skill, None, None).await.unwrap_err().to_string();
+    assert!(
+        error.contains("checklist") && error.contains("not in the library") && error.contains("--skills"),
+        "{error}"
+    );
+
+    let real = hub
+        .skills
+        .import_files(
+            vec![("SKILL.md".into(), b"---\nname: checklist\ndescription: A checklist.\n---\nCheck it.\n".to_vec())],
+            Some("checklist"),
+            None,
+            Timestamp(2),
         )
-        .await
-        .unwrap_or_else(|_| panic!("record"));
+        .unwrap();
+    let hash = real.hash.clone();
+    hub.agents.record_skill(hub.tenant(), real).await.unwrap_or_else(|_| panic!("record"));
     let done = hub.import_agent(&with_skill, None, None).await.unwrap();
     assert_eq!(done.version.spec.skills[0].hash, hash);
     let file = hub.export_agent("writer", None).await.unwrap();

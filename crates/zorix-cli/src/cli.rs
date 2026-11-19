@@ -70,6 +70,15 @@ pub enum Command {
     /// Connect ZORIX to MCP servers, or serve ZORIX's memory to other tools over MCP.
     #[command(subcommand)]
     Mcp(McpCommand),
+    /// Agents: reusable AI workers with their own instructions, skills, tools, memory and versions.
+    #[command(subcommand)]
+    Agent(AgentCommand),
+    /// Skills: folders of instructions and scripts an agent loads when it needs them.
+    #[command(subcommand)]
+    Skill(SkillCommand),
+    /// Evaluations: cases that check what an agent does, and comparisons between versions and models.
+    #[command(subcommand)]
+    Eval(EvalCommand),
     /// Connections to services: Git hosts, Jira, Slack, Discord, databases, web APIs and webhooks.
     #[command(subcommand)]
     Connect(ConnectCommand),
@@ -636,6 +645,307 @@ pub struct RunArgs {
     /// Do not use earlier executions of the conversation in this run.
     #[arg(long)]
     pub no_conversation: bool,
+
+    /// Ask an agent instead: it brings its own instructions, skills, tools and memory. The other flags only narrow
+    /// what it may do (`--allow…` flags keep only what both the agent and the flag allow).
+    #[arg(long, value_name = "AGENT", value_parser = parse_slug)]
+    pub agent: Option<String>,
+
+    /// With --agent: the version to use (default: the newest).
+    #[arg(long, value_name = "N", requires = "agent")]
+    pub agent_version: Option<u32>,
+
+    /// With --agent: data that goes with the prompt, as JSON.
+    #[arg(long, value_name = "JSON", value_parser = parse_json, requires = "agent")]
+    pub input: Option<serde_json::Value>,
+}
+
+/// What `zorix agent` does.
+#[derive(Debug, Subcommand)]
+pub enum AgentCommand {
+    /// List agents.
+    List(AgentListArgs),
+    /// Show an agent's definition.
+    Show(AgentShowArgs),
+    /// Make an agent from a file or from a few options.
+    Create(AgentCreateArgs),
+    /// Edit an agent as a Markdown file in $VISUAL or $EDITOR; saving makes a new version.
+    Edit(AgentSlugArg),
+    /// Read an agent file (Markdown with a header). A new name makes an agent; an existing one gets a new version.
+    Import(AgentImportArgs),
+    /// Write an agent as a Markdown file.
+    Export(AgentExportArgs),
+    /// List an agent's versions.
+    Versions(AgentSlugArg),
+    /// Show what changed between two versions.
+    Diff(AgentDiffArgs),
+    /// Go back to an older version by writing a new version that copies it.
+    Rollback(AgentRollbackArgs),
+    /// Hide an agent from lists (or show it again with --undo). Nothing is deleted.
+    Archive(AgentArchiveArgs),
+    /// Delete an agent with its versions and evaluation cases.
+    Remove(AgentRemoveArgs),
+    /// Add a ready-made agent with its skills and evaluation cases.
+    Add(AgentAddArgs),
+    /// List the ready-made agents.
+    Templates,
+}
+
+/// An agent's name (slug).
+#[derive(Debug, Args)]
+pub struct AgentSlugArg {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+}
+
+/// Options for `agent list`.
+#[derive(Debug, Args)]
+pub struct AgentListArgs {
+    /// Also list archived agents.
+    #[arg(long)]
+    pub all: bool,
+}
+
+/// Options for `agent show`.
+#[derive(Debug, Args)]
+pub struct AgentShowArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// A version other than the newest.
+    #[arg(long, value_name = "N")]
+    pub version: Option<u32>,
+}
+
+/// Options for `agent create`.
+#[derive(Debug, Args)]
+pub struct AgentCreateArgs {
+    /// The agent's name: lowercase letters, digits and dashes.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// Take the definition from this agent file (its name is replaced by the one above).
+    #[arg(long, value_name = "FILE")]
+    pub from_file: Option<PathBuf>,
+    /// The display name.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// What it is for, in a sentence.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// The model it uses by default.
+    #[arg(long, value_name = "MODEL", default_value = "default")]
+    pub model: String,
+    /// What it is told to do and how.
+    #[arg(long, value_name = "TEXT")]
+    pub instructions: Option<String>,
+    /// A tool it may use (an id, or a prefix ending in *). Repeat for more.
+    #[arg(long = "tool", value_name = "TOOL", value_parser = parse_tool_pattern)]
+    pub tools: Vec<String>,
+    /// A resource it may reach: `http:HOST`, `repo:OWNER/REPO`, `db:NAME`, `code:python`, `read:PATTERN`… Repeat for more.
+    #[arg(long = "access", value_name = "ENTRY", value_parser = parse_access_entry)]
+    pub access: Vec<String>,
+    /// A skill in the library it has. Repeat for more.
+    #[arg(long = "skill", value_name = "NAME")]
+    pub skills: Vec<String>,
+}
+
+/// Options for `agent import`.
+#[derive(Debug, Args)]
+pub struct AgentImportArgs {
+    /// The agent file.
+    pub file: PathBuf,
+    /// Import it under this name instead of the one in the file.
+    #[arg(long = "as", value_name = "NAME", value_parser = parse_slug)]
+    pub rename: Option<String>,
+    /// Import the skills the file names from `DIR/<skill name>` first.
+    #[arg(long, value_name = "DIR")]
+    pub skills: Option<PathBuf>,
+    /// A note for the version history.
+    #[arg(long)]
+    pub note: Option<String>,
+}
+
+/// Options for `agent export`.
+#[derive(Debug, Args)]
+pub struct AgentExportArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// A version other than the newest.
+    #[arg(long, value_name = "N")]
+    pub version: Option<u32>,
+    /// Write to this file instead of standard output.
+    #[arg(long, short, value_name = "FILE")]
+    pub output: Option<PathBuf>,
+    /// Also copy the agent's skills into this folder, one folder each, so the file can travel with them.
+    #[arg(long, value_name = "DIR")]
+    pub with_skills: Option<PathBuf>,
+}
+
+/// Options for `agent diff`.
+#[derive(Debug, Args)]
+pub struct AgentDiffArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// The older version.
+    pub from: u32,
+    /// The newer version.
+    pub to: u32,
+}
+
+/// Options for `agent rollback`.
+#[derive(Debug, Args)]
+pub struct AgentRollbackArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// The version to copy.
+    pub version: u32,
+}
+
+/// Options for `agent archive`.
+#[derive(Debug, Args)]
+pub struct AgentArchiveArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// Show it again.
+    #[arg(long)]
+    pub undo: bool,
+}
+
+/// Options for `agent remove`.
+#[derive(Debug, Args)]
+pub struct AgentRemoveArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// Say yes without being asked: this cannot be undone.
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Options for `agent add`.
+#[derive(Debug, Args)]
+pub struct AgentAddArgs {
+    /// The ready-made agent (see `zorix agent templates`).
+    #[arg(long, value_name = "NAME")]
+    pub template: String,
+    /// Add it under another name.
+    #[arg(long = "as", value_name = "NAME", value_parser = parse_slug)]
+    pub rename: Option<String>,
+}
+
+/// What `zorix skill` does.
+#[derive(Debug, Subcommand)]
+pub enum SkillCommand {
+    /// List the skills in the library.
+    List,
+    /// Show a skill: what it is for, its files and where it came from.
+    Show(SkillNameArg),
+    /// Add a skill from a folder (with a SKILL.md) or a zip file.
+    Import(SkillImportArgs),
+    /// Forget a skill. Agents that pin it keep working until `skill gc`.
+    Remove(SkillNameArg),
+    /// Delete the files of skills no agent version refers to.
+    Gc,
+}
+
+/// A skill's name.
+#[derive(Debug, Args)]
+pub struct SkillNameArg {
+    /// The skill's name.
+    pub name: String,
+}
+
+/// Options for `skill import`.
+#[derive(Debug, Args)]
+pub struct SkillImportArgs {
+    /// A folder or a .zip file.
+    pub path: PathBuf,
+}
+
+/// What `zorix eval` does.
+#[derive(Debug, Subcommand)]
+pub enum EvalCommand {
+    /// Add a case (or a list of cases) from a JSON file, or from standard input with `-`.
+    Add(EvalAddArgs),
+    /// List an agent's cases.
+    List(AgentSlugArg),
+    /// Delete a case.
+    Remove(EvalRemoveArgs),
+    /// Run an agent's cases and say what passed.
+    Run(EvalRunArgs),
+    /// List the runs of an agent's evaluations.
+    Runs(AgentSlugArg),
+    /// Show one evaluation run.
+    Show(EvalRunArg),
+    /// Compare two runs case by case.
+    Compare(EvalCompareArgs),
+}
+
+/// Options for `eval add`.
+#[derive(Debug, Args)]
+pub struct EvalAddArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// A JSON file with a case or a list of cases, or `-` for standard input.
+    pub file: PathBuf,
+}
+
+/// Options for `eval remove`.
+#[derive(Debug, Args)]
+pub struct EvalRemoveArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// The case's name.
+    pub case: String,
+}
+
+/// Options for `eval run`.
+#[derive(Debug, Args)]
+pub struct EvalRunArgs {
+    /// The agent's name.
+    #[arg(value_parser = parse_slug)]
+    pub agent: String,
+    /// A version other than the newest.
+    #[arg(long, value_name = "N")]
+    pub version: Option<u32>,
+    /// A model to try instead of the agent's default. Repeat to try several: each one is its own run.
+    #[arg(long = "model", value_name = "MODEL")]
+    pub models: Vec<String>,
+    /// Only cases with this tag. Repeat for more.
+    #[arg(long = "tag", value_name = "TAG")]
+    pub tags: Vec<String>,
+    /// Take away network access, whatever the agent has.
+    #[arg(long)]
+    pub offline: bool,
+    /// How many cases run at once (1 to 8).
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=8))]
+    pub concurrency: u8,
+    /// Use only providers on this computer.
+    #[arg(long)]
+    pub local_only: bool,
+}
+
+/// An evaluation run's id.
+#[derive(Debug, Args)]
+pub struct EvalRunArg {
+    /// The run's id.
+    pub run: String,
+}
+
+/// Options for `eval compare`.
+#[derive(Debug, Args)]
+pub struct EvalCompareArgs {
+    /// The first run's id.
+    pub before: String,
+    /// The second run's id.
+    pub after: String,
 }
 
 /// A scope: where a memory or a folder applies.
@@ -967,6 +1277,9 @@ pub struct ListArgs {
     /// Most rows.
     #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u32).range(1..=1000), value_name = "N")]
     pub limit: u32,
+    /// Only executions made by this agent.
+    #[arg(long, value_name = "AGENT", value_parser = parse_slug)]
+    pub agent: Option<String>,
 }
 
 /// One execution id.
@@ -1133,6 +1446,14 @@ fn parse_agent_slug(text: &str) -> Result<String, String> {
 
 fn parse_tool_pattern(text: &str) -> Result<String, String> {
     zorix_core::validate_tool_pattern(text).map(|()| text.to_string())
+}
+
+fn parse_slug(text: &str) -> Result<String, String> {
+    zorix_core::AgentSlug::new(text).map(|s| s.to_string())
+}
+
+fn parse_json(text: &str) -> Result<serde_json::Value, String> {
+    serde_json::from_str(text).map_err(|e| format!("that is not JSON: {e}"))
 }
 
 fn parse_access_entry(text: &str) -> Result<String, String> {
