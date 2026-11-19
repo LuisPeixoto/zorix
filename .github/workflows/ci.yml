@@ -39,6 +39,33 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude zorix-desktop
 
+  postgres:
+    # The Postgres tools need a real server, and a service container only exists on Linux runners.
+    name: Postgres tools
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: zorix
+          POSTGRES_PASSWORD: zorix-test
+          POSTGRES_DB: zorixtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zorix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test the Postgres tools against a real server
+        env:
+          ZORIX_TEST_POSTGRES: "127.0.0.1:5432:zorix:zorix-test:zorixtest"
+        run: cargo test -p zorix-integrations --test db_postgres -- --nocapture
+
   desktop:
     name: Desktop app (${{ matrix.os }})
     strategy:
