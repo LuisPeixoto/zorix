@@ -70,6 +70,8 @@ pub struct App {
     pub hub: Arc<Hub>,
     /// The model reference to record for a new execution.
     pub model: String,
+    /// Turns model names into candidates, for agents.
+    pub router: Arc<Router>,
     _lock: DataDirLock,
 }
 
@@ -133,7 +135,7 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     };
     let database = database_path(home);
     let store = Arc::new(SqliteMemoryStore::open(&database)?);
-    let gateway: Arc<dyn ModelGateway> = router;
+    let gateway: Arc<dyn ModelGateway> = router.clone();
     let stack = Arc::new(MemoryStack::new(store, repository.clone(), Some(gateway.clone())));
     let registry = builtin_registry(home)?;
     stack.register_tools(&*registry)?;
@@ -151,7 +153,7 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     tokio::task::spawn_blocking(move || {
         let _ = calibration.backfill();
     });
-    Ok(App { engine, stack, hub, model, _lock: lock })
+    Ok(App { engine, stack, hub, model, router, _lock: lock })
 }
 
 impl App {

@@ -9,6 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
+use zorix_agents::AgentAsk;
 use zorix_core::{
     Action, ApprovalStatus, ExecutionEngine, ExecutionId, ExecutionState, Grants, Limits, MemoryOptions, NewExecution,
     Permission, TaskRequest, TenantId, Tool, ToolAnnotations, ToolContext, ToolError, ToolRegistry, ToolSpec,
@@ -16,7 +17,7 @@ use zorix_core::{
 use zorix_mcp::{McpServer, ServerConfig};
 use zorix_memory::MemoryStack;
 use zorix_runtime::InMemoryToolRegistry;
-use zorix_store::{SqliteMemoryStore, database_path};
+use zorix_store::{SqliteAgentStore, SqliteMemoryStore, database_path};
 
 use crate::app::{App, CliError, open_engine, open_reader, open_router};
 use crate::cli::{McpServeArgs, ModelArgs};
@@ -59,9 +60,15 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         for tool in run_tools(opened.clone(), tenant.clone(), run_grants, project.clone()) {
             tools.push(tool);
         }
+        tools.push(Arc::new(AgentsTool {
+            store: opened.hub.agents.clone(),
+            tenant: tenant.clone(),
+            spec: agents_spec(),
+        }));
         instructions.push_str(
-            " zorix.run starts an activity in ZORIX; one that needs a person's approval waits for it in ZORIX and \
-             cannot be approved through MCP. zorix.status and zorix.result follow it.",
+            " zorix.run starts an activity in ZORIX, and zorix.run_agent starts one of the agents zorix.agents lists; \
+             both run with only what the person allowed when they started this server. One that needs a person's \
+             approval waits for it in ZORIX and cannot be approved through MCP. zorix.status and zorix.result follow it.",
         );
         app = Some(opened);
     } else {
@@ -75,7 +82,10 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         let registry = Arc::new(InMemoryToolRegistry::new());
         stack.register_tools(&*registry)?;
         collect_read_tools(&*registry, &mut tools);
+        let agents = Arc::new(SqliteAgentStore::open(&database)?);
+        tools.push(Arc::new(AgentsTool { store: agents, tenant: tenant.clone(), spec: agents_spec() }));
     }
+    instructions.push_str(" zorix.agents lists the agents a person made: who they are and what they are for.");
     for tool in &tools {
         grants = grants.with(Permission::use_tool(&tool.spec().id));
     }
@@ -125,6 +135,12 @@ fn run_grants(args: &McpServeArgs) -> Grants {
     for pattern in &args.allow_write {
         grants = grants.with(Permission::new(Action::Write, format!("workspace:{pattern}")));
     }
+    for entry in &args.allow_access {
+        // Checked when the flag was read, so this cannot fail.
+        for permission in zorix_core::access::compile_entry(entry).unwrap_or_default() {
+            grants = grants.with(permission);
+        }
+    }
     grants
 }
 
@@ -132,6 +148,7 @@ fn run_tools(app: Arc<App>, tenant: TenantId, grants: Grants, workspace: Option<
     let shared = Arc::new(RunShared { app, tenant, grants, workspace });
     vec![
         Arc::new(RunTool { shared: shared.clone(), spec: run_spec() }),
+        Arc::new(RunAgentTool { shared: shared.clone(), spec: run_agent_spec() }),
         Arc::new(StatusTool { shared: shared.clone(), spec: status_spec() }),
         Arc::new(ResultTool { shared, spec: result_spec() }),
     ]
@@ -236,8 +253,9 @@ impl Tool for RunTool {
     async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
         let shared = &self.shared;
         let wait = args["wait_seconds"].as_u64().unwrap_or(30).min(MAX_WAIT_SECONDS);
-        let engine = &shared.app.engine;
-        let created = engine
+        let created = shared
+            .app
+            .engine
             .create(NewExecution {
                 tenant: Some(shared.tenant.clone()),
                 request: TaskRequest {
@@ -254,17 +272,132 @@ impl Tool for RunTool {
             })
             .await
             .map_err(|e| failed(e.to_string()))?;
-        engine.start(&shared.tenant, created.id).await.map_err(|e| failed(e.to_string()))?;
+        shared.start_and_wait(ctx, created.id, wait).await
+    }
+}
+
+impl RunShared {
+    /// Start a created execution and wait for it for a while; if the client gives up, so does the run.
+    async fn start_and_wait(&self, ctx: &ToolContext, id: ExecutionId, wait: u64) -> Result<Value, ToolError> {
+        let engine = &self.app.engine;
+        engine.start(&self.tenant, id).await.map_err(|e| failed(e.to_string()))?;
         let settled = tokio::select! {
             _ = ctx.cancel.cancelled() => None,
-            r = tokio::time::timeout(Duration::from_secs(wait), engine.settle(&shared.tenant, created.id)) => Some(r),
+            r = tokio::time::timeout(Duration::from_secs(wait), engine.settle(&self.tenant, id)) => Some(r),
         };
         if settled.is_none() {
             // The client gave up: stop the work too, so nothing runs unseen.
-            let _ = engine.cancel(&shared.tenant, created.id, Some("the MCP client cancelled".into())).await;
+            let _ = engine.cancel(&self.tenant, id, Some("the MCP client cancelled".into())).await;
             return Err(failed("The call was cancelled, and so was the run."));
         }
-        shared.snapshot(created.id, true).await
+        self.snapshot(id, true).await
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+struct AgentsTool {
+    store: Arc<SqliteAgentStore>,
+    tenant: TenantId,
+    spec: ToolSpec,
+}
+
+fn agents_spec() -> ToolSpec {
+    let mut spec = ToolSpec::new(
+        "zorix.agents",
+        "List ZORIX agents",
+        "The agents the person made in ZORIX: each one's name, what it is for, its newest version and the skills it \
+         has. Use the name (slug) with zorix.run_agent when that is offered.",
+        json!({"type": "object", "properties": {}, "additionalProperties": false}),
+    );
+    spec.annotations = ToolAnnotations::safe_read();
+    spec
+}
+
+#[async_trait]
+impl Tool for AgentsTool {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+
+    async fn call(&self, _ctx: &ToolContext, _args: Value) -> Result<Value, ToolError> {
+        let cards = zorix_agents::cards(&*self.store, &self.tenant, false).await.map_err(|e| failed(e.to_string()))?;
+        // The definition itself (instructions, access) stays in ZORIX: a client needs to know who, not how.
+        let agents: Vec<Value> = cards
+            .into_iter()
+            .map(|c| {
+                json!({"agent": c.slug, "name": c.name, "description": c.description, "default_model": c.default_model,
+                       "version": c.version, "skills": c.skills})
+            })
+            .collect();
+        Ok(json!({"agents": agents}))
+    }
+}
+
+struct RunAgentTool {
+    shared: Arc<RunShared>,
+    spec: ToolSpec,
+}
+
+fn run_agent_spec() -> ToolSpec {
+    let mut spec = ToolSpec::new(
+        "zorix.run_agent",
+        "Run a ZORIX agent",
+        "Ask one of the agents zorix.agents lists to do something, and wait for it for a while. The agent uses its own \
+         instructions, skills and memory, but only the tools and resources the person allowed when they started this \
+         server, whatever the agent could do in ZORIX itself. Returns the execution id and either the result or where \
+         it stands; follow a long one with zorix.status and zorix.result.",
+        json!({
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "minLength": 1, "maxLength": 48, "description": "The agent's name (slug)."},
+                "prompt": {"type": "string", "minLength": 1, "maxLength": 20000},
+                "input": {"description": "Data that goes with the prompt (any JSON)."},
+                "model": {"type": "string", "maxLength": 200, "description": "A model the agent is allowed to use. Leave out for its own."},
+                "wait_seconds": {"type": "integer", "minimum": 0, "maximum": MAX_WAIT_SECONDS}
+            },
+            "required": ["agent", "prompt"],
+            "additionalProperties": false
+        }),
+    );
+    spec.annotations = ToolAnnotations { read_only: false, destructive: false, idempotent: false, open_world: true };
+    spec.timeout_ms = (MAX_WAIT_SECONDS + 30) * 1000;
+    spec
+}
+
+#[async_trait]
+impl Tool for RunAgentTool {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+
+    async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
+        let shared = &self.shared;
+        let wait = args["wait_seconds"].as_u64().unwrap_or(30).min(MAX_WAIT_SECONDS);
+        let slug = args["agent"].as_str().unwrap_or_default();
+        let ask = AgentAsk {
+            prompt: args["prompt"].as_str().unwrap_or_default().to_string(),
+            input: args.get("input").filter(|v| !v.is_null()).cloned(),
+            model: args["model"].as_str().map(str::to_string),
+            workspace: shared.workspace.clone(),
+            // Only what the person allowed for this server: an agent can never reach further through MCP than in ZORIX.
+            narrow: Some(shared.grants.clone()),
+            metadata: [("client".to_string(), "mcp".to_string())].into(),
+            ..AgentAsk::default()
+        };
+        let new = shared
+            .app
+            .hub
+            .prepare_agent_run(slug, None, ask, &*shared.app.router)
+            .await
+            .map_err(|e| failed(e.to_string()))?;
+        let binding = new.agent.clone();
+        let created = shared.app.engine.create(new).await.map_err(|e| failed(e.to_string()))?;
+        let mut out = shared.start_and_wait(ctx, created.id, wait).await?;
+        if let Some(binding) = binding {
+            out["agent"] = json!({"slug": binding.slug.to_string(), "version": binding.version});
+        }
+        Ok(out)
     }
 }
 

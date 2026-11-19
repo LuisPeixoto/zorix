@@ -53,6 +53,17 @@ impl Home {
     }
 }
 
+/// An agent made straight in the data folder's database, the way the app or `zorix agent` would.
+async fn make_agent(home: &Home, slug: &str, description: &str, tools: &[&str]) {
+    use zorix_core::AgentStore;
+    let store = zorix_store::SqliteAgentStore::open(&zorix_store::database_path(&home.path())).unwrap();
+    let mut spec = zorix_core::AgentSpec::new(zorix_core::AgentSlug::new(slug).unwrap(), "Calculator", "demo");
+    spec.description = description.into();
+    spec.instructions = "You calculate carefully. SECRET-INSTRUCTIONS.".into();
+    spec.tools = tools.iter().map(|t| t.to_string()).collect();
+    store.create_agent(&zorix_core::TenantId::local(), spec, None, zorix_core::Timestamp(1)).await.unwrap();
+}
+
 fn text_of(output: &CallOutput) -> String {
     output.content.iter().filter_map(|c| c["text"].as_str()).collect::<Vec<_>>().join("")
 }
@@ -85,7 +96,7 @@ async fn memory_is_served_read_only_and_without_taking_the_data_folder() {
     let client = home.client(&[]).await;
     assert_eq!(client.era(), &Era::Modern);
     assert_eq!(client.info().name.as_deref(), Some("zorix"));
-    assert_eq!(tool_names(&client).await, ["history.search", "knowledge.search", "memory.search"]);
+    assert_eq!(tool_names(&client).await, ["history.search", "knowledge.search", "memory.search", "zorix.agents"]);
 
     let found = call(&client, "memory.search", json!({"query": "releases"})).await;
     assert!(!found.is_error, "{}", text_of(&found));
@@ -171,7 +182,16 @@ async fn runs_are_offered_only_when_asked_and_approval_stays_in_zorix() {
         .await;
     assert_eq!(
         tool_names(&client).await,
-        ["history.search", "knowledge.search", "memory.search", "zorix.result", "zorix.run", "zorix.status"]
+        [
+            "history.search",
+            "knowledge.search",
+            "memory.search",
+            "zorix.agents",
+            "zorix.result",
+            "zorix.run",
+            "zorix.run_agent",
+            "zorix.status"
+        ]
     );
 
     let finished = call(&client, "zorix.run", json!({"prompt": "What is 17*23?", "wait_seconds": 60})).await;
@@ -212,4 +232,81 @@ fn run_options_need_allow_runs() {
         assert_eq!(code(&out), 2, "{}", text(&out.stderr));
         assert!(text(&out.stderr).contains("--allow-runs"), "{}", text(&out.stderr));
     }
+}
+
+#[tokio::test]
+async fn agents_are_listed_without_their_instructions_and_without_taking_the_data_folder() {
+    let home = Home::new();
+    assert_eq!(code(&home.zorix(&["memory", "list"])), 0);
+    let client = home.client(&[]).await;
+    let none = call(&client, "zorix.agents", json!({})).await;
+    assert_eq!(none.structured.expect("structured")["agents"], json!([]));
+    client.close().await;
+
+    make_agent(&home, "calc", "Does arithmetic.", &["math.evaluate"]).await;
+    let client = home.client(&[]).await;
+    let listed = call(&client, "zorix.agents", json!({})).await;
+    assert!(!listed.is_error, "{}", text_of(&listed));
+    let listed = listed.structured.expect("structured");
+    assert_eq!(listed["agents"][0]["agent"], "calc");
+    assert_eq!(listed["agents"][0]["description"], "Does arithmetic.");
+    assert_eq!(
+        (listed["agents"][0]["version"].as_u64(), listed["agents"][0]["default_model"].as_str()),
+        (Some(1), Some("demo"))
+    );
+    assert!(
+        !listed.to_string().contains("SECRET-INSTRUCTIONS"),
+        "a client learns who an agent is, not how it is told to work"
+    );
+    // Reading takes no lock: ZORIX still works.
+    assert_eq!(code(&home.zorix(&["run", "What is 17*23?", "--allow", "math.evaluate"])), 0);
+    // No tool to run an agent without --allow-runs.
+    assert!(!tool_names(&client).await.contains(&"zorix.run_agent".to_string()));
+    client.close().await;
+}
+
+#[tokio::test]
+async fn an_agent_runs_through_mcp_with_only_what_the_server_allows() {
+    let home = Home::new();
+    make_agent(&home, "calc", "Does arithmetic.", &["math.evaluate"]).await;
+    let project: &Path = home.dir.path();
+    let project = project.display().to_string();
+
+    // Allowed: the agent's own tool works, and the answer says which version made it.
+    let client = home.client(&["--allow-runs", "--allow", "math.evaluate", "--project", &project]).await;
+    let done =
+        call(&client, "zorix.run_agent", json!({"agent": "calc", "prompt": "What is 17*23?", "wait_seconds": 60}))
+            .await;
+    assert!(!done.is_error, "{}", text_of(&done));
+    let done = done.structured.expect("structured");
+    assert_eq!(done["state"], "completed", "{done}");
+    assert!(done["result"].as_str().unwrap().contains("391"), "{done}");
+    assert_eq!(done["agent"], json!({"slug": "calc", "version": 1}));
+
+    // A name that does not exist, and a model the agent may not use, are refused with a reason.
+    let missing = call(&client, "zorix.run_agent", json!({"agent": "nobody", "prompt": "hi"})).await;
+    assert!(missing.is_error && text_of(&missing).contains("no agent called nobody"), "{}", text_of(&missing));
+    let bad = call(&client, "zorix.run_agent", json!({"agent": "Not A Slug", "prompt": "hi"})).await;
+    assert!(bad.is_error);
+    client.close().await;
+
+    // Not allowed: the agent has the tool in ZORIX, but this server did not hand it over, so the run cannot use it.
+    let client = home.client(&["--allow-runs", "--project", &project]).await;
+    let denied =
+        call(&client, "zorix.run_agent", json!({"agent": "calc", "prompt": "What is 17*23?", "wait_seconds": 60}))
+            .await;
+    let denied = denied.structured.expect("structured");
+    assert!(!denied["result"].as_str().unwrap_or("").contains("391"), "{denied}");
+    client.close().await;
+}
+
+#[test]
+fn an_access_entry_must_be_valid_and_needs_allow_runs() {
+    let home = Home::new();
+    let out = home.zorix(&["mcp", "serve", "--allow-access", "http:example.com"]);
+    assert_eq!(code(&out), 2);
+    assert!(text(&out.stderr).contains("--allow-runs"), "{}", text(&out.stderr));
+    let out = home.zorix(&["mcp", "serve", "--allow-runs", "--allow-access", "ftp:somewhere"]);
+    assert_eq!(code(&out), 2);
+    assert!(text(&out.stderr).to_lowercase().contains("ftp"), "{}", text(&out.stderr));
 }
