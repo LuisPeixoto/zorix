@@ -225,6 +225,10 @@ impl Router {
                 left_out.push(format!("{}: the provider is turned off", candidate.label()));
                 continue;
             }
+            if !zorix_core::model_allowed(&request.allowed_models, Some(&candidate.provider), &candidate.model) {
+                left_out.push(format!("{}: this agent may not use it", candidate.label()));
+                continue;
+            }
             if local_only && !entry.local {
                 left_out.push(format!("{}: it is not on this computer (local only)", candidate.label()));
                 continue;

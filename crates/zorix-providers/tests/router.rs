@@ -436,3 +436,54 @@ async fn learning_a_discovered_model_makes_it_known() {
     assert_eq!(w.router.describe("home/discovered").unwrap().context_window, 16_000);
     assert!(w.router.known_models().iter().any(|m| m.id == "discovered"));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// An agent's allow-list (ADR-0027)
+
+fn allowing(mut r: ModelRequest, patterns: &[&str]) -> ModelRequest {
+    r.allowed_models = patterns.iter().map(|p| p.to_string()).collect();
+    r
+}
+
+#[tokio::test]
+async fn a_fallback_never_reaches_a_model_the_agent_may_not_use() {
+    // `big` fails; the route would move on to `other`, but the agent only allows `big`.
+    let w = world(ROUTES, vec![err(ModelErrorKind::Unavailable)]);
+    let error = ask(&w.router, allowing(request("route:main"), &["big/*"])).await.unwrap_err().to_string();
+    assert!(error.contains("big/smart"), "{error}");
+    assert!(w.other.asked().is_empty(), "the second candidate was never called");
+    assert!(w.home.asked().is_empty());
+
+    // With the second provider allowed, the same route falls back as before.
+    let w = world(ROUTES, vec![err(ModelErrorKind::Unavailable)]);
+    let ok = ask(&w.router, allowing(request("route:main"), &["big/*", "other/*"])).await.unwrap();
+    assert_eq!(ok.provider.as_deref(), Some("other"));
+    assert!(w.home.asked().is_empty(), "and the third was never needed");
+}
+
+#[tokio::test]
+async fn candidates_outside_the_list_are_left_out_with_a_reason_and_an_empty_result_says_so() {
+    let w = world(ROUTES, vec![]);
+    let error = ask(&w.router, allowing(request("route:main"), &["nobody/*"])).await.unwrap_err().to_string();
+    assert!(error.contains("this agent may not use it"), "{error}");
+    assert!(w.big.asked().is_empty() && w.other.asked().is_empty() && w.home.asked().is_empty(), "nothing was sent");
+
+    // An explicit model outside the list fails the same way, and one inside it goes through.
+    let error = ask(&w.router, allowing(request("big/cheap"), &["other/*"])).await.unwrap_err().to_string();
+    assert!(error.contains("this agent may not use it"), "{error}");
+    assert!(ask(&w.router, allowing(request("big/cheap"), &["big/cheap"])).await.is_ok());
+    assert!(
+        ask(&w.router, allowing(request("big/cheap"), &["big/smart"])).await.is_err(),
+        "an exact model, not its neighbour"
+    );
+}
+
+#[tokio::test]
+async fn an_empty_or_star_list_allows_everything_and_the_demo_models_can_be_allowed_by_name() {
+    let w = world(ROUTES, vec![]);
+    assert!(ask(&w.router, request("big/smart")).await.is_ok(), "no list, no restriction");
+    assert!(ask(&w.router, allowing(request("big/smart"), &["*"])).await.is_ok());
+    // Ordering still applies inside the allowed set.
+    let cheapest = ask(&w.router, allowing(request("route:cheapest"), &["big/*"])).await.unwrap();
+    assert_eq!(cheapest.model, "cheap");
+}
