@@ -1,5 +1,6 @@
 //! Tauri shell: starts the engine and exposes it to the interface as commands. It holds no rules of its own.
 
+mod agent_commands;
 mod commands;
 mod integration_commands;
 mod knowledge_commands;
@@ -68,6 +69,36 @@ pub fn run() {
             integration_commands::connection_remove,
             integration_commands::sandbox_status,
             integration_commands::sandbox_install_python,
+            agent_commands::agents_list,
+            agent_commands::agent_get,
+            agent_commands::agent_save,
+            agent_commands::agent_import,
+            agent_commands::agent_export,
+            agent_commands::agent_versions,
+            agent_commands::agent_diff,
+            agent_commands::agent_rollback,
+            agent_commands::agent_archive,
+            agent_commands::agent_remove,
+            agent_commands::agent_templates,
+            agent_commands::agent_add_template,
+            agent_commands::skills_list,
+            agent_commands::skill_import,
+            agent_commands::skill_remove,
+            agent_commands::skill_file,
+            agent_commands::eval_cases,
+            agent_commands::eval_put_case,
+            agent_commands::eval_remove_case,
+            agent_commands::eval_runs,
+            agent_commands::eval_running,
+            agent_commands::eval_start,
+            agent_commands::eval_cancel,
+            agent_commands::eval_compare,
+            agent_commands::agent_ask,
+            agent_commands::agent_threads,
+            agent_commands::thread_runs,
+            agent_commands::watch_live,
+            agent_commands::stop_live,
+            agent_commands::open_external,
             memory_commands::list_memory,
             memory_commands::add_memory,
             memory_commands::update_memory,

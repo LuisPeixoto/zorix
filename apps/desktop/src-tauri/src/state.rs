@@ -39,6 +39,8 @@ pub struct Services {
     pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
     /// The job that embeds everything again, when one is running.
     pub reembed_job: Mutex<Option<CancellationToken>>,
+    /// Evaluations that are running, by agent, so they can be cancelled and not started twice.
+    pub evals: Mutex<HashMap<String, CancellationToken>>,
     _lock: DataDirLock,
 }
 
@@ -49,6 +51,7 @@ pub struct AppState {
     /// The engine, or why it could not start (for example another ZORIX program holds the data folder).
     pub services: Result<Arc<Services>, String>,
     watchers: Mutex<HashMap<ExecutionId, CancellationToken>>,
+    live: Mutex<HashMap<ExecutionId, CancellationToken>>,
 }
 
 impl AppState {
@@ -59,7 +62,7 @@ impl AppState {
         if let Err(error) = &services {
             tracing::error!(%error, "the engine did not start");
         }
-        Self { home, services, watchers: Mutex::new(HashMap::new()) }
+        Self { home, services, watchers: Mutex::new(HashMap::new()), live: Mutex::new(HashMap::new()) }
     }
 
     /// The engine, or the reason there is none.
@@ -81,6 +84,22 @@ impl AppState {
         token
     }
 
+    /// Register a watcher of an execution's live text, replacing (and stopping) an earlier one.
+    pub fn watch_live(&self, id: ExecutionId) -> CancellationToken {
+        let token = CancellationToken::new();
+        if let Some(old) = self.live.lock().insert(id, token.clone()) {
+            old.cancel();
+        }
+        token
+    }
+
+    /// Stop watching an execution's live text.
+    pub fn unwatch_live(&self, id: ExecutionId) {
+        if let Some(token) = self.live.lock().remove(&id) {
+            token.cancel();
+        }
+    }
+
     /// Stop watching an execution.
     pub fn unwatch(&self, id: ExecutionId) {
         if let Some(token) = self.watchers.lock().remove(&id) {
@@ -93,11 +112,17 @@ impl AppState {
         for (_, token) in self.watchers.lock().drain() {
             token.cancel();
         }
+        for (_, token) in self.live.lock().drain() {
+            token.cancel();
+        }
         if let Ok(services) = &self.services {
             for (_, token) in services.syncs.lock().drain() {
                 token.cancel();
             }
             if let Some(token) = services.reembed_job.lock().take() {
+                token.cancel();
+            }
+            for (_, token) in services.evals.lock().drain() {
                 token.cancel();
             }
             services.hub.manager.shutdown().await;
@@ -166,6 +191,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
         memory_store,
         syncs: Mutex::new(HashMap::new()),
         reembed_job: Mutex::new(None),
+        evals: Mutex::new(HashMap::new()),
         _lock: lock,
     }))
 }

@@ -33,6 +33,8 @@ export interface Execution {
   active_ms: number;
   usage: Usage;
   conversation?: string | null;
+  /** The agent (and version) that made this run, when one did. */
+  agent?: { agent: string; slug: string; version: number; hash: string } | null;
   result: { text: string; structured: unknown } | null;
   failure: { kind: string; message: string; limit: string | null } | null;
   cancel_reason: string | null;
@@ -506,4 +508,238 @@ export function sandboxInstallPython(onProgress: (done: number, total: number) =
 /** Be told when any MCP server changes state (the value is the server's id, or `*` when some were missed). */
 export function onMcpStatus(handler: () => void): Promise<UnlistenFn> {
   return listen<string>("mcp-status", () => handler());
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Agents, skills and evaluations
+
+export interface AgentCard {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  emoji: string;
+  color: string;
+  default_model: string;
+  version: number;
+  skills: string[];
+  archived: boolean;
+}
+
+export interface Limits {
+  max_iterations: number;
+  max_tool_calls: number;
+  max_total_tokens: number | null;
+  max_cost_micros: number | null;
+  max_active_ms: number;
+  model_timeout_ms: number;
+  max_model_attempts: number;
+  max_validation_retries: number;
+}
+
+export interface AgentSpec {
+  slug: string;
+  name: string;
+  description: string;
+  avatar: { emoji: string; color: string };
+  instructions: string;
+  skills: { name: string; hash: string }[];
+  tools: string[];
+  access: string[];
+  models: { default: string; allowed: string[] };
+  limits: Limits;
+  memory: { conversation: boolean; long_term: boolean; knowledge: "off" | "auto"; operations: "off" | "auto" };
+  agent_memory: boolean;
+  params: { max_output_tokens: number | null; effort: string | null };
+  expected_output: unknown;
+  metadata: Record<string, string>;
+}
+
+export interface AgentVersion {
+  agent: string;
+  version: number;
+  hash: string;
+  spec: AgentSpec;
+  note: string | null;
+  created_at: number;
+}
+
+export interface SkillFile {
+  path: string;
+  size: number;
+  sha256: string;
+}
+
+export interface SkillRecord {
+  name: string;
+  hash: string;
+  description: string;
+  files: SkillFile[];
+  license: string | null;
+  compatibility: string | null;
+  metadata: Record<string, string>;
+  allowed_tools: string[];
+  source: string | null;
+  imported_at: number;
+}
+
+export interface AgentDetail {
+  agent: { id: string; slug: string; current_version: number; archived: boolean; created_at: number; updated_at: number };
+  version: AgentVersion;
+  skills: SkillRecord[];
+  cases: number;
+}
+
+export interface Saved {
+  slug: string;
+  version: number;
+  created: boolean;
+  changed: boolean;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  color: string;
+  skills: string[];
+  cases: number;
+  installed: boolean;
+}
+
+export interface DiffRow {
+  change: "same" | "added" | "removed";
+  text: string;
+}
+
+export type EvalCheck =
+  | { kind: "contains" | "not_contains"; text: string; ignore_case?: boolean }
+  | { kind: "regex"; pattern: string }
+  | { kind: "json_schema"; schema: unknown }
+  | { kind: "tool_used"; pattern: string; min?: number }
+  | { kind: "tool_not_used"; pattern: string }
+  | { kind: "max_cost_usd"; usd: number }
+  | { kind: "max_steps"; steps: number }
+  | { kind: "max_tool_calls"; calls: number }
+  | { kind: "status"; state: string };
+
+export interface EvalCase {
+  name: string;
+  prompt: string;
+  input?: unknown;
+  tags: string[];
+  checks: EvalCheck[];
+  judge?: { rubric: string; model: string; pass_score: number } | null;
+  approve: string[];
+  allow_writes: boolean;
+}
+
+export interface StoredCase {
+  id: string;
+  agent: string;
+  case: EvalCase;
+  updated_at: number;
+}
+
+export interface EvalResult {
+  case: string;
+  execution: string | null;
+  passed: boolean;
+  checks: { check: string; passed: boolean; detail: string }[];
+  judge: { score: number; reasons: string; cost_micros: number; model: string } | null;
+  state: string;
+  steps: number;
+  tool_calls: number;
+  cost_micros: number;
+  error: string | null;
+}
+
+export interface EvalRun {
+  id: string;
+  agent: string;
+  version: number;
+  model: string;
+  status: "running" | "finished" | "cancelled";
+  started_at: number;
+  finished_at: number | null;
+  results: EvalResult[];
+}
+
+export interface CompareRow {
+  case: string;
+  change: "StillPasses" | "StillFails" | "Fixed" | "Broke" | "OnlyInOne";
+  cost_delta_micros: number;
+  steps_delta: number;
+  score_delta: number | null;
+}
+
+export interface AgentConversation {
+  conversation: string;
+  title: string;
+  runs: number;
+  last_at: number;
+}
+
+export interface ThreadRun {
+  execution: Execution;
+  tool_calls: ToolCall[];
+  approvals: Approval[];
+}
+
+export interface AskAgent {
+  slug: string;
+  version?: number;
+  prompt: string;
+  input?: unknown;
+  model?: string;
+  conversation?: string;
+  /** What it may use from memory: each switch is on only if the agent allows it too. */
+  memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
+}
+
+export const agentsList = (includeArchived = false) => invoke<AgentCard[]>("agents_list", { includeArchived });
+export const agentGet = (slug: string, version?: number) => invoke<AgentDetail>("agent_get", { slug, version });
+export const agentSave = (spec: AgentSpec, note?: string) => invoke<Saved>("agent_save", { spec, note });
+export const agentImport = (file: string, rename?: string) => invoke<Saved>("agent_import", { file, rename });
+export const agentExport = (slug: string, version?: number) => invoke<string>("agent_export", { slug, version });
+export const agentVersions = (slug: string) => invoke<AgentVersion[]>("agent_versions", { slug });
+export const agentDiff = (slug: string, from: number, to: number) => invoke<DiffRow[]>("agent_diff", { slug, from, to });
+export const agentRollback = (slug: string, to: number) => invoke<AgentVersion>("agent_rollback", { slug, to });
+export const agentArchive = (slug: string, archived: boolean) => invoke<void>("agent_archive", { slug, archived });
+export const agentRemove = (slug: string) => invoke<void>("agent_remove", { slug });
+export const agentTemplates = () => invoke<Template[]>("agent_templates");
+export const agentAddTemplate = (id: string, rename?: string) => invoke<Saved>("agent_add_template", { id, rename });
+export const skillsList = () => invoke<SkillRecord[]>("skills_list");
+export const skillImport = (path: string) => invoke<SkillRecord>("skill_import", { path });
+export const skillRemove = (name: string) => invoke<void>("skill_remove", { name });
+export const skillFile = (hash: string, path: string) => invoke<string>("skill_file", { hash, path });
+export const evalCases = (slug: string) => invoke<StoredCase[]>("eval_cases", { slug });
+export const evalPutCase = (slug: string, evalCase: EvalCase) => invoke<StoredCase>("eval_put_case", { slug, case: evalCase });
+export const evalRemoveCase = (slug: string, name: string) => invoke<void>("eval_remove_case", { slug, name });
+export const evalRuns = (slug: string) => invoke<EvalRun[]>("eval_runs", { slug });
+export const evalRunning = (slug: string) => invoke<boolean>("eval_running", { slug });
+export const evalStart = (request: { slug: string; version?: number; models?: string[]; tags?: string[]; offline?: boolean }) =>
+  invoke<void>("eval_start", { request });
+export const evalCancel = (slug: string) => invoke<void>("eval_cancel", { slug });
+export const evalCompare = (before: string, after: string) => invoke<CompareRow[]>("eval_compare", { before, after });
+export const agentAsk = (request: AskAgent) => invoke<Execution>("agent_ask", { request });
+export const agentThreads = (slug: string) => invoke<AgentConversation[]>("agent_threads", { slug });
+export const threadRuns = (slug: string, conversation: string) => invoke<ThreadRun[]>("thread_runs", { slug, conversation });
+export const stopLive = (id: string) => invoke<void>("stop_live", { id });
+export const openExternal = (url: string) => invoke<void>("open_external", { url });
+
+export interface LiveBatch {
+  execution: string;
+  text: string;
+  /** Forget what was drawn before: another model took over. */
+  reset: boolean;
+}
+
+/** The text of a run's answer while it is still being written. Resolves when the watch ends. */
+export function watchLive(id: string, onBatch: (batch: LiveBatch) => void): Promise<void> {
+  const channel = new Channel<LiveBatch>();
+  channel.onmessage = onBatch;
+  return invoke<void>("watch_live", { id, onText: channel });
 }

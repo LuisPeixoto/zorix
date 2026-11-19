@@ -39,8 +39,8 @@
 
 <style>
   /* A soft caret after the text while the answer is still being written. */
-  :global(.stream-caret) > :global(*:last-child)::after,
-  :global(.stream-caret):empty::after {
+  :global(.stream-caret) :global(p:last-child)::after,
+  :global(.stream-caret) > :global(span:last-child)::after {
     content: "";
     display: inline-block;
     width: 0.5ch;
@@ -57,7 +57,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    :global(.stream-caret) > :global(*:last-child)::after {
+    :global(.stream-caret) :global(p:last-child)::after,
+    :global(.stream-caret) > :global(span:last-child)::after {
       animation: none;
     }
   }

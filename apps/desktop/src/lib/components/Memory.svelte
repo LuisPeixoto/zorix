@@ -6,6 +6,7 @@
 
   import { type MemoryRow, errorText, memoryUsage } from "../api.ts";
   import { ago } from "../format.ts";
+  import { agents } from "../stores/agents.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Tabs, Textarea } from "../ui/index.ts";
 
@@ -17,7 +18,7 @@
   const rows = $derived(
     store.memory.filter(
       (m) =>
-        (scope === "all" || m.scope === scope || (scope === "project" && m.scope.startsWith("project:")) || (scope === "conversation" && m.scope.startsWith("conversation:"))) &&
+        (scope === "all" || m.scope === scope || (scope === "project" && m.scope.startsWith("project:")) || (scope === "conversation" && m.scope.startsWith("conversation:")) || (scope === "agent" && m.scope.startsWith("agent:"))) &&
         (showOld || m.status === "active") &&
         (!query.trim() || `${m.content} ${m.subject ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())),
     ),
@@ -114,7 +115,13 @@
   }
 
   const date = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-  const scopeTone = (s: string) => (s === "global" ? "accent" : s.startsWith("project:") ? "info" : "muted");
+  const scopeTone = (s: string) => (s === "global" ? "accent" : s.startsWith("project:") ? "info" : s.startsWith("agent:") ? "ok" : "muted");
+  // An agent's memory shows the agent's name, not its id.
+  const scopeName = (m: MemoryRow) => {
+    if (!m.scope.startsWith("agent:")) return m.scope_label;
+    const card = agents.cards.find((c) => c.id === m.scope.slice(6));
+    return card ? `${card.emoji} ${card.name}` : "an agent";
+  };
 </script>
 
 <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 overflow-y-auto p-8 [&>*]:shrink-0">
@@ -149,7 +156,7 @@
     <div class="flex flex-wrap items-center gap-3">
       <Input class="min-w-56 flex-1" bind:value={query} placeholder="Search what is remembered" aria-label="Search what is remembered" />
       <Segmented
-        class="w-72"
+        class="w-96"
         label="Scope"
         bind:value={scope}
         options={[
@@ -157,6 +164,7 @@
           { value: "global", label: "Global" },
           { value: "project", label: "Project" },
           { value: "conversation", label: "Chat" },
+          { value: "agent", label: "Agent" },
         ]}
       />
       <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" bind:checked={showOld} /> Show replaced and expired</label>
@@ -182,7 +190,7 @@
               <p class="selectable text-md leading-relaxed break-words">{m.content}</p>
               <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <Badge tone="muted">{m.kind}</Badge>
-                <Badge tone={scopeTone(m.scope)}>{m.scope_label}</Badge>
+                <Badge tone={scopeTone(m.scope)}>{scopeName(m)}</Badge>
                 {#if m.subject}<Badge tone="muted">about: {m.subject}</Badge>{/if}
                 {#if m.status === "replaced"}<Badge tone="warn" dot>replaced{m.replaced_by ? ` by ${m.replaced_by}` : ""}</Badge>{/if}
                 {#if m.status === "expired"}<Badge tone="warn" dot>expired</Badge>{/if}

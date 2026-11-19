@@ -7850,6 +7850,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "zorix-agents",
  "zorix-core",
  "zorix-hub",
  "zorix-integrations",
