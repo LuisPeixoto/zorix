@@ -244,8 +244,10 @@ impl McpToolPin {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionKind {
-    /// A web API reached with `http.request`.
+    /// A web API reached with `http.get` and `http.request`.
     Http,
+    /// A URL that `webhook.send` posts signed events to.
+    Webhook,
     /// GitHub.
     Github,
     /// GitLab.
@@ -267,6 +269,7 @@ impl ConnectionKind {
     pub fn as_str(&self) -> &'static str {
         match self {
             ConnectionKind::Http => "http",
+            ConnectionKind::Webhook => "webhook",
             ConnectionKind::Github => "github",
             ConnectionKind::Gitlab => "gitlab",
             ConnectionKind::Jira => "jira",
@@ -281,6 +284,7 @@ impl ConnectionKind {
     pub fn parse(text: &str) -> Option<Self> {
         Some(match text {
             "http" => ConnectionKind::Http,
+            "webhook" => ConnectionKind::Webhook,
             "github" => ConnectionKind::Github,
             "gitlab" => ConnectionKind::Gitlab,
             "jira" => ConnectionKind::Jira,
@@ -440,7 +444,7 @@ mod tests {
         for status in [PinStatus::New, PinStatus::Pinned, PinStatus::Changed, PinStatus::Disabled] {
             assert_eq!(PinStatus::parse(status.as_str()), Some(status));
         }
-        for kind in ["http", "github", "gitlab", "jira", "slack", "discord", "postgres", "sqlite"] {
+        for kind in ["http", "webhook", "github", "gitlab", "jira", "slack", "discord", "postgres", "sqlite"] {
             assert_eq!(ConnectionKind::parse(kind).unwrap().as_str(), kind);
         }
         assert_eq!(ToolTrust::parse("read_only_no_ask"), Some(ToolTrust::ReadOnlyNoAsk));

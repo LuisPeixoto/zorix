@@ -114,6 +114,26 @@ pub fn workspace_grant(action: Action, pattern: &str) -> Result<Permission, Stri
     Ok(Permission::new(action, format!("workspace:{pattern}")))
 }
 
+/// Check a host pattern given by a person for `--allow-http`: a name or address, with `*` only at the end.
+pub fn validate_host_pattern(text: &str) -> Result<(), String> {
+    let body = text.strip_suffix('*').unwrap_or(text);
+    let ok = !text.is_empty()
+        && text.len() <= 253
+        && !body.contains('*')
+        && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']' | '_' | '*'));
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("“{text}” is not a host name or address (a `*` is only allowed at the end)."))
+    }
+}
+
+/// A grant to reach a host over HTTP (`network` on `http:<host>`). The host is compared in lowercase.
+pub fn network_grant(host_pattern: &str) -> Result<Permission, String> {
+    validate_host_pattern(host_pattern)?;
+    Ok(Permission::new(Action::Network, format!("http:{}", host_pattern.to_ascii_lowercase())))
+}
+
 /// What an execution is allowed to do. The default grants nothing.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -203,6 +223,24 @@ mod tests {
         for bad in ["", "/etc/*", "../x", "a/../b", "a\\b", "C:/x", "tab\there"] {
             assert!(workspace_grant(Action::Write, bad).is_err(), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn network_grants_name_a_host_and_only_exact_ones_name_a_private_machine() {
+        let grants =
+            Grants::none().with(network_grant("API.Example.com").unwrap()).with(network_grant("docs.*").unwrap());
+        assert!(grants.allows(&Permission::new(Action::Network, "http:api.example.com")));
+        assert!(grants.allows(&Permission::new(Action::Network, "http:docs.rs")));
+        assert!(!grants.allows(&Permission::new(Action::Network, "http:evil.example.com")));
+        assert!(!grants.allows(&Permission::new(Action::Read, "http:api.example.com")), "network is its own action");
+        for bad in ["", "a b", "a*b", "*.example.com", "http://x", "x/y", "x?"] {
+            assert!(validate_host_pattern(bad).is_err(), "{bad}");
+        }
+        assert!(
+            validate_host_pattern("*").is_ok()
+                && validate_host_pattern("127.0.0.1").is_ok()
+                && validate_host_pattern("[::1]").is_ok()
+        );
     }
 
     #[test]

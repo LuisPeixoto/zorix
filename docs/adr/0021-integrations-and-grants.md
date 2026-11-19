@@ -15,6 +15,13 @@ injection becomes damage: a message sent, an issue closed, a table dropped, data
 - **Writes ask.** HTTP methods other than GET and HEAD, every GitHub, GitLab, Jira write, every chat message and every database
   `execute` require approval; the card shows the target and a preview (body, diff, highlighted SQL). Reads do not ask when granted.
 - **Secrets are attached by the tool**, chosen by host or connection, never read from model arguments, and never follow a redirect to another host.
+- **HTTP is two tools** because a tool's approval is fixed: `http.get` (GET only, no approval, grants required) and `http.request`
+  (any method, always asks). `webhook.send` posts a signed event to an address fixed by a `webhook` connection, never one the model
+  chose, signed with HMAC-SHA256 over `<timestamp>.<body>` (`X-Zorix-Signature: sha256=…`, `X-Zorix-Timestamp`, `X-Zorix-Event`).
+- **Model-supplied headers** cannot carry credentials (`Authorization`, `Cookie`, anything with auth, token, key, secret or session in
+  its name) or change the connection; secrets come from a connection of kind `http` matched by host, over HTTPS (or to this computer).
+- **No proxy.** These tools connect directly: a proxy resolves names itself and would defeat the address checks. A network that
+  requires a proxy cannot use them in 0.4.
 - **SSRF guard** for HTTP and for any base URL: HTTPS only (loopback only when granted); resolve, check every address against
   loopback, private, link-local, unique-local, multicast, unspecified and IPv4-mapped ranges, connect to the checked address; redirects
   are followed manually, at most five, each re-checked.

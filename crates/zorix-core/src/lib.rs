@@ -54,7 +54,8 @@ pub use model::{
     SegmentReport, StepPhase,
 };
 pub use permission::{
-    Action, Grants, Permission, tool_grant, validate_tool_pattern, validate_workspace_pattern, workspace_grant,
+    Action, Grants, Permission, network_grant, tool_grant, validate_host_pattern, validate_tool_pattern,
+    validate_workspace_pattern, workspace_grant,
 };
 pub use policy::{PolicyDecision, PolicyEngine, PolicyRequest};
 pub use ports::{EventPublisher, ExecutionScheduler, ResultValidator, Validation};
