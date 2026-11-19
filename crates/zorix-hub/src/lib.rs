@@ -294,6 +294,25 @@ impl Hub {
         }
     }
 
+    /// Start one enabled server and wait until it has listed its tools or given up.
+    pub async fn start_and_wait(&self, name: &str, wait: Duration) -> Result<zorix_mcp::ServerStatus, HubError> {
+        let server = self.server(name).await?;
+        self.manager.start(server.id).await?;
+        let deadline = Instant::now() + wait;
+        loop {
+            let status = self
+                .manager
+                .status(server.id)
+                .await?
+                .ok_or_else(|| HubError(format!("{name} disappeared while starting.")))?;
+            let settled = !matches!(status.state, ServerState::Starting | ServerState::Restarting { .. });
+            if settled || Instant::now() >= deadline {
+                return Ok(status);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
     pub(crate) async fn keep(&self, name: String, value: Secret) -> Result<(), HubError> {
         let secrets = self.secrets.clone();
         tokio::task::spawn_blocking(move || secrets.set(&name, &value))
