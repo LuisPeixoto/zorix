@@ -112,6 +112,11 @@ impl Hub {
         Ok(TemplateInstalled { imported, skills, cases })
     }
 
+    /// A short description of each agent, by slug.
+    pub async fn agent_cards(&self, include_archived: bool) -> Result<Vec<zorix_agents::AgentCard>, HubError> {
+        Ok(zorix_agents::cards(&*self.agents, &self.tenant, include_archived).await?)
+    }
+
     /// One agent by name, with its newest version.
     pub async fn agent(&self, slug: &str) -> Result<(Agent, AgentVersion), HubError> {
         let slug = AgentSlug::new(slug).map_err(HubError)?;
