@@ -169,8 +169,8 @@ impl ExecutionRepository for SqliteRepository {
             let mut stored = execution;
             stored.version = 1;
             tx.execute(
-                "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc, agent)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     stored.id.to_string(),
                     stored.tenant.as_str(),
@@ -180,6 +180,7 @@ impl ExecutionRepository for SqliteRepository {
                     stored.idempotency_key,
                     stored.created_at.millis(),
                     encode(&stored)?,
+                    stored.agent.as_ref().map(|a| a.agent.to_string()),
                 ],
             )
             .map_err(storage)?;
@@ -257,6 +258,10 @@ impl ExecutionRepository for SqliteRepository {
             if let Some(conversation) = &filter.conversation {
                 sql.push_str(" AND conversation = ?");
                 args.push(conversation.as_str().to_string());
+            }
+            if let Some(agent) = &filter.agent {
+                sql.push_str(" AND agent = ?");
+                args.push(agent.to_string());
             }
             sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?");
             let limit = if filter.limit == 0 { 100 } else { filter.limit };

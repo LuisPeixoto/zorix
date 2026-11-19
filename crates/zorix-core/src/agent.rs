@@ -15,7 +15,7 @@ use serde_json::Value;
 use crate::approval::canonical_hash;
 use crate::error::{Error, Result};
 use crate::execution::Limits;
-use crate::ids::{AgentId, ConversationId, ExecutionId, TenantId};
+use crate::ids::{AgentId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, TenantId};
 use crate::memory::MemoryOptions;
 use crate::model::GenerationParams;
 use crate::permission::{Grants, validate_tool_pattern};
@@ -594,7 +594,7 @@ impl EvalCase {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StoredCase {
     /// Its id.
-    pub id: ExecutionId,
+    pub id: EvalCaseId,
     /// The agent it belongs to.
     pub agent: AgentId,
     /// What it is.
@@ -657,7 +657,7 @@ pub struct EvalResult {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct EvalRun {
     /// Its id.
-    pub id: ExecutionId,
+    pub id: EvalRunId,
     /// The agent.
     pub agent: AgentId,
     /// The version that was tried.
@@ -758,7 +758,7 @@ pub trait AgentStore: Send + Sync {
     /// Keep an eval run (new or updated, with its results so far).
     async fn save_eval_run(&self, tenant: &TenantId, run: &EvalRun) -> Result<()>;
     /// One eval run.
-    async fn eval_run(&self, tenant: &TenantId, id: ExecutionId) -> Result<Option<EvalRun>>;
+    async fn eval_run(&self, tenant: &TenantId, id: EvalRunId) -> Result<Option<EvalRun>>;
     /// The eval runs of an agent, newest first.
     async fn eval_runs(&self, tenant: &TenantId, agent: AgentId, limit: usize) -> Result<Vec<EvalRun>>;
 }
