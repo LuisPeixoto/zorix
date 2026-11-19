@@ -22,6 +22,7 @@ zorix-providers.workspace = true
 zorix-memory.workspace = true
 zorix-mcp.workspace = true
 zorix-hub.workspace = true
+zorix-agents.workspace = true
 zorix-sandbox.workspace = true
 serde.workspace = true
 getrandom = "0.3"

@@ -462,6 +462,12 @@ pub struct McpServeArgs {
     /// With --allow-runs: let file tools write paths matching this pattern, relative to the project.
     #[arg(long, value_name = "PATTERN", value_parser = parse_path_pattern, requires = "allow_runs")]
     pub allow_write: Vec<String>,
+
+    /// With --allow-runs: let runs reach a resource, written as an agent's access entry: `http:HOST`,
+    /// `repo:OWNER/REPO[:write]`, `jira:KEY`, `chat:slack:#channel`, `db:NAME[:write]`, `code:python`. Repeat for more.
+    /// Runs and agents only ever get what this and --allow give them, whatever an agent's own access says.
+    #[arg(long, value_name = "ENTRY", value_parser = parse_access_entry, requires = "allow_runs")]
+    pub allow_access: Vec<String>,
 }
 
 /// Which model answers.
@@ -1127,6 +1133,10 @@ fn parse_agent_slug(text: &str) -> Result<String, String> {
 
 fn parse_tool_pattern(text: &str) -> Result<String, String> {
     zorix_core::validate_tool_pattern(text).map(|()| text.to_string())
+}
+
+fn parse_access_entry(text: &str) -> Result<String, String> {
+    zorix_core::access::compile_entry(text).map(|_| text.to_string())
 }
 
 fn parse_path_pattern(text: &str) -> Result<String, String> {
