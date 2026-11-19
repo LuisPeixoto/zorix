@@ -166,6 +166,29 @@ impl Grants {
         self.0.iter().any(|grant| grant.covers(required))
     }
 
+    /// What both sets allow, as a set: a grant of either side that the other side also covers (a pattern covers a pattern when
+    /// everything it matches is matched by the other). Whatever the result allows, **both** sets allow, and whatever both allow,
+    /// the result allows. A run built from an agent uses it so it can only narrow what the agent may do.
+    pub fn intersect(&self, other: &Grants) -> Grants {
+        let mut out: Vec<Permission> = Vec::new();
+        let keep = |p: &Permission, out: &mut Vec<Permission>| {
+            if !out.contains(p) {
+                out.push(p.clone());
+            }
+        };
+        for p in &self.0 {
+            if other.allows(p) {
+                keep(p, &mut out);
+            }
+        }
+        for q in &other.0 {
+            if self.allows(q) {
+                keep(q, &mut out);
+            }
+        }
+        Grants(out)
+    }
+
     /// The members of `required` that no grant covers.
     pub fn missing<'a>(&self, required: &'a [Permission]) -> Vec<&'a Permission> {
         required.iter().filter(|permission| !self.allows(permission)).collect()
@@ -175,6 +198,43 @@ impl Grants {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn g(items: &[(Action, &str)]) -> Grants {
+        Grants::new(items.iter().map(|(a, r)| Permission::new(*a, *r)).collect())
+    }
+
+    #[test]
+    fn intersecting_keeps_only_what_both_sides_allow() {
+        let agent = g(&[
+            (Action::UseTool, "files.*"),
+            (Action::Read, "workspace:*"),
+            (Action::Network, "http:api.example.com"),
+        ]);
+        let ask =
+            g(&[(Action::UseTool, "files.read"), (Action::Read, "workspace:docs/*"), (Action::Write, "workspace:*")]);
+        let both = agent.intersect(&ask);
+        assert!(both.allows(&Permission::use_tool("files.read")));
+        assert!(!both.allows(&Permission::use_tool("files.write")), "the ask named one tool");
+        assert!(both.allows(&Permission::new(Action::Read, "workspace:docs/a.md")));
+        assert!(!both.allows(&Permission::new(Action::Read, "workspace:src/a.rs")), "the ask narrowed the folder");
+        assert!(!both.allows(&Permission::new(Action::Write, "workspace:docs/a.md")), "the agent never had write");
+        assert!(!both.allows(&Permission::new(Action::Network, "http:api.example.com")), "the ask did not name it");
+    }
+
+    #[test]
+    fn an_exact_grant_does_not_stand_for_a_pattern_and_intersection_is_symmetric() {
+        let a = g(&[(Action::UseTool, "mcp.github.create_issue")]);
+        let b = g(&[(Action::UseTool, "mcp.github.*")]);
+        let ab = a.intersect(&b);
+        assert!(ab.allows(&Permission::use_tool("mcp.github.create_issue")));
+        assert!(!ab.allows(&Permission::use_tool("mcp.github.delete_repo")));
+        for r in ["mcp.github.create_issue", "mcp.github.delete_repo", "mcp.gitlab.x"] {
+            let r = Permission::use_tool(r);
+            assert_eq!(ab.allows(&r), b.intersect(&a).allows(&r));
+            assert_eq!(ab.allows(&r), a.allows(&r) && b.allows(&r), "{r}");
+        }
+        assert!(Grants::none().intersect(&b).iter().next().is_none());
+    }
 
     #[test]
     fn nothing_is_allowed_by_default() {
