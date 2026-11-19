@@ -142,3 +142,28 @@ A run reaches only hosts it was granted (`--allow-http <host>`). Addresses on th
 The message says what the service answered, without secrets. Check the token's scopes (a GitHub token needs repository
 access to write), the site address (Jira Cloud: `https://<name>.atlassian.net`), and for Postgres that the server offers TLS
 (`sslmode disable` is only accepted for a database on this computer).
+
+## "There is no agent called …"
+
+`zorix agent list --all` shows every agent, archived ones included; an archived agent still runs by name. Names are lowercase letters, digits and dashes.
+
+## "The skill … is not in the library"
+
+An agent file pins skills by hash, and the files are not here. Import the folder (`zorix skill import FOLDER`), or give the folder that came with the file:
+`zorix agent import FILE --skills DIR` (what `zorix agent export … --with-skills DIR` wrote). `zorix skill gc` deletes the files of skills no agent uses; an
+agent that needs one again must import it.
+
+## "… may not use the model …"
+
+The agent's `models.allowed` does not include it. Change the list on the *Definition* tab, or ask for an allowed model with `--model`. A route or alias is
+checked by the models it would use, so a fallback outside the list is skipped, not tried.
+
+## A skill's script says a module is not found
+
+Scripts run in the sandbox with the standard library only. A skill that needs a package from PyPI cannot run its scripts here; the instructions in its
+`SKILL.md` still work.
+
+## An evaluation case fails with "evaluations refuse approvals"
+
+The agent tried a tool that asks first. Evaluations never approve by themselves: list the tool in the case's `approve`, or check that the agent did not need it.
+`memory.remember` can never be approved this way.

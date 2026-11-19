@@ -49,10 +49,18 @@ large collections.
 Later: sandboxing of stdio MCP servers, MCP sampling and elicitation, inbound webhooks (with workflows), OAuth for the native
 integrations, more catalogue entries, cloud providers' APIs.
 
-## Phase 5 — AI Agent Engine
+## ✅ Phase 5 — AI Agent Engine · v0.5.0
 
-Agents ("AI employees"): identity, instructions, skills, tools, memory and authorised models, independent of the model that
-runs them. Skill libraries. Agents create executions with their own grants and limits.
+- **Agents**: identity, instructions, skills, tools and access, memory of their own and authorised models, independent of the model that runs them. Stored in the
+  database, versioned (every run records the version it used) and exported and imported as one Markdown file ([agents](agents.md)).
+- **Skills** in the open Agent Skills format: a folder with a `SKILL.md`, loaded on demand, scripts only in the sandbox ([skills](skills.md)).
+- An **agent memory scope**, approved by a person like every memory ([memory](memory.md)).
+- A **model allow-list** the router cannot escape, and **live text** that appears as an answer is written.
+- **Evaluations**: deterministic checks, an optional judge, comparison between versions and models ([evals](evals.md)).
+- Four **starter agents** with skills and evaluation suites; agents over **MCP** (`zorix.agents`, `zorix.run_agent`).
+- The CLI (`agent`, `skill`, `eval`, `run --agent`), and the **Agents screens**: gallery, chat, definition, skills, versions, evals and memory.
+
+Later: skills that need native packages, reasoning-token streaming, agents that call agents (Phase 6).
 
 ## Phase 6 — Multi-Agent Orchestration
 

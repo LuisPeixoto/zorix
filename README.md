@@ -41,10 +41,18 @@ everything. It is not tied to one model or provider, and the core does not know 
   reviewed by you, [native integrations](docs/integrations.md) (HTTP, GitHub, GitLab, Jira, Slack, Discord, SQLite, Postgres)
   behind per-resource grants, a [WebAssembly sandbox](docs/sandbox.md) for code, and `zorix mcp serve` to share your memory with
   other tools, read-only.
+- **Agents you can trust to change.** Reusable [agents](docs/agents.md) with instructions, [skills](docs/skills.md), tools, memory of their own and
+  a list of models they may use. Every change is a version, every run records which one it used, and [evaluations](docs/evals.md) tell you whether a change made
+  the agent worse. Start from four ready-made agents, chat with them in the app, or call them over MCP.
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
 ## Screenshots
+
+| | |
+|---|---|
+| ![An agent's chat](docs/screenshots-0.5.0/agents-chat-light.png) | ![Versions of an agent](docs/screenshots-0.5.0/agents-versions-light.png) |
+| Talk to an agent: tool calls and approvals sit in the conversation. | Every change is a version you can compare and roll back. |
 
 | | |
 |---|---|
@@ -56,7 +64,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![Integrations](docs/screenshots-0.4.0/integrations-connected-light.png) | ![A database change waiting for approval](docs/screenshots-0.4.0/approval-db-light.png) |
 | Servers and services, live. Tools wait for your review. | What a change would do, with the SQL highlighted. |
 
-## What is in Phases 1 to 4
+## What is in Phases 1 to 5
 
 | Area | What it does | Guide |
 |---|---|---|

@@ -24,6 +24,13 @@ A fact or a folder applies **globally**, to one **project** (runs whose workspac
 **conversation**. A project is the canonical path of the workspace, so moving the folder orphans its memory. Tenants never
 mix: every query carries the tenant.
 
+## Agent memory
+
+An [agent](agents.md) has a fifth scope: **agent**, facts only that agent sees (`--scope agent:<name>` on the command line, the *Memory* tab of the
+agent, and the *Agent* filter of the Memory screen). Its runs see global, project, conversation **and** their own agent memory; no other run, agent or
+client does. `memory.remember` accepts `scope: "agent"` only inside an agent run that has memory of its own, and, as for every memory,
+**only a person approves it**. An agent that is deleted leaves its memory in place until you forget it; evaluation runs never use or write it.
+
 ## Who may write memory
 
 A model can only **propose**. The tool `memory.remember` always asks, and, unlike other tools, **no automatic mode can

@@ -135,6 +135,16 @@ and hash of every tool it was offered when it starts, so a server changing a too
 Servers, tool pins and connections are in SQLite (schema 3); secrets only in the keychain. See [MCP](mcp.md),
 [integrations](integrations.md), [sandbox](sandbox.md) and ADR-0018 to ADR-0023.
 
+## Agents (zorix-agents)
+
+An agent is data (a slug and immutable versions of a definition), so the runtime knows nothing about agents beyond a **binding** recorded on the execution
+(agent, version, hash, pinned skills, allowed models) and handed to tools. The `zorix-agents` crate holds the **AgentRunner** (how a version and a request
+become a `NewExecution`, with grants, limits and memory that can only narrow), the agent file format and its strict YAML subset, the skill library, importer
+and tools, the evaluator, and the embedded starter agents; `zorix-hub` wires it to the stores and the registry, and the CLI, the desktop and `zorix mcp serve`
+call only the hub. The model allow-list lives in the router (`Router::plan` drops candidates outside it) with a runtime check behind it; live text flows from the
+provider adapters through a `TextSink` to a `LiveBus` and `ExecutionEngine::live()`, and is never persisted. See [agents](agents.md), [skills](skills.md),
+[evals](evals.md) and ADR-0024 to ADR-0028.
+
 ## What comes next
 
 | Phase | Plugs into |

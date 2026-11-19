@@ -91,6 +91,14 @@ an outside agent can *read* what you told ZORIX to remember, never change it. `-
 the flags give them, and a run that needs an approval waits for it **in ZORIX**: no MCP client can approve a call. In Claude
 Code, for example: `claude mcp add zorix -- zorix mcp serve`.
 
+**Agents.** `zorix.agents` is always there: it lists the agents you made (name, description, default model, version and the names of
+their skills; never their instructions). With `--allow-runs`, **`zorix.run_agent`** `{agent, prompt, input?, model?, wait_seconds?}` runs one and
+answers like `zorix.run`, plus the agent and version that answered. A client's run gets only what you allowed when you started the server,
+whatever the agent can do in ZORIX: `--allow TOOL`, `--allow-read`, `--allow-write` and `--allow-access ENTRY` (an access entry such as
+`http:api.example.com`, `repo:acme/api`, `db:reports` or `code:python`) are **intersected** with the agent's own tools and access. With no
+`--allow` flags a client gets an agent with nothing to use, which is safe and usually not what you want: add what the agents need, for
+example `--allow 'skill.*' --allow-access code:python`. `zorix.status` and `zorix.result` follow either kind of run.
+
 ## Troubleshooting
 
 - **"Sign in"** on a card, or `needs sign-in` in `zorix mcp tools`: `zorix mcp login <name>`.

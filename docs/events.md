@@ -41,6 +41,11 @@ and later modules follow executions through events, with one mechanism ([ADR-000
 | `execution.failed` | Finished with an error | `kind`, `message`, `limit`, `usage` |
 | `execution.cancelled` | Stopped on request | `reason` |
 
+Live text (the words of an answer while a model is still writing it) is **not an event**: it is never stored and has no sequence number. It reaches a
+screen through `ExecutionEngine::live()`, pieces may be dropped when a reader is slow, and the stored `execution.model.responded` is the record that replaces
+whatever was drawn. Runs made by an agent record it in the execution (`agent`, `version`, `hash`) and in `execution.created`; evaluation runs carry the metadata
+label `zorix.eval`.
+
 ## Following an execution
 
 ```rust
