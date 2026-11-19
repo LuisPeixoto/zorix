@@ -35,10 +35,19 @@ usage providers report. Scopes: global, project, conversation. Guides: [memory](
 Not yet: summarising long conversations, a file watcher, OCR, memory shared between people, an on-disk vector index for very
 large collections.
 
-## Phase 4 — Tool & Integration Engine
+## ✅ Phase 4 — Tool & Integration Engine · v0.4.0
 
-A Model Context Protocol client, HTTP and webhook tools, integrations (GitHub, GitLab, Jira, databases, cloud, chat),
-credential handling, and a sandbox for tools that run code. Tool permissions grow per integration.
+- A **Model Context Protocol client** for both protocol eras, over stdio and Streamable HTTP with OAuth 2.1, with tool pinning
+  and review, a catalogue, and import from Claude Desktop, VS Code and Cursor ([MCP](mcp.md)).
+- **Native integrations**: generic HTTP, outbound signed webhooks, GitHub, GitLab, Jira, Slack, Discord, SQLite and Postgres,
+  behind per-resource grants and approvals ([integrations](integrations.md)).
+- A **WebAssembly sandbox** for JavaScript and Python ([sandbox](sandbox.md)).
+- **`zorix mcp serve`**: ZORIX's memory, read-only, for other MCP clients.
+- The CLI (`mcp`, `connect`, `sandbox`, run flags), the **Integrations screens**, approval cards per kind of call, a command
+  palette and design system v2.
+
+Later: sandboxing of stdio MCP servers, MCP sampling and elicitation, inbound webhooks (with workflows), OAuth for the native
+integrations, more catalogue entries, cloud providers' APIs.
 
 ## Phase 5 — AI Agent Engine
 

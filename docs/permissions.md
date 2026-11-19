@@ -24,6 +24,20 @@ zorix run "Summarise docs/plan.md" --workspace ~/project --allow workspace.read 
 
 Tools that are not granted are not even shown to the model, and if the model asks for one anyway it is refused.
 
+### Grants of integrations and MCP servers
+
+| Grant | Meaning |
+|---|---|
+| `use_tool mcp.<server>.*` | The tools of one MCP server (an MCP tool **always asks**, whatever the grant) |
+| `network http:<host>` | Reach a host (`http.*`, `webhook.send`); a trailing `*` is allowed |
+| `read` / `write` `github:<owner>/<repo>`, `gitlab:<group>/<project>` | A repository; `<owner>/*` covers an owner |
+| `read` / `write` `jira:<KEY>`, `slack:<channel>`, `discord:<channel id>` | A project or a channel |
+| `read` / `write` `db:<connection>` | A database connection. `db.query` is always read-only |
+| `execute code:javascript` / `code:python` | The [sandbox](sandbox.md); `read workspace:*` also lets it see the workspace, read-only |
+
+Writes, sends and statements that change data **always ask a person**, `--approve yes` is for tests and demos. See
+[integrations](integrations.md) for what each tool guards, and [MCP](mcp.md) for pinning and review.
+
 ## The policy engine
 
 `PolicyEngine::evaluate_tool_call` answers **Allow**, **Deny** or **RequireApproval**, in this order:

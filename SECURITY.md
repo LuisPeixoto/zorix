@@ -43,7 +43,7 @@ These notes grow with each feature that handles data, files, network or permissi
   `..`, no drive letters, no control characters, no Windows reserved names and nothing in `.zorix`. The real path,
   after following links, must stay inside the root; links that point outside are not followed and files are not written
   through a link. Writes go through a temporary file and a rename. Reads, listings and writes are size-limited. This is
-  *path* confinement, not a sandbox for code: no built-in tool runs code, and a tool that does will need real isolation first.
+  *path* confinement. Code runs only in the [WebAssembly sandbox](docs/sandbox.md); a stdio MCP server is a separate program that runs as you.
 - **Bounded everything.** Iterations, tool calls, tokens, cost, working time, model and tool time, tool output size,
   context size, note count and size, file sizes, calculator length and depth all have limits, listed in the docs.
 - **Secrets stay out.** Event payloads pass through a redaction filter (secret-looking keys, and words that look like
@@ -55,6 +55,22 @@ These notes grow with each feature that handles data, files, network or permissi
   prompts, tool arguments and results: treat the folder as sensitive. ZORIX has no telemetry. It connects only to the
   providers you configure, and only when a run uses them; the desktop interface itself can make no network request (its
   content security policy allows none), so every call goes through the Rust side.
+- **MCP servers are third parties.** A server you add is added **off** and needs your confirmation; a stdio server is a program
+  that runs **as you with no sandbox**, started without a shell, with a clean environment plus the variables you named. Its
+  tools are pinned: nothing is offered until you approve what it says, a changed description withdraws the tool until you
+  review it, and a run keeps the definitions it started with. Every MCP tool asks first; the server's own hints never grant.
+  What a server returns is data. ZORIX refuses sampling, elicitation and roots. OAuth uses PKCE, a state value, the resource
+  indicator and issuer checks; tokens are in the keychain, sent only to their server, and never logged. Details in
+  [docs/mcp.md](docs/mcp.md).
+- **Native integrations are bounded by grants.** A tool needs `use_tool` and a permission on the resource, and writes ask. Web
+  requests are HTTPS-only, resolve and check every address (SSRF and DNS rebinding), follow granted redirects only, use no
+  proxy, and the model cannot supply credentials. Jira searches are always confined to the granted project; Slack and Discord
+  mass mentions are refused; SQLite opens read-only; Postgres uses verified TLS (never falling back to plain text) and
+  read-only transactions for queries. See [docs/integrations.md](docs/integrations.md).
+- **The code sandbox has no network and hard limits.** WebAssembly (wasmtime): 256 MB, 10 s, 1 MB of output, 50 MB of scratch
+  files, no sockets; workspace files are visible only if granted and then read-only. The Python runtime is downloaded on request
+  and checked against a fixed SHA-256. See [docs/sandbox.md](docs/sandbox.md).
+- **`zorix mcp serve` is read-only by default** and holds no lock; with `--allow-runs` approvals still need a person in ZORIX.
 - **Data leaves the computer when a cloud provider is used.** The conversation, including tool results, is sent to that
   provider. `--local-only` (or `local_only = true` in `providers.toml`) restricts routing to servers on loopback addresses.
   Choosing a provider is a decision about where data goes; read the provider's terms.

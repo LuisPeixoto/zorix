@@ -29,6 +29,8 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 | `--instructions <TEXT>` | Standing instructions for the model |
 | `--allow <TOOL>` | Let the run use a tool (an id, or a prefix ending in `*`). Repeat for more |
 | `--allow-all-tools` | Let the run use every built-in tool. Tools that change things still ask first |
+| `--allow 'mcp.<server>.*'` | Let the run use the tools of an MCP server (each tool still asks first; see [MCP](mcp.md)) |
+| `--allow-http HOST`, `--allow-repo REPO[:write]`, `--allow-jira KEY[:write]`, `--allow-chat CHANNEL[:write]`, `--allow-db NAME[:write]`, `--allow-code LANGUAGE` | What the run may reach beyond its own tools: each gives the permission on the resource **and** the right to use the tools that reach it ([integrations](integrations.md)). Writes always ask |
 | `--workspace <DIR>` | The folder file tools are confined to |
 | `--allow-read <PATTERN>`, `--allow-write <PATTERN>` | Paths file tools may read or write, relative to the workspace (`*`, `docs/*`) |
 | `--approve ask\|never\|yes\|no` | What to do when a call needs approval. `ask` prompts on the terminal; `never` leaves it waiting and exits; `yes` and `no` answer automatically (for demos and tests). Default: `ask` on a terminal, `never` otherwise |
@@ -101,13 +103,44 @@ stops it between files and exits with code 4; what was done stays indexed. See [
 
 `show`, `models`, `set <PROVIDER/MODEL> [--dims N] [--cloud]`, `off`, `test` and `reembed`. A cloud provider needs `--cloud`: your text is sent to it.
 
+### `zorix mcp …`
+
+Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.
+
+| Command | What it does |
+|---|---|
+| `mcp catalog [SEARCH]` | The reviewed list of servers that can be added |
+| `mcp add <NAME> (--catalog ID [--input NAME=VALUE] \| --command PROGRAM [--arg ARG] [--env NAME] [--set NAME=VALUE] [--cwd DIR] \| --url URL [--auth none\|bearer\|oauth] [--client-id ID] [--scope S])` | Add a server, **off**. `--env NAME` reads a secret from this command's environment variable of the same name (or asks); it goes to the keychain |
+| `mcp list`, `mcp show <NAME>` | The servers, and one in full (secrets are never shown) |
+| `mcp enable <NAME> [--yes]` | Turn it on. Shows what it will run and asks, unless `--yes`; without a terminal `--yes` is required |
+| `mcp disable <NAME>`, `mcp remove <NAME>` | Turn off, or delete with every secret kept for it |
+| `mcp tools <NAME>` | Start the server briefly and list its tools: *new*, *pinned*, *changed*, *disabled* |
+| `mcp review <NAME> [--approve TOOL] [--approve-all] [--disable TOOL]` | Without flags, show what is new or changed (a changed description shows was and now) |
+| `mcp trust <NAME> --tool TOOL (--read-only-without-asking \| --ask)` | Whether calls ask first; the first only for a tool the server reports as read-only |
+| `mcp login <NAME>`, `mcp logout <NAME>` | Browser sign-in (OAuth) and forgetting it |
+| `mcp import [--from claude\|vscode\|cursor] [--path FILE] [--yes]` | Shows what another program has configured; adds it (off) only with `--yes` |
+| `mcp logs <NAME>` | Start briefly and show what the server wrote on its error stream |
+| `mcp serve [--allow-runs] [--project DIR] [--model M] [--allow TOOL] [--allow-read P] [--allow-write P]` | Serve ZORIX over MCP on standard input and output. Read-only unless `--allow-runs` |
+
+`mcp serve` and the commands that only read (`mcp list`, `show`, `catalog`) take no lock.
+
+### `zorix connect …`
+
+`connect add github|gitlab|jira|slack|discord|postgres|sqlite|http|webhook <NAME> …`, `connect list`, `connect test <NAME>`,
+`connect remove <NAME>`. See [integrations](integrations.md) for each kind's options. Secrets come from `--secret-env VAR`,
+`--secret-stdin` or a hidden prompt, never from an argument. A webhook without a key gets one, shown once.
+
+### `zorix sandbox status | install python`
+
+What the [code sandbox](sandbox.md) can run, and downloading CPython for it (about 26 MB, checked against a fixed checksum).
+
 ### `zorix calibration`
 
 Shows the factor learned for each model (how many real tokens an estimated token is worth) and how many samples it rests on.
 
 ### `zorix tools`
 
-Lists the built-in tools and how careful each is. `zorix data-dir` prints the data folder.
+Lists the tools ZORIX has (built in, memory, the native integrations and the sandbox), where each comes from and how careful it is. MCP tools appear in the app and in a run once a server is running. `zorix data-dir` prints the data folder.
 
 ## Exit codes
 
@@ -125,4 +158,4 @@ Lists the built-in tools and how careful each is. `zorix data-dir` prints the da
 
 Commands that run work (`run`, `approve`, `deny`, `resume`, `cancel`, `recover`) lock the data folder. If another
 ZORIX program (the desktop app, another terminal) holds it, they fail with *"Another ZORIX program is using the data
-folder"*. Reading commands (`list`, `show`, `events`, `tools`) never lock.
+folder"*. Commands that change integrations (`mcp add`, `enable`, `review`, `tools`, `login`, `connect add`, `sandbox install`…) lock it too. Reading commands (`list`, `show`, `events`, `tools`, `mcp list`, `mcp catalog`, `connect list`) and `mcp serve` without `--allow-runs` never lock.

@@ -83,3 +83,19 @@ real providers are `#[ignore]`d and run with `tools/live-tests.sh`:
   Gemini embeddings run when a key is stored.
 
 The tests print lengths, tool names and token counts, never a key or an answer.
+
+### Integrations
+
+The MCP client is tested against `zorix-fake-mcp`, a server in the repository that can play a well-behaved server of either
+era or a hostile one (changes definitions, floods, never answers, asks for sampling, sends oversized messages, crashes), and
+against mock HTTP servers for transports and OAuth (wiremock). The native tools are tested against mock APIs that check exact
+requests, that credentials never appear in URLs or logs, and the SSRF cases (loopback, `169.254.169.254`, a name that resolves to
+a private address, a redirect to an ungranted host). SQLite is tested on real files; Postgres runs against a real server in the
+CI job `Postgres tools` (the tests skip when `ZORIX_TEST_POSTGRES` is not set). The sandbox is tested with an infinite loop, a
+memory bomb, reading `/etc/passwd`, a network attempt and an output flood; the Python tests run where `ZORIX_PYTHON_WASM` points at
+the module (CI fetches it on Linux). `zorix mcp serve` is driven by ZORIX's own client over a real process. The CLI has process
+tests for `mcp`, `connect` and `sandbox`, using `zorix mcp serve` as the server under test.
+
+`tools/live-tests.sh integrations` runs the real command line against real servers: DeepWiki and Cloudflare docs, the
+`server-everything` and `server-filesystem` packages through `npx`, a public GitHub read with no token, and Python in the
+sandbox. It uses no account of yours.

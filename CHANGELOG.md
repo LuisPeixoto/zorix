@@ -5,6 +5,48 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-19
+
+The **Tool & Integration Engine**: ZORIX reaches the outside world, and you decide how far.
+
+### Added
+- **MCP client** for both protocol eras (the 2026-07-28 stateless revision and the handshake revisions up to 2025-11-25), over
+  stdio and Streamable HTTP, with OAuth 2.1 (PKCE, protected-resource and authorization-server metadata, dynamic client
+  registration, refresh) and tokens in the keychain. Tool definitions are **pinned**; a changed description withdraws the tool
+  until you review it; runs keep the definitions they started with. Servers are off until confirmed, every MCP tool asks first,
+  sampling, elicitation and roots are refused. A reviewed catalogue, import from Claude Desktop, VS Code and Cursor.
+- **Native integrations**: `http.get`/`http.request` (SSRF-guarded), signed outbound `webhook.send`, GitHub, GitLab, Jira, Slack,
+  Discord, SQLite (read-only) and Postgres (verified TLS, read-only transactions), behind grants per resource; connections with
+  tests and secrets in the keychain.
+- **Code sandbox**: JavaScript (QuickJS) and Python (CPython for WASI, downloaded and checksum-verified) in WebAssembly, with no
+  network and limits on memory, time, output and scratch files; the workspace is mounted read-only only when granted.
+- **`zorix mcp serve`**: ZORIX's memory, documents and past work over MCP on standard input and output, read-only and lock-free
+  by default; `--allow-runs` adds `zorix.run`, `zorix.status` and `zorix.result` (approvals stay in ZORIX).
+- **Command line**: `zorix mcp …`, `zorix connect …`, `zorix sandbox …`, and `--allow-http`, `--allow-repo`, `--allow-jira`,
+  `--allow-chat`, `--allow-db`, `--allow-code` on `run`. `zorix tools` shows every tool and where it comes from.
+- **Desktop**: the Integrations screens (connected servers with live state, catalogue, connections, sandbox), a server drawer to
+  review tools and changes, guided add/connect/import flows, a servers-and-services picker in New run, approval cards for MCP
+  tools, web requests, repositories and tickets, messages, SQL and code, and a command palette (⌘K).
+- **Design system v2**: depth tokens, glass, motion, and the Drawer, CommandPalette, BrandLogo, StatusPill, CodeBlock, DiffView,
+  Stepper, KeyValue and ToggleRow components. Brand marks are CC0 Simple Icons ([NOTICE](NOTICE.md)).
+- Database schema 3 (servers, tool pins, connections); events carry the tool's source, and approvals the pinned definition hash.
+- `tools/live-tests.sh integrations`: the real command line against real servers.
+
+### Changed
+- `zorix tools` lists more than the built-in tools; commands that change integrations lock the data folder like the other
+  writing commands.
+- The tool registry can change while ZORIX runs; an execution pins the tools it was offered.
+
+### Security
+- A Postgres connection that asks for verified TLS no longer falls back to plain text when the server does not offer it.
+- See SECURITY.md for the model of MCP servers, integrations and the sandbox.
+
+### Known limits
+- A stdio MCP server runs as you without a sandbox. Postgres is tested against a real server in CI, not locally. Legacy HTTP
+  MCP servers do not push tool-list changes live (they are seen at start or on refresh). HTTP+SSE (2024-11-05) and MCP client
+  ID metadata documents are not supported; Slack and GitHub OAuth need a pre-registered client id (the catalogue uses a token for
+  GitHub). Python is the 3.12 build of December 2023. MCP messages over SSE are limited to 1 MB. The catalogue has eleven entries.
+
 ## [0.3.0] - 2026-11-17
 
 The **Context & Memory Engine**: ZORIX remembers, and you decide what.
