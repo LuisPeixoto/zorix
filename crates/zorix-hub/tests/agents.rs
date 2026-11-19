@@ -154,3 +154,62 @@ async fn a_skill_is_imported_listed_removed_and_its_files_are_only_cleaned_when_
     hub.register_native_tools().unwrap();
     assert!(hub.registry_has_skill_tools());
 }
+
+#[tokio::test]
+async fn the_templates_are_listed_and_installing_one_brings_its_skills_cases_and_a_pinned_agent() {
+    let (hub, _dir) = hub();
+    let before = hub.templates().await.unwrap();
+    assert_eq!(
+        before.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        ["researcher", "code-reviewer", "data-analyst", "writer"]
+    );
+    assert!(before.iter().all(|t| !t.installed && t.cases >= 3 && !t.skills.is_empty() && !t.description.is_empty()));
+
+    let done = hub.add_template("data-analyst", None).await.unwrap();
+    assert!(done.imported.created);
+    assert_eq!((done.skills.len(), done.cases), (1, 3));
+    let (agent, version) = hub.agent("data-analyst").await.unwrap();
+    assert_eq!(version.spec.skills.len(), 1);
+    assert_eq!(version.spec.skills[0].name, "csv-profiling");
+    assert_eq!(version.spec.skills[0].hash, done.skills[0].hash, "the agent pins the exact skill that was imported");
+    assert!(hub.skills.has(&done.skills[0].hash), "and its files are in the library");
+    let cases = hub.agents.eval_cases(&TenantId::local(), agent.id).await.unwrap();
+    assert_eq!(cases.len(), 3);
+    assert!(hub.templates().await.unwrap().iter().any(|t| t.id == "data-analyst" && t.installed));
+
+    // Installing again is safe: nothing new is written.
+    let again = hub.add_template("data-analyst", None).await.unwrap();
+    assert!(!again.imported.created && !again.imported.changed);
+    assert_eq!(again.skills[0].hash, done.skills[0].hash);
+    assert_eq!(
+        hub.agents.eval_cases(&TenantId::local(), agent.id).await.unwrap().len(),
+        3,
+        "cases are replaced by name"
+    );
+    assert_eq!(hub.agents.versions(&TenantId::local(), agent.id).await.unwrap().len(), 1);
+
+    // A copy under another name has its own cases.
+    let copy = hub.add_template("data-analyst", Some("my-analyst")).await.unwrap();
+    assert!(copy.imported.created);
+    assert_eq!(hub.agents.eval_cases(&TenantId::local(), copy.imported.agent.id).await.unwrap().len(), 3);
+
+    let error = hub.add_template("nope", None).await.unwrap_err().to_string();
+    assert!(error.contains("no template called nope") && error.contains("researcher"), "{error}");
+}
+
+#[tokio::test]
+async fn every_template_installs_and_makes_a_run_that_carries_its_skill_tools() {
+    let (hub, _dir) = hub();
+    for info in hub.templates().await.unwrap() {
+        hub.add_template(&info.id, None).await.unwrap();
+        let new = hub
+            .prepare_agent_run(&info.id, None, AgentAsk { prompt: "hello".into(), ..AgentAsk::default() }, &Anything)
+            .await
+            .unwrap_or_else(|e| panic!("{}: {e}", info.id));
+        let binding = new.agent.as_ref().unwrap();
+        assert_eq!((binding.slug.as_str(), binding.version), (info.id.as_str(), 1));
+        assert_eq!(binding.skills.len(), 1);
+        assert!(new.request.instructions.as_deref().unwrap_or("").contains("<available_skills>"), "{}", info.id);
+        assert!(new.grants.allows(&zorix_core::Permission::use_tool("skill.load")), "{}", info.id);
+    }
+}
