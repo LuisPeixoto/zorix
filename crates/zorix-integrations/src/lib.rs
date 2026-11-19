@@ -2,6 +2,7 @@
 //! changes anything. Secrets live in the keychain and are chosen by the tool, never taken from the model.
 
 pub mod api;
+pub mod check;
 pub mod connections;
 pub mod db;
 pub mod discord;
@@ -15,6 +16,7 @@ pub mod sqlite_db;
 
 use zorix_core::ConnectionId;
 
+pub use check::{Checked, test_connection};
 pub use connections::Services;
 pub use db::db_tools;
 pub use discord::discord_tools;
