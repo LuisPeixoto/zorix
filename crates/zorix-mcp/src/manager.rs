@@ -18,17 +18,32 @@ use zorix_core::{
 };
 use zorix_providers::{SecretStore, get_async};
 
+use zorix_core::HttpAuth;
+
+use crate::auth::{AuthProvider, NoAuth, StaticBearer};
 use crate::client::{CallOutput, McpClient, McpToolDef, ToolListing};
 use crate::error::McpError;
+use crate::http::HttpTransport;
+use crate::oauth::{OAuthSession, Vault};
 use crate::stdio::{StdioConfig, StdioTransport};
 use crate::tool::{McpCaller, McpTool};
 use crate::transport::{ServerEvent, Transport};
 
-/// The keychain entry that holds one environment variable of a stdio server. Names are limited to lowercase letters, digits,
-/// `-`, `_` and `.`, so the variable's name is lowercased and the id shortened to its random tail.
-pub fn env_secret_name(server: McpServerId, variable: &str) -> String {
+/// The start of every keychain entry of a server. Names are limited to lowercase letters, digits, `-`, `_` and `.`, so the
+/// id is shortened to its random tail.
+pub fn secret_base(server: McpServerId) -> String {
     let id = server.to_string().replace('-', "");
-    format!("mcp.{}.env.{}", &id[id.len() - 12..], variable.to_ascii_lowercase())
+    format!("mcp.{}", &id[id.len() - 12..])
+}
+
+/// The keychain entry that holds one environment variable of a stdio server.
+pub fn env_secret_name(server: McpServerId, variable: &str) -> String {
+    format!("{}.env.{}", secret_base(server), variable.to_ascii_lowercase())
+}
+
+/// The keychain entry that holds a pasted bearer token for a remote server.
+pub fn token_secret_name(server: McpServerId) -> String {
+    format!("{}.token", secret_base(server))
 }
 
 /// Where a server stands.
@@ -124,7 +139,7 @@ pub trait Connector: Send + Sync {
     ) -> Result<Arc<dyn Transport>, McpError>;
 }
 
-/// Starts stdio servers; remote servers arrive with the HTTP transport.
+/// Starts stdio servers and reaches remote ones over HTTP.
 pub struct DefaultConnector;
 
 #[async_trait]
@@ -165,7 +180,30 @@ impl Connector for DefaultConnector {
                 })?;
                 Ok(Arc::new(transport))
             }
-            McpTransport::Http { .. } => Err(McpError::Spawn("remote servers are not supported by this build".into())),
+            McpTransport::Http { url, auth } => {
+                let provider: Arc<dyn AuthProvider> = match auth {
+                    HttpAuth::None => Arc::new(NoAuth),
+                    HttpAuth::Bearer => {
+                        let name = token_secret_name(server.id);
+                        let token = get_async(secrets.clone(), name)
+                            .await
+                            .map_err(|e| McpError::NeedsLogin(e.to_string()))?
+                            .ok_or_else(|| {
+                                McpError::NeedsLogin(format!(
+                                    "no token is stored for {} (zorix mcp login {})",
+                                    server.name, server.name
+                                ))
+                            })?;
+                        Arc::new(StaticBearer(token))
+                    }
+                    HttpAuth::OAuth { .. } => Arc::new(OAuthSession::new(
+                        Vault::new(secrets.clone(), &secret_base(server.id)),
+                        Arc::new(SystemClock),
+                        &format!("zorix mcp login {}", server.name),
+                    )?),
+                };
+                Ok(Arc::new(HttpTransport::new(url, provider)?))
+            }
         }
     }
 }

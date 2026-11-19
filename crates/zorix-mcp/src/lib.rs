@@ -7,6 +7,7 @@ pub mod error;
 pub mod headers;
 pub mod http;
 pub mod manager;
+pub mod oauth;
 pub mod protocol;
 pub mod stdio;
 pub mod tool;
@@ -19,7 +20,9 @@ pub use error::McpError;
 pub use http::HttpTransport;
 pub use manager::{
     Connector, DefaultConnector, ManagerOptions, McpManager, ServerState, ServerStatus, StatusChange, env_secret_name,
+    secret_base, token_secret_name,
 };
+pub use oauth::{BrowserOpener, LoginSummary, OAuthClient, OAuthSession, OAuthSettings, SystemBrowser, Vault};
 pub use protocol::{Era, LEGACY_VERSIONS, MODERN_VERSION};
 pub use stdio::{StdioConfig, StdioTransport};
 pub use tool::{McpCaller, McpTool, tool_id};

@@ -316,16 +316,16 @@ impl Inner {
             if !status.is_success() {
                 return Err(self.fail(response).await);
             }
-            if method == "initialize" {
-                if let Some(session) = response.headers().get(SESSION_HEADER).and_then(|v| v.to_str().ok()) {
-                    self.session.lock().id = Some(session.to_string());
-                }
+            if method == "initialize"
+                && let Some(session) = response.headers().get(SESSION_HEADER).and_then(|v| v.to_str().ok())
+            {
+                self.session.lock().id = Some(session.to_string());
             }
             let result = self.answer_to(response, id).await?;
-            if method == "initialize" {
-                if let Some(version) = result.get("protocolVersion").and_then(Value::as_str) {
-                    self.session.lock().version = Some(version.to_string());
-                }
+            if method == "initialize"
+                && let Some(version) = result.get("protocolVersion").and_then(Value::as_str)
+            {
+                self.session.lock().version = Some(version.to_string());
             }
             return Ok(result);
         }

@@ -13,8 +13,16 @@ descriptions are read by the model ([research](../research/integrations-landscap
 - **Hand-written client**, not `rmcp`: JSON-RPC 2.0, **stdio** and **Streamable HTTP**, on the HTTP client the providers use
   (HTTPS only, size and idle limits, redacted errors). The trust layer sits between the transport and the `Tool` adapter, and an SDK would be in the way.
 - **Dual-era.** stdio: probe `server/discover`, fall back to `initialize` on any non-modern answer. HTTP: try a modern request,
-  inspect a `400` body, fall back to `initialize`, and then to the deprecated HTTP+SSE transport only if the server answers like one.
-  The era is cached per process or origin and re-probed when it fails.
+  inspect a `400` body, fall back to `initialize`. The **deprecated 2024-11-05 HTTP+SSE transport is not supported** in 0.4
+  (it is deprecated since 2025-03-26 and servers that only speak it are rare). The era is cached per process or origin and
+  re-probed when it fails.
+- **Changes to tools.** A modern server announces them only to a client that opened `subscriptions/listen`, so the client opens one
+  (and waits for its acknowledgement before it is returned, so no change is missed between listing and listening) and opens it
+  again, telling listeners to look again, if it ends. Legacy stdio servers announce unasked. A legacy HTTP server's changes are
+  seen at the next start or on Refresh, because ZORIX does not open the legacy GET stream.
+- **`x-mcp-header`.** Parameters a server wants mirrored into `Mcp-Param-*` headers are mirrored (with the Base64 sentinel for
+  unsafe values), and a tool whose annotation is invalid is left out with the reason.
+- **Messages over SSE** are limited to 1 MB (the shared parser's line limit); a JSON body or a stdio line may be 4 MB.
 - **Never answer a server's requests.** Legacy `sampling/createMessage`, `elicitation/create` and `roots/list`, and the modern
   `InputRequiredResult`, are refused: sampling would let a server spend model tokens, elicitation would let it ask a person for
   secrets outside ZORIX's consent screens. `ping` is answered. A call that needs input fails with a message that says so.
