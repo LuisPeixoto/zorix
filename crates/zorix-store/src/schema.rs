@@ -254,6 +254,70 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE UNIQUE INDEX connections_by_name ON connections (tenant, name);
     ",
+    // 4: agents. What an agent is, every version of it (immutable), the skills it can load, and how it was evaluated. The
+    // executions table learns which agent a run came from; runs stored before this have none.
+    "
+    ALTER TABLE executions ADD COLUMN agent TEXT;
+    CREATE INDEX executions_by_agent ON executions (tenant, agent, created_at DESC) WHERE agent IS NOT NULL;
+
+    CREATE TABLE agents (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        current_version INTEGER NOT NULL,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE UNIQUE INDEX agents_by_slug ON agents (tenant, slug);
+
+    CREATE TABLE agent_versions (
+        agent_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        note TEXT,
+        created_at INTEGER NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (agent_id, version)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE skills (
+        tenant TEXT NOT NULL,
+        name TEXT NOT NULL,
+        current_hash TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (tenant, name)
+    ) WITHOUT ROWID;
+    CREATE TABLE skill_versions (
+        tenant TEXT NOT NULL,
+        name TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        imported_at INTEGER NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (tenant, name, hash)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE eval_cases (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX eval_cases_by_name ON eval_cases (agent_id, name);
+    CREATE TABLE eval_runs (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        model TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE INDEX eval_runs_by_agent ON eval_runs (tenant, agent_id, started_at DESC);
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -282,6 +346,29 @@ mod tests {
 
     fn version(conn: &Connection) -> u32 {
         conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_database_of_version_0_4_upgrades_to_agents_and_keeps_its_runs() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(3) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc) VALUES ('e1','local',NULL,'completed',1,NULL,1,'{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let (count, agent): (u32, Option<String>) =
+            conn.query_row("SELECT COUNT(*), MAX(agent) FROM executions", [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!((count, agent), (1, None), "the old run stays, with no agent");
+        let tables: u32 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('agents','agent_versions','skills','skill_versions','eval_cases','eval_runs')", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(tables, 6);
     }
 
     #[test]
