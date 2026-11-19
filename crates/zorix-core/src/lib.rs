@@ -34,7 +34,7 @@ pub use agent::{
 };
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
-pub use engine::{ExecutionDetail, ExecutionEngine, RecoveryReport};
+pub use engine::{ExecutionDetail, ExecutionEngine, LiveEvent, RecoveryReport};
 pub use error::{Error, Result};
 pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{
@@ -58,8 +58,8 @@ pub use memory::{
 pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
 pub use model::{
     Effort, EmbedPurpose, EmbeddingProfile, EmbeddingRequest, EmbeddingResponse, FinishReason, GenerationParams,
-    ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, RouteAttempt, RouteTrace,
-    SegmentReport, StepPhase,
+    ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, NoSink, RouteAttempt,
+    RouteTrace, SegmentReport, StepPhase, TextSink,
 };
 pub use permission::{
     Action, Grants, Permission, network_grant, tool_grant, validate_host_pattern, validate_tool_pattern,

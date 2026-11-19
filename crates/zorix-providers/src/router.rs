@@ -11,7 +11,7 @@ use parking_lot::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Clock, EmbeddingRequest, EmbeddingResponse, Message, ModelError, ModelErrorKind, ModelGateway, ModelProfile,
-    ModelRequest, ModelResponse, RouteAttempt, RouteTrace, StepPhase, SystemClock, Timestamp,
+    ModelRequest, ModelResponse, NoSink, RouteAttempt, RouteTrace, StepPhase, SystemClock, TextSink, Timestamp,
 };
 
 use crate::catalog::{Catalog, Latency, ModelInfo};
@@ -289,6 +289,16 @@ fn price_key(info: &Option<ModelInfo>) -> f64 {
 #[async_trait]
 impl ModelGateway for Router {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    /// A model that fails after it has started writing leaves its text behind, so the sink is reset before the next try.
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let resolved = self
             .resolve(&request.model, request.phase)
             .map_err(|e| ModelError::provider(ModelErrorKind::Invalid, e))?;
@@ -311,7 +321,7 @@ impl ModelGateway for Router {
             let Some(entry) = self.providers.get(&candidate.provider) else { continue };
             let mut attempt_request = request.clone();
             attempt_request.model = candidate.model.clone();
-            match entry.gateway.generate(attempt_request, cancel.clone()).await {
+            match entry.gateway.generate_live(attempt_request, cancel.clone(), sink.clone()).await {
                 Ok(mut response) => {
                     attempts.push(RouteAttempt {
                         provider: candidate.provider.clone(),
@@ -323,6 +333,7 @@ impl ModelGateway for Router {
                     return Ok(response);
                 }
                 Err(error) => {
+                    sink.reset();
                     let kind = error.kind();
                     attempts.push(RouteAttempt {
                         provider: candidate.provider.clone(),

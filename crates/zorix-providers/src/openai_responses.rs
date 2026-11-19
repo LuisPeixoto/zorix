@@ -12,7 +12,7 @@ use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Effort, FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse,
-    NativeTurn, Role, ToolCallId, ToolCallRequest, Usage,
+    NativeTurn, NoSink, Role, TextSink, ToolCallId, ToolCallRequest, Usage,
 };
 
 use crate::adapter::{Discover, ToolNameMap, parse_openai_models, resolve_key, schema_instruction, simple_name_char};
@@ -206,12 +206,19 @@ fn error_kind(code: &str, message: &str) -> ModelErrorKind {
 #[derive(Default)]
 pub struct ResponsesAggregator {
     done: Option<Value>,
+    sink: Option<Arc<dyn TextSink>>,
 }
 
 impl ResponsesAggregator {
     /// A new aggregator.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Pass the answer's text on as it arrives. The final answer still comes from `response.completed`.
+    pub fn with_sink(mut self, sink: Arc<dyn TextSink>) -> Self {
+        self.sink = Some(sink);
+        self
     }
 
     /// Take one event.
@@ -224,6 +231,11 @@ impl ResponsesAggregator {
             ModelError::provider(ModelErrorKind::Unavailable, "openai: an event of the stream was not JSON.")
         })?;
         match value["type"].as_str().unwrap_or("") {
+            "response.output_text.delta" => {
+                if let (Some(sink), Some(piece)) = (&self.sink, value["delta"].as_str().filter(|d| !d.is_empty())) {
+                    sink.text(piece);
+                }
+            }
             "response.completed" | "response.incomplete" => self.done = Some(value["response"].clone()),
             "response.failed" => {
                 let error = &value["response"]["error"];
@@ -331,6 +343,15 @@ impl Discover for OpenAiResponsesGateway {
 #[async_trait]
 impl ModelGateway for OpenAiResponsesGateway {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let key = resolve_key(&self.secrets, "openai", &self.key_name).await?;
         let mut replay = !self.replay_refused.load(Ordering::Relaxed);
         loop {
@@ -354,7 +375,7 @@ impl ModelGateway for OpenAiResponsesGateway {
                 }
             };
             let mut reader = self.http.sse(response);
-            let mut aggregator = ResponsesAggregator::new();
+            let mut aggregator = ResponsesAggregator::new().with_sink(sink.clone());
             while let Some(event) = reader.next(&cancel).await? {
                 aggregator.on_event(&event)?;
             }

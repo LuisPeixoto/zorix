@@ -13,8 +13,8 @@ use reqwest::Url;
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, Role,
-    ToolCallId, ToolCallRequest, Usage,
+    FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, NoSink, Role,
+    TextSink, ToolCallId, ToolCallRequest, Usage,
 };
 
 use crate::adapter::{Discover, ToolNameMap, schema_instruction, simple_name_char};
@@ -348,6 +348,15 @@ impl ModelGateway for OllamaGateway {
     }
 
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let (body, names) = build_request(&request, self.num_ctx(&request.model));
         let response = self
             .http
@@ -356,11 +365,17 @@ impl ModelGateway for OllamaGateway {
             .map_err(|e| self.hint(e))?;
         let mut reader = self.http.ndjson(response);
         let (mut text, mut calls, mut done) = (String::new(), Vec::<ToolCallRequest>::new(), None::<Value>);
+        let mut think = crate::adapter::ThinkFilter::default();
         while let Some(line) = reader.next(&cancel).await? {
             if let Some(error) = line["error"].as_str() {
                 return Err(line_error(error));
             }
-            text.push_str(line["message"]["content"].as_str().unwrap_or(""));
+            let piece = line["message"]["content"].as_str().unwrap_or("");
+            text.push_str(piece);
+            let visible = think.push(piece);
+            if !visible.is_empty() {
+                sink.text(&visible);
+            }
             for call in line["message"]["tool_calls"].as_array().into_iter().flatten() {
                 let arguments = &call["function"]["arguments"];
                 let arguments = match arguments {
@@ -376,6 +391,10 @@ impl ModelGateway for OllamaGateway {
                 });
             }
             if line["done"].as_bool() == Some(true) {
+                let rest = think.flush();
+                if !rest.is_empty() {
+                    sink.text(&rest);
+                }
                 done = Some(line);
                 break;
             }

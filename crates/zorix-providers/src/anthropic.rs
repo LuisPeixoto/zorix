@@ -14,7 +14,7 @@ use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Effort, FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse,
-    NativeTurn, Role, ToolCallId, ToolCallRequest, Usage,
+    NativeTurn, NoSink, Role, TextSink, ToolCallId, ToolCallRequest, Usage,
 };
 
 use crate::adapter::{Discover, ToolNameMap, resolve_key, schema_instruction, simple_name_char};
@@ -243,6 +243,7 @@ pub fn build_request(
 /// Builds a response out of the stream's events.
 #[derive(Default)]
 pub struct Aggregator {
+    sink: Option<Arc<dyn TextSink>>,
     model: String,
     blocks: Vec<Option<Block>>,
     usage: Usage,
@@ -262,6 +263,12 @@ impl Aggregator {
     /// A new, empty aggregator.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Pass the answer's text on as it arrives.
+    pub fn with_sink(mut self, sink: Arc<dyn TextSink>) -> Self {
+        self.sink = Some(sink);
+        self
     }
 
     fn usage_from(&mut self, usage: &Value) {
@@ -309,7 +316,13 @@ impl Aggregator {
                 if let Some(Some(block)) = self.blocks.get_mut(index) {
                     let delta = &data["delta"];
                     match delta["type"].as_str().unwrap_or("") {
-                        "text_delta" => block.text.push_str(delta["text"].as_str().unwrap_or("")),
+                        "text_delta" => {
+                            let piece = delta["text"].as_str().unwrap_or("");
+                            block.text.push_str(piece);
+                            if let (Some(sink), false) = (&self.sink, piece.is_empty()) {
+                                sink.text(piece);
+                            }
+                        }
                         "thinking_delta" => block.text.push_str(delta["thinking"].as_str().unwrap_or("")),
                         "input_json_delta" => block.json.push_str(delta["partial_json"].as_str().unwrap_or("")),
                         "signature_delta" => block.value["signature"] = delta["signature"].clone(),
@@ -440,6 +453,15 @@ impl Discover for AnthropicGateway {
 #[async_trait]
 impl ModelGateway for AnthropicGateway {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let key = resolve_key(&self.secrets, "anthropic", &self.key_name).await?;
         let info = self.catalog.get(&self.name, &request.model);
         let max_output = info.map(|m| m.max_output);
@@ -470,7 +492,7 @@ impl ModelGateway for AnthropicGateway {
                 }
             };
             let mut reader = self.http.sse(response);
-            let mut aggregator = Aggregator::new();
+            let mut aggregator = Aggregator::new().with_sink(sink.clone());
             while let Some(event) = reader.next(&cancel).await? {
                 aggregator.on_event(&event)?;
             }

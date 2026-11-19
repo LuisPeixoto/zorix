@@ -486,7 +486,13 @@ impl Run {
                 gen_ai.request.model = %request.model,
                 zorix.attempt = attempt
             );
-            let call = self.engine.inner.model.generate(request.clone(), self.control.cancel.clone()).instrument(span);
+            let sink = self.engine.inner.live.sink(self.exec.id);
+            let call = self
+                .engine
+                .inner
+                .model
+                .generate_live(request.clone(), self.control.cancel.clone(), sink)
+                .instrument(span);
             let outcome = tokio::time::timeout(Duration::from_millis(limits.model_timeout_ms), call).await;
             let (message, retry_after) = match outcome {
                 Ok(Ok(response)) => return Ok(response),

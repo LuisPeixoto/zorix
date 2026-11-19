@@ -13,7 +13,7 @@ use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, NativeTurn,
-    Role, ToolCallId, ToolCallRequest, Usage,
+    NoSink, Role, TextSink, ToolCallId, ToolCallRequest, Usage,
 };
 
 use crate::adapter::{Discover, ToolNameMap, resolve_key, schema_instruction};
@@ -309,6 +309,7 @@ pub fn build_request(
 /// Builds a response out of the stream's chunks.
 #[derive(Default)]
 pub struct GeminiAggregator {
+    sink: Option<Arc<dyn TextSink>>,
     model: String,
     parts: Vec<Value>,
     finish: Option<String>,
@@ -320,6 +321,12 @@ impl GeminiAggregator {
     /// A new aggregator.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Pass the answer's text on as it arrives (the model's thoughts stay out).
+    pub fn with_sink(mut self, sink: Arc<dyn TextSink>) -> Self {
+        self.sink = Some(sink);
+        self
     }
 
     /// Take one event.
@@ -347,6 +354,13 @@ impl GeminiAggregator {
         }
         if let Some(candidate) = chunk["candidates"].get(0) {
             for part in candidate["content"]["parts"].as_array().into_iter().flatten() {
+                if let (Some(sink), Some(piece), false) = (
+                    &self.sink,
+                    part["text"].as_str().filter(|t| !t.is_empty()),
+                    part["thought"].as_bool() == Some(true),
+                ) {
+                    sink.text(piece);
+                }
                 self.parts.push(part.clone());
             }
             if let Some(reason) = candidate["finishReason"].as_str() {
@@ -461,6 +475,15 @@ impl Discover for GeminiGateway {
 #[async_trait]
 impl ModelGateway for GeminiGateway {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let key = resolve_key(&self.secrets, "gemini", &self.key_name).await?;
         let max_output = self.catalog.get(&self.name, &request.model).map(|m| m.max_output);
         let (body, names) = build_request(&request, &self.options, max_output)?;
@@ -470,7 +493,7 @@ impl ModelGateway for GeminiGateway {
         let headers = [("x-goog-api-key", Header::Secret(&key))];
         let response = self.http.post_json(&url, &headers, &body, true, &cancel).await.map_err(map_error)?;
         let mut reader = self.http.sse(response);
-        let mut aggregator = GeminiAggregator::new();
+        let mut aggregator = GeminiAggregator::new().with_sink(sink.clone());
         while let Some(event) = reader.next(&cancel).await? {
             aggregator.on_event(&event)?;
         }

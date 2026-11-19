@@ -91,6 +91,54 @@ impl ToolNameMap {
     }
 }
 
+/// Hides `<think>…</think>` spans from text that arrives in pieces, so live text matches what `strip_think` keeps. A tag
+/// split between two pieces is held back until it is known to be a tag.
+#[derive(Debug, Default)]
+pub struct ThinkFilter {
+    inside: bool,
+    held: String,
+}
+
+impl ThinkFilter {
+    /// The visible part of the next piece.
+    pub fn push(&mut self, piece: &str) -> String {
+        self.held.push_str(piece);
+        let mut out = String::new();
+        loop {
+            let tag = if self.inside { "</think>" } else { "<think>" };
+            if let Some(at) = self.held.find(tag) {
+                if !self.inside {
+                    out.push_str(&self.held[..at]);
+                }
+                self.held.drain(..at + tag.len());
+                self.inside = !self.inside;
+                continue;
+            }
+            // Keep the longest ending that could still turn into the tag.
+            let keep = (1..tag.len())
+                .rev()
+                .find(|&n| {
+                    self.held.len() >= n
+                        && self.held.is_char_boundary(self.held.len() - n)
+                        && tag.starts_with(&self.held[self.held.len() - n..])
+                })
+                .unwrap_or(0);
+            let cut = self.held.len() - keep;
+            if !self.inside {
+                out.push_str(&self.held[..cut]);
+            }
+            self.held.drain(..cut);
+            return out;
+        }
+    }
+
+    /// What is still held when the stream ends: a half tag outside thinking is only text.
+    pub fn flush(&mut self) -> String {
+        let rest = std::mem::take(&mut self.held);
+        if self.inside { String::new() } else { rest }
+    }
+}
+
 /// Letters, digits, `_` and `-`: the rule of Anthropic and OpenAI function names.
 pub fn simple_name_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || matches!(c, '_' | '-')
@@ -135,6 +183,34 @@ mod tests {
 
     fn tool(id: &str) -> ToolDefinition {
         ToolDefinition { id: id.into(), description: String::new(), input_schema: json!({"type": "object"}) }
+    }
+
+    #[test]
+    fn the_think_filter_matches_strip_think_however_the_text_is_cut() {
+        let text = "Hi <think>let me think, <b>really</think>The answer <thin is 4.<think>never closed";
+        let expected = crate::openai_chat::strip_think(text);
+        for size in 1..=text.len() {
+            let mut filter = ThinkFilter::default();
+            let mut seen = String::new();
+            let mut at = 0;
+            while at < text.len() {
+                let mut end = (at + size).min(text.len());
+                while !text.is_char_boundary(end) {
+                    end += 1;
+                }
+                seen.push_str(&filter.push(&text[at..end]));
+                at = end;
+            }
+            seen.push_str(&filter.flush());
+            assert_eq!(seen.trim(), expected, "pieces of {size}");
+        }
+    }
+
+    #[test]
+    fn a_half_tag_at_the_end_is_text() {
+        let mut filter = ThinkFilter::default();
+        assert_eq!(filter.push("1 <thi"), "1 ");
+        assert_eq!(filter.flush(), "<thi");
     }
 
     #[test]

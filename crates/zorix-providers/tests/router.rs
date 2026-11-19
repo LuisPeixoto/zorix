@@ -8,7 +8,7 @@ use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     ExecutionId, FinishReason, ManualClock, Message, ModelError, ModelErrorKind, ModelGateway, ModelProfile,
-    ModelRequest, ModelResponse, StepPhase, Timestamp, ToolDefinition, Usage,
+    ModelRequest, ModelResponse, StepPhase, TextSink, Timestamp, ToolDefinition, Usage,
 };
 use zorix_providers::catalog::{Catalog, Latency, ModelInfo, Price};
 use zorix_providers::config::{ProviderConfig, ProviderKind, ProvidersConfig};
@@ -55,6 +55,29 @@ impl ModelGateway for Fake {
 
     fn describe(&self, _model: &str) -> Option<ModelProfile> {
         None
+    }
+
+    /// Starts writing before it knows whether it will fail, like a real stream.
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
+        sink.text(&format!("writing {}", self.name));
+        self.generate(request, cancel).await
+    }
+}
+
+struct Recorder(Mutex<Vec<String>>);
+
+impl TextSink for Recorder {
+    fn text(&self, delta: &str) {
+        self.0.lock().push(delta.to_string());
+    }
+
+    fn reset(&self) {
+        self.0.lock().push("<reset>".into());
     }
 }
 
@@ -486,4 +509,24 @@ async fn an_empty_or_star_list_allows_everything_and_the_demo_models_can_be_allo
     // Ordering still applies inside the allowed set.
     let cheapest = ask(&w.router, allowing(request("route:cheapest"), &["big/*"])).await.unwrap();
     assert_eq!(cheapest.model, "cheap");
+}
+
+#[tokio::test]
+async fn live_text_starts_again_when_a_fallback_takes_over() {
+    let w = world(ROUTES, vec![err(ModelErrorKind::RateLimited)]);
+    let recorder = Arc::new(Recorder(Mutex::new(Vec::new())));
+    let response =
+        w.router.generate_live(request("route:main"), CancellationToken::new(), recorder.clone()).await.unwrap();
+    assert_eq!(response.text, "from other");
+    assert_eq!(*recorder.0.lock(), ["writing big", "<reset>", "writing other"]);
+
+    // A first try that works is not reset.
+    let recorder = Arc::new(Recorder(Mutex::new(Vec::new())));
+    w.router.generate_live(request("route:main"), CancellationToken::new(), recorder.clone()).await.unwrap();
+    assert_eq!(
+        recorder.0.lock().first().map(String::as_str),
+        Some("writing other"),
+        "big is resting after its failure"
+    );
+    assert!(!recorder.0.lock().contains(&"<reset>".to_string()));
 }

@@ -79,6 +79,7 @@ pub(crate) struct Inner {
     pub scheduler: Arc<dyn ExecutionScheduler>,
     pub clock: Arc<dyn Clock>,
     pub bus: EventBus,
+    pub live: crate::live::LiveBus,
     pub publishers: Vec<Arc<dyn EventPublisher>>,
     pub validators: Vec<Arc<dyn ResultValidator>>,
     pub config: EngineConfig,
@@ -190,6 +191,7 @@ impl EngineBuilder {
             scheduler: self.scheduler.unwrap_or_else(|| Arc::new(LocalScheduler::new())),
             clock: self.clock.unwrap_or_else(|| Arc::new(SystemClock)),
             bus: EventBus::new(),
+            live: crate::live::LiveBus::new(),
             publishers: self.publishers,
             validators,
             owner: format!("engine-{}", ExecutionId::new()),
@@ -435,6 +437,11 @@ impl ExecutionEngine for Engine {
     ) -> Result<BoxStream<'static, ExecutionEvent>> {
         self.scoped(tenant, id).await?;
         Ok(follow(self.inner.repository.clone(), &self.inner.bus, id, after_seq))
+    }
+
+    async fn live(&self, tenant: &TenantId, id: ExecutionId) -> Result<BoxStream<'static, zorix_core::LiveEvent>> {
+        self.scoped(tenant, id).await?;
+        Ok(self.inner.live.watch(id))
     }
 
     async fn settle(&self, tenant: &TenantId, id: ExecutionId) -> Result<Execution> {
