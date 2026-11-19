@@ -5,6 +5,8 @@
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
   import Memory from "./lib/components/Memory.svelte";
+  import Agents from "./lib/components/agents/Agents.svelte";
+  import { AGENT_TABS, type AgentTab, agents } from "./lib/stores/agents.svelte.ts";
   import Integrations from "./lib/components/integrations/Integrations.svelte";
   import { integrations } from "./lib/stores/integrations.svelte.ts";
   import Providers from "./lib/components/Providers.svelte";
@@ -19,6 +21,7 @@
     theme.init();
     void store.init().then(() => {
       void integrations.init();
+      void agents.refresh();
       // For screenshots and reviews: open straight to a screen.
       const [where, forced] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split("@");
       if (forced === "light" || forced === "dark") theme.preview(forced);
@@ -33,6 +36,10 @@
         store.showIntegrations("connected");
         void integrations.refresh().then(() => integrations.open(tab || integrations.servers[0]?.name));
       }
+      if (start === "agents") {
+        const [slug, wanted, conversation] = tab ? tab.split("/") : [];
+        store.showAgents(slug || null, AGENT_TABS.includes(wanted as AgentTab) ? (wanted as AgentTab) : "chat", conversation || null);
+      }
       if (start === "memory") {
         store.startTab = tab || "facts";
         store.showMemory();
@@ -45,6 +52,16 @@
   // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.
   const commands = $derived<Command[]>([
     { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showRuns(); store.showForm(); } },
+    { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
+    ...agents.cards.map((card) => ({
+      id: `agent-${card.slug}`,
+      label: `Agent: ${card.name}`,
+      group: "Agents",
+      icon: "bot",
+      hint: `v${card.version}`,
+      keywords: card.slug,
+      run: () => store.showAgents(card.slug),
+    })),
     { id: "memory", label: "Memory", group: "Go to", icon: "book", keywords: "facts remember knowledge", run: () => store.showMemory() },
     { id: "integrations", label: "Integrations", group: "Go to", icon: "plug", keywords: "mcp servers connections catalogue github slack database", run: () => store.showIntegrations() },
     { id: "catalogue", label: "Browse the server catalogue", group: "Integrations", icon: "grid", keywords: "mcp add", run: () => store.showIntegrations("catalogue") },
@@ -97,6 +114,8 @@
         </div>
       {:else if store.view === "design"}
         <DesignSystem />
+      {:else if store.view === "agents"}
+        <Agents />
       {:else if store.view === "memory"}
         <Memory />
       {:else if store.view === "integrations"}

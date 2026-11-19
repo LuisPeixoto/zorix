@@ -28,6 +28,7 @@ zorix-tools.workspace = true
 zorix-providers.workspace = true
 zorix-memory.workspace = true
 zorix-hub.workspace = true
+zorix-agents.workspace = true
 zorix-mcp.workspace = true
 zorix-sandbox.workspace = true
 zorix-integrations.workspace = true

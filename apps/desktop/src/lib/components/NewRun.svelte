@@ -1,10 +1,12 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
+  import { type AgentDetail, agentGet } from "../api.ts";
+  import { agents } from "../stores/agents.svelte.ts";
 
   import { errorText } from "../api.ts";
   import { integrations } from "../stores/integrations.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
-  import { Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Switch, Textarea } from "../ui/index.ts";
+  import { Avatar, Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Switch, Textarea } from "../ui/index.ts";
 
   const examples = [
     "What is 17*23 and save it as result",
@@ -19,6 +21,17 @@
   let allowWrite = $state("");
   // "" means: whatever the default is (shown in the first option).
   let model = $state("");
+  // Run as an agent: it brings its own instructions, tools and access, and this form can only narrow them.
+  let agentSlug = $state("");
+  let agentDetail = $state<AgentDetail | null>(null);
+  $effect(() => {
+    const slug = agentSlug;
+    agentDetail = null;
+    if (slug) void agentGet(slug).then((d) => { if (agentSlug === slug) agentDetail = d; }).catch(() => {});
+  });
+  $effect(() => {
+    if (!agents.loaded) void agents.refresh();
+  });
   // What the person changed from the defaults. Offer the tools that need nothing more than a tool permission; file tools
   // need a workspace, so they start off.
   let overrides = $state<Record<string, boolean>>({});
@@ -73,6 +86,16 @@
 
   function submit(event: Event) {
     event.preventDefault();
+    if (agentSlug) {
+      void store.startAgent({
+        slug: agentSlug,
+        prompt: prompt.trim(),
+        model: model || undefined,
+        conversation: continuing?.id,
+        memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
+      });
+      return;
+    }
     void store.start({
       prompt: prompt.trim(),
       allow_tools: builtinTools.map((t) => t.id).filter(isOn),
@@ -112,6 +135,36 @@
     </div>
   </Card>
 
+  {#if agents.cards.length}
+    <Card title="Run as" icon="bot">
+      <Field label="Who does it?" hint={agentSlug ? "" : "Pick an agent to use its instructions, skills, tools and own memory. Or leave a plain run and set everything below."}>
+        {#snippet children(f)}
+          <Select id={f.id} bind:value={agentSlug}>
+            <option value="">No agent: a plain run</option>
+            {#each agents.cards as c (c.slug)}<option value={c.slug}>{c.emoji} {c.name} · v{c.version}</option>{/each}
+          </Select>
+        {/snippet}
+      </Field>
+      {#if agentDetail}
+        {@const spec = agentDetail.version.spec}
+        <div class="mt-4 flex items-start gap-3 rounded-xl border border-line bg-panel-2 p-3">
+          <Avatar emoji={spec.avatar.emoji} color={spec.avatar.color} size="lg" />
+          <div class="min-w-0 flex-1">
+            <p class="text-md font-semibold">{spec.name} <span class="text-sm font-normal text-faint">v{agentDetail.agent.current_version}</span></p>
+            <p class="text-sm text-muted">{spec.description}</p>
+            <p class="mt-2 flex flex-wrap gap-1.5">
+              {#each spec.tools as t (t)}<Badge tone="muted" class="mono">{t}</Badge>{/each}
+              {#each spec.access as a (a)}<Badge tone="accent" class="mono">{a}</Badge>{/each}
+              {#each spec.skills as k (k.name)}<Badge tone="info">skill {k.name}</Badge>{/each}
+              <Badge tone="muted">up to {spec.limits.max_iterations} steps</Badge>
+            </p>
+            <p class="mt-2 text-xs text-faint">It keeps all of this. Changing the model or switching memory off below only narrows it; it never adds. Anything that changes something still asks you first.</p>
+          </div>
+        </div>
+      {/if}
+    </Card>
+  {/if}
+
   <Card title="Memory" icon="book">
     {#if continuing}
       <Callout tone="info" icon="history">
@@ -133,7 +186,7 @@
     <Field label="Which model answers?">
       {#snippet children(f)}
         <Select id={f.id} bind:value={model}>
-          <option value="">Default ({defaultName})</option>
+          <option value="">Default ({agentDetail ? agentDetail.version.spec.models.default : defaultName})</option>
           <option value="demo">demo (built-in, no network)</option>
           {#each store.models?.routes ?? [] as r}<option value={"route:" + r}>route: {r}</option>{/each}
           {#each store.models?.aliases ?? [] as a}<option value={a}>alias: {a}</option>{/each}
@@ -154,6 +207,7 @@
     </div>
   </Card>
 
+  {#if !agentSlug}
   <Card title="Tools it may use" icon="wrench">
     <div class="grid gap-2 sm:grid-cols-2">
       {#each builtinTools as tool (tool.id)}
@@ -245,9 +299,11 @@
     {/if}
   </Card>
 
+  {/if}
+
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
   <div class="sticky -bottom-8 z-20 -mx-8 -mb-8 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-8 py-4 backdrop-blur">
-    <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>Start run</Button>
+    <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>{agentSlug ? "Start with the agent" : "Start run"}</Button>
   </div>
 </form>

@@ -1,6 +1,7 @@
 // The app's state. Effects follow ids, never the objects, which are replaced on every refresh.
 import {
   type AppInfo,
+  type AskAgent,
   type ExecEvent,
   type ModelChoices,
   type ProviderRow,
@@ -13,6 +14,7 @@ import {
   type StartRun,
   type ToolSpec,
   addMemory,
+  agentAsk,
   appInfo,
   cancelRun,
   decideRun,
@@ -36,6 +38,7 @@ import {
   watchRun,
 } from "../api.ts";
 import { isFinished } from "../format.ts";
+import { type AgentTab, agents } from "./agents.svelte.ts";
 import { toast } from "./toast.svelte.ts";
 
 class RunsStore {
@@ -47,7 +50,7 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
-  view = $state<"runs" | "providers" | "memory" | "design" | "integrations">("runs");
+  view = $state<"runs" | "providers" | "memory" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -154,6 +157,12 @@ class RunsStore {
     this.integrationsTab = tab;
   }
 
+  /** Open the Agents screen: the gallery, or one agent on a tab. */
+  showAgents(slug: string | null = null, tab: AgentTab = "chat", conversation: string | null = null): void {
+    this.view = "agents";
+    void agents.open(slug, tab, conversation);
+  }
+
   showDesign(): void {
     this.view = "design";
   }
@@ -256,6 +265,19 @@ class RunsStore {
     let created: Execution | null = null;
     const ok = await this.#act(async () => {
       created = await startRun(request);
+    });
+    if (ok && created) {
+      this.continuing = null;
+      await this.refreshList();
+      await this.select((created as Execution).id);
+    }
+  }
+
+  /** Start a run as an agent (the New run form with an agent picked) and follow it. */
+  async startAgent(request: AskAgent): Promise<void> {
+    let created: Execution | null = null;
+    const ok = await this.#act(async () => {
+      created = await agentAsk(request);
     });
     if (ok && created) {
       this.continuing = null;

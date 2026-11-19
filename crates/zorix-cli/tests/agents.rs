@@ -145,6 +145,7 @@ fn an_agent_can_be_exported_imported_versioned_compared_rolled_back_archived_and
     assert_eq!(copy["created"], true);
 
     let (versions, _) = home.ok(&["agent", "versions", "calc"]);
+    assert!(versions.find("v2").unwrap() < versions.find("v1").unwrap(), "newest first: {versions}");
     assert!(
         versions.contains("v2") && versions.contains("← current") && versions.contains("show the working"),
         "{versions}"

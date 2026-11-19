@@ -42,7 +42,14 @@
       <span class="glow -top-24 -right-16 size-60" aria-hidden="true"></span>
       <div class="relative flex items-start justify-between gap-4">
         <div class="min-w-0">
-          <StatusBadge state={run.state} />
+          <div class="flex flex-wrap items-center gap-2">
+            <StatusBadge state={run.state} />
+            {#if run.agent}
+              <button type="button" class="inline-flex h-6 items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-xs font-medium text-accent transition hover:bg-select" title="Open {run.agent.slug} and this conversation" onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null)}>
+                <Icon name="bot" size={12} /> {run.agent.slug} · v{run.agent.version}
+              </button>
+            {/if}
+          </div>
           <h2 class="selectable mt-2 text-2xl leading-tight font-semibold break-words">{run.request.prompt}</h2>
           <p class="mt-1.5 flex items-center gap-1 text-xs text-faint">
             <span class="mono selectable">{run.id}</span>
@@ -57,7 +64,7 @@
             <Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>
           {/if}
           {#if isFinished(run.state) && run.conversation}
-            <Button icon="history" onclick={() => store.continueConversation()}>Continue</Button>
+            <Button icon="history" onclick={() => (run.agent ? store.showAgents(run.agent.slug, "chat", run.conversation ?? null) : store.continueConversation())}>Continue</Button>
           {/if}
           {#if !isFinished(run.state)}
             <Button variant="danger" icon="stop" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>

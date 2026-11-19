@@ -36,7 +36,7 @@
 </script>
 
 <div class={cn("overflow-hidden rounded-xl border bg-panel-2", status === "awaiting_approval" ? "border-warn/50" : "border-line")}>
-  <button type="button" class="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-hover" aria-expanded={open} aria-controls={panel} onclick={() => (open = !open)}>
+  <button type="button" class="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-hover" aria-expanded={open} aria-controls={open ? panel : undefined} onclick={() => (open = !open)}>
     <span class="grid size-6 shrink-0 place-items-center rounded-md bg-panel text-muted shadow-1">
       {#if status === "started"}<Spinner size={13} />{:else}<Icon name={look.icon} size={13} />{/if}
     </span>

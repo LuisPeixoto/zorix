@@ -1,8 +1,9 @@
 <script lang="ts">
   import { ago, shorten } from "../../format.ts";
+  import { agents } from "../../stores/agents.svelte.ts";
   import { integrations } from "../../stores/integrations.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
-  import { Button } from "../../ui/index.ts";
+  import { Button, Icon } from "../../ui/index.ts";
   import StatusBadge from "../StatusBadge.svelte";
   import NavItem from "./NavItem.svelte";
 
@@ -25,7 +26,7 @@
         class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {store.view === 'runs' && store.selectedId === run.id ? 'bg-accent-soft shadow-[inset_2px_0_0_var(--accent)]' : ''}"
         onclick={() => { store.showRuns(); void store.select(run.id); }}
       >
-        <span class="block truncate text-md font-medium">{shorten(run.request.prompt, 60)}</span>
+        <span class="flex items-center gap-1.5 truncate text-md font-medium">{#if run.agent}<Icon name="bot" size={13} class="shrink-0 text-accent" />{/if}<span class="truncate">{shorten(run.request.prompt, 60)}</span></span>
         <span class="mt-0.5 flex items-center justify-between text-xs text-muted">
           <StatusBadge state={run.state} />
           <span class="tnum">{ago(run.created_at, store.now)}</span>
@@ -38,6 +39,7 @@
 
   <div class="border-t border-line-soft px-2 pt-2 pb-1">
     <p class="px-2.5 pb-1 text-2xs font-semibold tracking-wider text-faint uppercase">Workspace</p>
+    <NavItem icon="bot" active={store.view === "agents"} count={agents.cards.length} onclick={() => store.showAgents()}>Agents</NavItem>
     <NavItem icon="book" active={store.view === "memory"} onclick={() => store.showMemory()}>Memory</NavItem>
     <NavItem icon="plug" active={store.view === "integrations"} attention={integrations.attention > 0} count={integrations.servers.filter((s) => s.enabled).length} onclick={() => store.showIntegrations()}>Integrations</NavItem>
     <NavItem icon="key" active={store.view === "providers"} onclick={() => store.showProviders()}>Providers &amp; keys</NavItem>
