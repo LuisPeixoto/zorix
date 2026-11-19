@@ -22,6 +22,7 @@ zorix-tools = { path = "crates/zorix-tools" }
 zorix-providers = { path = "crates/zorix-providers" }
 zorix-mcp = { path = "crates/zorix-mcp" }
 zorix-integrations = { path = "crates/zorix-integrations" }
+zorix-sandbox = { path = "crates/zorix-sandbox" }
 zorix-memory = { path = "crates/zorix-memory" }
 
 async-trait = "0.1"
@@ -57,6 +58,33 @@ uuid = { version = "1", features = ["v7", "serde"] }
 # Keep debug builds small: this machine and many CI runners have little disk to spare.
 [profile.dev]
 debug = "line-tables-only"
+
+# The sandbox compiles WebAssembly at run time. Unoptimised, that takes many seconds, which makes the tests (and a developer's
+# first run) painful; the compiler is optimised even in debug builds.
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.cranelift-frontend]
+opt-level = 3
+[profile.dev.package.cranelift-entity]
+opt-level = 3
+[profile.dev.package.cranelift-bforest]
+opt-level = 3
+[profile.dev.package.cranelift-control]
+opt-level = 3
+[profile.dev.package.regalloc2]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+[profile.dev.package.wasmtime-internal-cranelift]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.wasmtime]
+opt-level = 3
+[profile.dev.package.gimli]
+opt-level = 3
+[profile.dev.package.object]
+opt-level = 3
 
 [profile.release]
 lto = "thin"
