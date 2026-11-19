@@ -7664,7 +7664,9 @@ dependencies = [
  "async-trait",
  "clap",
  "futures-util",
+ "getrandom 0.3.4",
  "rpassword",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
@@ -7672,10 +7674,12 @@ dependencies = [
  "tokio-util",
  "tracing-subscriber",
  "zorix-core",
+ "zorix-hub",
  "zorix-mcp",
  "zorix-memory",
  "zorix-providers",
  "zorix-runtime",
+ "zorix-sandbox",
  "zorix-sim",
  "zorix-store",
  "zorix-tools",
@@ -7718,6 +7722,24 @@ dependencies = [
  "zorix-sim",
  "zorix-store",
  "zorix-tools",
+]
+
+[[package]]
+name = "zorix-hub"
+version = "0.3.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+ "zorix-core",
+ "zorix-integrations",
+ "zorix-mcp",
+ "zorix-providers",
+ "zorix-runtime",
+ "zorix-sandbox",
+ "zorix-store",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod commands;
 mod follow;
+mod integrations;
 mod mcp_serve;
 mod memory;
 mod providers;

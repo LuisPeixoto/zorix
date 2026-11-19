@@ -70,6 +70,12 @@ pub enum Command {
     /// Connect ZORIX to MCP servers, or serve ZORIX's memory to other tools over MCP.
     #[command(subcommand)]
     Mcp(McpCommand),
+    /// Connections to services: Git hosts, Jira, Slack, Discord, databases, web APIs and webhooks.
+    #[command(subcommand)]
+    Connect(ConnectCommand),
+    /// Run code in a WebAssembly sandbox.
+    #[command(subcommand)]
+    Sandbox(SandboxCommand),
     /// How many real tokens ZORIX's estimates are worth, per model, learned from what providers report.
     Calibration,
     /// Print where ZORIX keeps its data.
@@ -79,9 +85,354 @@ pub enum Command {
 /// What `zorix mcp` does.
 #[derive(Debug, Subcommand)]
 pub enum McpCommand {
+    /// The servers ZORIX knows how to add, from a short reviewed list.
+    Catalog(McpCatalogArgs),
+    /// Add an MCP server (disabled until you enable it): from the catalogue, a command to run, or a web address.
+    Add(McpAddArgs),
+    /// List the servers you added.
+    List,
+    /// Show one server: what it runs or where it connects, and what is known about its tools.
+    Show(McpNameArg),
+    /// Sign in to a server that uses a browser sign-in.
+    Login(McpNameArg),
+    /// Forget the sign-in of a server.
+    Logout(McpNameArg),
+    /// Start a server briefly and list the tools it offers and where each stands.
+    Tools(McpNameArg),
+    /// Approve, or turn off, tools that are new or whose description changed.
+    Review(McpReviewArgs),
+    /// Say whether calls to a tool ask first.
+    Trust(McpTrustArgs),
+    /// Turn a server on: it starts when a run is allowed to use it.
+    Enable(McpEnableArgs),
+    /// Turn a server off.
+    Disable(McpNameArg),
+    /// Remove a server and every secret kept for it.
+    Remove(McpNameArg),
+    /// Bring in servers from Claude Desktop, VS Code or Cursor. Shows what would be imported unless you pass --yes.
+    Import(McpImportArgs),
+    /// Start a server briefly and show what it wrote on its error stream.
+    Logs(McpNameArg),
     /// Serve ZORIX over MCP on standard input and output, for Claude Code, Cursor and other MCP clients. Read-only by
     /// default: memory, documents and past work can be searched, never changed.
     Serve(McpServeArgs),
+}
+
+/// A server name.
+#[derive(Debug, Args)]
+pub struct McpNameArg {
+    /// The name ZORIX knows the server by.
+    pub name: String,
+}
+
+/// Options for `mcp catalog`.
+#[derive(Debug, Args)]
+pub struct McpCatalogArgs {
+    /// Only entries whose name, summary or category contain this text.
+    pub search: Option<String>,
+}
+
+/// How a remote server signs people in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum McpAuthArg {
+    /// No sign-in.
+    None,
+    /// A token you paste.
+    Bearer,
+    /// OAuth in the browser.
+    Oauth,
+}
+
+/// Where a secret comes from when it is not typed at a prompt.
+#[derive(Debug, Args)]
+pub struct SecretArgs {
+    /// Read the secret from this environment variable of this command.
+    #[arg(long, value_name = "VAR")]
+    pub secret_env: Option<String>,
+    /// Read the secret from standard input (one line).
+    #[arg(long)]
+    pub secret_stdin: bool,
+}
+
+/// Options for `mcp add`.
+#[derive(Debug, Args)]
+pub struct McpAddArgs {
+    /// The name to give it (lowercase letters, digits, - and _). With --catalog the entry's own name is the default.
+    pub name: Option<String>,
+    /// Add this entry of the catalogue (see `zorix mcp catalog`).
+    #[arg(long, value_name = "ID", conflicts_with_all = ["command", "url"])]
+    pub catalog: Option<String>,
+    /// A value the catalogue entry asks for, as NAME=VALUE (a folder, for example). Repeat for more.
+    #[arg(long = "input", value_name = "NAME=VALUE", requires = "catalog")]
+    pub inputs: Vec<String>,
+    /// A program to run as the server. It runs as you, without a sandbox.
+    #[arg(long, value_name = "PROGRAM", conflicts_with = "url")]
+    pub command: Option<String>,
+    /// An argument for the program. Repeat for more.
+    #[arg(long = "arg", value_name = "ARG", allow_hyphen_values = true, requires = "command")]
+    pub args: Vec<String>,
+    /// A secret environment variable for the program: its value comes from this command's own environment of the same name,
+    /// or is asked for. It goes to the keychain. Repeat for more.
+    #[arg(long = "env", value_name = "NAME", requires = "command")]
+    pub env: Vec<String>,
+    /// A plain environment variable for the program, as NAME=VALUE. Not secret. Repeat for more.
+    #[arg(long = "set", value_name = "NAME=VALUE", requires = "command")]
+    pub set: Vec<String>,
+    /// The folder to start the program in.
+    #[arg(long, value_name = "DIR", requires = "command")]
+    pub cwd: Option<PathBuf>,
+    /// The address of a remote server (https).
+    #[arg(long, value_name = "URL")]
+    pub url: Option<String>,
+    /// How the remote server signs in. Default: none.
+    #[arg(long, value_enum, requires = "url")]
+    pub auth: Option<McpAuthArg>,
+    /// A client id registered in advance, for servers that do not register clients themselves.
+    #[arg(long, value_name = "ID")]
+    pub client_id: Option<String>,
+    /// A scope to ask for at sign-in. Repeat for more.
+    #[arg(long = "scope", value_name = "SCOPE")]
+    pub scopes: Vec<String>,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// Options for `mcp review`.
+#[derive(Debug, Args)]
+pub struct McpReviewArgs {
+    /// The server.
+    pub name: String,
+    /// Approve what the server lists now for this tool.
+    #[arg(long, value_name = "TOOL")]
+    pub approve: Vec<String>,
+    /// Approve every tool that is new or changed.
+    #[arg(long)]
+    pub approve_all: bool,
+    /// Turn this tool off.
+    #[arg(long, value_name = "TOOL")]
+    pub disable: Vec<String>,
+}
+
+/// Options for `mcp trust`.
+#[derive(Debug, Args)]
+pub struct McpTrustArgs {
+    /// The server.
+    pub name: String,
+    /// The tool.
+    #[arg(long, value_name = "TOOL")]
+    pub tool: String,
+    /// Do not ask before calling it. Only for a tool the server reports as read-only.
+    #[arg(long, conflicts_with = "ask")]
+    pub read_only_without_asking: bool,
+    /// Ask before every call (the default).
+    #[arg(long)]
+    pub ask: bool,
+}
+
+/// Options for `mcp enable`.
+#[derive(Debug, Args)]
+pub struct McpEnableArgs {
+    /// The server.
+    pub name: String,
+    /// Do not ask for confirmation.
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Where `mcp import` looks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ImportSourceArg {
+    /// Claude Desktop's claude_desktop_config.json.
+    Claude,
+    /// VS Code's mcp.json.
+    Vscode,
+    /// Cursor's ~/.cursor/mcp.json.
+    Cursor,
+}
+
+/// Options for `mcp import`.
+#[derive(Debug, Args)]
+pub struct McpImportArgs {
+    /// Which program's configuration to read. Default: every one that is found.
+    #[arg(long, value_enum)]
+    pub from: Option<ImportSourceArg>,
+    /// A configuration file to read instead of the usual place (needs --from).
+    #[arg(long, value_name = "FILE", requires = "from")]
+    pub path: Option<PathBuf>,
+    /// Import what was found (servers are added disabled).
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// What `zorix connect` does.
+#[derive(Debug, Subcommand)]
+pub enum ConnectCommand {
+    /// Add a connection to a service.
+    #[command(subcommand)]
+    Add(ConnectAdd),
+    /// List connections.
+    List,
+    /// Check that a connection works, with one harmless read.
+    Test(McpNameArg),
+    /// Remove a connection and its secret.
+    Remove(McpNameArg),
+}
+
+/// Which service a new connection is for.
+#[derive(Debug, Subcommand)]
+pub enum ConnectAdd {
+    /// GitHub (or GitHub Enterprise). A token is only needed to write or to read private repositories.
+    Github(ConnectGit),
+    /// GitLab (gitlab.com or your own).
+    Gitlab(ConnectGit),
+    /// Jira Cloud (or Server with a bearer token).
+    Jira(ConnectJira),
+    /// A Slack workspace, with a bot token.
+    Slack(ConnectChat),
+    /// A Discord bot.
+    Discord(ConnectChat),
+    /// A Postgres database. Queries run in read-only transactions.
+    Postgres(ConnectPostgres),
+    /// A SQLite file, opened read-only.
+    Sqlite(ConnectSqlite),
+    /// Credentials for a web API, sent only to its host.
+    Http(ConnectHttp),
+    /// A webhook ZORIX can post signed events to.
+    Webhook(ConnectWebhook),
+}
+
+/// A GitHub or GitLab connection.
+#[derive(Debug, Args)]
+pub struct ConnectGit {
+    /// The name of the connection.
+    pub name: String,
+    /// The API address, for GitHub Enterprise or your own GitLab.
+    #[arg(long, value_name = "URL")]
+    pub base_url: Option<String>,
+    /// Keep no token: public data only.
+    #[arg(long)]
+    pub no_token: bool,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// A Jira connection.
+#[derive(Debug, Args)]
+pub struct ConnectJira {
+    /// The name of the connection.
+    pub name: String,
+    /// The site address, for example https://acme.atlassian.net.
+    #[arg(long, value_name = "URL")]
+    pub site: String,
+    /// The account email (Jira Cloud).
+    #[arg(long)]
+    pub email: Option<String>,
+    /// The token is a bearer token (Jira Server), not an API token with an email.
+    #[arg(long)]
+    pub bearer: bool,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// A Slack or Discord connection.
+#[derive(Debug, Args)]
+pub struct ConnectChat {
+    /// The name of the connection.
+    pub name: String,
+    /// The API address, if it is not the usual one.
+    #[arg(long, value_name = "URL")]
+    pub base_url: Option<String>,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// A Postgres connection.
+#[derive(Debug, Args)]
+pub struct ConnectPostgres {
+    /// The name of the connection (used in `--allow-db`).
+    pub name: String,
+    /// The host.
+    #[arg(long)]
+    pub host: String,
+    /// The port.
+    #[arg(long, default_value_t = 5432, value_parser = clap::value_parser!(u16).range(1..))]
+    pub port: u16,
+    /// The database.
+    #[arg(long)]
+    pub database: String,
+    /// The user.
+    #[arg(long)]
+    pub user: String,
+    /// verify-full (the default) or disable (only for a database on this computer).
+    #[arg(long, value_name = "MODE")]
+    pub sslmode: Option<String>,
+    /// A certificate authority file to trust, for a server with its own certificate.
+    #[arg(long, value_name = "FILE")]
+    pub ca_file: Option<PathBuf>,
+    /// The password is not needed (trust or certificate login).
+    #[arg(long)]
+    pub no_password: bool,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// A SQLite connection.
+#[derive(Debug, Args)]
+pub struct ConnectSqlite {
+    /// The name of the connection (used in `--allow-db`).
+    pub name: String,
+    /// The database file.
+    pub path: PathBuf,
+}
+
+/// An HTTP API connection.
+#[derive(Debug, Args)]
+pub struct ConnectHttp {
+    /// The name of the connection.
+    pub name: String,
+    /// The host the credential is for, such as api.example.com.
+    #[arg(long)]
+    pub host: String,
+    /// How to send it: bearer (the default), header or basic.
+    #[arg(long, default_value = "bearer")]
+    pub auth: String,
+    /// With header: the header name (default X-Api-Key).
+    #[arg(long)]
+    pub header: Option<String>,
+    /// With basic: the user name.
+    #[arg(long)]
+    pub username: Option<String>,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// A webhook connection.
+#[derive(Debug, Args)]
+pub struct ConnectWebhook {
+    /// The name of the connection.
+    pub name: String,
+    /// The address events are posted to.
+    #[arg(long, value_name = "URL")]
+    pub url: String,
+    #[command(flatten)]
+    pub secret: SecretArgs,
+}
+
+/// What `zorix sandbox` does.
+#[derive(Debug, Subcommand)]
+pub enum SandboxCommand {
+    /// What the code sandbox can run, and what is installed.
+    Status,
+    /// Download a language runtime (checked against a fixed checksum).
+    #[command(subcommand)]
+    Install(SandboxInstall),
+}
+
+/// What can be installed.
+#[derive(Debug, Subcommand)]
+pub enum SandboxInstall {
+    /// CPython 3.12 for WebAssembly (about 25 MB). JavaScript needs nothing.
+    Python,
 }
 
 /// Options for `mcp serve`.
@@ -215,6 +566,30 @@ pub struct RunArgs {
     /// Let file tools write paths matching this pattern, relative to the workspace.
     #[arg(long, value_name = "PATTERN", value_parser = parse_path_pattern)]
     pub allow_write: Vec<String>,
+
+    /// Let the execution reach this host over HTTPS with `http.get`, `http.request` and `webhook.send`.
+    #[arg(long, value_name = "HOST", value_parser = parse_http_grant)]
+    pub allow_http: Vec<GrantFlag>,
+
+    /// Let the execution use a repository: `[github:|gitlab:]OWNER/REPO[:write]`, or `OWNER/*`.
+    #[arg(long, value_name = "REPO", value_parser = parse_repo_grant)]
+    pub allow_repo: Vec<GrantFlag>,
+
+    /// Let the execution use a Jira project: `KEY[:write]`.
+    #[arg(long, value_name = "KEY", value_parser = parse_jira_grant)]
+    pub allow_jira: Vec<GrantFlag>,
+
+    /// Let the execution use a chat channel: `slack:#channel[:write]` or `discord:<channel id>[:write]`.
+    #[arg(long, value_name = "CHANNEL", value_parser = parse_chat_grant)]
+    pub allow_chat: Vec<GrantFlag>,
+
+    /// Let the execution use a database connection: `NAME[:write]`. Writes always ask first.
+    #[arg(long, value_name = "NAME", value_parser = parse_db_grant)]
+    pub allow_db: Vec<GrantFlag>,
+
+    /// Let the execution run code in the sandbox: `javascript` or `python`.
+    #[arg(long, value_name = "LANGUAGE", value_parser = parse_code_grant)]
+    pub allow_code: Vec<GrantFlag>,
 
     /// The folder file tools are confined to.
     #[arg(long, value_name = "DIR")]
@@ -701,6 +1076,34 @@ fn parse_key(text: &str) -> Result<String, String> {
         return Err("a key has 1 to 128 characters".into());
     }
     Ok(text.to_string())
+}
+
+/// Permissions a flag expands to.
+#[derive(Clone, Debug)]
+pub struct GrantFlag(pub Vec<zorix_core::Permission>);
+
+fn parse_http_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::http(text).map(GrantFlag)
+}
+
+fn parse_repo_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::repo(text).map(GrantFlag)
+}
+
+fn parse_jira_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::jira(text).map(GrantFlag)
+}
+
+fn parse_chat_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::chat(text).map(GrantFlag)
+}
+
+fn parse_db_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::db(text).map(GrantFlag)
+}
+
+fn parse_code_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::code(text).map(GrantFlag)
 }
 
 fn parse_tool_pattern(text: &str) -> Result<String, String> {

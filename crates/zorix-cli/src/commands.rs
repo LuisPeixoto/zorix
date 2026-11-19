@@ -40,6 +40,9 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Knowledge(command) => crate::memory::knowledge(&home, &tenant, printer, command).await,
         Command::Embeddings(command) => crate::memory::embeddings(&home, &tenant, printer, command).await,
         Command::Mcp(McpCommand::Serve(args)) => crate::mcp_serve::serve(&home, tenant, args).await,
+        Command::Mcp(command) => crate::integrations::mcp(&home, tenant, printer, command).await,
+        Command::Connect(command) => crate::integrations::connect(&home, tenant, printer, command).await,
+        Command::Sandbox(command) => crate::integrations::sandbox(&home, tenant, printer, command).await,
         Command::Calibration => crate::memory::calibration(&home, printer),
         Command::DataDir => {
             println!("{}", home.display());
@@ -61,6 +64,19 @@ fn grants_from(args: &RunArgs) -> Grants {
     }
     for pattern in &args.allow_write {
         grants = grants.with(Permission::new(Action::Write, format!("workspace:{pattern}")));
+    }
+    let flags = args
+        .allow_http
+        .iter()
+        .chain(&args.allow_repo)
+        .chain(&args.allow_jira)
+        .chain(&args.allow_chat)
+        .chain(&args.allow_db)
+        .chain(&args.allow_code);
+    for flag in flags {
+        for permission in &flag.0 {
+            grants = grants.with(permission.clone());
+        }
     }
     grants
 }
@@ -91,7 +107,9 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     if let Some(seconds) = args.max_seconds {
         limits.max_active_ms = seconds * 1_000;
     }
-    let app = open_engine(home, &args.model)?;
+    let app = open_engine(home, &tenant, &args.model)?;
+    let grants = grants_from(&args);
+    app.start_servers(&grants).await;
     let new = NewExecution {
         tenant: Some(tenant.clone()),
         conversation: args.conversation.clone(),
@@ -103,7 +121,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
             ..TaskRequest::default()
         },
         limits,
-        grants: grants_from(&args),
+        grants,
         workspace,
         idempotency_key: args.idempotency_key.clone(),
         memory: zorix_core::MemoryOptions {
@@ -244,9 +262,10 @@ async fn decide(
     args: DecideArgs,
     approve: bool,
 ) -> Result<Exit, CliError> {
-    let app = open_engine(home, &args.model)?;
+    let app = open_engine(home, &tenant, &args.model)?;
     let engine = &app.engine;
     let detail = engine.detail(&tenant, args.id).await?;
+    app.start_servers(&detail.execution.grants).await;
     if detail.execution.state != ExecutionState::WaitingForApproval {
         app.shutdown().await;
         return Err(CliError(format!(
@@ -287,7 +306,7 @@ async fn decide(
 }
 
 async fn cancel(home: &Path, tenant: TenantId, printer: Printer, args: CancelArgs) -> Result<Exit, CliError> {
-    let app = open_engine(home, &ModelArgs::default_demo())?;
+    let app = open_engine(home, &tenant, &ModelArgs::default_demo())?;
     let result = app.engine.cancel(&tenant, args.id, args.reason.clone()).await;
     app.shutdown().await;
     let execution = result?;
@@ -300,8 +319,11 @@ async fn cancel(home: &Path, tenant: TenantId, printer: Printer, args: CancelArg
 }
 
 async fn resume(home: &Path, tenant: TenantId, printer: Printer, args: ResumeArgs) -> Result<Exit, CliError> {
-    let app = open_engine(home, &args.model)?;
+    let app = open_engine(home, &tenant, &args.model)?;
     let engine = &app.engine;
+    if let Ok(execution) = engine.get(&tenant, args.id).await {
+        app.start_servers(&execution.grants).await;
+    }
     let after = last_seq(engine, &tenant, args.id).await?;
     let stream = engine.subscribe(&tenant, args.id, after).await?;
     engine.resume(&tenant, args.id).await?;
@@ -311,10 +333,28 @@ async fn resume(home: &Path, tenant: TenantId, printer: Printer, args: ResumeArg
 }
 
 async fn recover(home: &Path, tenant: TenantId, printer: Printer, args: RecoverArgs) -> Result<Exit, CliError> {
-    let app = open_engine(home, &args.model)?;
+    let app = open_engine(home, &tenant, &args.model)?;
     let engine = &app.engine;
     let queued =
         engine.list(&tenant, &ListFilter { states: vec![ExecutionState::Queued], ..ListFilter::default() }).await?;
+    // Work that was in the middle of a step may need MCP servers; have them ready before it continues.
+    let active = engine
+        .list(
+            &tenant,
+            &ListFilter {
+                states: vec![
+                    ExecutionState::Queued,
+                    ExecutionState::Running,
+                    ExecutionState::WaitingForModel,
+                    ExecutionState::WaitingForTool,
+                ],
+                ..ListFilter::default()
+            },
+        )
+        .await?;
+    for execution in &active {
+        app.start_servers(&execution.grants).await;
+    }
     let report = engine.recover().await?;
     if printer.json {
         println!("{}", serde_json::to_string(&report)?);
@@ -358,6 +398,14 @@ async fn recover(home: &Path, tenant: TenantId, printer: Printer, args: RecoverA
 fn tools(home: &Path, printer: Printer) -> Result<Exit, CliError> {
     use zorix_core::ToolRegistry;
     let registry = builtin_registry(home)?;
+    // The native integrations and the sandbox too: they are offered only to runs that are granted them.
+    let hub = zorix_hub::Hub::open(
+        home,
+        TenantId::local(),
+        crate::app::secrets(&crate::app::load_config(home)?),
+        registry.clone(),
+    )?;
+    hub.register_native_tools()?;
     let specs = registry.list();
     if printer.json {
         println!("{}", serde_json::to_string(&specs)?);
@@ -371,7 +419,7 @@ fn tools(home: &Path, printer: Printer) -> Result<Exit, CliError> {
         } else {
             "changes things"
         };
-        println!("{:<16} {:<14} {}", spec.id, how, spec.description);
+        println!("{:<22} {:<14} {:<12} {}", spec.id, how, spec.source.label(), shorten(&spec.description, 70));
     }
     Ok(Exit::Done)
 }

@@ -51,7 +51,7 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
 
     if args.allow_runs {
         // Runs need the engine, and with it the data-folder lock: another ZORIX program cannot run meanwhile.
-        let opened = Arc::new(open_engine(home, &ModelArgs { model: args.model.clone(), local_only: false })?);
+        let opened = Arc::new(open_engine(home, &tenant, &ModelArgs { model: args.model.clone(), local_only: false })?);
         let registry = Arc::new(InMemoryToolRegistry::new());
         opened.stack.register_tools(&*registry)?;
         collect_read_tools(&*registry, &mut tools);

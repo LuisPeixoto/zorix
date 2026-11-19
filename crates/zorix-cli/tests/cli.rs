@@ -112,7 +112,12 @@ fn the_tools_are_listed_with_how_careful_they_are() {
     let put = listing.lines().find(|l| l.starts_with("notes.put")).unwrap();
     assert!(put.contains("asks first"), "{put}");
     let json = z.run(&["--json", "tools"]);
-    assert_eq!(serde_json::from_slice::<Value>(&json.stdout).unwrap().as_array().unwrap().len(), 8);
+    let all = serde_json::from_slice::<Value>(&json.stdout).unwrap();
+    let ids: Vec<&str> = all.as_array().unwrap().iter().filter_map(|t| t["id"].as_str()).collect();
+    for wanted in ["math.evaluate", "notes.put", "http.get", "github.get_issue", "db.query", "code.run"] {
+        assert!(ids.contains(&wanted), "{wanted} in {ids:?}");
+    }
+    assert!(listing.contains("integration") && listing.contains("builtin"), "each tool says where it comes from");
 }
 
 #[test]
