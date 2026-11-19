@@ -11,7 +11,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::error::Result;
-use crate::ids::{ApprovalId, ConversationId, ExecutionId, KnowledgeRootId, MemoryId, TenantId, ToolCallId};
+use crate::ids::{AgentId, ApprovalId, ConversationId, ExecutionId, KnowledgeRootId, MemoryId, TenantId, ToolCallId};
 use crate::time::Timestamp;
 
 /// SHA-256 of a text, in lowercase hex. It keys vectors, so the same text is never embedded twice, and it detects
@@ -50,6 +50,8 @@ pub enum Scope {
     Project(String),
     /// One conversation.
     Conversation(ConversationId),
+    /// What one agent remembers for itself. No other run sees it (ADR-0026).
+    Agent(AgentId),
 }
 
 impl Scope {
@@ -59,6 +61,7 @@ impl Scope {
             Scope::Global => ("global", String::new()),
             Scope::Project(path) => ("project", path.clone()),
             Scope::Conversation(id) => ("conversation", id.to_string()),
+            Scope::Agent(id) => ("agent", id.to_string()),
         }
     }
 
@@ -68,6 +71,7 @@ impl Scope {
             "global" => Some(Scope::Global),
             "project" => Some(Scope::Project(key.to_string())),
             "conversation" => ConversationId::new(key).ok().map(Scope::Conversation),
+            "agent" => key.parse::<AgentId>().ok().map(Scope::Agent),
             _ => None,
         }
     }
@@ -78,6 +82,7 @@ impl Scope {
             Scope::Global => "global".into(),
             Scope::Project(path) => format!("project {path}"),
             Scope::Conversation(id) => format!("conversation {id}"),
+            Scope::Agent(id) => format!("agent {id}"),
         }
     }
 }
@@ -91,12 +96,15 @@ pub struct Visibility {
     pub project: Option<String>,
     /// The conversation, when the run has one.
     pub conversation: Option<ConversationId>,
+    /// The agent the run belongs to, when it does. Only its own runs see its agent memories.
+    #[serde(default)]
+    pub agent: Option<AgentId>,
 }
 
 impl Visibility {
-    /// Visibility of a tenant with no project and no conversation.
+    /// Visibility of a tenant with no project, no conversation and no agent.
     pub fn tenant(tenant: TenantId) -> Self {
-        Self { tenant, project: None, conversation: None }
+        Self { tenant, project: None, conversation: None, agent: None }
     }
 
     /// The scopes visible, widest first.
@@ -107,6 +115,9 @@ impl Visibility {
         }
         if let Some(conversation) = &self.conversation {
             scopes.push(Scope::Conversation(conversation.clone()));
+        }
+        if let Some(agent) = &self.agent {
+            scopes.push(Scope::Agent(*agent));
         }
         scopes
     }
@@ -751,7 +762,12 @@ mod tests {
     #[test]
     fn scopes_round_trip_and_visibility_is_widest_first() {
         let conversation = ConversationId::new("chat-1").unwrap();
-        for scope in [Scope::Global, Scope::Project("/work/a".into()), Scope::Conversation(conversation.clone())] {
+        for scope in [
+            Scope::Global,
+            Scope::Project("/work/a".into()),
+            Scope::Conversation(conversation.clone()),
+            Scope::Agent(AgentId::new()),
+        ] {
             let (name, key) = scope.parts();
             assert_eq!(Scope::from_parts(name, &key), Some(scope));
         }
@@ -760,6 +776,7 @@ mod tests {
             tenant: TenantId::local(),
             project: Some("/work/a".into()),
             conversation: Some(conversation.clone()),
+            agent: None,
         };
         assert_eq!(
             v.scopes(),

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::agent::AgentBinding;
 use crate::error::{Error, Result};
 use crate::ids::{ConversationId, ExecutionId, TenantId};
 use crate::memory::MemoryOptions;
@@ -236,6 +237,9 @@ pub struct NewExecution {
     /// What the execution may use from memory. Everything, by default.
     #[serde(default)]
     pub memory: MemoryOptions,
+    /// The agent version it comes from, when an agent made it (ADR-0024). Frozen at creation.
+    #[serde(default)]
+    pub agent: Option<AgentBinding>,
 }
 
 impl NewExecution {
@@ -266,6 +270,11 @@ impl NewExecution {
             && !workspace.is_absolute()
         {
             return bad("The workspace must be an absolute path.");
+        }
+        if let Some(agent) = &self.agent
+            && agent.allowed_models.is_empty()
+        {
+            return bad("An agent's run must name the models it may use (`*` means any).");
         }
         self.limits.validate()
     }
@@ -300,6 +309,9 @@ pub struct Execution {
     /// What it may use from memory. Executions stored by 0.2 have everything on.
     #[serde(default)]
     pub memory: MemoryOptions,
+    /// The agent version it comes from, when an agent made it (ADR-0024). Executions stored before 0.5 have none.
+    #[serde(default)]
+    pub agent: Option<AgentBinding>,
     /// The tools this execution may use, pinned when its first model step starts (ADR-0020). `None` until then, and for
     /// executions stored by 0.3, which pin at their next step.
     #[serde(default)]
@@ -346,6 +358,7 @@ impl Execution {
             workspace: new.workspace,
             idempotency_key: new.idempotency_key,
             memory: new.memory,
+            agent: new.agent,
             tool_pins: None,
             iteration: 0,
             tool_calls_requested: 0,

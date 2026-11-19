@@ -151,6 +151,8 @@ pub struct ListFilter {
     pub states: Vec<ExecutionState>,
     /// Only this conversation.
     pub conversation: Option<ConversationId>,
+    /// Only runs of this agent.
+    pub agent: Option<crate::ids::AgentId>,
     /// At most this many (newest first). Zero means the default of 100.
     pub limit: usize,
 }

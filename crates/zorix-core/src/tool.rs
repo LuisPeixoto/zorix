@@ -227,6 +227,8 @@ pub struct ToolContext {
     pub workspace_root: Option<PathBuf>,
     /// The conversation the execution belongs to, if any. Memory tools use it for the conversation scope.
     pub conversation: Option<ConversationId>,
+    /// The agent version the execution comes from, if an agent made it. Skill and memory tools use it.
+    pub agent: Option<crate::agent::AgentBinding>,
 }
 
 /// A capability the model can ask for.
