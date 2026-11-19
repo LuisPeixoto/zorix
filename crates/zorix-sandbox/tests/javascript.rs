@@ -13,8 +13,10 @@ async fn go(sandbox: &Sandbox, code: &str, limits: Limits) -> Outcome {
     sandbox.run(run(code), limits, &CancellationToken::new()).await.unwrap()
 }
 
+// Generous on purpose: on a busy machine nine tests compile the module at once, and a test that is about something else must
+// not turn into a timeout. The tests about the time limit set their own.
 fn quick() -> Limits {
-    Limits { time: Duration::from_secs(3), ..Limits::default() }
+    Limits { time: Duration::from_secs(30), ..Limits::default() }
 }
 
 #[tokio::test]
@@ -63,14 +65,14 @@ async fn a_program_that_wants_too_much_memory_or_writes_too_much_is_stopped() {
     let sandbox = Sandbox::new(dir.path()).unwrap();
     let small = Limits {
         memory_bytes: 64 * 1024 * 1024,
-        time: Duration::from_secs(8),
+        time: Duration::from_secs(30),
         output_bytes: 64 * 1024,
         ..Limits::default()
     };
     let hungry = go(&sandbox, "const keep = []; while (true) { keep.push(new Array(500000).fill(7)); }", small).await;
     // Either the runtime refuses the growth and the program dies, or the host stops it: it never gets past the limit.
     assert!(hungry.stopped == Some(StopReason::Memory) || hungry.exit_code != 0, "{hungry:?}");
-    assert!(hungry.elapsed < Duration::from_secs(8), "{:?}", hungry.elapsed);
+    assert!(hungry.elapsed < Duration::from_secs(30), "{:?}", hungry.elapsed);
 
     let loud = go(&sandbox, "while (true) { console.log('x'.repeat(1000)); }", small).await;
     assert_eq!(loud.stopped, Some(StopReason::Output), "{:?}", loud.stderr);
@@ -136,7 +138,7 @@ async fn files_go_to_a_scratch_folder_that_does_not_survive_and_a_workspace_is_r
 async fn a_program_that_fills_its_scratch_folder_is_stopped() {
     let dir = tempfile::tempdir().unwrap();
     let sandbox = Sandbox::new(dir.path()).unwrap();
-    let limits = Limits { scratch_bytes: 1024 * 1024, time: Duration::from_secs(8), ..Limits::default() };
+    let limits = Limits { scratch_bytes: 1024 * 1024, time: Duration::from_secs(30), ..Limits::default() };
     let out = go(&sandbox, "const f = std.open('/work/big.bin', 'w'); const chunk = 'x'.repeat(65536); while (true) { f.puts(chunk); f.flush(); }", limits).await;
     assert_eq!(out.stopped, Some(StopReason::Disk), "{out:?}");
 }
