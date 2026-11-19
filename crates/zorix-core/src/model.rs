@@ -76,6 +76,10 @@ pub struct ModelRequest {
     /// What each context segment contributed and whether it was kept. For events; never sent to a provider.
     #[serde(default, skip)]
     pub context_report: Vec<SegmentReport>,
+    /// The models this call may use, when an agent made the run: patterns of `provider/model`, `provider/*`, `demo` or `*`
+    /// (ADR-0027). Empty means any. The router drops every candidate outside it, fallbacks included. Never sent to a provider.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_models: Vec<String>,
 }
 
 impl ModelRequest {

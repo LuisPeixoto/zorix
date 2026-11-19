@@ -134,7 +134,8 @@ pub fn model_allowed(patterns: &[String], provider: Option<&str>, model: &str) -
         p => match p.split_once('/') {
             Some((pp, "*")) => provider == Some(pp),
             Some((pp, pm)) => provider == Some(pp) && pm == model,
-            None => provider.is_none() && p == model,
+            // The built-in simulated models (`demo`, `script`) have no real provider; the router names it `sim`.
+            None => matches!(provider, None | Some("sim")) && p == model,
         },
     })
 }
@@ -834,6 +835,7 @@ mod tests {
         assert!(model_allowed(&p(&["openai/gpt-5"]), Some("openai"), "gpt-5"));
         assert!(!model_allowed(&p(&["openai/gpt-5"]), Some("openai"), "gpt-5-mini"));
         assert!(model_allowed(&p(&["demo"]), None, "demo"));
+        assert!(model_allowed(&p(&["demo"]), Some("sim"), "demo"), "the router calls the simulated provider sim");
         assert!(!model_allowed(&p(&["demo"]), Some("openai"), "demo"));
         assert!(!model_allowed(&p(&["anthropic/*"]), None, "demo"));
     }
