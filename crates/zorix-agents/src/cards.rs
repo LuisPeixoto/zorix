@@ -6,6 +6,8 @@ use zorix_core::{AgentStore, Result, TenantId};
 /// What a list shows about an agent.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct AgentCard {
+    /// Its id, which names its memory scope.
+    pub id: String,
     /// Its short name.
     pub slug: String,
     /// Its display name.
@@ -33,6 +35,7 @@ pub async fn cards(store: &dyn AgentStore, tenant: &TenantId, include_archived: 
         let Some(version) = store.version(tenant, agent.id, agent.current_version).await? else { continue };
         let spec = version.spec;
         out.push(AgentCard {
+            id: agent.id.to_string(),
             slug: agent.slug.to_string(),
             name: spec.name,
             description: spec.description,

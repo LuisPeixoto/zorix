@@ -252,7 +252,7 @@ async fn versions(hub: &Hub, printer: Printer, arg: AgentSlugArg) -> Result<Exit
     if printer.json {
         print_json(&versions)?;
     } else {
-        for v in versions.iter().rev() {
+        for v in &versions {
             let current = if v.version == agent.current_version { "  ← current" } else { "" };
             println!(
                 "v{:<3} {}  {}  {}{current}",
