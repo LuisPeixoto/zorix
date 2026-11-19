@@ -43,6 +43,18 @@ pub trait Transport: Send + Sync {
         params: Value,
         timeout: Duration,
         cancel: &CancellationToken,
+    ) -> Result<Value, McpError> {
+        self.request_with(method, params, &[], timeout, cancel).await
+    }
+
+    /// The same with extra HTTP headers (`Mcp-Param-*`). Transports that have no headers ignore them.
+    async fn request_with(
+        &self,
+        method: &str,
+        params: Value,
+        headers: &[(String, String)],
+        timeout: Duration,
+        cancel: &CancellationToken,
     ) -> Result<Value, McpError>;
 
     /// Send a notification.

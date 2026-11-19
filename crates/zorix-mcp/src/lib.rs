@@ -3,6 +3,7 @@
 
 pub mod client;
 pub mod error;
+pub mod headers;
 pub mod manager;
 pub mod protocol;
 pub mod stdio;

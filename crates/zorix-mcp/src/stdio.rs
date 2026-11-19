@@ -358,10 +358,11 @@ impl StdioTransport {
 
 #[async_trait]
 impl Transport for StdioTransport {
-    async fn request(
+    async fn request_with(
         &self,
         method: &str,
         params: Value,
+        _headers: &[(String, String)],
         timeout: Duration,
         cancel: &CancellationToken,
     ) -> Result<Value, McpError> {
