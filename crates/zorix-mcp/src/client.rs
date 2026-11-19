@@ -3,15 +3,18 @@
 //! It never answers a server's request for model access, user input or folders. A tool call that needs more input fails
 //! with an explanation instead.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use zorix_core::integrations::MAX_TOOLS_PER_SERVER;
 
-use crate::error::{McpError, UNSUPPORTED_VERSION};
+use crate::error::{METHOD_NOT_FOUND, McpError, UNSUPPORTED_VERSION};
+use crate::headers::{Mirror, mirrors as header_mirrors, param_headers};
 use crate::protocol::{Era, LEGACY_VERSIONS, MODERN_VERSION, client_info, with_modern_meta};
 use crate::transport::{ServerEvent, Transport};
 
@@ -133,6 +136,16 @@ pub struct McpClient {
     transport: Arc<dyn Transport>,
     era: Era,
     info: ServerInfo,
+    /// Parameters each tool wants mirrored into HTTP headers, learned when the tools are listed.
+    mirrors: Mutex<HashMap<String, Vec<Mirror>>>,
+    /// What the server does besides answering, plus what the client adds (a stream that came back after a gap).
+    events: broadcast::Sender<ServerEvent>,
+    /// Ends the background tasks of this client.
+    stop: CancellationToken,
+    /// Signalled when the server acknowledged the subscription to changes.
+    acked: Arc<tokio::sync::Notify>,
+    /// A subscription was asked for.
+    listening: bool,
 }
 
 impl McpClient {
@@ -156,7 +169,7 @@ impl McpClient {
                     .map(|a| a.iter().filter_map(Value::as_str).collect())
                     .unwrap_or_default();
                 if versions.contains(&MODERN_VERSION) {
-                    return Ok(Self { transport, era: Era::Modern, info: info_from(&result) });
+                    return Ok(Self::ready(transport, Era::Modern, info_from(&result)).settle().await);
                 }
                 if versions.is_empty() {
                     return Self::legacy(transport, cancel, handshake).await;
@@ -224,7 +237,103 @@ impl McpClient {
             )));
         }
         transport.notify("notifications/initialized", Value::Null).await?;
-        Ok(Self { transport, era: Era::Legacy { version: agreed.to_string() }, info: info_from(&result) })
+        Ok(Self::ready(transport, Era::Legacy { version: agreed.to_string() }, info_from(&result)).settle().await)
+    }
+
+    fn ready(transport: Arc<dyn Transport>, era: Era, info: ServerInfo) -> Self {
+        let (events, _) = broadcast::channel(256);
+        let stop = CancellationToken::new();
+        let listening = era == Era::Modern && info.capabilities["tools"]["listChanged"] == true;
+        let client = Self {
+            transport,
+            era,
+            info,
+            mirrors: Mutex::new(HashMap::new()),
+            events,
+            stop,
+            acked: Arc::new(tokio::sync::Notify::new()),
+            listening,
+        };
+        client.forward_events();
+        if listening {
+            client.listen_for_changes();
+        }
+        client
+    }
+
+    /// Wait (briefly) until the server confirms it will announce changes, so none is missed between listing and listening.
+    async fn settle(self) -> Self {
+        if self.listening {
+            let _ = tokio::time::timeout(Duration::from_secs(2), self.acked.notified()).await;
+        }
+        self
+    }
+
+    /// Pass on what the transport reports, so the client can add to it.
+    fn forward_events(&self) {
+        let mut from = self.transport.subscribe();
+        let to = self.events.clone();
+        let stop = self.stop.clone();
+        let acked = self.acked.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = stop.cancelled() => return,
+                    event = from.recv() => match event {
+                        Ok(event) => {
+                            if matches!(&event, ServerEvent::Notification { method, .. } if method == "notifications/subscriptions/acknowledged") {
+                                acked.notify_one();
+                            }
+                            let _ = to.send(event);
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(broadcast::error::RecvError::Closed) => return,
+                    },
+                }
+            }
+        });
+    }
+
+    /// Modern servers announce changes only to a client that asked (`subscriptions/listen`). The request stays open; when it
+    /// ends without the client closing it, it is opened again, and the tools are looked at again in case something was missed.
+    fn listen_for_changes(&self) {
+        let transport = self.transport.clone();
+        let stop = self.stop.clone();
+        let events = self.events.clone();
+        tokio::spawn(async move {
+            let mut wait = Duration::from_secs(1);
+            let mut first = true;
+            loop {
+                if stop.is_cancelled() || !transport.alive() {
+                    return;
+                }
+                if !first {
+                    let _ = events.send(ServerEvent::Notification {
+                        method: "notifications/tools/list_changed".into(),
+                        params: Value::Null,
+                    });
+                }
+                first = false;
+                let params = with_modern_meta(json!({"notifications": {"toolsListChanged": true}}));
+                let started = std::time::Instant::now();
+                match transport
+                    .request("subscriptions/listen", params, Duration::from_secs(30 * 24 * 3600), &stop)
+                    .await
+                {
+                    Err(McpError::Cancelled | McpError::Closed) => return,
+                    Err(McpError::Rpc { code, .. }) if code == METHOD_NOT_FOUND => return,
+                    _ => {}
+                }
+                if started.elapsed() > Duration::from_secs(30) {
+                    wait = Duration::from_secs(1);
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(wait) => {}
+                    _ = stop.cancelled() => return,
+                }
+                wait = (wait * 2).min(Duration::from_secs(30));
+            }
+        });
     }
 
     /// Which era the server speaks.
@@ -239,7 +348,7 @@ impl McpClient {
 
     /// What the server does besides answering.
     pub fn events(&self) -> broadcast::Receiver<ServerEvent> {
-        self.transport.subscribe()
+        self.events.subscribe()
     }
 
     /// False once the connection has ended.
@@ -254,6 +363,7 @@ impl McpClient {
 
     /// End the connection.
     pub async fn close(&self) {
+        self.stop.cancel();
         self.transport.close().await;
     }
 
@@ -264,11 +374,22 @@ impl McpClient {
         timeout: Duration,
         cancel: &CancellationToken,
     ) -> Result<Value, McpError> {
+        self.request_with(method, params, &[], timeout, cancel).await
+    }
+
+    async fn request_with(
+        &self,
+        method: &str,
+        params: Value,
+        headers: &[(String, String)],
+        timeout: Duration,
+        cancel: &CancellationToken,
+    ) -> Result<Value, McpError> {
         let params = match self.era {
             Era::Modern => with_modern_meta(params),
             Era::Legacy { .. } => params,
         };
-        self.transport.request(method, params, timeout, cancel).await
+        self.transport.request_with(method, params, headers, timeout, cancel).await
     }
 
     /// The tools the server lists now.
@@ -290,7 +411,13 @@ impl McpClient {
                     Ok(tool) if listing.tools.iter().any(|t| t.name == tool.name) => {
                         listing.skipped.push((tool.name, "the server lists it twice".into()));
                     }
-                    Ok(tool) => listing.tools.push(tool),
+                    Ok(tool) => match header_mirrors(&tool.input_schema) {
+                        Ok(found) => {
+                            self.mirrors.lock().insert(tool.name.clone(), found);
+                            listing.tools.push(tool);
+                        }
+                        Err(reason) => listing.skipped.push((tool.name, reason)),
+                    },
                     Err(skipped) => listing.skipped.push(skipped),
                 }
                 if listing.tools.len() > MAX_TOOLS_PER_SERVER {
@@ -315,7 +442,10 @@ impl McpClient {
         timeout: Duration,
         cancel: &CancellationToken,
     ) -> Result<CallOutput, McpError> {
-        let result = self.request("tools/call", json!({"name": name, "arguments": arguments}), timeout, cancel).await?;
+        let headers = self.mirrors.lock().get(name).map(|m| param_headers(m, &arguments)).unwrap_or_default();
+        let result = self
+            .request_with("tools/call", json!({"name": name, "arguments": arguments}), &headers, timeout, cancel)
+            .await?;
         if result.get("resultType").and_then(Value::as_str) == Some("input_required") {
             let wanted: Vec<String> = result
                 .get("inputRequests")

@@ -82,6 +82,8 @@ fn main() {
     let stdin = std::io::stdin();
     let mut lines = stdin.lock().lines();
     let (mut lists, mut calls, mut cancelled, mut initialized) = (0u32, 0u32, 0u32, false);
+    // Modern servers announce changes only to a client that asked with `subscriptions/listen`.
+    let mut subscribed: Option<Value> = None;
 
     while let Some(Ok(line)) = lines.next() {
         let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
@@ -139,6 +141,16 @@ fn main() {
                 );
             }
             "ping" => reply(&id, json!({})),
+            "subscriptions/listen" => {
+                if !has_meta {
+                    fail(&id, -32600, "subscriptions/listen needs the protocol metadata");
+                    continue;
+                }
+                out(
+                    &json!({"jsonrpc": "2.0", "method": "notifications/subscriptions/acknowledged", "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": id}, "notifications": {"toolsListChanged": true}}}),
+                );
+                subscribed = Some(id);
+            }
             "tools/list" => {
                 if !has_meta && !(opts.legacy && initialized) {
                     fail(&id, -32600, "tools/list needs the protocol metadata, or an initialized session");
@@ -246,7 +258,14 @@ fn main() {
                     other => fail(&id, -32602, &format!("Unknown tool: {other}")),
                 }
                 if opts.list_changed && calls == 1 {
-                    out(&json!({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}));
+                    // Legacy servers announce unasked; modern ones only on a subscription.
+                    if let Some(subscription) = &subscribed {
+                        out(
+                            &json!({"jsonrpc": "2.0", "method": "notifications/tools/list_changed", "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": subscription}}}),
+                        );
+                    } else if opts.legacy && !opts.modern {
+                        out(&json!({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"}));
+                    }
                 }
             }
             _ => fail(&id, -32601, "Method not found"),

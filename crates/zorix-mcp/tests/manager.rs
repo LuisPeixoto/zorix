@@ -379,3 +379,105 @@ async fn a_run_uses_an_mcp_tool_only_after_a_person_approves_the_call() {
     engine.shutdown().await;
     rig.manager.shutdown().await;
 }
+
+mod remote {
+    use super::*;
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+    use zorix_core::HttpAuth;
+
+    struct Modern;
+
+    impl Respond for Modern {
+        fn respond(&self, request: &Request) -> ResponseTemplate {
+            if request.headers.get("authorization").and_then(|v| v.to_str().ok()) != Some("Bearer pasted-token") {
+                return ResponseTemplate::new(401).insert_header("WWW-Authenticate", "Bearer");
+            }
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            let result = match body["method"].as_str().unwrap() {
+                "server/discover" => {
+                    json!({"supportedVersions": ["2026-07-28"], "capabilities": {"tools": {}}, "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "remote", "version": "1"}}})
+                }
+                "tools/list" => {
+                    json!({"tools": [{"name": "search", "description": "Search.", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": true}}]})
+                }
+                _ => return ResponseTemplate::new(404),
+            };
+            ResponseTemplate::new(200).set_body_json(json!({"jsonrpc": "2.0", "id": body["id"], "result": result}))
+        }
+    }
+
+    async fn remote(rig: &Rig, name: &str, url: &str, auth: HttpAuth) -> McpServer {
+        let server = rig
+            .store
+            .add_mcp_server(
+                &rig.tenant,
+                NewMcpServer { name: name.into(), transport: McpTransport::Http { url: url.into(), auth } },
+                Timestamp(1),
+            )
+            .await
+            .unwrap();
+        rig.store.update_mcp_server(&rig.tenant, McpServer { enabled: true, ..server }, Timestamp(2)).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_remote_server_with_a_pasted_token_lists_its_tools_for_approval() {
+        let rig = rig();
+        let mock = MockServer::start().await;
+        Mock::given(method("POST")).respond_with(Modern).mount(&mock).await;
+        let server = remote(&rig, "remote", &format!("{}/mcp", mock.uri()), HttpAuth::Bearer).await;
+        rig.secrets.set(&zorix_mcp::token_secret_name(server.id), &Secret::new("pasted-token")).unwrap();
+        rig.manager.start(server.id).await.unwrap();
+        let status = until(&rig, server.id, "ready", |s| s.state == ServerState::Ready).await;
+        assert_eq!((status.era.as_deref(), status.tools_listed, status.tools_to_review), (Some("modern"), 1, 1));
+        rig.manager.review(server.id, "search", PinAction::Approve, "luis").await.unwrap();
+        assert_eq!(mcp_ids(&rig), ["mcp.remote.search"]);
+        rig.manager.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn a_remote_server_that_needs_a_sign_in_says_so_and_offers_nothing() {
+        let rig = rig();
+        let mock = MockServer::start().await;
+        Mock::given(method("POST")).respond_with(Modern).mount(&mock).await;
+        let oauth = HttpAuth::OAuth { client_id: None, scopes: vec![] };
+        let server = remote(&rig, "signin", &format!("{}/mcp", mock.uri()), oauth).await;
+        rig.manager.start(server.id).await.unwrap();
+        let status = until(&rig, server.id, "needs login", |s| matches!(s.state, ServerState::NeedsLogin { .. })).await;
+        match status.state {
+            ServerState::NeedsLogin { reason } => assert!(reason.contains("zorix mcp login signin"), "{reason}"),
+            other => panic!("{other:?}"),
+        }
+        assert!(mcp_ids(&rig).is_empty());
+        // A wrong pasted token is the same: the person is told to paste another.
+        let bad = remote(&rig, "badtoken", &format!("{}/mcp", mock.uri()), HttpAuth::Bearer).await;
+        rig.secrets.set(&zorix_mcp::token_secret_name(bad.id), &Secret::new("wrong-token")).unwrap();
+        rig.manager.start(bad.id).await.unwrap();
+        until(&rig, bad.id, "needs login", |s| matches!(s.state, ServerState::NeedsLogin { .. })).await;
+    }
+
+    #[tokio::test]
+    async fn an_address_that_is_not_https_is_refused_with_the_reason() {
+        let rig = rig();
+        let server = remote(&rig, "plain", "http://mcp.example.com/mcp", HttpAuth::None).await;
+        let only_once = ManagerOptions { backoff: vec![], probe_timeout: Duration::from_millis(300), work_dir: None };
+        let strict = McpManager::with(
+            rig.store.clone(),
+            rig.registry.clone(),
+            rig.secrets.clone(),
+            rig.tenant.clone(),
+            Arc::new(zorix_mcp::DefaultConnector),
+            Arc::new(zorix_core::SystemClock),
+            only_once,
+        );
+        strict.start(server.id).await.unwrap();
+        for _ in 0..100 {
+            if let Some(ServerState::Failed { reason }) = strict.status(server.id).await.unwrap().map(|s| s.state) {
+                assert!(reason.contains("plain HTTP"), "{reason}");
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        panic!("never failed");
+    }
+}
