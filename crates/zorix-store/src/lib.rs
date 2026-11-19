@@ -3,6 +3,7 @@
 //! [`SqliteRepository`] implements `ExecutionRepository`; [`paths`] says where the data lives and keeps two programs
 //! from using it at once.
 
+pub mod agents;
 mod calibration;
 pub mod integrations;
 pub mod memory;
@@ -10,6 +11,7 @@ pub mod paths;
 mod schema;
 mod sqlite;
 
+pub use agents::SqliteAgentStore;
 pub use calibration::SqliteCalibration;
 pub use integrations::SqliteIntegrationStore;
 pub use memory::SqliteMemoryStore;

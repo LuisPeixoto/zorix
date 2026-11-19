@@ -40,8 +40,8 @@ pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
 };
 pub use ids::{
-    AgentId, ApprovalId, ConnectionId, ConversationId, ExecutionId, IdError, KnowledgeRootId, McpServerId, MemoryId,
-    TenantId, ToolCallId,
+    AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,
+    McpServerId, MemoryId, TenantId, ToolCallId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,

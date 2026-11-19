@@ -163,6 +163,14 @@ uuid_id!(
     AgentId
 );
 uuid_id!(
+    /// Identifies one evaluation case.
+    EvalCaseId
+);
+uuid_id!(
+    /// Identifies one evaluation run: one version of an agent tried with one model.
+    EvalRunId
+);
+uuid_id!(
     /// Identifies one connection to an outside service (a Git host, a database, a chat workspace…).
     ConnectionId
 );
