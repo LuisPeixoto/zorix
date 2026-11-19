@@ -25,7 +25,7 @@
         {#if i < steps.length - 1}<span class={cn("h-px flex-1", done ? "bg-ok/50" : "bg-line")}></span>{/if}
       </div>
       <p class={cn("truncate text-sm font-medium", here ? "text-fg" : "text-muted")}>{step.label}<span class="sr-only">{done ? " (done)" : here ? " (current)" : ""}</span></p>
-      {#if step.hint}<p class="truncate text-xs text-faint">{step.hint}</p>{/if}
+      {#if step.hint}<p class="truncate text-xs text-muted">{step.hint}</p>{/if}
     </li>
   {/each}
 </ol>

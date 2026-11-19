@@ -49,7 +49,7 @@
     >
       <header class="flex items-center gap-2.5 border-b border-line px-5 py-3.5">
         {#if icon}<Icon name={icon} size={17} class="text-accent" />{/if}
-        <h2 id="{uid}-title" class="min-w-0 flex-1 truncate text-xl font-semibold">{title}</h2>
+        <h2 id="{uid}-title" data-autofocus tabindex="-1" class="min-w-0 flex-1 truncate text-xl font-semibold outline-none">{title}</h2>
         <IconButton label="Close" icon="x" size="sm" onclick={close} />
       </header>
       <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">{@render children?.()}</div>

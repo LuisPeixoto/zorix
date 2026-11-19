@@ -53,7 +53,9 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 export function trapFocus(node: HTMLElement) {
   const before = document.activeElement as HTMLElement | null;
   const items = () => [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
-  queueMicrotask(() => (items()[0] ?? node).focus());
+  // A dialog's title takes the first focus when it says so (`data-autofocus`), so a screen reader starts on what the dialog is
+  // about and no button shows a focus ring and tooltip before anyone touched it.
+  queueMicrotask(() => (node.querySelector<HTMLElement>("[data-autofocus]") ?? items()[0] ?? node).focus());
 
   function onKey(event: KeyboardEvent) {
     if (event.key !== "Tab") return;
