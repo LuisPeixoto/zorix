@@ -11,6 +11,13 @@ rust-version.workspace = true
 [dependencies]
 zorix-core.workspace = true
 zorix-providers.workspace = true
+zorix-sandbox.workspace = true
+async-trait.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+zip = { version = "9", default-features = false, features = ["deflate"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -19,5 +26,3 @@ similar = "3"
 
 [dev-dependencies]
 zorix-store.workspace = true
-tokio.workspace = true
-tempfile.workspace = true

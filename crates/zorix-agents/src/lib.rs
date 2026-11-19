@@ -4,6 +4,8 @@
 pub mod diff;
 pub mod format;
 pub mod runner;
+pub mod skills;
 pub mod yaml;
 
 pub use runner::{AgentAsk, ModelResolver, RunnerError, prepare};
+pub use skills::{SkillError, SkillLibrary, skill_tools};
