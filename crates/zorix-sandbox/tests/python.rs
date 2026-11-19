@@ -18,7 +18,7 @@ fn sandbox_with_python() -> Option<(tempfile::TempDir, Sandbox)> {
 async fn py(sandbox: &Sandbox, code: &str, limits: Limits) -> Outcome {
     sandbox
         .run(
-            Run { language: Language::Python, code: code.into(), stdin: None, workspace: None },
+            Run { language: Language::Python, code: code.into(), stdin: None, workspace: None, mounts: vec![] },
             limits,
             &CancellationToken::new(),
         )
@@ -89,7 +89,7 @@ async fn without_the_module_python_says_how_to_install_it() {
     assert!(!sandbox.python_installed());
     let error = sandbox
         .run(
-            Run { language: Language::Python, code: "print(1)".into(), stdin: None, workspace: None },
+            Run { language: Language::Python, code: "print(1)".into(), stdin: None, workspace: None, mounts: vec![] },
             quick(),
             &CancellationToken::new(),
         )

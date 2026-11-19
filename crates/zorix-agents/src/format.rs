@@ -175,7 +175,7 @@ pub fn render(spec: &AgentSpec, version: Option<u32>) -> String {
 }
 
 /// Split a file into its frontmatter and its body.
-fn split(text: &str) -> Result<(String, String), String> {
+pub(crate) fn split(text: &str) -> Result<(String, String), String> {
     let text = text.replace("\r\n", "\n");
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     let rest = text

@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 use zorix_sandbox::{Language, Limits, Outcome, Run, Sandbox, StopReason};
 
 fn run(code: &str) -> Run {
-    Run { language: Language::JavaScript, code: code.into(), stdin: None, workspace: None }
+    Run { language: Language::JavaScript, code: code.into(), stdin: None, workspace: None, mounts: vec![] }
 }
 
 async fn go(sandbox: &Sandbox, code: &str, limits: Limits) -> Outcome {
@@ -124,6 +124,7 @@ async fn files_go_to_a_scratch_folder_that_does_not_survive_and_a_workspace_is_r
         code: "console.log(std.loadFile('/workspace/notes.txt')); let wrote = 'yes'; try { const f = std.open('/workspace/new.txt', 'w'); wrote = f ? 'yes' : 'no'; if (f) { f.puts('x'); f.close(); } } catch (e) { wrote = 'no'; } console.log('wrote=' + wrote);".into(),
         stdin: None,
         workspace: Some(workspace.path().to_path_buf()),
+        mounts: vec![],
     };
     let out = sandbox.run(with_files, quick(), &CancellationToken::new()).await.unwrap();
     assert!(out.stdout.starts_with("from the workspace\n"), "{out:?}");
@@ -151,6 +152,7 @@ async fn standard_input_exit_codes_and_errors_work() {
                 code: "console.log(std.in.readAsString().toUpperCase());".into(),
                 stdin: Some("hello there".into()),
                 workspace: None,
+                mounts: vec![],
             },
             quick(),
             &CancellationToken::new(),
