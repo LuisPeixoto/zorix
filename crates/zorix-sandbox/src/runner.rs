@@ -194,7 +194,9 @@ fn folder_size(path: &Path, stop_at: u64) -> u64 {
     while let Some(dir) = pending.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else { continue };
         for entry in entries.flatten() {
-            let Ok(meta) = entry.metadata() else { continue };
+            // Not `entry.metadata()`: on Windows that is the size the directory last recorded, which lags behind a file that is
+            // still open and being written. Asking the file itself gives its real size.
+            let Ok(meta) = std::fs::metadata(entry.path()) else { continue };
             if meta.is_dir() {
                 pending.push(entry.path());
             } else {
