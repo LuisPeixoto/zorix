@@ -20,6 +20,7 @@ zorix-store = { path = "crates/zorix-store" }
 zorix-sim = { path = "crates/zorix-sim" }
 zorix-tools = { path = "crates/zorix-tools" }
 zorix-providers = { path = "crates/zorix-providers" }
+zorix-mcp = { path = "crates/zorix-mcp" }
 zorix-memory = { path = "crates/zorix-memory" }
 
 async-trait = "0.1"

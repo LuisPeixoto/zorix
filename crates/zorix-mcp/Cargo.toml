@@ -1,0 +1,37 @@
+[package]
+name = "zorix-mcp"
+description = "ZORIX's Model Context Protocol client: stdio and HTTP transports, both protocol eras, tool pinning."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "zorix-fake-mcp"
+path = "src/bin/fake_server.rs"
+test = false
+doc = false
+
+[dependencies]
+zorix-core.workspace = true
+zorix-providers.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["process"] }
+tokio-util.workspace = true
+tracing.workspace = true
+jsonschema.workspace = true
+
+[dev-dependencies]
+zorix-runtime.workspace = true
+zorix-sim.workspace = true
+zorix-store.workspace = true
+tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
