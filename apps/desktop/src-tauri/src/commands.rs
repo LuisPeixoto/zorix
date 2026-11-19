@@ -100,6 +100,56 @@ pub struct StartRun {
     /// What the run may use from memory. Left out: everything.
     #[serde(default)]
     memory: Option<MemoryChoice>,
+    /// The servers and services the run may reach.
+    #[serde(default)]
+    integrations: IntegrationChoice,
+}
+
+/// What the New run form lets a run reach. Each entry has the same meaning as the matching `--allow-…` flag of the command line.
+#[derive(Deserialize, Default)]
+pub struct IntegrationChoice {
+    /// MCP servers, by name: every tool of the server may be used (each still asks first).
+    #[serde(default)]
+    mcp: Vec<String>,
+    #[serde(default)]
+    http: Vec<String>,
+    #[serde(default)]
+    repo: Vec<String>,
+    #[serde(default)]
+    jira: Vec<String>,
+    #[serde(default)]
+    chat: Vec<String>,
+    #[serde(default)]
+    db: Vec<String>,
+    #[serde(default)]
+    code: Vec<String>,
+}
+
+type Expand = fn(&str) -> Result<Vec<zorix_core::Permission>, String>;
+
+impl IntegrationChoice {
+    fn grants(&self, mut grants: Grants) -> Result<Grants, String> {
+        use zorix_hub::grants;
+        for name in &self.mcp {
+            grants = grants.with(tool_grant(&format!("mcp.{name}.*"))?);
+        }
+        let groups: [(&Vec<String>, Expand); 6] = [
+            (&self.http, grants::http),
+            (&self.repo, grants::repo),
+            (&self.jira, grants::jira),
+            (&self.chat, grants::chat),
+            (&self.db, grants::db),
+            (&self.code, grants::code),
+        ];
+        for (items, expand) in groups {
+            for item in items {
+                for permission in expand(item)? {
+                    grants = grants.with(permission);
+                }
+            }
+        }
+        Ok(grants)
+    }
 }
 
 /// The switches of the New run form.
@@ -138,6 +188,7 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
     for pattern in &request.allow_write {
         grants = grants.with(workspace_grant(Action::Write, pattern)?);
     }
+    grants = request.integrations.grants(grants)?;
     let workspace = match request.workspace.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
         Some(path) => {
             Some(std::fs::canonicalize(path).map_err(|e| format!("The workspace {path} cannot be used: {e}"))?)
