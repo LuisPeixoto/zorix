@@ -4,7 +4,7 @@
   import { toast } from "../stores/toast.svelte.ts";
   import { MODE_LABEL, type Mode } from "../theme.ts";
   import {
-    Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
+    Avatar, Badge, BrandLogo, ChatBubble, Composer, Markdown, ScoreMatrix, ToolCallCard, VersionTimeline, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
     ICON_NAMES, Icon, IconButton, Input, Kbd, KeyValue, List, ListRow, Modal, PageHeader, Segmented, Select, Skeleton, Spinner,
     Stat, StatusPill, Stepper, Switch, Tabs, Textarea, ToggleRow, type Command,
   } from "../ui/index.ts";
@@ -56,6 +56,13 @@
     { id: "c", label: "Memory", group: "Go to", icon: "book", run: () => toast.info("Memory") },
   ];
   const sampleSql = "SELECT id, name, created_at\nFROM customers\nWHERE plan = 'pro' -- paying\nORDER BY created_at DESC\nLIMIT 20;";
+  let draft = $state("");
+  let toolOpen = $state(true);
+  let pickedVersion = $state<number | null>(2);
+  const answer = "Water boils at **100 °C** at sea level [1].\n\n| Altitude | Boils at |\n| :-- | --: |\n| 0 m | 100 °C |\n| 3000 m | 90 °C |\n\nIn Python: `round(100 - 0.0033 * 3000)`.\n\n## Sources\n1. [Boiling point](https://en.wikipedia.org/wiki/Boiling_point)";
+  const matrixRuns = [{ id: "a", label: "v1 · demo", sub: "Today 10:02" }, { id: "b", label: "v2 · demo", sub: "Today 10:41" }];
+  const matrixCases = ["cites-its-sources", "says-when-it-found-nothing", "stays-short"];
+  const matrixCell = (c: string, r: string) => ({ state: (r === "b" || c !== "stays-short" ? "pass" : "fail") as "pass" | "fail", note: c });
   let loading = $state(false);
   function fakeLoad() {
     loading = true;
@@ -327,6 +334,50 @@
           <div class="mt-4 space-y-2"><Skeleton class="h-4 w-2/3" /><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /></div>
         </Card>
       </div>
+
+      <Card title="Agents" icon="bot">
+        <p class="mb-4 text-base text-muted">An agent has a face, a conversation, tool calls in the flow, versions and a score. These are the pieces its screens are made of.</p>
+        <div class="flex flex-wrap items-center gap-3">
+          {#each [["🔎", "info"], ["🧐", "warn"], ["📊", "ok"], ["✍️", "accent"], ["🛠️", "muted"], ["🔥", "err"]] as [emoji, color]}<Avatar {emoji} {color} size="lg" />{/each}
+          <Avatar emoji="🔎" color="info" size="xl" /><Avatar emoji="🔎" color="info" size="md" /><Avatar emoji="🔎" color="info" size="sm" /><Avatar emoji="🔎" color="info" size="xs" />
+        </div>
+        <div class="mt-6 grid items-start gap-6 lg:grid-cols-2">
+          <div class="space-y-4 rounded-2xl border border-line bg-bg p-4">
+            <ChatBubble role="user" time="10:02">What is the boiling point of water? Give a source.</ChatBubble>
+            <ChatBubble role="assistant" name="Researcher" time="10:02">
+              {#snippet avatar()}<Avatar emoji="🔎" color="info" />{/snippet}
+              <Markdown text={answer} />
+            </ChatBubble>
+            <div class="pl-12"><ToolCallCard tool="http.get" status="succeeded" args={{ url: "https://en.wikipedia.org/wiki/Boiling_point" }} result="200 OK · 48 KB" bind:open={toolOpen} /></div>
+            <div class="pl-12"><ToolCallCard tool="files.write" status="awaiting_approval" args={{ path: "notes/boiling.md" }}><p class="text-sm text-muted">Waiting for you to approve this.</p></ToolCallCard></div>
+            <ChatBubble role="assistant" name="Researcher" streaming>
+              {#snippet avatar()}<Avatar emoji="🔎" color="info" />{/snippet}
+              <p>Looking at the second source</p>
+            </ChatBubble>
+            <Composer bind:value={draft} onsend={(t) => toast.info(`Sent: ${t}`)} placeholder="Ask the Researcher…" label="Message the Researcher" />
+          </div>
+          <div class="space-y-6">
+            <div>
+              <h4 class="mb-2 text-sm font-semibold">Evaluation scores</h4>
+              <ScoreMatrix cases={matrixCases} runs={matrixRuns} cell={matrixCell} onselect={() => {}} />
+            </div>
+            <div>
+              <h4 class="mb-2 text-sm font-semibold">Versions</h4>
+              <VersionTimeline
+                selected={pickedVersion}
+                onselect={(v) => (pickedVersion = v)}
+                items={[
+                  { version: 3, hash: "9d41c2e07a", note: "rollback to v1", at: "Today 11:20", current: true },
+                  { version: 2, hash: "5b0e7a31cc", note: "Show the working", at: "Today 10:40" },
+                  { version: 1, hash: "e2a9f4d0b8", note: "From the researcher template", at: "Yesterday 18:05" },
+                ]}
+              >
+                {#snippet actions(item)}{#if !item.current}<Button size="sm" icon="undo" onclick={() => toast.info(`Roll back to v${item.version}`)}>Roll back</Button>{/if}{/snippet}
+              </VersionTimeline>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card padding="none"><EmptyState icon="bot" title="No runs yet" text="Describe an activity and ZORIX runs it under your rules, with every step recorded.">{#snippet actions()}<Button variant="primary" icon="plus">New run</Button><Button>Read the docs</Button>{/snippet}</EmptyState></Card>
     </div>
