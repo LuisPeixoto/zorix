@@ -32,6 +32,9 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Cancel(args) => cancel(&home, tenant, printer, args).await,
         Command::Resume(args) => resume(&home, tenant, printer, args).await,
         Command::Recover(args) => recover(&home, tenant, printer, args).await,
+        Command::Agent(command) => crate::agents::agent(&home, &tenant, printer, command).await,
+        Command::Skill(command) => crate::agents::skill(&home, &tenant, printer, command).await,
+        Command::Eval(command) => crate::agents::eval(&home, &tenant, printer, command).await,
         Command::Tools => tools(&home, printer),
         Command::Models(args) => crate::providers::models(&home, printer, args).await,
         Command::Provider(command) => crate::providers::provider(&home, printer, command).await,
@@ -110,27 +113,80 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     let app = open_engine(home, &tenant, &args.model)?;
     let grants = grants_from(&args);
     app.start_servers(&grants).await;
-    let new = NewExecution {
-        tenant: Some(tenant.clone()),
-        conversation: args.conversation.clone(),
-        parent: None,
-        request: TaskRequest {
-            instructions: args.instructions.clone(),
+    let memory = zorix_core::MemoryOptions {
+        conversation: !args.no_conversation,
+        long_term: !args.no_memory,
+        knowledge: if args.no_knowledge { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
+        operations: if args.no_memory { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
+    };
+    let new = if let Some(slug) = &args.agent {
+        if args.instructions.is_some() {
+            return Err(CliError(
+                "An agent has its own instructions; --instructions cannot be used with --agent.".into(),
+            ));
+        }
+        // Flags only narrow: without any --allow… flag the agent keeps everything it has.
+        let narrows = args.allow_all_tools
+            || !(args.allow.is_empty()
+                && args.allow_read.is_empty()
+                && args.allow_write.is_empty()
+                && args.allow_http.is_empty()
+                && args.allow_repo.is_empty()
+                && args.allow_jira.is_empty()
+                && args.allow_chat.is_empty()
+                && args.allow_db.is_empty()
+                && args.allow_code.is_empty());
+        let mut narrower = Limits::default();
+        let mut limited = false;
+        for (value, slot) in
+            [(args.max_iterations, &mut narrower.max_iterations), (args.max_tool_calls, &mut narrower.max_tool_calls)]
+        {
+            if let Some(n) = value {
+                *slot = n;
+                limited = true;
+            }
+        }
+        if let Some(seconds) = args.max_seconds {
+            narrower.max_active_ms = seconds * 1_000;
+            limited = true;
+        }
+        let ask = zorix_agents::AgentAsk {
             prompt: args.prompt.clone(),
-            model: app.model.clone(),
-            ..TaskRequest::default()
-        },
-        limits,
-        grants,
-        workspace,
-        idempotency_key: args.idempotency_key.clone(),
-        memory: zorix_core::MemoryOptions {
-            conversation: !args.no_conversation,
-            long_term: !args.no_memory,
-            knowledge: if args.no_knowledge { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
-            operations: if args.no_memory { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
-        },
-        agent: None,
+            input: args.input.clone(),
+            model: args.model.model.as_ref().map(|m| m.label()),
+            conversation: args.conversation.clone(),
+            workspace,
+            narrow: narrows.then(|| grants.clone()),
+            limits: limited.then_some(narrower),
+            memory: Some(memory),
+            idempotency_key: args.idempotency_key.clone(),
+            ..zorix_agents::AgentAsk::default()
+        };
+        let mut new = app.hub.prepare_agent_run(slug, args.agent_version, ask, &*app.router).await?;
+        new.tenant = Some(tenant.clone());
+        if let Some(binding) = &new.agent {
+            app.start_servers(&new.grants).await;
+            eprintln!("zorix: {} v{}", binding.slug, binding.version);
+        }
+        new
+    } else {
+        NewExecution {
+            tenant: Some(tenant.clone()),
+            conversation: args.conversation.clone(),
+            parent: None,
+            request: TaskRequest {
+                instructions: args.instructions.clone(),
+                prompt: args.prompt.clone(),
+                model: app.model.clone(),
+                ..TaskRequest::default()
+            },
+            limits,
+            grants,
+            workspace,
+            idempotency_key: args.idempotency_key.clone(),
+            memory,
+            agent: None,
+        }
     };
     let engine = &app.engine;
     let created = engine.create(new).await?;
@@ -147,8 +203,25 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
 
 async fn list(home: &Path, tenant: &TenantId, printer: Printer, args: ListArgs) -> Result<Exit, CliError> {
     let repository = open_reader(home)?;
-    let filter =
-        ListFilter { states: args.state.into_iter().collect(), limit: args.limit as usize, ..ListFilter::default() };
+    let agent = match &args.agent {
+        Some(slug) => {
+            let store = zorix_store::SqliteAgentStore::open(&zorix_store::database_path(home))?;
+            let slug = zorix_core::AgentSlug::new(slug).map_err(CliError)?;
+            use zorix_core::AgentStore as _;
+            let found = store
+                .agent_by_slug(tenant, &slug)
+                .await?
+                .ok_or_else(|| CliError(format!("There is no agent called {slug}.")))?;
+            Some(found.id)
+        }
+        None => None,
+    };
+    let filter = ListFilter {
+        states: args.state.into_iter().collect(),
+        limit: args.limit as usize,
+        agent,
+        ..ListFilter::default()
+    };
     let executions = repository.list(tenant, &filter).await?;
     if printer.json {
         println!("{}", serde_json::to_string(&executions)?);
@@ -193,6 +266,9 @@ async fn show(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> R
     println!("State      {}", e.state);
     println!("Task       {}", shorten(&e.request.prompt, 100));
     println!("Model      {}", summary.model);
+    if let Some(agent) = &e.agent {
+        println!("Agent      {} v{}", agent.slug, agent.version);
+    }
     if !summary.models.is_empty() {
         println!(
             "Served by  {}{}",

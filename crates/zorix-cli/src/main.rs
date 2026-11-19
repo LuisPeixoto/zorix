@@ -1,5 +1,6 @@
 //! The `zorix` command line.
 
+mod agents;
 mod app;
 mod cli;
 mod commands;
