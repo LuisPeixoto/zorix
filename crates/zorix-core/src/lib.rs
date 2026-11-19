@@ -28,8 +28,9 @@ pub mod tool;
 
 pub use agent::{
     Agent, AgentBinding, AgentConversation, AgentModels, AgentSlug, AgentSpec, AgentStore, AgentVersion, Avatar,
-    CheckOutcome, EvalCase, EvalCheck, EvalJudge, EvalResult, EvalRun, JudgeOutcome, MAX_AGENTS, MAX_VERSIONS,
-    SkillFile, SkillPin, SkillRecord, StoredCase, model_allowed, valid_skill_name, validate_model_pattern,
+    CheckOutcome, EVAL_LABEL, EvalCase, EvalCheck, EvalJudge, EvalResult, EvalRun, JudgeOutcome, MAX_AGENTS,
+    MAX_VERSIONS, SkillFile, SkillPin, SkillRecord, StoredCase, model_allowed, valid_skill_name,
+    validate_model_pattern,
 };
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};

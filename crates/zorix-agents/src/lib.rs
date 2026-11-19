@@ -2,10 +2,11 @@
 //! load and the evaluations that compare them.
 
 pub mod diff;
+pub mod evals;
 pub mod format;
 pub mod runner;
 pub mod skills;
 pub mod yaml;
 
-pub use runner::{AgentAsk, ModelResolver, RunnerError, prepare};
+pub use runner::{AgentAsk, ModelResolver, RunnerError, agent_grants, prepare};
 pub use skills::{SkillError, SkillLibrary, skill_tools};

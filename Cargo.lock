@@ -7768,6 +7768,10 @@ name = "zorix-agents"
 version = "0.4.0"
 dependencies = [
  "async-trait",
+ "futures-util",
+ "jsonschema",
+ "parking_lot",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7779,8 +7783,11 @@ dependencies = [
  "yaml-rust2",
  "zip",
  "zorix-core",
+ "zorix-memory",
  "zorix-providers",
+ "zorix-runtime",
  "zorix-sandbox",
+ "zorix-sim",
  "zorix-store",
 ]
 

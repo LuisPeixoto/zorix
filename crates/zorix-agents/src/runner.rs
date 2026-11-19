@@ -51,6 +51,8 @@ pub struct AgentAsk {
     pub metadata: BTreeMap<String, String>,
     /// The execution that asked, when an agent delegates (Phase 6).
     pub parent: Option<ExecutionId>,
+    /// `Some(false)` keeps the agent's own memory out of this run. It can only turn it off, never on.
+    pub agent_memory: Option<bool>,
 }
 
 /// Why a run could not be made.
@@ -122,6 +124,22 @@ pub fn instructions_with_skills(instructions: &str, skills: &[(String, String)])
     text
 }
 
+/// What an agent may do before any request narrows it: its tools and access, and the skill tools when it has skills
+/// (`skill.run` only if it may run code).
+pub fn agent_grants(spec: &zorix_core::AgentSpec) -> Result<Grants, zorix_core::Error> {
+    let mut grants = spec.grants()?;
+    if !spec.skills.is_empty() {
+        for tool in ["skill.load", "skill.read"] {
+            grants = grants.with(Permission::use_tool(tool));
+        }
+        let may_run_code = grants.iter().any(|p| p.action == Action::Execute && p.resource.starts_with("code:"));
+        if may_run_code {
+            grants = grants.with(Permission::use_tool("skill.run"));
+        }
+    }
+    Ok(grants)
+}
+
 /// Make the execution for an agent version.
 pub async fn prepare(
     agent: &Agent,
@@ -132,7 +150,8 @@ pub async fn prepare(
 ) -> Result<NewExecution, RunnerError> {
     let spec = &version.spec;
     let tenant: TenantId = agent.tenant.clone();
-    let binding = AgentBinding::of(agent, version);
+    let mut binding = AgentBinding::of(agent, version);
+    binding.agent_memory = binding.agent_memory && ask.agent_memory.unwrap_or(true);
 
     // 1. The model: asked for, or the default, and at least one candidate must be allowed.
     let model = ask.model.clone().filter(|m| !m.trim().is_empty()).unwrap_or_else(|| spec.models.default.clone());
@@ -160,16 +179,7 @@ pub async fn prepare(
     }
 
     // 3. Grants: the agent's tools and access, plus the skill tools; a request may only narrow them.
-    let mut grants = spec.grants()?;
-    if !spec.skills.is_empty() {
-        for tool in ["skill.load", "skill.read"] {
-            grants = grants.with(Permission::use_tool(tool));
-        }
-        let may_run_code = grants.iter().any(|p| p.action == Action::Execute && p.resource.starts_with("code:"));
-        if may_run_code {
-            grants = grants.with(Permission::use_tool("skill.run"));
-        }
-    }
+    let mut grants = agent_grants(spec)?;
     if let Some(narrow) = &ask.narrow {
         grants = grants.intersect(narrow);
     }

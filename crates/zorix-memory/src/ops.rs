@@ -124,6 +124,10 @@ struct Writer {
 impl Writer {
     async fn record(&self, id: ExecutionId) -> zorix_core::Result<bool> {
         let Some(execution) = self.repository.load(id).await? else { return Ok(false) };
+        // An evaluation is a test, not work: it must not turn up later as something that was done.
+        if execution.request.metadata.contains_key(zorix_core::EVAL_LABEL) {
+            return Ok(false);
+        }
         if !matches!(execution.state, ExecutionState::Completed | ExecutionState::Failed | ExecutionState::Cancelled) {
             return Ok(false);
         }
