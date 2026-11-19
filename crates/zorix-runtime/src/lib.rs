@@ -5,6 +5,7 @@
 mod context;
 mod engine;
 mod events;
+mod live;
 mod memory;
 mod policy;
 mod retry;
@@ -21,6 +22,7 @@ pub use context::{
 };
 pub use engine::{Engine, EngineBuilder, EngineConfig};
 pub use events::{EventBus, follow, is_final};
+pub use live::LiveBus;
 pub use memory::MemoryRepository;
 pub use policy::{DefaultPolicy, Effect, Policy, Rule};
 pub use retry::RetryPolicy;
