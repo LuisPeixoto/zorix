@@ -21,6 +21,8 @@ use crate::model::GenerationParams;
 use crate::permission::{Grants, validate_tool_pattern};
 use crate::time::Timestamp;
 
+/// The metadata key that marks an execution as part of an evaluation. Such runs are not recorded as past work.
+pub const EVAL_LABEL: &str = "zorix.eval";
 /// Most agents a tenant keeps.
 pub const MAX_AGENTS: usize = 200;
 /// Most versions kept for one agent.

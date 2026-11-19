@@ -301,3 +301,19 @@ async fn another_tenants_work_is_never_found() {
             .any(|m| m.content.contains("acquisition plan") && m.content.starts_with("<past_work"))
     );
 }
+
+#[tokio::test]
+async fn an_evaluation_run_is_never_recorded_as_past_work() {
+    let env = env(vec![Turn::Say("The evaluated answer.".into()), Turn::Say("A real answer.".into())]);
+    let mut trial = new_run("Answer the evaluation question", None, None);
+    trial.request.metadata.insert(zorix_core::EVAL_LABEL.into(), "run-1".into());
+    let evaluated = run(&env, trial).await;
+    let real = run(&env, new_run("Answer the real question", None, None)).await;
+    // The real run is recorded; once it is, give the evaluation's turn a chance to have been (wrongly) recorded too.
+    recorded(&env, real.id).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(
+        env.store.operation(&TenantId::local(), evaluated.id).await.unwrap().is_none(),
+        "a test is not work that was done"
+    );
+}
