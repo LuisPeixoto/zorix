@@ -4,6 +4,7 @@
 #   tools/live-tests.sh            Ollama (if it runs) and every cloud provider that has a key
 #   tools/live-tests.sh ollama     only Ollama
 #   tools/live-tests.sh anthropic  only that provider (also: openai, gemini)
+#   tools/live-tests.sh integrations MCP servers, GitHub (public) and the sandbox, through the real command line
 #   tools/live-tests.sh embeddings embeddings and memory: Ollama (all-minilm, plus qwen3:1.7b for the run that cites a
 #                                  document) and, with a stored key, OpenAI and Gemini embeddings
 #
@@ -17,6 +18,10 @@ cd "$(dirname "$0")/.."
 filter="${1:-}"
 args=(--test live -- --ignored --nocapture --test-threads=1)
 [ -n "$filter" ] && args+=("$filter")
+
+if [ "$filter" = integrations ]; then
+  exec tools/live-integrations.sh
+fi
 
 if [ "$filter" = embeddings ]; then
   if ! curl -fsS -m 3 "${OLLAMA_HOST:-http://localhost:11434}/api/tags" >/dev/null 2>&1; then
