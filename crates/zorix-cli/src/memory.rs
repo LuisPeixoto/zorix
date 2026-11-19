@@ -7,27 +7,30 @@ use std::time::Instant;
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Clock, Corpus, EmbedPurpose, EmbeddingRequest, KnowledgeRoot, MemoryFilter, MemoryId, MemoryItem, MemoryKind,
-    MemoryOrigin, MemoryPatch, MemorySettings, MemoryStore, ModelGateway, NewMemory, Remembered, Scope, SystemClock,
-    TenantId, Timestamp, Visibility, redact_text,
+    AgentStore, Clock, Corpus, EmbedPurpose, EmbeddingRequest, KnowledgeRoot, MemoryFilter, MemoryId, MemoryItem,
+    MemoryKind, MemoryOrigin, MemoryPatch, MemorySettings, MemoryStore, ModelGateway, NewMemory, Remembered, Scope,
+    SystemClock, TenantId, Timestamp, Visibility, redact_text,
 };
 use zorix_memory::MemoryStack;
 use zorix_memory::index::{Phase, Progress};
 use zorix_memory::retrieve::hybrid_search;
 use zorix_memory::tools::end_of_day;
 use zorix_providers::{Router, embedding_choices};
-use zorix_store::{DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path};
+use zorix_store::{
+    DataDirLock, SqliteAgentStore, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path,
+};
 
 use crate::app::{CliError, open_router};
 use crate::cli::{
     CorpusArg, EmbeddingsCommand, EmbeddingsSetArgs, KnowledgeAddArgs, KnowledgeCommand, KnowledgeFilesArgs,
     KnowledgeRootArg, KnowledgeSearchArgs, KnowledgeSyncArgs, MemoryAddArgs, MemoryCommand, MemoryEditArgs,
-    MemoryExportArgs, MemoryForgetArgs, MemoryIdArg, MemoryListArgs, MemorySearchArgs, ModelArgs,
+    MemoryExportArgs, MemoryForgetArgs, MemoryIdArg, MemoryListArgs, MemorySearchArgs, ModelArgs, ScopeArg, ScopeSpec,
 };
 use crate::follow::{Exit, Printer, ask, decider};
 
 /// What a memory command works with. Commands that change things hold the data-folder lock.
 struct Ctx {
+    agents: SqliteAgentStore,
     store: Arc<SqliteMemoryStore>,
     stack: Arc<MemoryStack>,
     router: Arc<Router>,
@@ -42,7 +45,44 @@ fn open(home: &Path, write: bool) -> Result<Ctx, CliError> {
     let router = open_router(home, &ModelArgs::default_demo())?;
     let gateway: Arc<dyn ModelGateway> = router.clone();
     let stack = Arc::new(MemoryStack::new(store.clone(), repository, Some(gateway)));
-    Ok(Ctx { store, stack, router, _lock: lock })
+    let agents = SqliteAgentStore::open(&database)?;
+    Ok(Ctx { agents, store, stack, router, _lock: lock })
+}
+
+/// Agents by id and by slug, so a scope can be typed and shown with a name.
+#[derive(Default)]
+struct AgentNames {
+    by_id: std::collections::HashMap<zorix_core::AgentId, String>,
+    by_slug: std::collections::HashMap<String, zorix_core::AgentId>,
+}
+
+impl AgentNames {
+    async fn load(ctx: &Ctx, tenant: &TenantId) -> Result<Self, CliError> {
+        let mut names = Self::default();
+        for agent in ctx.agents.agents(tenant, true).await? {
+            names.by_id.insert(agent.id, agent.slug.to_string());
+            names.by_slug.insert(agent.slug.to_string(), agent.id);
+        }
+        Ok(names)
+    }
+
+    fn resolve(&self, arg: &ScopeArg) -> Result<Scope, CliError> {
+        match &arg.0 {
+            ScopeSpec::Fixed(scope) => Ok(scope.clone()),
+            ScopeSpec::Agent(slug) => self
+                .by_slug
+                .get(slug)
+                .map(|id| Scope::Agent(*id))
+                .ok_or_else(|| CliError(format!("There is no agent called {slug}. `zorix agent list` shows them."))),
+        }
+    }
+
+    fn label(&self, scope: &Scope) -> String {
+        match scope {
+            Scope::Agent(id) => format!("agent {}", self.by_id.get(id).map_or_else(|| id.to_string(), Clone::clone)),
+            other => other.label(),
+        }
+    }
 }
 
 fn now() -> Timestamp {
@@ -64,7 +104,7 @@ fn until(text: &str) -> Result<Timestamp, CliError> {
     Ok(at)
 }
 
-fn describe(item: &MemoryItem, now: Timestamp) -> String {
+fn describe(item: &MemoryItem, now: Timestamp, names: &AgentNames) -> String {
     let status = match (item.status, item.superseded_by, item.valid_until) {
         (zorix_core::MemoryStatus::Superseded, Some(by), _) => format!("  (replaced by m:{by})"),
         (zorix_core::MemoryStatus::Superseded, None, _) => "  (replaced)".to_string(),
@@ -77,13 +117,13 @@ fn describe(item: &MemoryItem, now: Timestamp) -> String {
         "m:{}  {:<10}  {}  confirmed {}{subject}  {}{status}",
         item.id,
         item.kind.as_str(),
-        item.scope.label(),
+        names.label(&item.scope),
         &item.confirmed_at.to_rfc3339()[..10],
         item.content
     )
 }
 
-fn print_items(printer: Printer, items: &[MemoryItem]) -> Result<(), CliError> {
+fn print_items(printer: Printer, items: &[MemoryItem], names: &AgentNames) -> Result<(), CliError> {
     if printer.json {
         println!("{}", serde_json::to_string(items)?);
     } else if items.is_empty() {
@@ -91,7 +131,7 @@ fn print_items(printer: Printer, items: &[MemoryItem]) -> Result<(), CliError> {
     } else {
         let at = now();
         for item in items {
-            println!("{}", describe(item, at));
+            println!("{}", describe(item, at, names));
         }
     }
     Ok(())
@@ -117,7 +157,8 @@ pub async fn memory(
                 .store
                 .update_memory(tenant, parse_id(&id)?, MemoryPatch { confirm: true, ..MemoryPatch::default() }, now())
                 .await?;
-            print_items(printer, &[item])?;
+            let names = AgentNames::load(&ctx, tenant).await?;
+            print_items(printer, &[item], &names)?;
             Ok(Exit::Done)
         }
         MemoryCommand::Forget(args) => forget(home, tenant, printer, args).await,
@@ -132,10 +173,12 @@ async fn list(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryList
         .store
         .all_memory(tenant, &MemoryFilter { include_inactive: args.all, ..MemoryFilter::default() }, now())
         .await?;
+    let names = AgentNames::load(&ctx, tenant).await?;
     if let Some(scope) = &args.scope {
-        items.retain(|i| i.scope == scope.0);
+        let scope = names.resolve(scope)?;
+        items.retain(|i| i.scope == scope);
     }
-    print_items(printer, &items)?;
+    print_items(printer, &items, &names)?;
     Ok(Exit::Done)
 }
 
@@ -146,8 +189,10 @@ async fn add(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryAddAr
             "That looks like a credential or a key, so it was not remembered. Memory is not for secrets.".into(),
         ));
     }
+    let ctx = open(home, true)?;
+    let names = AgentNames::load(&ctx, tenant).await?;
     let new = NewMemory {
-        scope: args.scope.0,
+        scope: names.resolve(&args.scope)?,
         kind: if args.kind == crate::cli::KindArg::Fact { MemoryKind::Fact } else { MemoryKind::Preference },
         subject: args.subject,
         content: text,
@@ -155,7 +200,6 @@ async fn add(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryAddAr
         origin: MemoryOrigin::User { name: decider() },
         replaces: vec![],
     };
-    let ctx = open(home, true)?;
     let outcome = ctx.store.remember(tenant, new, now()).await?;
     // Best effort: make its vector now so it can be found by meaning.
     let _ = ctx.stack.embed_missing(tenant, &CancellationToken::new()).await;
@@ -176,11 +220,14 @@ async fn add(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryAddAr
 }
 
 async fn edit(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryEditArgs) -> Result<Exit, CliError> {
+    let ctx = open(home, true)?;
+    let names = AgentNames::load(&ctx, tenant).await?;
+    let scope = args.scope.as_ref().map(|s| names.resolve(s)).transpose()?;
     let patch = MemoryPatch {
         content: args.text,
         subject: args.subject.map(Some),
         valid_until: if args.no_until { Some(None) } else { args.until.as_deref().map(until).transpose()?.map(Some) },
-        scope: args.scope.map(|s| s.0),
+        scope,
         confirm: false,
     };
     if patch.content.is_none() && patch.subject.is_none() && patch.valid_until.is_none() && patch.scope.is_none() {
@@ -191,10 +238,9 @@ async fn edit(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryEdit
             "That looks like a credential or a key, so it was not saved. Memory is not for secrets.".into(),
         ));
     }
-    let ctx = open(home, true)?;
     let item = ctx.store.update_memory(tenant, parse_id(&args.id)?, patch, now()).await?;
     let _ = ctx.stack.embed_missing(tenant, &CancellationToken::new()).await;
-    print_items(printer, &[item])?;
+    print_items(printer, &[item], &names)?;
     Ok(Exit::Done)
 }
 
@@ -207,7 +253,7 @@ async fn forget(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryFo
         if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
             return Err(CliError("Deleting needs a yes: add --yes.".into()));
         }
-        eprintln!("{}", describe(&item, now()));
+        eprintln!("{}", describe(&item, now(), &AgentNames::default()));
         if !used.is_empty() {
             eprintln!("It was used in {} run(s); the copy in each run's record is removed too.", used.len());
         }
@@ -227,7 +273,11 @@ async fn forget(home: &Path, tenant: &TenantId, printer: Printer, args: MemoryFo
     Ok(Exit::Done)
 }
 
-fn visibility(tenant: &TenantId, project: Option<&PathBuf>) -> Result<Visibility, CliError> {
+fn visibility(
+    tenant: &TenantId,
+    project: Option<&PathBuf>,
+    agent: Option<zorix_core::AgentId>,
+) -> Result<Visibility, CliError> {
     let project = match project {
         Some(dir) => Some(
             std::fs::canonicalize(dir)
@@ -237,12 +287,22 @@ fn visibility(tenant: &TenantId, project: Option<&PathBuf>) -> Result<Visibility
         ),
         None => None,
     };
-    Ok(Visibility { tenant: tenant.clone(), project, conversation: None, agent: None })
+    Ok(Visibility { tenant: tenant.clone(), project, conversation: None, agent })
 }
 
 async fn search(home: &Path, tenant: &TenantId, printer: Printer, args: MemorySearchArgs) -> Result<Exit, CliError> {
     let ctx = open(home, false)?;
-    let vis = visibility(tenant, args.project.as_ref())?;
+    let names = AgentNames::load(&ctx, tenant).await?;
+    let agent = match &args.agent {
+        Some(slug) => Some(
+            *names
+                .by_slug
+                .get(slug)
+                .ok_or_else(|| CliError(format!("There is no agent called {slug}. `zorix agent list` shows them.")))?,
+        ),
+        None => None,
+    };
+    let vis = visibility(tenant, args.project.as_ref(), agent)?;
     let (corpus, label) = match args.corpus {
         CorpusArg::Memory => (Corpus::Memory, "memory"),
         CorpusArg::Knowledge => (Corpus::Knowledge, "documents"),
@@ -262,7 +322,7 @@ async fn search(home: &Path, tenant: &TenantId, printer: Printer, args: MemorySe
                     Ok(id) => ctx.store.memory(tenant, id).await?,
                     Err(_) => None,
                 } {
-                    rows.push(json!({"id": format!("m:{}", item.id), "text": describe(&item, now()), "found_by": hit.found_by()}));
+                    rows.push(json!({"id": format!("m:{}", item.id), "text": describe(&item, now(), &names), "found_by": hit.found_by()}));
                 }
             }
             Corpus::Knowledge => {
@@ -491,7 +551,13 @@ pub async fn knowledge(
             Ok(Exit::Done)
         }
         KnowledgeCommand::Search(KnowledgeSearchArgs { query, project }) => {
-            search(home, tenant, printer, MemorySearchArgs { query, corpus: CorpusArg::Knowledge, project }).await
+            search(
+                home,
+                tenant,
+                printer,
+                MemorySearchArgs { query, corpus: CorpusArg::Knowledge, project, agent: None },
+            )
+            .await
         }
     }
 }
