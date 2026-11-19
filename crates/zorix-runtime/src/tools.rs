@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use parking_lot::RwLock;
@@ -13,6 +14,7 @@ use zorix_core::{Error, Result, Tool, ToolContext, ToolError, ToolRegistry, Tool
 #[derive(Default)]
 pub struct InMemoryToolRegistry {
     tools: RwLock<BTreeMap<String, Arc<dyn Tool>>>,
+    generation: AtomicU64,
 }
 
 impl InMemoryToolRegistry {
@@ -53,7 +55,28 @@ impl ToolRegistry for InMemoryToolRegistry {
             return Err(Error::InvalidInput(format!("A tool with the id {id} is already registered.")));
         }
         tools.insert(id, tool);
+        self.generation.fetch_add(1, Ordering::SeqCst);
         Ok(())
+    }
+
+    fn unregister(&self, id: &str) -> bool {
+        let removed = self.tools.write().remove(id).is_some();
+        if removed {
+            self.generation.fetch_add(1, Ordering::SeqCst);
+        }
+        removed
+    }
+
+    fn replace(&self, tool: Arc<dyn Tool>) -> Result<()> {
+        check_spec(tool.spec())?;
+        let id = tool.spec().id.clone();
+        self.tools.write().insert(id, tool);
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
     }
 
     fn get(&self, id: &str) -> Option<Arc<dyn Tool>> {

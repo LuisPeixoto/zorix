@@ -143,6 +143,7 @@ fn remember_spec() -> ToolSpec {
             "additionalProperties": false
         }),
     );
+    spec.source = zorix_core::ToolSource::Memory;
     spec.annotations = ToolAnnotations { read_only: false, destructive: false, idempotent: true, open_world: false };
     spec.requires_approval = true;
     spec.approval_by_person_only = true;
@@ -278,6 +279,7 @@ fn search_spec() -> ToolSpec {
             "additionalProperties": false
         }),
     );
+    spec.source = zorix_core::ToolSource::Memory;
     spec.annotations = ToolAnnotations::safe_read();
     spec
 }
@@ -357,6 +359,7 @@ fn history_spec() -> ToolSpec {
             "additionalProperties": false
         }),
     );
+    spec.source = zorix_core::ToolSource::Memory;
     spec.annotations = ToolAnnotations::safe_read();
     spec
 }
@@ -423,6 +426,7 @@ fn knowledge_spec() -> ToolSpec {
             "additionalProperties": false
         }),
     );
+    spec.source = zorix_core::ToolSource::Memory;
     spec.annotations = ToolAnnotations::safe_read();
     spec
 }

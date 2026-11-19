@@ -303,14 +303,27 @@ impl Run {
 
     // ---- model ------------------------------------------------------------------------------------------------
 
-    fn offered_tools(&self) -> Vec<ToolSpec> {
-        self.engine
+    /// The tools this execution may use. They are pinned the first time they are needed and never change afterwards,
+    /// so every step and every resume offers the same list, and a server that changes a tool in the meantime cannot
+    /// change what a running execution was shown or approved (ADR-0020).
+    fn pin_tools(&mut self) {
+        if self.exec.tool_pins.is_some() {
+            return;
+        }
+        let pins = self
+            .engine
             .inner
             .tools
             .list()
             .into_iter()
             .filter(|spec| self.exec.grants.allows(&Permission::use_tool(&spec.id)))
-            .collect()
+            .map(|spec| spec.pin())
+            .collect();
+        self.exec.tool_pins = Some(pins);
+    }
+
+    fn offered_tools(&self) -> Vec<ToolSpec> {
+        self.exec.tool_pins.iter().flatten().map(|pin| pin.spec.clone()).collect()
     }
 
     async fn model_turn(&mut self) -> Step {
@@ -318,6 +331,7 @@ impl Run {
         if let Some(failure) = self.engine.inner.policy.check_limits(&self.exec) {
             return Err(self.fail(failure).await);
         }
+        self.pin_tools();
         let tools = self.offered_tools();
         let context_budget = self.engine.inner.model.describe(&self.exec.request.model).map(|profile| {
             profile
@@ -581,7 +595,13 @@ impl Run {
             let record = self.record_for(&call, idempotent);
             let event = self.event(
                 EventKind::ToolRequested,
-                json!({ "call_id": call.id, "tool": call.tool, "arguments": call.arguments, "call_hash": hash }),
+                json!({
+                    "call_id": call.id,
+                    "tool": call.tool,
+                    "arguments": call.arguments,
+                    "call_hash": hash,
+                    "source": tool.as_ref().map(|t| t.spec().source.label()),
+                }),
             );
             self.upsert_record(record.clone());
             self.commit(&[], vec![event], Extras { tool_calls: vec![record], ..Extras::default() }).await?;
@@ -592,6 +612,26 @@ impl Run {
             return self.settle_failed(&call, message, EventKind::ToolDenied, "runtime").await;
         };
         let spec = tool.spec().clone();
+
+        // A tool the execution was not shown, or whose definition changed since it was, does not run.
+        if let Some(pins) = &self.exec.tool_pins {
+            match pins.iter().find(|pin| pin.spec.id == call.tool) {
+                // Not granted at all: the policy below gives the usual "no permission" answer.
+                None if !self.exec.grants.allows(&Permission::use_tool(&call.tool)) => {}
+                None => {
+                    let message = format!("{} was not available to this execution when it started.", call.tool);
+                    return self.settle_failed(&call, message, EventKind::ToolDenied, "runtime").await;
+                }
+                Some(pin) if pin.hash != spec.definition_hash() => {
+                    let message = format!(
+                        "{} changed after this execution started (its definition is not the one it was shown), so it was not run.",
+                        call.tool
+                    );
+                    return self.settle_failed(&call, message, EventKind::ToolDenied, "runtime").await;
+                }
+                Some(_) => {}
+            }
+        }
 
         if let Err(error) = ToolExecutor::validate_arguments(&spec, &call.arguments) {
             return self.settle_failed(&call, error.to_string(), EventKind::ToolFailed, "validation").await;
@@ -659,6 +699,9 @@ impl Run {
                 "call_hash": approval.call_hash,
                 "reason": approval.reason,
                 "person_only": self.engine.inner.tools.get(&approval.tool).is_some_and(|t| t.spec().approval_by_person_only),
+                "source": self.engine.inner.tools.get(&approval.tool).map(|t| t.spec().source.label()),
+                "definition_hash": self.exec.tool_pins.iter().flatten().find(|p| p.spec.id == approval.tool).map(|p| p.hash.clone()),
+                "summary": self.engine.inner.tools.get(&approval.tool).and_then(|t| t.describe_call(&approval.arguments)),
             }),
         );
         let checkpoint = self.event(EventKind::Checkpoint, json!({ "step": self.step + 1 }));

@@ -300,6 +300,10 @@ pub struct Execution {
     /// What it may use from memory. Executions stored by 0.2 have everything on.
     #[serde(default)]
     pub memory: MemoryOptions,
+    /// The tools this execution may use, pinned when its first model step starts (ADR-0020). `None` until then, and for
+    /// executions stored by 0.3, which pin at their next step.
+    #[serde(default)]
+    pub tool_pins: Option<Vec<crate::tool::PinnedTool>>,
     /// How many model-driven iterations have started.
     pub iteration: u32,
     /// How many tool calls have been requested.
@@ -342,6 +346,7 @@ impl Execution {
             workspace: new.workspace,
             idempotency_key: new.idempotency_key,
             memory: new.memory,
+            tool_pins: None,
             iteration: 0,
             tool_calls_requested: 0,
             validation_retries: 0,

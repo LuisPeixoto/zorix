@@ -23,7 +23,7 @@ pub mod time;
 pub mod tokens;
 pub mod tool;
 
-pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash};
+pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
 pub use engine::{ExecutionDetail, ExecutionEngine, RecoveryReport};
 pub use error::{Error, Result};
@@ -58,4 +58,6 @@ pub use secret::{REDACTED, Secret};
 pub use state::{ExecutionState, InvalidTransition, Trigger, transition};
 pub use time::{Clock, ManualClock, SystemClock, Timestamp};
 pub use tokens::{Calibration, InMemoryCalibration, NoCalibration, TokenCalibration, TokenSample};
-pub use tool::{Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolRegistry, ToolSpec};
+pub use tool::{
+    PinnedTool, Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolRegistry, ToolSource, ToolSpec,
+};
