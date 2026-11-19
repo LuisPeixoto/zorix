@@ -32,6 +32,28 @@ A proposal from a run to remember something has its own approval card: the sente
 automatic mode approves it ([memory](memory.md)). New run has three switches (earlier runs of the conversation, remembered things and
 past work, documents); every desktop run belongs to a conversation, and **Continue** reuses it.
 
+## Integrations (version 0.4)
+
+The **Integrations** screen has three tabs: **Connected** (your MCP servers, each card showing its live state, how many tools
+are ready and how many wait for your review), **Catalogue** (a reviewed list with search and categories) and **Connections**
+(GitHub, GitLab, Jira, Slack, Discord, Postgres, SQLite, web APIs and webhooks, plus the code sandbox). Cards update as servers
+start, stop and fail. A server's **drawer** has its tools (approve, turn off, and for a read-only tool *don't ask before using
+it*), what changed since you approved a tool, its details and its logs; a server that needs a sign-in has a **Sign in**
+button. Adding a server, connecting a service and importing from Claude Desktop, VS Code or Cursor are short guided flows; a
+secret you type goes straight to the keychain.
+
+![A server's drawer, with tools to review](screenshots-0.4.0/server-self-light.png)
+
+New run has a **Servers and services** card: pick MCP servers, databases (read-only unless you allow writes), code, and name
+hosts, repositories, Jira projects and channels. Approval cards show what each kind of call would do: an MCP tool shows its
+server and pinned definition, a database change shows highlighted SQL, a message looks like the message, a web request shows
+its method, address and body, and code shows its source.
+
+![An MCP tool waiting for approval](screenshots-0.4.0/approval-mcp-light.png)
+
+<kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>K</kbd> opens a command palette to jump to a screen, a run or a server. See [MCP](mcp.md) and
+[integrations](integrations.md).
+
 Nothing is allowed by default. The form preselects the demo tools that need only a tool permission; the file tools start
 off because they need a workspace. Tools that change things say **asks you first**.
 

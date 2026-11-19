@@ -106,3 +106,39 @@ continues with keyword search and its context says so.
 ## `zorix memory` or `zorix knowledge sync` says the data folder is in use
 
 Writing commands need the data folder to themselves, so they fail while the desktop app is open. Close it, or use the app.
+
+## An MCP server is "Starting" for a long time, or "Failed"
+
+Open the server's **Logs** tab, or run `zorix mcp logs <name>`. Servers started with `npx` need Node installed and may download
+their package the first time (the start waits up to 30 seconds). Remote servers need to be reachable over HTTPS.
+
+## A server says "Sign in"
+
+`zorix mcp login <name>` (or the **Sign in** button) opens your browser. If the browser cannot open, the address to open is
+printed. Servers that need a client registered in advance take `--client-id`. If a sign-in keeps failing, `zorix mcp logout
+<name>` and try again.
+
+## A tool I approved is gone from runs
+
+Its description or schema changed on the server, so it is withdrawn until you review it (`zorix mcp review <name>`, or the
+server's drawer). This is deliberate: a changed description is a changed tool.
+
+## A run says "There is no tool called mcp.…"
+
+The run was not granted the server (`--allow 'mcp.<server>.*'`), the server was not running or not approved when the run
+started, or the tool is off. Runs pin their tools when they start, so approving afterwards helps the next run.
+
+## `http.get` says a host is not allowed, or an address is refused
+
+A run reaches only hosts it was granted (`--allow-http <host>`). Addresses on this computer or a private network (`localhost`,
+`10.…`, `192.168.…`, `169.254.…`) are refused unless that exact host is granted.
+
+## Python says it is not installed
+
+`zorix sandbox install python` (or **Install Python** under Integrations › Connections). JavaScript needs nothing.
+
+## A connection test fails
+
+The message says what the service answered, without secrets. Check the token's scopes (a GitHub token needs repository
+access to write), the site address (Jira Cloud: `https://<name>.atlassian.net`), and for Postgres that the server offers TLS
+(`sslmode disable` is only accepted for a database on this computer).

@@ -50,6 +50,18 @@ other.
 | `context_snapshots`, `snapshot_items` | What each run was given, frozen ([ADR-0015](adr/0015-frozen-recall-snapshot.md)) |
 | `token_calibration`, `memory_settings` | The learned token factor per model; the embeddings model |
 
+### Integration tables (schema 3)
+
+| Table | Holds |
+|---|---|
+| `mcp_servers` | The servers a person added: name, transport (command, arguments, variable **names**, folder; or address and sign-in kind), whether it is on, the protocol era found |
+| `mcp_tool_pins` | For each tool of a server: what it listed last, the definition and hash a person approved, its status (new, pinned, changed, disabled), whether it asks, who approved it and when |
+| `connections` | Name, kind, settings that are not secret, whether a secret is kept, the last test |
+
+No table holds a secret. They live in the system keychain under names such as `mcp.<id>.env.<variable>`, `mcp.<id>.token`,
+`mcp.<id>.oauth` and `mcp.<id>.access` (OAuth), and `conn.<id>`; removing a server or connection removes its entries.
+Opening a 0.3 database upgrades it in one transaction.
+
 Each search index is its own FTS5 table, kept in step by triggers. Opening a 0.2 database upgrades it in one transaction. Deleting a
 memory or a folder removes its rows, search entries and vectors, scrubs the snapshots and overwrites the freed pages
 (`secure_delete`).

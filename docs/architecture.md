@@ -118,13 +118,30 @@ wiring both the CLI and the desktop use. The store is behind a `MemoryStore` tra
 `zorix-store`, and embeddings are one more method on `ModelGateway`, so any provider can supply them. Token counts are
 calibrated from real usage in the runtime. See [memory](memory.md), [knowledge](knowledge.md) and ADR-0013 to ADR-0017.
 
+## Integrations (zorix-mcp, zorix-integrations, zorix-sandbox, zorix-hub)
+
+Everything that reaches outside plugs in through the same `Tool` contract and a registry that can change while ZORIX runs
+(`unregister`, `replace`, a `generation` counter). A tool carries its **source** (built in, memory, an MCP server, an
+integration, the sandbox) and may describe a call in a sentence for approval cards. An execution **pins** the definition
+and hash of every tool it was offered when it starts, so a server changing a tool cannot change a run in progress.
+
+- **`zorix-mcp`** is the MCP client (both protocol eras, stdio and Streamable HTTP, OAuth) with the manager that supervises
+  servers, pins their tool definitions and registers approved tools; it is also the MCP server behind `zorix mcp serve`.
+- **`zorix-integrations`** holds the native tools and the SSRF-guarded HTTP client they share.
+- **`zorix-sandbox`** runs JavaScript and Python in WebAssembly.
+- **`zorix-hub`** assembles them once (store, keychain, registry, manager, sandbox) and turns flags such as `--allow-repo` into
+  grants; the CLI and the desktop app both use it.
+
+Servers, tool pins and connections are in SQLite (schema 3); secrets only in the keychain. See [MCP](mcp.md),
+[integrations](integrations.md), [sandbox](sandbox.md) and ADR-0018 to ADR-0023.
+
 ## What comes next
 
 | Phase | Plugs into |
 |---|---|
 | 2 AI Provider Engine | `ModelGateway` implementations, model catalogue, routing |
 | 3 Context & Memory ✅ | New `ContextSource`s; memory stores |
-| 4 Tool & Integration | `ToolRegistry` sources: MCP, HTTP, integrations; credentials |
+| 4 Tool & Integration ✅ | `ToolRegistry` sources: MCP, HTTP, integrations, the sandbox; credentials |
 | 5 AI Agent Engine | Agent definitions that create executions with instructions, tools, grants |
 | 6 Multi-Agent | Executions that create child executions (parent id is already part of the model) |
 | 7 Workflows | A scheduler of executions with conditions; uses events as triggers |
