@@ -117,3 +117,40 @@ async fn a_run_is_built_from_a_version_and_the_version_is_chosen_by_number() {
     assert!(newest.grants.allows(&zorix_core::Permission::use_tool("clock.now")));
     assert!(hub.prepare_agent_run("writer", Some(7), ask("x"), &Anything).await.is_err());
 }
+
+#[tokio::test]
+async fn a_skill_is_imported_listed_removed_and_its_files_are_only_cleaned_when_nothing_names_them() {
+    let (hub, dir) = hub();
+    let folder = dir.path().join("src").join("checklist");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("SKILL.md"),
+        "---\nname: checklist\ndescription: A checklist. Use before shipping.\n---\n\nTick the boxes.\n",
+    )
+    .unwrap();
+    let record = hub.import_skill(&folder).await.unwrap();
+    assert_eq!(record.name, "checklist");
+    assert_eq!(hub.skills_list().await.unwrap().len(), 1);
+    assert_eq!(hub.skill("checklist").await.unwrap().hash, record.hash);
+    assert!(hub.skill("nothing").await.unwrap_err().to_string().contains("zorix skill list"));
+    assert!(hub.import_skill(&dir.path().join("src").join("absent")).await.is_err());
+
+    // An agent pins it; removing the skill keeps its files for that agent.
+    let file = FILE.replace("tools:", "skills:\n  - checklist\ntools:");
+    hub.import_agent(&file, None, None).await.unwrap();
+    hub.remove_skill("checklist").await.unwrap();
+    assert!(hub.skill("checklist").await.is_err());
+    let report = hub.clean_skills().await.unwrap();
+    assert_eq!(report.removed, 0, "the agent still names it");
+    assert!(hub.skills.has(&record.hash));
+
+    // With the agent gone, nothing names it and cleaning removes the files.
+    let (agent, _) = hub.agent("writer").await.unwrap();
+    hub.agents.remove_agent(hub.tenant(), agent.id).await.unwrap();
+    let report = hub.clean_skills().await.unwrap();
+    assert_eq!(report.removed, 1);
+    assert!(!hub.skills.has(&record.hash));
+    assert!(!hub.registry_has_skill_tools(), "nothing is registered until the app asks");
+    hub.register_native_tools().unwrap();
+    assert!(hub.registry_has_skill_tools());
+}

@@ -72,6 +72,8 @@ pub struct Hub {
     pub sandbox: Arc<Sandbox>,
     /// Agents, their versions, skills and evaluations.
     pub agents: Arc<SqliteAgentStore>,
+    /// The skill files on disk.
+    pub skills: Arc<zorix_agents::SkillLibrary>,
     services: Arc<Services>,
 }
 
@@ -89,7 +91,8 @@ impl Hub {
         let sandbox = Arc::new(Sandbox::new(home)?);
         let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone() });
         let agents = Arc::new(SqliteAgentStore::open(&database_path(home))?);
-        Ok(Self { tenant, store, secrets, registry, manager, sandbox, agents, services })
+        let skills = Arc::new(zorix_agents::SkillLibrary::new(home));
+        Ok(Self { tenant, store, secrets, registry, manager, sandbox, agents, skills, services })
     }
 
     /// The tenant it works for.
@@ -114,10 +117,17 @@ impl Hub {
         tools.extend(discord_tools(self.services()));
         tools.extend(db_tools(self.services()));
         tools.extend(sandbox_tools(self.sandbox.clone()));
+        tools.extend(zorix_agents::skill_tools(self.agents.clone(), self.skills.clone(), self.sandbox.clone()));
         for tool in tools {
             self.registry.register(tool)?;
         }
         Ok(())
+    }
+
+    /// Whether the skill tools are registered (tests).
+    pub fn registry_has_skill_tools(&self) -> bool {
+        use zorix_core::ToolRegistry as _;
+        ["skill.load", "skill.read", "skill.run"].iter().all(|id| self.registry.get(id).is_some())
     }
 
     fn now(&self) -> Timestamp {
