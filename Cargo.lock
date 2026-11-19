@@ -6655,6 +6655,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorix-mcp"
+version = "0.3.0"
+dependencies = [
+ "async-trait",
+ "jsonschema",
+ "libc",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zorix-core",
+ "zorix-providers",
+ "zorix-runtime",
+ "zorix-sim",
+ "zorix-store",
+]
+
+[[package]]
 name = "zorix-memory"
 version = "0.3.0"
 dependencies = [
