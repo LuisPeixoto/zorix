@@ -230,7 +230,8 @@ async fn grants_connections_and_files_are_checked() {
         .contains("no database connection called ghost")
     );
     // A connection whose file is gone, or whose path is relative, says so.
-    rig.connect("gone", "/definitely/not/here.db").await;
+    let gone = std::env::temp_dir().join("zorix-definitely-not-here").join("app.db");
+    rig.connect("gone", gone.to_str().unwrap()).await;
     rig.connect("rel", "relative/app.db").await;
     let any = Grants::none().with(Permission::new(Action::Read, "db:*"));
     assert!(
