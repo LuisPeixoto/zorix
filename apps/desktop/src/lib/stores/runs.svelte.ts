@@ -48,6 +48,8 @@ class RunsStore {
   error = $state<string | null>(null);
   busy = $state(false);
   view = $state<"runs" | "providers" | "memory" | "design">("runs");
+  /** The command palette (⌘K) is open. */
+  palette = $state(false);
   memory = $state<MemoryRow[]>([]);
   /** The Memory tab to open first (for screenshots). */
   startTab = $state("facts");
