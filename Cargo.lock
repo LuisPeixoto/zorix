@@ -7661,6 +7661,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 name = "zorix-cli"
 version = "0.3.0"
 dependencies = [
+ "async-trait",
  "clap",
  "futures-util",
  "rpassword",
@@ -7671,6 +7672,7 @@ dependencies = [
  "tokio-util",
  "tracing-subscriber",
  "zorix-core",
+ "zorix-mcp",
  "zorix-memory",
  "zorix-providers",
  "zorix-runtime",

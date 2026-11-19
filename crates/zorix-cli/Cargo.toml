@@ -20,13 +20,15 @@ zorix-store.workspace = true
 zorix-tools.workspace = true
 zorix-providers.workspace = true
 zorix-memory.workspace = true
+zorix-mcp.workspace = true
+async-trait.workspace = true
 tokio-util.workspace = true
 rpassword.workspace = true
 clap.workspace = true
 futures-util.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-std"] }
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
