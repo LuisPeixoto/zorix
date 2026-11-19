@@ -95,3 +95,27 @@ Svelte (src/)  ──invoke / Channel──►  Tauri commands (src-tauri/src/co
   replaced on every refresh.
 - `src/lib/format.ts` turns states and events into words (pure, tested with `npm test`).
 - Live events arrive through a Tauri `Channel`: first what is stored, then what happens, without gaps or repeats.
+
+## Agents (version 0.5)
+
+The **Agents** screen is a gallery of cards (face, name, what it does, version, model, skills) with **Add from templates** and **Import a file**. An agent has a
+page with six tabs:
+
+| Tab | What it is for |
+|---|---|
+| **Chat** | Conversations on the left, the thread on the right: your messages, the agent's answers as Markdown, each tool call as a card, an approval right where it is asked, text that appears as it is written, and a composer (Enter sends, Shift+Enter starts a line) |
+| **Definition** | The whole agent as a form: face, name, instructions, models, tools, access, limits and memory. *Save* writes a new version, with an optional note |
+| **Skills** | The skills it has (open any file), the library, import a folder, attach, detach, use a newer version |
+| **Versions** | A timeline, what changed in each version, and *Roll back* |
+| **Evals** | A cases-by-runs matrix (Pass or Fail in words), the checks and the grader's reasons for a cell, run and stop, and how many cases the last run fixed or broke |
+| **Memory** | The facts only this agent sees: add one, forget one |
+
+![An agent's definition](screenshots-0.5.0/agents-definition-light.png)
+
+**New run** has a *Run as* picker. With an agent chosen the form shows what the agent keeps and offers only narrowing: the model (it must be allowed) and the memory
+switches. The run view shows an **agent · vN** chip that opens the agent's chat, and **Continue** on an agent's run goes back to that chat. The Memory screen can filter by
+**Agent**, and ⌘K finds agents by name. Links in an answer open in your browser; only web and mail addresses open.
+
+![The agent page in dark](screenshots-0.5.0/agents-chat-dark.png)
+
+See [agents](agents.md), [skills](skills.md) and [evals](evals.md).

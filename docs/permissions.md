@@ -38,6 +38,14 @@ Tools that are not granted are not even shown to the model, and if the model ask
 Writes, sends and statements that change data **always ask a person**, `--approve yes` is for tests and demos. See
 [integrations](integrations.md) for what each tool guards, and [MCP](mcp.md) for pinning and review.
 
+### Grants of agents
+
+An [agent](agents.md)'s grants are its `tools` and `access` entries, compiled with the same code as the `--allow-…` flags, plus the skill tools. A run made
+by an agent can only **narrow** them (`Grants::intersect`: allowed only if both sides allow it), whether the narrowing comes from flags, the New run form or
+the server that started `zorix mcp serve`. `skill.run` is granted only to an agent whose access has `code:…`. A skill's `allowed-tools` is shown and never
+granted. The agent's `models.allowed` list is enforced twice: the router will not plan a model outside it, and the runtime fails a run whose model is not on it.
+Evaluations additionally drop `write` grants and refuse approvals unless a case says otherwise.
+
 ## The policy engine
 
 `PolicyEngine::evaluate_tool_call` answers **Allow**, **Deny** or **RequireApproval**, in this order:

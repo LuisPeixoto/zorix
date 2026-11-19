@@ -41,7 +41,12 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 
 Ctrl-C **pauses** at the next step (continue with `zorix resume`). A second Ctrl-C stops at once; continue later with `zorix recover`.
 
-### `zorix list [--state STATE] [--limit N]`
+**As an agent.** `--agent NAME` runs the prompt as an [agent](agents.md): it brings its instructions, skills, tools, access and memory.
+The other flags only **narrow** it: an `--allow…` flag keeps what both the agent and the flag allow, `--max-…` flags take the smaller limit,
+`--no-memory` and friends switch memory off. `--agent-version N` picks a version, `--input JSON` sends data with the prompt, and `--model`
+must be one the agent may use. `--instructions` cannot be combined with it. The version is printed (`zorix: calc v2`) and shown by `zorix show`.
+
+### `zorix list [--state STATE] [--agent NAME] [--limit N]`
 
 Executions, newest first.
 
@@ -92,6 +97,17 @@ Shows the aliases and routes from `providers.toml`.
 `edit <ID> [--text T] [--subject S] [--until D | --no-until] [--scope …]`, `confirm <ID>`, `forget <ID> [--yes]`,
 `search <QUERY> [--in memory|knowledge|history] [--project <folder>]` and `export [--out FILE]`. Ids look like `m:<id>`; the bare id works too.
 Text that looks like a credential is refused. `forget` asks unless `--yes` is given, and refuses to run without a terminal. See [memory](memory.md).
+
+### `zorix agent …`, `zorix skill …`, `zorix eval …`
+
+Agents ([agents](agents.md)): `agent list [--all]`, `show NAME [--version N]`, `create NAME [--from-file F | --instructions T …]`, `edit NAME`
+(opens `$VISUAL` or `$EDITOR`; a saved change is a new version), `import FILE [--as NAME] [--skills DIR] [--note T]`,
+`export NAME [--version N] [-o FILE] [--with-skills DIR]`, `versions NAME`, `diff NAME A B`, `rollback NAME N`, `archive NAME [--undo]`,
+`remove NAME --yes`, `add --template researcher|code-reviewer|data-analyst|writer [--as NAME]` and `templates`.
+Skills ([skills](skills.md)): `skill list`, `show NAME`, `import <folder|zip>`, `remove NAME`, `gc`.
+Evaluations ([evals](evals.md)): `eval add AGENT FILE.json`, `list AGENT`, `remove AGENT CASE`, `run AGENT [--version N] [--model M]… [--tag T]… [--offline] [--concurrency N]`
+(exit code 1 when a case fails), `runs AGENT`, `show RUN` and `compare A B` (exit code 1 when something broke).
+These take the data-folder lock only for `eval run`; the rest work while the desktop app is open.
 
 ### `zorix knowledge …`
 

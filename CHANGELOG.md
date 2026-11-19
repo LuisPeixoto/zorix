@@ -5,6 +5,39 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
+The **AI Agent Engine**: reusable agents that you can version, evaluate and trust to change.
+
+### Added
+- **Agents**: a name and face, instructions, skills, tools and access, memory of their own, the models they may use and limits. Stored in the database, **versioned**
+  (a new version only when the content changed; rollback writes a new version) and exported and imported as one deterministic Markdown file. A run made by an
+  agent records the agent, version and hash, and can only **narrow** the agent's grants, limits and memory.
+- **Skills** in the open **Agent Skills** format (`SKILL.md` plus files), content-addressed in a library, pinned by hash, loaded on demand with `skill.load`,
+  `skill.read` and `skill.run`; scripts run only in the WebAssembly sandbox with the skill mounted read-only. Imports from a folder or a zip are bounded and atomic.
+- An **agent memory scope**: facts only one agent sees, approved by a person like every memory.
+- A **model allow-list** per agent, enforced by the router (a fallback can never leave it) and again by the runtime.
+- **Live text**: answers appear as they are written (Anthropic, OpenAI chat and responses, Gemini, Ollama), through a `TextSink` and `ExecutionEngine::live()`;
+  never stored.
+- **Evaluations**: deterministic checks (text, regex, JSON Schema, tools, steps, cost), an optional judge with a rubric, runs per version and model, comparison
+  (fixed, broke), and a safe way to run them (no writes, no approvals, not recorded as past work).
+- Four **starter agents** (researcher, code reviewer, data analyst, writer), each with a skill and an evaluation suite.
+- **Agents over MCP**: `zorix.agents`, and `zorix.run_agent` with `--allow-runs`, limited to what the server's flags allow (new `--allow-access`).
+- **Command line**: `zorix agent …`, `zorix skill …`, `zorix eval …`, `zorix run --agent`, `zorix list --agent`, `zorix memory --scope agent:<name>`.
+- **Desktop**: the Agents gallery and agent page (chat with live text, tool cards and inline approvals; definition; skills; versions with a diff and rollback;
+  evals with a score matrix; memory), a *Run as* picker in New run, an *agent · vN* chip in the run view, and an Agent filter in Memory.
+- **Design system**: Avatar, Markdown (safe, never raw HTML), ChatBubble, Composer, ToolCallCard, ScoreMatrix and VersionTimeline.
+- Database schema 4 (agents, versions, skills, evaluations, and an agent column on executions).
+
+### Changed
+- `ModelGateway` gained `generate_live`, and the engine contract `live()`, both with defaults, so existing gateways keep working.
+- `zorix mcp serve` always offers `zorix.agents`.
+
+### Security
+- A skill's `allowed-tools` is shown and never granted; skill scripts have no network and no workspace.
+- An agent file or skill cannot widen what a person allowed: grants only narrow, and an import whose pinned skill is missing is refused.
+- Markdown from a model is rendered as a tree, never as HTML; only http, https and mailto links open.
+
 ## [0.4.0] - 2026-11-19
 
 The **Tool & Integration Engine**: ZORIX reaches the outside world, and you decide how far.

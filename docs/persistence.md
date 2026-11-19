@@ -62,6 +62,20 @@ No table holds a secret. They live in the system keychain under names such as `m
 `mcp.<id>.oauth` and `mcp.<id>.access` (OAuth), and `conn.<id>`; removing a server or connection removes its entries.
 Opening a 0.3 database upgrades it in one transaction.
 
+### Agent tables (schema 4)
+
+| Table | Holds |
+|---|---|
+| `agents` | One row per agent: its id, slug, newest version, whether it is archived |
+| `agent_versions` | Every version, never edited: the definition (JSON), its SHA-256, a note, the time |
+| `skills`, `skill_versions` | What was imported: name, description, the files with sizes and hashes, license, source, and which version is current. The files themselves are in `<data>/skills/<sha256>/` |
+| `eval_cases` | An agent's cases |
+| `eval_runs` | One row per evaluation run, with its results |
+
+`executions` gains an `agent` column (the agent, version and hash a run was made by) with an index, so the run list can be filtered by agent. Opening a
+0.4 database upgrades it in one transaction; a 0.4 program refuses a schema-4 database instead of guessing. The agent scope of memory needs no table:
+it is a scope value in the existing memory tables. Live text (the words of an answer while it is written) is never stored.
+
 Each search index is its own FTS5 table, kept in step by triggers. Opening a 0.2 database upgrades it in one transaction. Deleting a
 memory or a folder removes its rows, search entries and vectors, scrubs the snapshots and overwrites the freed pages
 (`secure_delete`).

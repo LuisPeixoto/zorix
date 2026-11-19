@@ -42,6 +42,20 @@ wrapper, and a rule-based demo model.
 | 14 | Event publication | `lifecycle::events_are_numbered_in_order_and_a_subscriber_sees_the_same_ones_live`, the `events::` tests, `a_subscriber_that_lags_still_sees_everything` |
 | 15 | Idempotency | `lifecycle::the_same_idempotency_key_returns_the_same_execution_and_runs_once`, the repository contract, `durability::the_idempotency_key_holds_across_connections`, `recovery::a_crash_during_a_tool_that_may_not_be_repeated_asks_a_person…` |
 
+## Agents
+
+| What | Where |
+|---|---|
+| The agent file round trip, the strict YAML subset (aliases, size, depth), agent versions and hashes | `zorix-agents` unit and `tests/runner.rs`, `zorix-store/tests/agents.rs` |
+| Skill import limits (zip-slip, symlinks, sizes), hashes that do not depend on the platform, the three skill tools and the sandbox | `zorix-agents/tests/skills.rs`, `zorix-hub/tests/agents.rs` |
+| The router never calls a model outside the allow-list; live text resets before a fallback | `zorix-providers/tests/router.rs`, `tests/live_text.rs` |
+| A run records its agent; the live stream is per execution and per tenant | `zorix-runtime/tests/agent_runs.rs`, `tests/live_text.rs` |
+| Agent memory is invisible to other agents and plain runs; a proposal still waits for a person | `zorix-memory/tests/agent_memory.rs` |
+| Every check, the judge, refused approvals, dropped writes, comparison | `zorix-agents/tests/evals.rs` |
+| The four starter agents parse, import, pin their skills and have valid cases | `zorix-agents/tests/starters.rs` |
+| The commands as real programs; agents over MCP with only what the server allows | `zorix-cli/tests/agents.rs`, `tests/mcp_serve.rs` |
+| The Markdown renderer cannot produce markup or unsafe links; the thread builder | `apps/desktop/src/lib/ui/markdown.test.ts`, `src/lib/thread.test.ts` |
+
 ## Security cases
 
 | Concern | Tests |
