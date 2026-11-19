@@ -1,11 +1,16 @@
 //! ZORIX's native integrations (ADR-0021). Each tool is behind grants on the resource it touches and asks a person before it
 //! changes anything. Secrets live in the keychain and are chosen by the tool, never taken from the model.
 
+pub mod api;
+pub mod connections;
+pub mod forge;
 pub mod http_tools;
 pub mod net;
 
 use zorix_core::ConnectionId;
 
+pub use connections::Services;
+pub use forge::forge_tools;
 pub use http_tools::{http_tools, signature};
 
 /// The keychain entry that holds the secret of a connection (a token, a password, a signing key).
