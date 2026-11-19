@@ -5,6 +5,8 @@
 #   tools/live-tests.sh ollama     only Ollama
 #   tools/live-tests.sh anthropic  only that provider (also: openai, gemini)
 #   tools/live-tests.sh integrations MCP servers, GitHub (public) and the sandbox, through the real command line
+#   tools/live-tests.sh agents     the agent engine through the real command line (skills, allow-list, templates, evaluations)
+#                                  and, when Ollama runs, a real local model
 #   tools/live-tests.sh embeddings embeddings and memory: Ollama (all-minilm, plus qwen3:1.7b for the run that cites a
 #                                  document) and, with a stored key, OpenAI and Gemini embeddings
 #
@@ -21,6 +23,10 @@ args=(--test live -- --ignored --nocapture --test-threads=1)
 
 if [ "$filter" = integrations ]; then
   exec tools/live-integrations.sh
+fi
+
+if [ "$filter" = agents ]; then
+  exec tools/live-agents.sh
 fi
 
 if [ "$filter" = embeddings ]; then
