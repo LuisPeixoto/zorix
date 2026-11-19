@@ -71,7 +71,7 @@ async fn a_legacy_server_that_ignores_unknown_methods_is_still_found_after_the_p
     let client = connect(&["--era", "legacy", "--silent-discover"]).await;
     assert_eq!(client.era().label(), "legacy");
     assert!(started.elapsed() < Duration::from_secs(5), "it waited for the probe, not for the handshake");
-    assert_eq!(client.list_tools(&CancellationToken::new()).await.unwrap().tools.is_empty(), false);
+    assert!(!client.list_tools(&CancellationToken::new()).await.unwrap().tools.is_empty());
 }
 
 #[tokio::test]
