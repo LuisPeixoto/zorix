@@ -1,6 +1,7 @@
 //! The contract clients use. The CLI, the desktop shell and later modules depend on this, not on the runtime crate.
 
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,25 @@ pub struct RecoveryReport {
     pub in_use: usize,
 }
 
+/// A piece of an answer that is still being written. Live events are never stored: the `model.responded` event is the
+/// record, and it replaces what the pieces showed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LiveEvent {
+    /// The next piece of the text.
+    Text {
+        /// The execution that is writing.
+        execution: ExecutionId,
+        /// The piece.
+        delta: String,
+    },
+    /// Forget the pieces so far: another model is taking over.
+    Reset {
+        /// The execution that is writing.
+        execution: ExecutionId,
+    },
+}
+
 /// Starts, follows and controls executions.
 #[async_trait]
 pub trait ExecutionEngine: Send + Sync {
@@ -65,6 +85,14 @@ pub trait ExecutionEngine: Send + Sync {
         id: ExecutionId,
         after_seq: u64,
     ) -> Result<BoxStream<'static, ExecutionEvent>>;
+
+    /// The text of this execution's answers as it is written, for a screen that shows it before the step is stored.
+    /// Pieces are not kept: someone who connects late sees only what comes next. The stream never ends by itself; drop it
+    /// when the execution is over. An engine that cannot stream gives an empty stream.
+    async fn live(&self, tenant: &TenantId, id: ExecutionId) -> Result<BoxStream<'static, LiveEvent>> {
+        self.get(tenant, id).await?;
+        Ok(futures_util::stream::pending().boxed())
+    }
 
     /// Wait until the execution is finished, waiting for approval or paused, and return it.
     async fn settle(&self, tenant: &TenantId, id: ExecutionId) -> Result<Execution>;

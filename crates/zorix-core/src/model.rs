@@ -286,11 +286,43 @@ pub struct ModelProfile {
     pub vision: bool,
 }
 
+/// Where the text of an answer goes while it is still being written. Nothing sent here is stored: the finished
+/// [`ModelResponse`] is the record, and it replaces whatever a sink showed.
+pub trait TextSink: Send + Sync {
+    /// The next piece of the answer.
+    fn text(&self, delta: &str);
+
+    /// Forget what was sent for this call: a router is about to try another model.
+    fn reset(&self) {}
+}
+
+/// A sink that drops everything.
+pub struct NoSink;
+
+impl TextSink for NoSink {
+    fn text(&self, _delta: &str) {}
+}
+
 /// Something that turns a [`ModelRequest`] into a [`ModelResponse`].
 #[async_trait]
 pub trait ModelGateway: Send + Sync {
     /// Make one call. It must stop early when `cancel` fires.
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError>;
+
+    /// Like [`generate`](Self::generate), and the text is also passed to `sink` as it arrives. A gateway that cannot
+    /// stream answers once the call is done, with the whole text in a single piece.
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: std::sync::Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
+        let response = self.generate(request, cancel).await?;
+        if !response.text.is_empty() {
+            sink.text(&response.text);
+        }
+        Ok(response)
+    }
 
     /// What is known about `model`, for sizing the context. `None` means nothing is known.
     fn describe(&self, _model: &str) -> Option<ModelProfile> {
