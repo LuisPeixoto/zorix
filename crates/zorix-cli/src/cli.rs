@@ -67,10 +67,50 @@ pub enum Command {
     /// The model that turns text into vectors for search by meaning.
     #[command(subcommand)]
     Embeddings(EmbeddingsCommand),
+    /// Connect ZORIX to MCP servers, or serve ZORIX's memory to other tools over MCP.
+    #[command(subcommand)]
+    Mcp(McpCommand),
     /// How many real tokens ZORIX's estimates are worth, per model, learned from what providers report.
     Calibration,
     /// Print where ZORIX keeps its data.
     DataDir,
+}
+
+/// What `zorix mcp` does.
+#[derive(Debug, Subcommand)]
+pub enum McpCommand {
+    /// Serve ZORIX over MCP on standard input and output, for Claude Code, Cursor and other MCP clients. Read-only by
+    /// default: memory, documents and past work can be searched, never changed.
+    Serve(McpServeArgs),
+}
+
+/// Options for `mcp serve`.
+#[derive(Debug, Args)]
+pub struct McpServeArgs {
+    /// Also let the client start activities (`zorix.run`, `zorix.status`, `zorix.result`). This takes the data folder
+    /// for as long as the server runs, so the desktop app cannot be used meanwhile.
+    #[arg(long)]
+    pub allow_runs: bool,
+
+    /// The project whose memories are visible and whose folder runs work in.
+    #[arg(long, value_name = "DIR")]
+    pub project: Option<PathBuf>,
+
+    /// With --allow-runs: the model runs use (see `zorix run --model`).
+    #[arg(long, value_name = "MODEL", requires = "allow_runs")]
+    pub model: Option<ModelChoice>,
+
+    /// With --allow-runs: let runs use this tool (an id, or a prefix ending in *). Repeat for more.
+    #[arg(long = "allow", value_name = "TOOL", value_parser = parse_tool_pattern, requires = "allow_runs")]
+    pub allow: Vec<String>,
+
+    /// With --allow-runs: let file tools read paths matching this pattern, relative to the project.
+    #[arg(long, value_name = "PATTERN", value_parser = parse_path_pattern, requires = "allow_runs")]
+    pub allow_read: Vec<String>,
+
+    /// With --allow-runs: let file tools write paths matching this pattern, relative to the project.
+    #[arg(long, value_name = "PATTERN", value_parser = parse_path_pattern, requires = "allow_runs")]
+    pub allow_write: Vec<String>,
 }
 
 /// Which model answers.

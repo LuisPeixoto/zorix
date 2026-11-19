@@ -4,6 +4,7 @@ mod app;
 mod cli;
 mod commands;
 mod follow;
+mod mcp_serve;
 mod memory;
 mod providers;
 mod render;
@@ -27,7 +28,10 @@ fn run(cli: Cli) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    match runtime.block_on(commands::dispatch(cli)) {
+    let outcome = runtime.block_on(commands::dispatch(cli));
+    // Reading standard input happens on a thread that cannot be interrupted; do not wait for it when we are done.
+    runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+    match outcome {
         Ok(exit) => ExitCode::from(exit as u8),
         Err(error) => {
             eprintln!("zorix: {error}");

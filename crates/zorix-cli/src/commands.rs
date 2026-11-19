@@ -11,7 +11,8 @@ use zorix_runtime::summarize;
 
 use crate::app::{CliError, builtin_registry, home_dir, open_engine, open_reader};
 use crate::cli::{
-    CancelArgs, Cli, Command, DecideArgs, EventsArgs, IdArg, ListArgs, ModelArgs, RecoverArgs, ResumeArgs, RunArgs,
+    CancelArgs, Cli, Command, DecideArgs, EventsArgs, IdArg, ListArgs, McpCommand, ModelArgs, RecoverArgs, ResumeArgs,
+    RunArgs,
 };
 use crate::follow::{Exit, Printer, decider, default_mode, follow, hint_for_pending};
 use crate::render::{event_line, execution_row, shorten};
@@ -38,6 +39,7 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Memory(command) => crate::memory::memory(&home, &tenant, printer, command).await,
         Command::Knowledge(command) => crate::memory::knowledge(&home, &tenant, printer, command).await,
         Command::Embeddings(command) => crate::memory::embeddings(&home, &tenant, printer, command).await,
+        Command::Mcp(McpCommand::Serve(args)) => crate::mcp_serve::serve(&home, tenant, args).await,
         Command::Calibration => crate::memory::calibration(&home, printer),
         Command::DataDir => {
             println!("{}", home.display());
