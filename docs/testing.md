@@ -113,3 +113,11 @@ tests for `mcp`, `connect` and `sandbox`, using `zorix mcp serve` as the server 
 `tools/live-tests.sh integrations` runs the real command line against real servers: DeepWiki and Cloudflare docs, the
 `server-everything` and `server-filesystem` packages through `npx`, a public GitHub read with no token, and Python in the
 sandbox. It uses no account of yours.
+
+### Agents
+
+`tools/live-tests.sh agents` runs the real command line on a throwaway data folder (your data and keychain are not touched). It always checks, with a
+scripted model, that an agent loads a skill and **runs its JavaScript script in the sandbox**, that a run records its agent and version, that a model outside
+an agent's list is refused with a reason, that a template installs, answers, exports with its skill and imports somewhere else, and that an evaluation runs
+and passes. When Ollama runs here and `ZORIX_LIVE_OLLAMA_MODEL` (default `qwen3:1.7b`) is pulled, the `writer` template answers with the real model and its
+smoke cases are tried; the result is shown and not asserted, because it depends on the model. No cloud provider is used.
