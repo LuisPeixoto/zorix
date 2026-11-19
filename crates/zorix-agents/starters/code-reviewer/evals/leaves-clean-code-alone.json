@@ -1,0 +1,24 @@
+{
+  "name": "leaves-clean-code-alone",
+  "tags": [
+    "smoke",
+    "precision"
+  ],
+  "prompt": "Review this function:\n\n```python\ndef add(a: int, b: int) -> int:\n    \"\"\"Return the sum of a and b.\"\"\"\n    return a + b\n```",
+  "checks": [
+    {
+      "kind": "not_contains",
+      "text": "SQL injection",
+      "ignore_case": true
+    },
+    {
+      "kind": "not_contains",
+      "text": "Must fix:",
+      "ignore_case": false
+    },
+    {
+      "kind": "max_steps",
+      "steps": 3
+    }
+  ]
+}

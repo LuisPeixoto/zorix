@@ -1,0 +1,27 @@
+{
+  "name": "cites-its-sources",
+  "tags": [
+    "smoke",
+    "citations"
+  ],
+  "prompt": "What is the boiling point of water at sea level? Give a source.",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "(?i)(100\\s*°?\\s*c|212\\s*°?\\s*f)"
+    },
+    {
+      "kind": "regex",
+      "pattern": "https?://"
+    },
+    {
+      "kind": "contains",
+      "text": "Sources",
+      "ignore_case": true
+    },
+    {
+      "kind": "max_tool_calls",
+      "calls": 8
+    }
+  ]
+}

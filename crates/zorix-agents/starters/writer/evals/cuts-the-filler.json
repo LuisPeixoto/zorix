@@ -1,0 +1,29 @@
+{
+  "name": "cuts-the-filler",
+  "tags": [
+    "smoke",
+    "style"
+  ],
+  "prompt": "Rewrite in plain language, keeping every fact: \"It should be noted that, due to the fact that the server will be down on March 3, in order to avoid any problems, users are advised to save their work beforehand.\"",
+  "checks": [
+    {
+      "kind": "contains",
+      "text": "March 3"
+    },
+    {
+      "kind": "not_contains",
+      "text": "in order to",
+      "ignore_case": true
+    },
+    {
+      "kind": "not_contains",
+      "text": "due to the fact",
+      "ignore_case": true
+    },
+    {
+      "kind": "not_contains",
+      "text": "it should be noted",
+      "ignore_case": true
+    }
+  ]
+}

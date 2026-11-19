@@ -6,6 +6,7 @@ pub mod evals;
 pub mod format;
 pub mod runner;
 pub mod skills;
+pub mod starters;
 pub mod yaml;
 
 pub use runner::{AgentAsk, ModelResolver, RunnerError, agent_grants, prepare};

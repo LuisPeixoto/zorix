@@ -1,0 +1,21 @@
+{
+  "name": "computes-a-mean",
+  "tags": [
+    "smoke"
+  ],
+  "prompt": "These are the daily sales: 4, 8, 15, 16, 23, 42. What is the mean, and what is the median?",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "\\b18(\\.0+)?\\b"
+    },
+    {
+      "kind": "regex",
+      "pattern": "\\b15\\.5\\b"
+    },
+    {
+      "kind": "max_tool_calls",
+      "calls": 8
+    }
+  ]
+}
