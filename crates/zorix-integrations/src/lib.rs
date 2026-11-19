@@ -3,16 +3,20 @@
 
 pub mod api;
 pub mod connections;
+pub mod db;
 pub mod discord;
 pub mod forge;
 pub mod http_tools;
 pub mod jira;
 pub mod net;
+pub mod postgres_db;
 pub mod slack;
+pub mod sqlite_db;
 
 use zorix_core::ConnectionId;
 
 pub use connections::Services;
+pub use db::db_tools;
 pub use discord::discord_tools;
 pub use forge::forge_tools;
 pub use http_tools::{http_tools, signature};
