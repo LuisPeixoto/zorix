@@ -93,6 +93,9 @@ pub fn validate_base_url(text: &str) -> Result<Url, String> {
 #[derive(Clone)]
 pub struct HttpClient {
     client: reqwest::Client,
+    /// For servers on this computer. It never uses a proxy: a system proxy that does not list loopback in its exceptions
+    /// (or whose exceptions the HTTP stack does not read) would otherwise be handed every call to a local Ollama.
+    local: reqwest::Client,
     config: HttpConfig,
     provider: String,
 }
@@ -106,13 +109,20 @@ impl HttpClient {
     /// A client for the provider called `provider` (used in messages).
     pub fn new(provider: &str, config: HttpConfig) -> Result<Self, String> {
         install_crypto();
-        let client = reqwest::Client::builder()
-            .connect_timeout(config.connect_timeout)
-            .user_agent(concat!("zorix/", env!("CARGO_PKG_VERSION")))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| format!("Could not start the HTTP client: {e}"))?;
-        Ok(Self { client, config, provider: provider.to_string() })
+        let build = |direct: bool| {
+            let builder = reqwest::Client::builder()
+                .connect_timeout(config.connect_timeout)
+                .user_agent(concat!("zorix/", env!("CARGO_PKG_VERSION")))
+                .redirect(reqwest::redirect::Policy::none());
+            let builder = if direct { builder.no_proxy() } else { builder };
+            builder.build().map_err(|e| format!("Could not start the HTTP client: {e}"))
+        };
+        Ok(Self { client: build(false)?, local: build(true)?, config, provider: provider.to_string() })
+    }
+
+    /// The client to use for `url`: direct for this computer, the system's settings for everything else.
+    fn client_for(&self, url: &Url) -> &reqwest::Client {
+        if url.host_str().is_some_and(is_loopback) { &self.local } else { &self.client }
     }
 
     /// The limits in use.
@@ -151,7 +161,7 @@ impl HttpClient {
         streaming: bool,
         cancel: &CancellationToken,
     ) -> Result<reqwest::Response, ModelError> {
-        let mut request = self.client.post(url.clone()).header(CONTENT_TYPE, "application/json").json(body);
+        let mut request = self.client_for(url).post(url.clone()).header(CONTENT_TYPE, "application/json").json(body);
         if !streaming {
             request = request.timeout(self.config.request_timeout);
         }
@@ -189,7 +199,7 @@ impl HttpClient {
         headers: &[(&str, Header<'_>)],
         cancel: &CancellationToken,
     ) -> Result<Value, ModelError> {
-        let mut request = self.client.get(url.clone()).timeout(Duration::from_secs(30));
+        let mut request = self.client_for(url).get(url.clone()).timeout(Duration::from_secs(30));
         for (name, value) in headers {
             let (text, sensitive) = value.text_and_sensitivity();
             if let (Ok(name), Ok(mut value)) = (HeaderName::from_bytes(name.as_bytes()), HeaderValue::from_str(&text)) {
@@ -549,6 +559,28 @@ mod tests {
         let (k2, m2, _) = kind(post(&client(small), &url(&server, "/big"), &Secret::new("k")).await);
         assert_eq!(k2, ModelErrorKind::Unavailable);
         assert!(m2.contains("larger than the limit"), "{m2}");
+    }
+
+    #[test]
+    fn only_this_computer_counts_as_loopback() {
+        for yes in [
+            "http://127.0.0.1:11434/",
+            "http://localhost/",
+            "http://LOCALHOST:1/",
+            "http://[::1]:80/",
+            "http://127.9.9.9/",
+        ] {
+            assert!(Url::parse(yes).unwrap().host_str().is_some_and(is_loopback), "{yes}");
+        }
+        for no in [
+            "https://api.openai.com/",
+            "http://10.0.0.5/",
+            "http://192.168.1.2/",
+            "http://localhost.evil.example/",
+            "http://127.0.0.1.evil.example/",
+        ] {
+            assert!(!Url::parse(no).unwrap().host_str().is_some_and(is_loopback), "{no}");
+        }
     }
 
     #[tokio::test]
