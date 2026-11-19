@@ -159,6 +159,10 @@ uuid_id!(
     McpServerId
 );
 uuid_id!(
+    /// Identifies one agent: a named, reusable definition that creates executions.
+    AgentId
+);
+uuid_id!(
     /// Identifies one connection to an outside service (a Git host, a database, a chat workspace…).
     ConnectionId
 );
