@@ -6669,6 +6669,7 @@ name = "zorix-integrations"
 version = "0.3.0"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "futures-util",
  "hmac 0.12.1",
  "parking_lot",

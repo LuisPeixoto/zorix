@@ -158,26 +158,20 @@ impl Env {
             "header" => (connection.settings["header"].as_str().unwrap_or("X-Api-Key").to_string(), secret),
             "basic" => {
                 let user = connection.settings["username"].as_str().unwrap_or("");
-                ("Authorization".to_string(), format!("Basic {}", base64_encode(format!("{user}:{secret}").as_bytes())))
+                (
+                    "Authorization".to_string(),
+                    format!(
+                        "Basic {}",
+                        base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            format!("{user}:{secret}").as_bytes()
+                        )
+                    ),
+                )
             }
             _ => return Ok(None),
         }))
     }
-}
-
-fn base64_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for chunk in bytes.chunks(3) {
-        let n = (u32::from(chunk[0]) << 16)
-            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
-            | u32::from(*chunk.get(2).unwrap_or(&0));
-        out.push(TABLE[(n >> 18) as usize & 63] as char);
-        out.push(TABLE[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { TABLE[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { TABLE[n as usize & 63] as char } else { '=' });
-    }
-    out
 }
 
 fn is_text(content_type: &str) -> bool {
