@@ -136,6 +136,7 @@
             {#each detail.tool_calls as call (call.call_id)}
               <ListRow>
                 <span class="mono shrink-0 text-sm font-medium">{call.tool}</span>
+                {#if call.tool.startsWith("mcp.")}<Badge tone="accent" class="h-5">third party</Badge>{/if}
                 <span class="selectable mono min-w-0 flex-1 truncate text-xs text-muted">{JSON.stringify(call.arguments)}</span>
                 <Badge tone={callTone(call.status)} dot>{statusLabel(call.status)}</Badge>
               </ListRow>

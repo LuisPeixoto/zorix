@@ -105,7 +105,8 @@
       </div>
       <div id="{uid}-list" role="listbox" aria-label="Commands" class="min-h-0 flex-1 overflow-y-auto p-2">
         {#each groups as group (group.name)}
-          <p class="px-2.5 pt-2 pb-1 text-2xs font-semibold tracking-wider text-faint uppercase" role="presentation">{group.name}</p>
+          <div role="group" aria-label={group.name}>
+          <p class="px-2.5 pt-2 pb-1 text-2xs font-semibold tracking-wider text-muted uppercase" aria-hidden="true">{group.name}</p>
           {#each group.items as { command, index } (command.id)}
             <div
               id="{uid}-opt-{index}"
@@ -122,6 +123,7 @@
               {#if command.hint}<span class="truncate text-xs text-muted">{command.hint}</span>{/if}
             </div>
           {/each}
+          </div>
         {:else}
           <p class="px-3 py-8 text-center text-base text-muted" role="presentation">Nothing matches “{query}”.</p>
         {/each}

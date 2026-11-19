@@ -7,6 +7,7 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ExecutionId, TenantId};
+use zorix_hub::Hub;
 use zorix_memory::MemoryStack;
 use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
@@ -30,6 +31,10 @@ pub struct Services {
     pub memory: Arc<MemoryStack>,
     /// Where memory is kept.
     pub memory_store: Arc<SqliteMemoryStore>,
+    /// Connections: MCP servers, integrations and the sandbox.
+    pub hub: Arc<Hub>,
+    /// Sign-ins that are waiting for the browser, so they can be cancelled.
+    pub logins: Mutex<HashMap<String, CancellationToken>>,
     /// Knowledge syncs that are running, so they can be cancelled.
     pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
     /// The job that embeds everything again, when one is running.
@@ -95,6 +100,7 @@ impl AppState {
             if let Some(token) = services.reembed_job.lock().take() {
                 token.cancel();
             }
+            services.hub.manager.shutdown().await;
             services.engine.shutdown().await;
             let _ = services.memory.backfill_operations().await;
         }
@@ -117,6 +123,9 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
     let gateway: Arc<dyn zorix_core::ModelGateway> = router.clone();
     let memory = Arc::new(MemoryStack::new(memory_store.clone(), repository.clone(), Some(gateway.clone())));
     memory.register_tools(&*registry).map_err(|e| e.to_string())?;
+    let hub =
+        Arc::new(Hub::open(home, TenantId::local(), secrets.clone(), registry.clone()).map_err(|e| e.to_string())?);
+    hub.register_native_tools().map_err(|e| e.to_string())?;
     let calibration = Arc::new(SqliteCalibration::open(&database).map_err(|e| e.to_string())?);
     let engine = memory
         .install(Engine::builder(repository, gateway).tools(registry).calibration(calibration.clone()).config(config))
@@ -138,8 +147,17 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
         Ok(_) => {}
         Err(error) => tracing::warn!(%error, "recovery failed"),
     }
+    {
+        // Servers that were left on start in the background; each shows its state as it gets there.
+        let hub = hub.clone();
+        tokio::spawn(async move {
+            let _ = hub.manager.start_all().await;
+        });
+    }
     Ok(Arc::new(Services {
         engine,
+        hub,
+        logins: Mutex::new(HashMap::new()),
         tenant: TenantId::local(),
         router,
         secrets,

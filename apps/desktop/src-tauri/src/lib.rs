@@ -1,6 +1,7 @@
 //! Tauri shell: starts the engine and exposes it to the interface as commands. It holds no rules of its own.
 
 mod commands;
+mod integration_commands;
 mod knowledge_commands;
 mod memory_commands;
 mod state;
@@ -20,6 +21,9 @@ pub fn run() {
             // The engine starts workers on the async runtime, so it must be created inside it.
             let state = tauri::async_runtime::block_on(AppState::start());
             app.manage(state);
+            if let Ok(services) = app.state::<AppState>().services_arc() {
+                crate::integration_commands::forward_status(app.handle().clone(), services.hub.manager.clone());
+            }
             // Folders marked "check at start" are brought up to date in the background.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { crate::knowledge_commands::sync_at_start(handle).await });
@@ -42,6 +46,28 @@ pub fn run() {
             commands::remove_provider_key,
             commands::test_provider,
             commands::list_models,
+            integration_commands::mcp_list,
+            integration_commands::mcp_server,
+            integration_commands::mcp_catalog,
+            integration_commands::mcp_add,
+            integration_commands::mcp_set_enabled,
+            integration_commands::mcp_remove,
+            integration_commands::mcp_restart,
+            integration_commands::mcp_refresh,
+            integration_commands::mcp_review,
+            integration_commands::mcp_approve_all,
+            integration_commands::mcp_trust,
+            integration_commands::mcp_login,
+            integration_commands::mcp_login_cancel,
+            integration_commands::mcp_logout,
+            integration_commands::mcp_import_preview,
+            integration_commands::mcp_import_apply,
+            integration_commands::connections_list,
+            integration_commands::connection_add,
+            integration_commands::connection_test,
+            integration_commands::connection_remove,
+            integration_commands::sandbox_status,
+            integration_commands::sandbox_install_python,
             memory_commands::list_memory,
             memory_commands::add_memory,
             memory_commands::update_memory,

@@ -24,7 +24,7 @@
   </figcaption>
   {#if words}
     <p class="selectable p-3 text-base leading-relaxed">
-      {#each parts as part, i (i)}{#if part.kind === "same"}<span>{part.text}</span>{:else if part.kind === "add"}<ins class="rounded bg-ok/15 px-0.5 text-ok no-underline" aria-label="added">{part.text}</ins>{:else}<del class="rounded bg-err/15 px-0.5 text-err" aria-label="removed">{part.text}</del>{/if}{/each}
+      {#each parts as part, i (i)}{#if part.kind === "same"}<span>{part.text}</span>{:else if part.kind === "add"}<ins class="rounded bg-ok/15 px-0.5 text-ok no-underline"><span class="sr-only">added: </span>{part.text}</ins>{:else}<del class="rounded bg-err/15 px-0.5 text-err"><span class="sr-only">removed: </span>{part.text}</del>{/if}{/each}
     </p>
   {:else}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrollable region must be reachable by keyboard) -->

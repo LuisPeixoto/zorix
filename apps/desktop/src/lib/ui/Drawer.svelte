@@ -58,7 +58,7 @@
     <header class="flex items-start gap-3 border-b border-line px-5 py-4">
       {#if leading}{@render leading()}{:else if icon}<Icon name={icon} size={18} class="mt-0.5 text-accent" />{/if}
       <div class="min-w-0 flex-1">
-        <h2 id="{uid}-title" class="truncate text-xl font-semibold">{title}</h2>
+        <h2 id="{uid}-title" data-autofocus tabindex="-1" class="truncate text-xl font-semibold outline-none">{title}</h2>
         {#if subtitle}<p class="mt-0.5 truncate text-sm text-muted">{subtitle}</p>{/if}
       </div>
       {@render actions?.()}

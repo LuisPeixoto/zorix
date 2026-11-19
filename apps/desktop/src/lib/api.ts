@@ -101,6 +101,8 @@ export interface ToolSpec {
   description: string;
   requires_approval: boolean;
   annotations: { read_only: boolean; destructive: boolean; idempotent: boolean; open_world: boolean };
+  /** Where it comes from: built in, memory, an MCP server, a native integration or the sandbox. */
+  source?: { kind: "builtin" | "memory" | "mcp" | "integration" | "sandbox"; server?: string; connection?: string | null };
 }
 
 export interface AppInfo {
@@ -124,6 +126,8 @@ export interface StartRun {
   conversation?: string;
   /** What the run may use from memory. Left out: everything. */
   memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
+  /** The servers and services the run may reach. Each entry means what the matching `--allow-…` flag means. */
+  integrations?: Partial<Record<"mcp" | "http" | "repo" | "jira" | "chat" | "db" | "code", string[]>>;
 }
 
 export interface MemoryRow {
@@ -368,4 +372,138 @@ export function watchRun(id: string, afterSeq: number, onEvent: (event: ExecEven
 /** Turn whatever an invoke rejected with into a sentence. */
 export function errorText(error: unknown): string {
   return typeof error === "string" ? error : error instanceof Error ? error.message : JSON.stringify(error);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Integrations: MCP servers, connections and the sandbox
+
+export type ServerState = "off" | "ready" | "starting" | "restarting" | "needs_login" | "failed" | "stopped";
+
+export interface ServerRow {
+  name: string;
+  kind: "stdio" | "http";
+  enabled: boolean;
+  state: ServerState;
+  reason: string | null;
+  summary: string;
+  era: string | null;
+  server_name: string | null;
+  server_version: string | null;
+  tools_listed: number;
+  tools_ready: number;
+  tools_to_review: number;
+  auth: "none" | "bearer" | "oauth" | null;
+  signed_in: boolean;
+  logo: string | null;
+}
+
+export interface McpToolRow {
+  name: string;
+  status: "new" | "pinned" | "changed" | "disabled";
+  trust: "ask" | "read_only_no_ask";
+  listed: boolean;
+  title: string | null;
+  description: string;
+  approved_description: string | null;
+  changed_fields: string[];
+  inputs: string[];
+  schema: unknown;
+  approved_schema: unknown | null;
+  read_only_hint: boolean;
+  destructive_hint: boolean;
+  open_world_hint: boolean;
+  can_skip_asking: boolean;
+}
+
+export interface ServerDetail extends ServerRow {
+  tools: McpToolRow[];
+  log: string[];
+  command: string | null;
+  args: string[];
+  /** Name, whether it is a secret (its value is never sent here), and its value when it is not. */
+  env: [string, boolean, string | null][];
+  cwd: string | null;
+  url: string | null;
+}
+
+export interface CatalogEntry {
+  id: string;
+  name: string;
+  summary: string;
+  category: string;
+  homepage: string;
+  logo: string;
+  default_name: string;
+  transport:
+    | { kind: "stdio"; command: string; args: string[]; env: { name: string; label: string; secret: boolean }[]; inputs: { name: string; label: string; kind: string }[] }
+    | { kind: "http"; url: string; auth: "none" | "bearer" | "oauth" };
+  requires?: string | null;
+  token_help?: string | null;
+  notes?: string | null;
+}
+
+export interface AddServer {
+  name?: string;
+  catalog?: string;
+  inputs?: Record<string, string>;
+  command?: string;
+  args?: string[];
+  env?: { name: string; value: string; secret: boolean }[];
+  cwd?: string;
+  url?: string;
+  auth?: "none" | "bearer" | "oauth";
+  client_id?: string;
+  scopes?: string[];
+  token?: string;
+  secrets?: Record<string, string>;
+}
+
+export interface ImportPreview {
+  source: string;
+  path: string;
+  rows: { original_name: string; name: string; summary: string | null; warnings: string[]; skipped: string | null; secrets: number }[];
+}
+
+export type ConnectionKind = "http" | "webhook" | "github" | "gitlab" | "jira" | "slack" | "discord" | "postgres" | "sqlite";
+
+export interface ConnectionRow {
+  id: string;
+  kind: ConnectionKind;
+  name: string;
+  settings: Record<string, unknown>;
+  has_secret: boolean;
+  last_test: { at: number; ok: boolean; note: string } | null;
+}
+
+export const mcpList = () => invoke<ServerRow[]>("mcp_list");
+export const mcpServer = (name: string) => invoke<ServerDetail>("mcp_server", { name });
+export const mcpCatalog = () => invoke<{ version: number; checked: string; entries: CatalogEntry[] }>("mcp_catalog");
+export const mcpAdd = (request: AddServer) => invoke<ServerRow>("mcp_add", { request });
+export const mcpSetEnabled = (name: string, enabled: boolean) => invoke<ServerRow>("mcp_set_enabled", { name, enabled });
+export const mcpRemove = (name: string) => invoke<void>("mcp_remove", { name });
+export const mcpRestart = (name: string) => invoke<ServerRow>("mcp_restart", { name });
+export const mcpRefresh = (name: string) => invoke<void>("mcp_refresh", { name });
+export const mcpReview = (name: string, tool: string, action: "approve" | "disable") => invoke<void>("mcp_review", { name, tool, action });
+export const mcpApproveAll = (name: string) => invoke<number>("mcp_approve_all", { name });
+export const mcpTrust = (name: string, tool: string, skipAsking: boolean) => invoke<void>("mcp_trust", { name, tool, skipAsking });
+export const mcpLogin = (name: string) => invoke<string>("mcp_login", { name });
+export const mcpLoginCancel = (name: string) => invoke<void>("mcp_login_cancel", { name });
+export const mcpLogout = (name: string) => invoke<void>("mcp_logout", { name });
+export const mcpImportPreview = (source: string, path?: string) => invoke<ImportPreview[]>("mcp_import_preview", { source, path });
+export const mcpImportApply = (source: string, path: string, names: string[]) => invoke<string[]>("mcp_import_apply", { source, path, names });
+export const connectionsList = () => invoke<ConnectionRow[]>("connections_list");
+export const connectionAdd = (request: { kind: ConnectionKind; name: string; settings: Record<string, unknown>; secret?: string }) =>
+  invoke<ConnectionRow>("connection_add", { request });
+export const connectionTest = (name: string) => invoke<{ ok: boolean; note: string }>("connection_test", { name });
+export const connectionRemove = (name: string) => invoke<void>("connection_remove", { name });
+export const sandboxStatus = () => invoke<{ javascript: boolean; python: boolean; python_megabytes: number }>("sandbox_status");
+export function sandboxInstallPython(onProgress: (done: number, total: number) => void): Promise<void> {
+  const channel = new Channel<[number, number]>();
+  channel.onmessage = ([done, total]) => onProgress(done, total);
+  return invoke<void>("sandbox_install_python", { progress: channel });
+}
+
+/** Be told when any MCP server changes state (the value is the server's id, or `*` when some were missed). */
+export function onMcpStatus(handler: () => void): Promise<UnlistenFn> {
+  return listen<string>("mcp-status", () => handler());
 }

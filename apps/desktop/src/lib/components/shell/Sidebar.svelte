@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ago, shorten } from "../../format.ts";
+  import { integrations } from "../../stores/integrations.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
   import { Button } from "../../ui/index.ts";
   import StatusBadge from "../StatusBadge.svelte";
@@ -38,6 +39,7 @@
   <div class="border-t border-line-soft px-2 pt-2 pb-1">
     <p class="px-2.5 pb-1 text-2xs font-semibold tracking-wider text-faint uppercase">Workspace</p>
     <NavItem icon="book" active={store.view === "memory"} onclick={() => store.showMemory()}>Memory</NavItem>
+    <NavItem icon="plug" active={store.view === "integrations"} attention={integrations.attention > 0} count={integrations.servers.filter((s) => s.enabled).length} onclick={() => store.showIntegrations()}>Integrations</NavItem>
     <NavItem icon="key" active={store.view === "providers"} onclick={() => store.showProviders()}>Providers &amp; keys</NavItem>
     {#if import.meta.env.DEV}
       <NavItem icon="layers" active={store.view === "design"} onclick={() => store.showDesign()}>Design system</NavItem>
