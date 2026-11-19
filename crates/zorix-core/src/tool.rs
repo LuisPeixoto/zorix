@@ -41,6 +41,49 @@ impl ToolAnnotations {
     }
 }
 
+/// Where a tool comes from. It is shown in events and the interface, so a person can tell a built-in tool from one a
+/// third-party server supplied.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ToolSource {
+    /// Shipped with ZORIX.
+    #[default]
+    Builtin,
+    /// Memory: remember, search, history.
+    Memory,
+    /// A tool of an MCP server.
+    Mcp {
+        /// ZORIX's name for the server.
+        server: String,
+    },
+    /// A native integration (HTTP, Git hosts, tickets, chat, databases).
+    Integration {
+        /// The connection it uses, when it has one.
+        connection: Option<String>,
+    },
+    /// Code run in the sandbox.
+    Sandbox,
+}
+
+impl ToolSource {
+    /// A short label for lists and events: `builtin`, `memory`, `mcp:github`, `integration:prod-db`, `sandbox`.
+    pub fn label(&self) -> String {
+        match self {
+            ToolSource::Builtin => "builtin".into(),
+            ToolSource::Memory => "memory".into(),
+            ToolSource::Mcp { server } => format!("mcp:{server}"),
+            ToolSource::Integration { connection: Some(name) } => format!("integration:{name}"),
+            ToolSource::Integration { connection: None } => "integration".into(),
+            ToolSource::Sandbox => "sandbox".into(),
+        }
+    }
+
+    /// True for tools whose description and schemas were written by someone outside ZORIX.
+    pub fn is_third_party(&self) -> bool {
+        matches!(self, ToolSource::Mcp { .. })
+    }
+}
+
 /// The full description of a tool.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolSpec {
@@ -68,6 +111,9 @@ pub struct ToolSpec {
     /// for tools that change what ZORIX remembers.
     #[serde(default)]
     pub approval_by_person_only: bool,
+    /// Where the tool comes from.
+    #[serde(default)]
+    pub source: ToolSource,
     /// How long one call may run, in milliseconds.
     pub timeout_ms: u64,
     /// The most bytes of result kept; more is cut and marked.
@@ -92,6 +138,7 @@ impl ToolSpec {
             required_permissions: Vec::new(),
             requires_approval: false,
             approval_by_person_only: false,
+            source: ToolSource::Builtin,
             timeout_ms: 10_000,
             max_output_bytes: 64 * 1024,
         }
@@ -107,11 +154,38 @@ impl ToolSpec {
     }
 
     /// Everything a grant set must cover for this tool to run: `use_tool` on the id, and the declared permissions.
+    /// The hash that pins this definition: SHA-256 of the id, description and both schemas in canonical JSON. What the model
+    /// reads is what is hashed, so a changed description is a changed tool (ADR-0018).
+    pub fn definition_hash(&self) -> String {
+        let value = serde_json::json!({
+            "id": self.id,
+            "description": self.description,
+            "input_schema": self.input_schema,
+            "output_schema": self.output_schema,
+        });
+        crate::approval::canonical_hash(&value)
+    }
+
+    /// The tool as an execution pins it.
+    pub fn pin(&self) -> PinnedTool {
+        PinnedTool { spec: self.clone(), hash: self.definition_hash() }
+    }
+
     pub fn all_required_permissions(&self) -> Vec<Permission> {
         let mut all = vec![Permission::use_tool(&self.id)];
         all.extend(self.required_permissions.iter().cloned());
         all
     }
+}
+
+/// A tool as an execution saw it when it started. The run keeps offering this definition, and refuses to run a tool whose
+/// definition has changed since (ADR-0020).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PinnedTool {
+    /// The definition.
+    pub spec: ToolSpec,
+    /// Its [`ToolSpec::definition_hash`].
+    pub hash: String,
 }
 
 /// The part of a tool that is sent to the model.
@@ -163,6 +237,12 @@ pub trait Tool: Send + Sync {
 
     /// Run it. The runtime already validated `args` against the input schema and checked permissions.
     async fn call(&self, ctx: &ToolContext, args: Value) -> std::result::Result<Value, ToolError>;
+
+    /// A short, safe sentence about what this call would do, for approval cards ("Create issue in owner/repo"). It must
+    /// not echo secrets. `None` means the card shows the arguments only.
+    fn describe_call(&self, _args: &Value) -> Option<String> {
+        None
+    }
 }
 
 /// Where tools are registered and found.
@@ -175,6 +255,15 @@ pub trait ToolRegistry: Send + Sync {
 
     /// The specs of every registered tool, sorted by id.
     fn list(&self) -> Vec<ToolSpec>;
+
+    /// Remove a tool. Returns whether it was there. Runs that already started keep the definition they pinned.
+    fn unregister(&self, id: &str) -> bool;
+
+    /// Add a tool, or replace the one with the same id (an MCP server that changed its tools). The spec must be valid.
+    fn replace(&self, tool: std::sync::Arc<dyn Tool>) -> Result<()>;
+
+    /// A number that changes whenever the set of tools or a definition changes, for caches and change notifications.
+    fn generation(&self) -> u64;
 }
 
 #[cfg(test)]

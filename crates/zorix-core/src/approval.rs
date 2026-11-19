@@ -80,6 +80,14 @@ pub fn call_hash(tool: &str, arguments: &Value) -> String {
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
+/// SHA-256 of a JSON value in canonical form (sorted keys, no spaces), as lowercase hex.
+pub fn canonical_hash(value: &Value) -> String {
+    let mut text = String::new();
+    canonical_json(value, &mut text);
+    let digest = Sha256::digest(text.as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 fn canonical_json(value: &Value, out: &mut String) {
     match value {
         Value::Object(map) => {
