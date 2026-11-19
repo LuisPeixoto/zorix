@@ -119,6 +119,10 @@ fn scope_sql(alias: &str, visibility: &Visibility, args: &mut Vec<Sql>) -> Strin
         args.push(Sql::Text(conversation.to_string()));
         parts.push(format!("({alias}.scope = 'conversation' AND {alias}.scope_key = ?{})", args.len()));
     }
+    if let Some(agent) = &visibility.agent {
+        args.push(Sql::Text(agent.to_string()));
+        parts.push(format!("({alias}.scope = 'agent' AND {alias}.scope_key = ?{})", args.len()));
+    }
     format!("({})", parts.join(" OR "))
 }
 
