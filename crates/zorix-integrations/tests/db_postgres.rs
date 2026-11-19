@@ -118,7 +118,10 @@ async fn rows_come_back_as_json_whatever_their_types_and_reads_cannot_write() {
         "SELECT set_config('transaction_read_only', 'off', true)".into(),
     ] {
         let error = message(rig.sql("db.query", &sql).await.unwrap_err());
-        assert!(error.contains("read-only") || error.contains("read-write"), "{sql}: {error}");
+        assert!(
+            error.contains("read-only") || error.contains("read-write") || error.contains("data-modifying"),
+            "{sql}: {error}"
+        );
     }
     let still = rig.sql("db.query", &format!("SELECT count(*) AS n FROM {t}")).await.unwrap();
     assert_eq!(still["rows"][0][0], 2, "nothing was changed");

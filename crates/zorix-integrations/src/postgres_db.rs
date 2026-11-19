@@ -9,6 +9,7 @@ use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 use rustls_platform_verifier::ConfigVerifierExt;
 use serde_json::{Value, json};
+use tokio_postgres::config::SslMode;
 use tokio_postgres::{Client, Config, NoTls};
 use tokio_postgres_rustls_improved::MakeRustlsConnect;
 use zorix_core::{Connection, ToolError, redact_text};
@@ -67,6 +68,9 @@ async fn connect(connection: &Connection, password: Option<&str>) -> Result<Clie
         }
         "disable" => return Err(failed("Encryption can only be switched off for a database on this computer.")),
         "verify-full" => {
+            // tokio-postgres defaults to `prefer`, which falls back to plain text when the server answers "no TLS".
+            // verify-full must never do that.
+            config.ssl_mode(SslMode::Require);
             let tls = MakeRustlsConnect::new(tls_config(s["ca_file"].as_str())?);
             let (client, connection) = config
                 .connect(tls)
