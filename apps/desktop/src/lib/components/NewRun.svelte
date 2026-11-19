@@ -2,8 +2,9 @@
   import { open } from "@tauri-apps/plugin-dialog";
 
   import { errorText } from "../api.ts";
+  import { integrations } from "../stores/integrations.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
-  import { Badge, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Switch, Textarea } from "../ui/index.ts";
+  import { Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, PageHeader, Select, Switch, Textarea } from "../ui/index.ts";
 
   const examples = [
     "What is 17*23 and save it as result",
@@ -28,6 +29,24 @@
   let useKnowledge = $state(true);
   // Continuing a conversation from the Run view (the Continue button) or starting a new one.
   const continuing = $derived(store.continuing);
+
+  // What the run may reach beyond the built-in tools: MCP servers, databases, code, and hosts, repositories and channels by name.
+  let pickedServers = $state<Record<string, boolean>>({});
+  let pickedDbs = $state<Record<string, boolean>>({});
+  let dbWrites = $state<Record<string, boolean>>({});
+  let pickedCode = $state<Record<string, boolean>>({});
+  let hosts = $state("");
+  let repos = $state("");
+  let jira = $state("");
+  let chat = $state("");
+  const builtinTools = $derived(store.tools.filter((t) => !t.source || t.source.kind === "builtin" || t.source.kind === "memory"));
+  const readyServers = $derived(integrations.servers.filter((s) => s.enabled && s.tools_ready > 0));
+  const databases = $derived(integrations.connections.filter((c) => c.kind === "sqlite" || c.kind === "postgres"));
+  const reach = $derived(
+    readyServers.length + databases.length > 0 || integrations.connections.length > 0 || integrations.servers.length > 0,
+  );
+  const names = (text: string) => text.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  const chosen_ = (picked: Record<string, boolean>) => Object.entries(picked).filter(([, on]) => on).map(([k]) => k);
 
   const isOn = (id: string) => overrides[id] ?? !id.startsWith("workspace.");
 
@@ -56,7 +75,16 @@
     event.preventDefault();
     void store.start({
       prompt: prompt.trim(),
-      allow_tools: store.tools.map((t) => t.id).filter(isOn),
+      allow_tools: builtinTools.map((t) => t.id).filter(isOn),
+      integrations: {
+        mcp: chosen_(pickedServers),
+        db: chosen_(pickedDbs).map((n) => (dbWrites[n] ? `${n}:write` : n)),
+        code: chosen_(pickedCode),
+        http: names(hosts),
+        repo: names(repos),
+        jira: names(jira),
+        chat: names(chat),
+      },
       allow_read: workspace ? lines(allowRead) : [],
       allow_write: workspace ? lines(allowWrite) : [],
       workspace: workspace || undefined,
@@ -128,7 +156,7 @@
 
   <Card title="Tools it may use" icon="wrench">
     <div class="grid gap-2 sm:grid-cols-2">
-      {#each store.tools as tool (tool.id)}
+      {#each builtinTools as tool (tool.id)}
         <div class="rounded-xl border p-3 transition duration-150 {isOn(tool.id) ? 'border-accent/45 bg-accent-soft' : 'border-line bg-panel hover:border-line-strong'}">
           <Checkbox checked={isOn(tool.id)} onchange={(e) => (overrides[tool.id] = e.currentTarget.checked)} description={tool.description}>
             <span class="mono text-sm font-medium">{tool.id}</span>
@@ -137,6 +165,65 @@
         </div>
       {/each}
     </div>
+  </Card>
+
+  <Card title="Servers and services" icon="plug">
+    {#if !reach}
+      <p class="text-sm text-muted">Nothing is connected yet. <button type="button" class="text-accent underline" onclick={() => store.showIntegrations("catalogue")}>Connect a server or a service</button> to let a run use your repositories, tickets, databases and more.</p>
+    {:else}
+      <p class="mb-3 text-sm text-muted">A run reaches only what you pick here. Each MCP tool still asks you first; databases are read-only unless you allow writes, and writes ask too.</p>
+      {#if readyServers.length}
+        <p class="mb-1.5 text-xs font-medium text-muted">MCP servers</p>
+        <div class="mb-4 flex flex-wrap gap-2">
+          {#each readyServers as server (server.name)}
+            <button
+              type="button"
+              aria-pressed={!!pickedServers[server.name]}
+              onclick={() => (pickedServers[server.name] = !pickedServers[server.name])}
+              class="flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition duration-150 {pickedServers[server.name] ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel hover:border-line-strong'}"
+            >
+              <BrandLogo name={server.logo ?? (server.kind === "http" ? "globe" : "server")} size={28} />
+              <span><span class="block text-base font-medium">{server.name}</span><span class="tnum block text-xs text-muted">{server.tools_ready} tools ready</span></span>
+              {#if pickedServers[server.name]}<Icon name="check" size={14} class="text-accent" />{/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+      {#if databases.length}
+        <p class="mb-1.5 text-xs font-medium text-muted">Databases</p>
+        <div class="mb-4 space-y-2">
+          {#each databases as db (db.id)}
+            <div class="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 {pickedDbs[db.name] ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel'}">
+              <Checkbox checked={!!pickedDbs[db.name]} onchange={(e) => (pickedDbs[db.name] = e.currentTarget.checked)}>
+                <BrandLogo name={db.kind} size={24} class="mr-1 inline-grid align-middle" /> <span class="mono text-sm font-medium">{db.name}</span>
+              </Checkbox>
+              {#if pickedDbs[db.name]}<Switch bind:checked={dbWrites[db.name]} class="ml-auto">Allow writes (each asks first)</Switch>{/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+      <p class="mb-1.5 text-xs font-medium text-muted">Code</p>
+      <div class="mb-4 flex flex-wrap gap-2">
+        <Chip selected={!!pickedCode.javascript} onclick={() => (pickedCode.javascript = !pickedCode.javascript)}>Run JavaScript</Chip>
+        <Chip selected={!!pickedCode.python} onclick={() => (integrations.sandbox?.python ? (pickedCode.python = !pickedCode.python) : store.showIntegrations("connections"))}>
+          Run Python{integrations.sandbox?.python ? "" : " (install it first)"}
+        </Chip>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <Field label="Web hosts" hint="Comma separated, for example api.example.com">
+          {#snippet children(f)}<Input id={f.id} mono bind:value={hosts} placeholder="none" />{/snippet}
+        </Field>
+        <Field label="Repositories" hint="owner/repo, or owner/repo:write to also write">
+          {#snippet children(f)}<Input id={f.id} mono bind:value={repos} placeholder="none" />{/snippet}
+        </Field>
+        <Field label="Jira projects" hint="KEY, or KEY:write">
+          {#snippet children(f)}<Input id={f.id} mono bind:value={jira} placeholder="none" />{/snippet}
+        </Field>
+        <Field label="Chat channels" hint="slack:#alerts, discord:<channel id>, add :write to send">
+          {#snippet children(f)}<Input id={f.id} mono bind:value={chat} placeholder="none" />{/snippet}
+        </Field>
+      </div>
+    {/if}
   </Card>
 
   <Card title="Workspace folder" icon="folder">
@@ -160,7 +247,7 @@
 
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
-  <div class="sticky bottom-0 -mx-8 -mb-8 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-8 py-4 backdrop-blur">
+  <div class="sticky -bottom-8 z-20 -mx-8 -mb-8 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-8 py-4 backdrop-blur">
     <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>Start run</Button>
   </div>
 </form>
