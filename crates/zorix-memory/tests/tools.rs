@@ -230,6 +230,7 @@ async fn scopes_need_what_they_name_and_stay_where_they_were_put() {
         tenant: TenantId::local(),
         project: Some(project_path("one")),
         conversation: Some(ConversationId::new("chat-a").unwrap()),
+        agent: None,
     };
     let seen = env.store.list_memory(&both, &MemoryFilter::default(), Timestamp(i64::MAX / 2)).await.unwrap();
     let mut contents: Vec<&str> = seen.iter().map(|i| i.content.as_str()).collect();

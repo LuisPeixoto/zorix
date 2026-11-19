@@ -56,6 +56,7 @@ impl Rig {
             cancel: CancellationToken::new(),
             workspace_root: None,
             conversation: None,
+            agent: None,
         };
         self.tool(id).call(&ctx, args).await
     }

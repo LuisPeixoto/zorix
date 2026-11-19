@@ -82,7 +82,7 @@ async fn recorded(env: &Env, id: ExecutionId) -> OperationRecord {
 }
 
 fn vis(project: Option<&str>) -> Visibility {
-    Visibility { tenant: TenantId::local(), project: project.map(str::to_string), conversation: None }
+    Visibility { tenant: TenantId::local(), project: project.map(str::to_string), conversation: None, agent: None }
 }
 
 #[tokio::test]

@@ -260,6 +260,7 @@ mod tests {
             cancel: CancellationToken::new(),
             workspace_root: None,
             conversation: None,
+            agent: None,
         }
     }
 

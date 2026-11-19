@@ -128,7 +128,7 @@ async fn the_docs_of_this_repository_are_indexed_and_questions_find_the_right_fi
         ("what is the list of events a run emits", "events.md"),
         ("the app will not start because another program is using the data", "troubleshooting.md"),
     ];
-    let visibility = Visibility { tenant: rig.tenant.clone(), project: None, conversation: None };
+    let visibility = Visibility { tenant: rig.tenant.clone(), project: None, conversation: None, agent: None };
     let embedder = rig.stack.embedder().map(|e| e.as_ref());
     let mut right = 0;
     for (question, file) in questions {

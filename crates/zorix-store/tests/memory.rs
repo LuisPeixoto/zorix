@@ -175,7 +175,8 @@ async fn what_a_run_sees_depends_on_tenant_project_and_conversation() {
         t.sort();
         t
     };
-    let full = Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: Some(chat) };
+    let full =
+        Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: Some(chat), agent: None };
     assert_eq!(
         texts(f.store.list_memory(&full, &MemoryFilter::default(), NOW).await.unwrap()),
         ["chat fact", "global fact", "project one fact"]
@@ -386,8 +387,8 @@ async fn project_folders_are_visible_only_to_their_project_and_limits_hold() {
     let p = add_root(&f.store, "a", Scope::Project("/work/one".into()), "/work/one/docs").await;
     f.store.write_document(doc(g, "g.md", vec![chunk("shared handbook text", 1)])).await.unwrap();
     f.store.write_document(doc(p, "p.md", vec![chunk("project handbook text", 1)])).await.unwrap();
-    let one = Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: None };
-    let two = Visibility { tenant: tenant("a"), project: Some("/work/two".into()), conversation: None };
+    let one = Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: None, agent: None };
+    let two = Visibility { tenant: tenant("a"), project: Some("/work/two".into()), conversation: None, agent: None };
     assert_eq!(f.store.text_search(&one, Corpus::Knowledge, &terms(&["handbook"]), 5).await.unwrap().len(), 2);
     assert_eq!(f.store.text_search(&two, Corpus::Knowledge, &terms(&["handbook"]), 5).await.unwrap().len(), 1);
     assert_eq!(f.store.roots(&one).await.unwrap().len(), 2);
@@ -586,7 +587,7 @@ async fn operational_records_are_searchable_by_project_and_replaced_when_recorde
     f.store.record_operation(record(e1, "a", Some("/work/one"), "migrated the billing database")).await.unwrap();
     f.store.record_operation(record(e2, "a", None, "billing report without a workspace")).await.unwrap();
     f.store.record_operation(record(e3, "b", None, "billing for another tenant")).await.unwrap();
-    let one = Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: None };
+    let one = Visibility { tenant: tenant("a"), project: Some("/work/one".into()), conversation: None, agent: None };
     let ids = |hits: Vec<zorix_core::TextHit>| hits.into_iter().map(|h| h.id).collect::<Vec<_>>();
     assert_eq!(
         ids(f.store.text_search(&one, Corpus::Operations, &terms(&["billing"]), 5).await.unwrap()),

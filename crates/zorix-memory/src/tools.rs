@@ -31,6 +31,7 @@ fn visibility(ctx: &ToolContext) -> Visibility {
         tenant: ctx.tenant.clone(),
         project: ctx.workspace_root.as_ref().map(|p| p.to_string_lossy().into_owned()),
         conversation: ctx.conversation.clone(),
+        agent: None,
     }
 }
 
