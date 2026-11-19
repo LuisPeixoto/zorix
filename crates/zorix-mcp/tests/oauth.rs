@@ -23,6 +23,8 @@ struct Behaviour {
     registration: bool,
     issuer_in_metadata: Option<String>,
     resource_in_metadata: Option<String>,
+    /// How the server names itself: appended to its address (`""` is the origin).
+    resource_style: Option<&'static str>,
     refresh_fails: bool,
 }
 
@@ -34,6 +36,7 @@ impl Default for Behaviour {
             registration: true,
             issuer_in_metadata: None,
             resource_in_metadata: None,
+            resource_style: None,
             refresh_fails: false,
         }
     }
@@ -56,7 +59,7 @@ async fn mock(b: Behaviour) -> MockServer {
     Mock::given(method("GET"))
         .and(path("/.well-known/oauth-protected-resource/mcp"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "resource": b.resource_in_metadata.clone().unwrap_or(format!("{base}/mcp")),
+            "resource": match b.resource_style { Some(style) => format!("{base}{style}"), None => b.resource_in_metadata.clone().unwrap_or(format!("{base}/mcp")) },
             "authorization_servers": [base],
             "scopes_supported": ["read", "write"],
         })))
@@ -381,6 +384,25 @@ async fn a_server_that_cannot_prove_its_metadata_or_pkce_is_not_signed_in_to() {
         assert!(matches!(&error, McpError::Protocol(m) if m.contains(expect)), "{expect}: {error:?}");
         assert!(rig.requests_to("/token").await.is_empty());
     }
+}
+
+#[tokio::test]
+async fn a_server_may_name_itself_by_its_origin_or_with_a_trailing_slash_and_that_name_is_what_is_asked_for() {
+    // Seen in the wild: one server names itself `https://host`, another `https://host/mcp/`.
+    for style in ["", "/mcp/"] {
+        let rig = rig(Behaviour { resource_style: Some(style), ..Behaviour::default() }).await;
+        let browser = Consent::approve(&rig.server.uri());
+        rig.login(&browser, OAuthSettings::default()).await.unwrap();
+        assert_eq!(
+            browser.param("resource"),
+            Some(format!("{}{style}", rig.server.uri())),
+            "the server's own name for itself"
+        );
+        assert_eq!(form_value(&rig.requests_to("/token").await[0], "resource"), browser.param("resource"));
+    }
+    // A name that is not this server or one of its parents is still refused.
+    let rig = rig(Behaviour { resource_style: Some("/other"), ..Behaviour::default() }).await;
+    assert!(rig.login(&Consent::approve(&rig.server.uri()), OAuthSettings::default()).await.is_err());
 }
 
 #[tokio::test]
