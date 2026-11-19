@@ -1,0 +1,32 @@
+[package]
+name = "zorix-integrations"
+description = "ZORIX's native integrations: HTTP, webhooks, Git hosts, tickets, chat and databases, each behind grants and approvals."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-providers.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+hmac = "0.12"
+parking_lot.workspace = true
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+zorix-runtime.workspace = true
+zorix-store.workspace = true
+tempfile.workspace = true
+wiremock.workspace = true
