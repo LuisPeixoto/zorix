@@ -11,8 +11,8 @@ use reqwest::Url;
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, Role,
-    ToolCallId, ToolCallRequest, Usage,
+    FinishReason, ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, NoSink, Role,
+    TextSink, ToolCallId, ToolCallRequest, Usage,
 };
 
 use crate::adapter::{
@@ -167,6 +167,8 @@ struct PartialCall {
 /// Builds a response out of the stream's chunks.
 #[derive(Default)]
 pub struct ChatAggregator {
+    sink: Option<Arc<dyn TextSink>>,
+    think: crate::adapter::ThinkFilter,
     model: String,
     text: String,
     calls: BTreeMap<u64, PartialCall>,
@@ -181,6 +183,12 @@ impl ChatAggregator {
         Self::default()
     }
 
+    /// Pass the answer's text on as it arrives.
+    pub fn with_sink(mut self, sink: Arc<dyn TextSink>) -> Self {
+        self.sink = Some(sink);
+        self
+    }
+
     /// Take one event.
     pub fn on_event(&mut self, event: &SseEvent) -> Result<(), ModelError> {
         let data = event.data.trim();
@@ -189,6 +197,12 @@ impl ChatAggregator {
         }
         if data == "[DONE]" {
             self.done = true;
+            if let Some(sink) = &self.sink {
+                let rest = self.think.flush();
+                if !rest.is_empty() {
+                    sink.text(&rest);
+                }
+            }
             return Ok(());
         }
         let chunk: Value = serde_json::from_str(data).map_err(|_| {
@@ -212,6 +226,12 @@ impl ChatAggregator {
             let delta = &choice["delta"];
             if let Some(text) = delta["content"].as_str() {
                 self.text.push_str(text);
+                if let Some(sink) = &self.sink {
+                    let visible = self.think.push(text);
+                    if !visible.is_empty() {
+                        sink.text(&visible);
+                    }
+                }
             }
             for call in delta["tool_calls"].as_array().into_iter().flatten() {
                 let index = call["index"].as_u64().unwrap_or(self.calls.len() as u64);
@@ -310,6 +330,15 @@ impl Discover for OpenAiChatGateway {
 #[async_trait]
 impl ModelGateway for OpenAiChatGateway {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
+        self.generate_live(request, cancel, Arc::new(NoSink)).await
+    }
+
+    async fn generate_live(
+        &self,
+        request: ModelRequest,
+        cancel: CancellationToken,
+        sink: Arc<dyn TextSink>,
+    ) -> Result<ModelResponse, ModelError> {
         let key = if self.key_required {
             Some(resolve_key(&self.secrets, &self.name, &self.key_name).await?)
         } else {
@@ -322,7 +351,7 @@ impl ModelGateway for OpenAiChatGateway {
         let headers: Vec<(&str, Header)> = key.iter().map(|k| ("authorization", Header::Bearer(k))).collect();
         let response = self.http.post_json(&self.url, &headers, &body, true, &cancel).await?;
         let mut reader = self.http.sse(response);
-        let mut aggregator = ChatAggregator::new();
+        let mut aggregator = ChatAggregator::new().with_sink(sink.clone());
         while let Some(event) = reader.next(&cancel).await? {
             aggregator.on_event(&event)?;
         }
