@@ -1,0 +1,23 @@
+[package]
+name = "zorix-agents"
+description = "ZORIX's agents: versioned definitions that create executions, their Markdown form, skills and evaluations."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-providers.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+yaml-rust2 = "0.13"
+similar = "3"
+
+[dev-dependencies]
+zorix-store.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
