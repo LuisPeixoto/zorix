@@ -5,10 +5,10 @@ use std::collections::HashMap;
 
 use std::path::Path;
 use zorix_agents::diff::{DiffLine, diff};
-use zorix_agents::{AgentAsk, ModelResolver, format, prepare};
+use zorix_agents::{AgentAsk, ModelResolver, format, prepare, starters};
 
 use zorix_core::{
-    Agent, AgentSlug, AgentSpec, AgentStore, AgentVersion, Clock, NewExecution, SkillRecord, SystemClock,
+    Agent, AgentSlug, AgentSpec, AgentStore, AgentVersion, Clock, EvalCase, NewExecution, SkillRecord, SystemClock,
 };
 
 use crate::{Hub, HubError};
@@ -26,7 +26,92 @@ pub struct Imported {
     pub changed: bool,
 }
 
+/// A starter agent that ships with ZORIX, as the lists show it.
+#[derive(Clone, Debug)]
+pub struct TemplateInfo {
+    /// What to type after `--template`.
+    pub id: String,
+    /// The agent's name.
+    pub name: String,
+    /// What it does.
+    pub description: String,
+    /// Its avatar's emoji.
+    pub emoji: String,
+    /// Its avatar's colour name.
+    pub color: String,
+    /// The skills it comes with.
+    pub skills: Vec<String>,
+    /// How many evaluation cases it comes with.
+    pub cases: usize,
+    /// An agent with this id already exists here.
+    pub installed: bool,
+}
+
+/// What installing a starter did.
+#[derive(Clone, Debug)]
+pub struct TemplateInstalled {
+    /// The agent that was created (or got a new version).
+    pub imported: Imported,
+    /// The skills that were put in the library.
+    pub skills: Vec<SkillRecord>,
+    /// The evaluation cases that were added or refreshed.
+    pub cases: usize,
+}
+
 impl Hub {
+    /// The starter agents, with whether each is already here.
+    pub async fn templates(&self) -> Result<Vec<TemplateInfo>, HubError> {
+        let mut out = Vec::new();
+        for starter in starters::all() {
+            let parsed = format::parse(starter.agent).map_err(HubError)?;
+            let slug = parsed.spec.slug.clone();
+            let installed = self.agents.agent_by_slug(&self.tenant, &slug).await?.is_some();
+            out.push(TemplateInfo {
+                id: starter.id.to_string(),
+                name: parsed.spec.name.clone(),
+                description: parsed.spec.description.clone(),
+                emoji: parsed.spec.avatar.emoji.clone(),
+                color: parsed.spec.avatar.color.clone(),
+                skills: starter.skills.iter().map(|s| s.name.to_string()).collect(),
+                cases: starter.cases.len(),
+                installed,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Install a starter: its skills go in the library, the agent is created (or gets a new version when one with its slug
+    /// exists and differs), and its evaluation cases are added. `rename` installs it under another slug.
+    pub async fn add_template(&self, id: &str, rename: Option<&str>) -> Result<TemplateInstalled, HubError> {
+        let starter = starters::get(id).ok_or_else(|| {
+            let known: Vec<&str> = starters::all().iter().map(|s| s.id).collect();
+            HubError(format!("There is no template called {id}. The templates are: {}.", known.join(", ")))
+        })?;
+        let now = SystemClock.now();
+        let mut skills = Vec::new();
+        for skill in starter.skills {
+            let library = self.skills.clone();
+            let (name, files) = (skill.name, skill.owned_files());
+            let record = tokio::task::spawn_blocking(move || {
+                library.import_files(files, Some(name), Some("built-in template".to_string()), now)
+            })
+            .await
+            .map_err(|e| HubError(e.to_string()))?
+            .map_err(|e| HubError(e.to_string()))?;
+            self.agents.record_skill(&self.tenant, record.clone()).await?;
+            skills.push(record);
+        }
+        let imported = self.import_agent(starter.agent, rename, Some(format!("From the {id} template."))).await?;
+        let mut cases = 0;
+        for text in starter.cases {
+            let case: EvalCase = serde_json::from_str(text).map_err(|e| HubError(e.to_string()))?;
+            case.validate().map_err(|e| HubError(e.to_string()))?;
+            self.agents.put_eval_case(&self.tenant, imported.agent.id, case, now).await?;
+            cases += 1;
+        }
+        Ok(TemplateInstalled { imported, skills, cases })
+    }
+
     /// One agent by name, with its newest version.
     pub async fn agent(&self, slug: &str) -> Result<(Agent, AgentVersion), HubError> {
         let slug = AgentSlug::new(slug).map_err(HubError)?;

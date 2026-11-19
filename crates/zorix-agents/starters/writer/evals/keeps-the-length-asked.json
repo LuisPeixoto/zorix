@@ -1,0 +1,17 @@
+{
+  "name": "keeps-the-length-asked",
+  "tags": [
+    "instructions"
+  ],
+  "prompt": "Write a two-sentence welcome for new members of a book club. Exactly two sentences.",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "^(?s)[^.!?]+[.!?]\\s+[^.!?]+[.!?]\\s*(\\n.*)?$"
+    },
+    {
+      "kind": "max_tool_calls",
+      "calls": 0
+    }
+  ]
+}

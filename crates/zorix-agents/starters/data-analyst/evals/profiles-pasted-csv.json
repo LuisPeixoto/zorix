@@ -1,0 +1,18 @@
+{
+  "name": "profiles-pasted-csv",
+  "tags": [
+    "skills"
+  ],
+  "prompt": "Here is a CSV. How many rows does it have, and which column has missing values?\n\nid,city,amount\n1,Lisbon,10\n2,Porto,\n3,Lisbon,30\n4,Faro,25\n",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "(?i)\\b(4|four)\\b"
+    },
+    {
+      "kind": "contains",
+      "text": "amount",
+      "ignore_case": true
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "stays-short",
+  "tags": [
+    "smoke"
+  ],
+  "prompt": "In one sentence: what is the capital of Australia? Cite a source.",
+  "checks": [
+    {
+      "kind": "contains",
+      "text": "Canberra"
+    },
+    {
+      "kind": "regex",
+      "pattern": "^(?s).{0,900}$"
+    }
+  ]
+}

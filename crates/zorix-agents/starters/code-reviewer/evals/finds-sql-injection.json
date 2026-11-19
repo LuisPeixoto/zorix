@@ -1,0 +1,23 @@
+{
+  "name": "finds-sql-injection",
+  "tags": [
+    "smoke",
+    "security"
+  ],
+  "prompt": "Review this function:\n\n```python\ndef find_user(db, name):\n    query = \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(query).fetchall()\n```",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "(?i)(sql injection|parameteri[sz]ed|bound parameters|placeholders?)"
+    },
+    {
+      "kind": "contains",
+      "text": "Must fix",
+      "ignore_case": true
+    },
+    {
+      "kind": "tool_not_used",
+      "pattern": "files.*"
+    }
+  ]
+}

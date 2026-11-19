@@ -1,0 +1,17 @@
+{
+  "name": "spots-a-swallowed-error",
+  "tags": [
+    "correctness"
+  ],
+  "prompt": "Review this function:\n\n```python\ndef save(path, text):\n    try:\n        with open(path, 'w') as f:\n            f.write(text)\n    except Exception:\n        pass\n```",
+  "checks": [
+    {
+      "kind": "regex",
+      "pattern": "(?i)(swallow|silent|ignor|hides?|hidden|bare|pass)"
+    },
+    {
+      "kind": "regex",
+      "pattern": "(?i)(log|raise|re-?raise|return|report|handle)"
+    }
+  ]
+}
