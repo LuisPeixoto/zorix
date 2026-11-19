@@ -22,6 +22,7 @@ fn context(grants: Grants, workspace: Option<std::path::PathBuf>) -> ToolContext
         cancel: CancellationToken::new(),
         workspace_root: workspace,
         conversation: None,
+        agent: None,
     }
 }
 

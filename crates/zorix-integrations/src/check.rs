@@ -184,6 +184,7 @@ fn context(tenant: &TenantId, grants: Grants) -> ToolContext {
         cancel: CancellationToken::new(),
         workspace_root: None,
         conversation: None,
+        agent: None,
     }
 }
 

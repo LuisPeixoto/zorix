@@ -73,6 +73,7 @@ impl Rig {
             cancel: CancellationToken::new(),
             workspace_root: None,
             conversation: None,
+            agent: None,
         };
         self.tools.iter().find(|t| t.spec().id == id).unwrap().call(&ctx, args).await
     }

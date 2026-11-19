@@ -255,7 +255,7 @@ pub async fn try_query(
         ),
         None => None,
     };
-    let visibility = Visibility { tenant: services.tenant.clone(), project, conversation: None };
+    let visibility = Visibility { tenant: services.tenant.clone(), project, conversation: None, agent: None };
     let (which, store) = match corpus.as_str() {
         "knowledge" => (Corpus::Knowledge, &services.memory_store),
         "history" => (Corpus::Operations, &services.memory_store),

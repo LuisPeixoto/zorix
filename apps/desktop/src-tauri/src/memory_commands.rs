@@ -24,7 +24,8 @@ fn parse_scope(text: &str) -> Result<Scope, String> {
         None if text == "global" => Ok(Scope::Global),
         Some(("project", path)) if !path.is_empty() => Ok(Scope::Project(path.to_string())),
         Some(("conversation", id)) => ConversationId::new(id).map(Scope::Conversation).map_err(|e| e.to_string()),
-        _ => Err("The scope is global, project:<folder> or conversation:<id>.".into()),
+        Some(("agent", id)) => id.parse().map(Scope::Agent).map_err(|e: zorix_core::IdError| e.to_string()),
+        _ => Err("The scope is global, project:<folder>, conversation:<id> or agent:<id>.".into()),
     }
 }
 
@@ -33,6 +34,7 @@ fn scope_text(scope: &Scope) -> String {
         Scope::Global => "global".into(),
         Scope::Project(path) => format!("project:{path}"),
         Scope::Conversation(id) => format!("conversation:{id}"),
+        Scope::Agent(id) => format!("agent:{id}"),
     }
 }
 

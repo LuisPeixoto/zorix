@@ -237,7 +237,7 @@ fn visibility(tenant: &TenantId, project: Option<&PathBuf>) -> Result<Visibility
         ),
         None => None,
     };
-    Ok(Visibility { tenant: tenant.clone(), project, conversation: None })
+    Ok(Visibility { tenant: tenant.clone(), project, conversation: None, agent: None })
 }
 
 async fn search(home: &Path, tenant: &TenantId, printer: Printer, args: MemorySearchArgs) -> Result<Exit, CliError> {

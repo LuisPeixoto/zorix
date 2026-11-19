@@ -85,6 +85,7 @@ fn scope_rank(scope: &Scope) -> u8 {
         Scope::Global => 0,
         Scope::Project(_) => 1,
         Scope::Conversation(_) => 2,
+        Scope::Agent(_) => 3,
     }
 }
 
@@ -94,6 +95,7 @@ pub fn visibility_of(execution: &Execution) -> Visibility {
         tenant: execution.tenant.clone(),
         project: execution.workspace.as_ref().map(|p| p.to_string_lossy().into_owned()),
         conversation: execution.conversation.clone(),
+        agent: execution.agent.as_ref().filter(|binding| binding.agent_memory).map(|binding| binding.agent),
     }
 }
 
@@ -226,6 +228,7 @@ impl Retriever {
             states: vec![ExecutionState::Completed, ExecutionState::Failed, ExecutionState::Cancelled],
             conversation: Some(conversation),
             limit: 100,
+            agent: None,
         };
         let earlier = self.repository.list(&execution.tenant, &filter).await?;
         let mut allowed = self.shares.conversation.tokens(budget);

@@ -130,6 +130,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
             knowledge: if args.no_knowledge { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
             operations: if args.no_memory { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
         },
+        agent: None,
     };
     let engine = &app.engine;
     let created = engine.create(new).await?;

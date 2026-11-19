@@ -2,6 +2,8 @@
 //!
 //! This crate has no I/O and no knowledge of providers, storage or interfaces. See `docs/architecture.md`.
 
+pub mod access;
+pub mod agent;
 pub mod approval;
 pub mod context;
 pub mod engine;
@@ -24,6 +26,11 @@ pub mod time;
 pub mod tokens;
 pub mod tool;
 
+pub use agent::{
+    Agent, AgentBinding, AgentConversation, AgentModels, AgentSlug, AgentSpec, AgentStore, AgentVersion, Avatar,
+    CheckOutcome, EvalCase, EvalCheck, EvalJudge, EvalResult, EvalRun, JudgeOutcome, MAX_AGENTS, MAX_VERSIONS,
+    SkillFile, SkillPin, SkillRecord, StoredCase, model_allowed, valid_skill_name, validate_model_pattern,
+};
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
 pub use engine::{ExecutionDetail, ExecutionEngine, RecoveryReport};
@@ -33,8 +40,8 @@ pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
 };
 pub use ids::{
-    ApprovalId, ConnectionId, ConversationId, ExecutionId, IdError, KnowledgeRootId, McpServerId, MemoryId, TenantId,
-    ToolCallId,
+    AgentId, ApprovalId, ConnectionId, ConversationId, ExecutionId, IdError, KnowledgeRootId, McpServerId, MemoryId,
+    TenantId, ToolCallId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,

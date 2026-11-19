@@ -107,6 +107,7 @@ mod tests {
             cancel: tokio_util::sync::CancellationToken::new(),
             workspace_root: None,
             conversation: None,
+            agent: None,
         }
     }
 
