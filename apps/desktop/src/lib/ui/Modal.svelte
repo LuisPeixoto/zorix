@@ -45,7 +45,7 @@
       aria-labelledby="{uid}-title"
       transition:scale={{ start: 0.97, duration: 160 }}
       use:trapFocus
-      class={cn("relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-line bg-elevated shadow-pop", widths[size])}
+      class={cn("relative flex max-h-full w-full flex-col overflow-hidden rounded-2xl border border-line bg-elevated shadow-3", widths[size])}
     >
       <header class="flex items-center gap-2.5 border-b border-line px-5 py-3.5">
         {#if icon}<Icon name={icon} size={17} class="text-accent" />{/if}

@@ -4,6 +4,8 @@
   import { Button } from "../../ui/index.ts";
   import StatusBadge from "../StatusBadge.svelte";
   import NavItem from "./NavItem.svelte";
+
+  const waiting = $derived(store.runs.filter((r) => r.state === "waiting_for_approval").length);
 </script>
 
 <aside class="flex w-64 shrink-0 flex-col border-r border-line bg-panel-2">
@@ -11,18 +13,21 @@
     <Button variant="primary" icon="plus" class="w-full" onclick={() => { store.continuing = null; store.showRuns(); store.showForm(); }}>New run</Button>
   </div>
 
-  <p class="px-5 pt-2 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Runs</p>
+  <div class="flex items-center justify-between px-5 pt-2 pb-1.5">
+    <p class="text-2xs font-semibold tracking-wider text-faint uppercase">Runs</p>
+    {#if waiting > 0}<span class="tnum rounded-full bg-warn/15 px-1.5 text-2xs font-medium text-warn" title="Waiting for you">{waiting} waiting</span>{/if}
+  </div>
   <nav class="min-h-0 flex-1 overflow-y-auto px-2 pb-2" aria-label="Runs">
     {#each store.runs as run (run.id)}
       <button
         type="button"
-        class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {store.view === 'runs' && store.selectedId === run.id ? 'bg-accent-soft' : ''}"
+        class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {store.view === 'runs' && store.selectedId === run.id ? 'bg-accent-soft shadow-[inset_2px_0_0_var(--accent)]' : ''}"
         onclick={() => { store.showRuns(); void store.select(run.id); }}
       >
         <span class="block truncate text-md font-medium">{shorten(run.request.prompt, 60)}</span>
         <span class="mt-0.5 flex items-center justify-between text-xs text-muted">
           <StatusBadge state={run.state} />
-          <span>{ago(run.created_at, store.now)}</span>
+          <span class="tnum">{ago(run.created_at, store.now)}</span>
         </span>
       </button>
     {:else}
@@ -30,14 +35,15 @@
     {/each}
   </nav>
 
-  <div class="border-t border-line px-2 py-2">
+  <div class="border-t border-line-soft px-2 pt-2 pb-1">
+    <p class="px-2.5 pb-1 text-2xs font-semibold tracking-wider text-faint uppercase">Workspace</p>
     <NavItem icon="book" active={store.view === "memory"} onclick={() => store.showMemory()}>Memory</NavItem>
     <NavItem icon="key" active={store.view === "providers"} onclick={() => store.showProviders()}>Providers &amp; keys</NavItem>
     {#if import.meta.env.DEV}
       <NavItem icon="layers" active={store.view === "design"} onclick={() => store.showDesign()}>Design system</NavItem>
     {/if}
   </div>
-  <footer class="border-t border-line px-4 py-2.5 text-xs text-faint">
+  <footer class="border-t border-line-soft px-4 py-2.5 text-xs text-faint">
     <p class="mono">v{store.info?.version ?? ""}</p>
     <p class="truncate" title={store.info?.data_dir}>{store.info?.data_dir ?? ""}</p>
   </footer>

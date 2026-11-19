@@ -54,6 +54,24 @@ dialogs, `rounded-full` for chips and dots. `shadow-card` for cards, `shadow-pop
 ring for something happening now), `.skeleton` (loading), `.mono` (monospace without ligatures), `.selectable` (text people
 copy: results, errors, ids).
 
+### Tokens added in version 2
+
+Surfaces gained depth and the motion got a language, without changing a single colour the contrast test already covers.
+
+| Token | Use |
+|---|---|
+| `line-soft` | The hairline between rows inside a card (softer than `line`, which frames the card) |
+| `inset` | Light that falls on the top edge of a raised surface (`.raised`, `shadow-raised`) |
+| `shadow-1` · `shadow-2` · `shadow-3` | Three elevation steps, each two layers (a contact shadow and a soft ambient one): rows, cards and menus, sheets and dialogs |
+| `glass`, `glass-line` | The toolbar and the command palette only: a translucent panel with a blur, and a solid `panel` where the platform has no blur |
+| `accent-grad` | The primary button's gentle top-to-bottom gradient. It is kept light enough that `accent-fg` still passes AA |
+| `ring` | The soft focus ring of fields |
+| `page-wash` | A faint accent glow at the top of a screen |
+| `ease-spring` · `.tnum` | A slightly springy easing for things that appear, and tabular figures for counts, times and sizes |
+
+Syntax colours (`.tok-kw`, `.tok-str`, `.tok-num`, `.tok-com`, `.tok-fn`) reuse accent, ok, warn, faint and info, so code in
+`CodeBlock` is as readable as any other text.
+
 ## Themes
 
 Light is the default. The toolbar button cycles light → dark → system, and the choice is remembered (`localStorage`, key
@@ -83,6 +101,14 @@ Import from `src/lib/ui/index.ts`. All accept `class`; interactive ones have hov
 | `Toasts` + `toast` | Mount `Toasts` once; call `toast.ok / err / info(text)` |
 | `EmptyState` · `PageHeader` | Icon tile with the brand gradient; page title, subtitle and actions |
 | `Icon` · `Spinner` · `Dot` · `Kbd` · `Divider` · `Skeleton` | Small parts |
+| `Drawer` | A sheet from the right for looking at one thing beside its list: `bind:open`, `title`, `subtitle`, `width`; snippets `leading`, `actions`, `footer`. Traps focus, closes on Escape |
+| `CommandPalette` | ⌘K / Ctrl K. `bind:open`, `commands` (`id`, `label`, `group`, `icon`, `hint`, `keywords`, `run`). Fuzzy search, arrows and Enter, a combobox for screen readers |
+| `BrandLogo` | A service's mark (Simple Icons, CC0) on a quiet tile; a plug for anything without one |
+| `StatusPill` | `ready`, `starting`, `restarting`, `needs_login`, `failed`, `stopped`, `off`, `review`: a tone, a word and a pulse while something is happening |
+| `CodeBlock` | SQL, JSON, JavaScript and Python, highlighted by a tiny tokenizer with no network and no HTML; scrolls, copies |
+| `DiffView` | What changed between two texts: word by word for a sentence, line by line for more. Added and removed carry `+`/`−` and a label, not only colour |
+| `Stepper` | A short flow (`steps`, `current`); done steps carry a check |
+| `KeyValue` · `ToggleRow` | Facts as label and value; a setting with a sentence and a switch |
 | `tooltip` · `trapFocus` | Actions. `tooltip` is plain text only |
 
 **Tones.** Never write tone classes by hand: `toneClass(tone, kind)` returns the Tailwind classes for `text`, `dot`, `soft`,
@@ -107,6 +133,8 @@ markup written in that file and never come from user input.
 - Focus is always visible: a 2px accent outline, and a soft ring on fields.
 - Dialogs trap focus and give it back; Escape closes them. Toasts are announced politely, errors assertively.
 - Motion respects `prefers-reduced-motion`.
+- Scrollable regions (`CodeBlock`, `DiffView`) take focus so the keyboard can scroll them.
+- Glass never carries text that would not pass on the solid fallback.
 
 ## Changing the system
 

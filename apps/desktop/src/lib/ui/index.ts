@@ -1,4 +1,15 @@
 // The component kit. Import from here: `import { Button, Card } from "../ui/index.ts"`.
+export { default as BrandLogo } from "./BrandLogo.svelte";
+export { default as CodeBlock } from "./CodeBlock.svelte";
+export { default as CommandPalette, type Command } from "./CommandPalette.svelte";
+export { default as DiffView } from "./DiffView.svelte";
+export { default as Drawer } from "./Drawer.svelte";
+export { default as KeyValue } from "./KeyValue.svelte";
+export { default as StatusPill, type PillState } from "./StatusPill.svelte";
+export { default as Stepper } from "./Stepper.svelte";
+export { default as ToggleRow } from "./ToggleRow.svelte";
+export { fuzzyFilter, fuzzyScore } from "./fuzzy.ts";
+export { type Language, highlight } from "./highlight.ts";
 export { default as Badge } from "./Badge.svelte";
 export { default as Button } from "./Button.svelte";
 export { default as Callout } from "./Callout.svelte";

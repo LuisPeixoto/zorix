@@ -40,9 +40,18 @@
   --text-3xl: 24px;
   --text-4xl: 28px;
 
+  --color-line-soft: var(--line-soft);
+  --color-glass: var(--glass);
+
   --shadow-card: var(--sh-card);
   --shadow-pop: var(--sh-pop);
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+  --shadow-raised: var(--sh-raised);
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --radius-card: 16px;
 }
 
 /* Light is the default theme. */
@@ -76,6 +85,19 @@
 
   --sh-card: 0 1px 2px rgb(18 22 33 / 0.05), 0 4px 14px -6px rgb(18 22 33 / 0.08);
   --sh-pop: 0 16px 44px -12px rgb(18 22 33 / 0.28), 0 2px 8px rgb(18 22 33 / 0.08);
+
+  /* v2: a hairline between rows, light that falls on the top edge of raised things, and shadows in three steps. */
+  --line-soft: #edeff5;
+  --inset: rgb(255 255 255 / 0.9);
+  --glass: rgb(255 255 255 / 0.74);
+  --glass-line: rgb(18 22 33 / 0.07);
+  --sh-1: 0 1px 1px rgb(18 22 33 / 0.04), 0 1px 3px rgb(18 22 33 / 0.05);
+  --sh-2: 0 1px 2px rgb(18 22 33 / 0.05), 0 6px 16px -8px rgb(18 22 33 / 0.12);
+  --sh-3: 0 2px 6px rgb(18 22 33 / 0.06), 0 18px 40px -14px rgb(18 22 33 / 0.26);
+  --sh-raised: inset 0 1px 0 var(--inset), 0 1px 2px rgb(18 22 33 / 0.06), 0 6px 18px -10px rgb(18 22 33 / 0.16);
+  --accent-grad: linear-gradient(180deg, color-mix(in srgb, var(--accent) 94%, #fff) 0%, var(--accent) 100%);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 26%, transparent);
+  --page-wash: radial-gradient(1100px 380px at 12% -120px, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
 }
 
 :root[data-theme="dark"] {
@@ -106,6 +128,18 @@
 
   --sh-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px -8px rgb(0 0 0 / 0.5);
   --sh-pop: 0 18px 50px -12px rgb(0 0 0 / 0.7), 0 2px 10px rgb(0 0 0 / 0.35);
+
+  --line-soft: #292d3a;
+  --inset: rgb(255 255 255 / 0.06);
+  --glass: rgb(27 30 39 / 0.72);
+  --glass-line: rgb(255 255 255 / 0.08);
+  --sh-1: 0 1px 1px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.3);
+  --sh-2: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 20px -10px rgb(0 0 0 / 0.55);
+  --sh-3: 0 2px 8px rgb(0 0 0 / 0.4), 0 22px 48px -16px rgb(0 0 0 / 0.75);
+  --sh-raised: inset 0 1px 0 var(--inset), 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 22px -12px rgb(0 0 0 / 0.6);
+  --accent-grad: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #fff) 0%, color-mix(in srgb, var(--accent) 88%, #000) 100%);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 34%, transparent);
+  --page-wash: radial-gradient(1100px 380px at 12% -120px, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
 }
 
 html,
@@ -175,6 +209,54 @@ button:disabled {
 }
 :root[data-theme="dark"] .glow {
   opacity: 0.2;
+}
+
+/* v2 surfaces. Glass is for the toolbar and the command palette only; it falls back to a solid panel without blur. */
+.glass {
+  background: var(--panel);
+  border-color: var(--line);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .glass {
+    background: var(--glass);
+    border-color: var(--glass-line);
+    backdrop-filter: blur(18px) saturate(1.5);
+  }
+}
+.raised {
+  box-shadow: var(--sh-raised);
+}
+.page-wash {
+  background-image: var(--page-wash);
+  background-repeat: no-repeat;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.hairline {
+  border-color: var(--line-soft);
+}
+
+/* Code and diffs: the same few colours everywhere (tones that already pass the contrast test). */
+.tok-kw {
+  color: var(--accent);
+  font-weight: 500;
+}
+.tok-str {
+  color: var(--ok);
+}
+.tok-num {
+  color: var(--warn);
+}
+.tok-com {
+  color: var(--faint);
+  font-style: italic;
+}
+.tok-fn {
+  color: var(--info);
+}
+.tok-punct {
+  color: var(--muted);
 }
 
 /* A status dot with a pulsing ring, for something that is happening now. */

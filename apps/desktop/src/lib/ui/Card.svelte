@@ -29,13 +29,13 @@
 
 <section
   class={cn(
-    "overflow-hidden rounded-2xl border border-line bg-panel shadow-card",
-    interactive && "transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-pop",
+    "raised overflow-hidden rounded-2xl border border-line bg-panel",
+    interactive && "transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3",
     klass,
   )}
 >
   {#if title || actions}
-    <header class="flex items-center gap-2 border-b border-line px-4 py-3">
+    <header class="flex items-center gap-2 border-b border-line-soft px-4 py-3">
       {#if icon}<Icon name={icon} size={15} class="text-accent" />{/if}
       <h3 class="min-w-0 flex-1 truncate text-md font-semibold">{title}</h3>
       {@render actions?.()}

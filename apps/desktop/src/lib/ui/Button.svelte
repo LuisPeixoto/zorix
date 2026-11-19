@@ -18,8 +18,9 @@
   let { variant = "secondary", size = "md", icon, iconRight, loading = false, disabled = false, type = "button", class: klass = "", children, ...rest }: Props = $props();
 
   const variants = {
-    primary: "bg-accent text-accent-fg shadow-sm hover:brightness-110 active:brightness-95",
-    secondary: "border border-line bg-panel text-fg shadow-sm hover:border-line-strong hover:bg-hover",
+    primary:
+      "bg-[image:var(--accent-grad)] bg-accent text-accent-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_1px_2px_rgb(18_22_33/0.22),0_8px_16px_-8px_var(--accent)] hover:brightness-105 active:brightness-95",
+    secondary: "border border-line bg-panel text-fg shadow-1 raised hover:border-line-strong hover:bg-hover",
     ghost: "text-muted hover:bg-hover hover:text-fg",
     danger: "border border-err/40 bg-err/8 text-err hover:bg-err/15",
     subtle: "bg-accent-soft text-accent hover:bg-select",
