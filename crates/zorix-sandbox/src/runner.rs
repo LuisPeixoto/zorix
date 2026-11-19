@@ -89,6 +89,8 @@ pub struct Run {
     pub stdin: Option<String>,
     /// A folder to show the program read-only as `/workspace`.
     pub workspace: Option<PathBuf>,
+    /// More folders to show read-only, each at a guest path such as `/skill`.
+    pub mounts: Vec<(PathBuf, String)>,
 }
 
 /// Why a run was stopped before it finished.
@@ -350,6 +352,13 @@ impl Sandbox {
         wasi.preopened_dir(scratch.path(), "/work", FsPerms::ReadWrite).map_err(fail)?;
         if let Some(folder) = &run.workspace {
             wasi.preopened_dir(folder, "/workspace", FsPerms::ReadOnly).map_err(fail)?;
+        }
+        for (folder, guest) in &run.mounts {
+            // Mounts are always read-only, and cannot take the place of the program's own folder or the workspace.
+            if matches!(guest.as_str(), "/work" | "/workspace") || !guest.starts_with('/') {
+                return Err(fail(format!("A mount cannot be placed at {guest}.")));
+            }
+            wasi.preopened_dir(folder, guest, FsPerms::ReadOnly).map_err(fail)?;
         }
         let host = Host {
             wasi: wasi.build_p1(),

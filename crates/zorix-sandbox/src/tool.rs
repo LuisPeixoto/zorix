@@ -70,7 +70,8 @@ fn shown(text: &str) -> String {
     format!("{kept}… [cut: {} more characters]", text.chars().count() - SHOWN_CHARS)
 }
 
-fn result(outcome: &Outcome, limits: &Limits) -> Value {
+/// A run as the model reads it: what was printed, the exit code, how long it took and, if it was stopped, why.
+pub fn result(outcome: &Outcome, limits: &Limits) -> Value {
     let mut out = json!({
         "stdout": shown(&outcome.stdout),
         "stderr": shown(&outcome.stderr),
@@ -126,7 +127,7 @@ impl Tool for CodeTool {
         let limits = Limits::default();
         let outcome = self
             .sandbox
-            .run(Run { language, code: code.to_string(), stdin: stdin.map(str::to_string), workspace }, limits, &ctx.cancel)
+            .run(Run { language, code: code.to_string(), stdin: stdin.map(str::to_string), workspace, mounts: vec![] }, limits, &ctx.cancel)
             .await
             .map_err(|e| match e {
                 SandboxError::PythonMissing => failed("Python is not installed on this computer. A person can install it once with `zorix sandbox install python`."),
