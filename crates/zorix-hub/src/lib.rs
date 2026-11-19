@@ -3,6 +3,7 @@
 //! It owns the integration store, the keychain, the tool registry, the MCP manager and the sandbox, and offers what a person
 //! does with them: add and sign in to MCP servers, add and test connections, and turn flags into grants.
 
+pub mod agents;
 pub mod connections;
 pub mod grants;
 
@@ -24,7 +25,7 @@ use zorix_mcp::{
 use zorix_providers::SecretStore;
 use zorix_runtime::InMemoryToolRegistry;
 use zorix_sandbox::{Sandbox, sandbox_tools};
-use zorix_store::{SqliteIntegrationStore, database_path};
+use zorix_store::{SqliteAgentStore, SqliteIntegrationStore, database_path};
 
 /// Something a person can act on, as one sentence.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +70,8 @@ pub struct Hub {
     pub manager: McpManager,
     /// Runs code.
     pub sandbox: Arc<Sandbox>,
+    /// Agents, their versions, skills and evaluations.
+    pub agents: Arc<SqliteAgentStore>,
     services: Arc<Services>,
 }
 
@@ -85,7 +88,8 @@ impl Hub {
         let manager = McpManager::new(dyn_store.clone(), registry.clone(), secrets.clone(), tenant.clone());
         let sandbox = Arc::new(Sandbox::new(home)?);
         let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone() });
-        Ok(Self { tenant, store, secrets, registry, manager, sandbox, services })
+        let agents = Arc::new(SqliteAgentStore::open(&database_path(home))?);
+        Ok(Self { tenant, store, secrets, registry, manager, sandbox, agents, services })
     }
 
     /// The tenant it works for.
