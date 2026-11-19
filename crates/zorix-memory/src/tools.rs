@@ -31,7 +31,8 @@ fn visibility(ctx: &ToolContext) -> Visibility {
         tenant: ctx.tenant.clone(),
         project: ctx.workspace_root.as_ref().map(|p| p.to_string_lossy().into_owned()),
         conversation: ctx.conversation.clone(),
-        agent: None,
+        // An agent sees its own memory only when its definition says it has one.
+        agent: ctx.agent.as_ref().filter(|binding| binding.agent_memory).map(|binding| binding.agent),
     }
 }
 
@@ -135,7 +136,7 @@ fn remember_spec() -> ToolSpec {
             "properties": {
                 "content": {"type": "string", "minLength": 1, "maxLength": 500, "description": "One short, self-contained statement."},
                 "kind": {"type": "string", "enum": ["fact", "preference"]},
-                "scope": {"type": "string", "enum": ["global", "project", "conversation"], "description": "global: always. project: only for runs in this workspace folder. conversation: only this conversation."},
+                "scope": {"type": "string", "enum": ["global", "project", "conversation", "agent"], "description": "global: always. project: only for runs in this workspace folder. conversation: only this conversation. agent: only you, the agent that is running, in every conversation."},
                 "subject": {"type": "string", "maxLength": 80, "description": "What it is about, such as 'database' or 'language'. A newer item about the same subject replaces the older one."},
                 "valid_until": {"type": "string", "description": "A date (YYYY-MM-DD) after which it should be forgotten."},
                 "replaces": {"type": "array", "maxItems": 10, "items": {"type": "string"}, "description": "Ids (m:…) of memories this one replaces."}
@@ -176,7 +177,8 @@ impl Tool for Remember {
             "global" => Scope::Global,
             "project" => Scope::Project(vis.project.clone().ok_or_else(|| failed("This run has no workspace folder, so there is no project to remember it for. Use global or conversation."))?),
             "conversation" => Scope::Conversation(vis.conversation.clone().ok_or_else(|| failed("This run is not part of a conversation. Use global or project."))?),
-            _ => return Err(failed("The scope is global, project or conversation.")),
+            "agent" => Scope::Agent(vis.agent.ok_or_else(|| failed("Only an agent that has memory of its own can remember for itself. Use global, project or conversation."))?),
+            _ => return Err(failed("The scope is global, project, conversation or agent.")),
         };
         let now = t.clock.now();
         let valid_until = match args["valid_until"].as_str().filter(|s| !s.trim().is_empty()) {

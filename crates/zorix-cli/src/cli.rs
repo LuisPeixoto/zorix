@@ -634,23 +634,35 @@ pub struct RunArgs {
 
 /// A scope: where a memory or a folder applies.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScopeArg(pub zorix_core::Scope);
+pub struct ScopeArg(pub ScopeSpec);
+
+/// A scope as typed: most are complete, an agent is named by its slug and looked up when the command runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScopeSpec {
+    /// A scope that needs nothing looked up.
+    Fixed(zorix_core::Scope),
+    /// The memory of the agent with this slug.
+    Agent(String),
+}
 
 impl FromStr for ScopeArg {
     type Err = String;
 
     fn from_str(text: &str) -> Result<Self, String> {
         match text.split_once(':') {
-            None if text == "global" => Ok(ScopeArg(zorix_core::Scope::Global)),
+            None if text == "global" => Ok(ScopeArg(ScopeSpec::Fixed(zorix_core::Scope::Global))),
             Some(("project", dir)) if !dir.is_empty() => {
                 let real =
                     std::fs::canonicalize(dir).map_err(|e| format!("The project folder {dir} cannot be used: {e}"))?;
-                Ok(ScopeArg(zorix_core::Scope::Project(real.to_string_lossy().into_owned())))
+                Ok(ScopeArg(ScopeSpec::Fixed(zorix_core::Scope::Project(real.to_string_lossy().into_owned()))))
             }
             Some(("conversation", id)) => zorix_core::ConversationId::new(id)
-                .map(|c| ScopeArg(zorix_core::Scope::Conversation(c)))
+                .map(|c| ScopeArg(ScopeSpec::Fixed(zorix_core::Scope::Conversation(c))))
                 .map_err(|e| e.to_string()),
-            _ => Err("use global, project:<folder> or conversation:<id>".into()),
+            Some(("agent", slug)) => {
+                zorix_core::AgentSlug::new(slug).map(|s| ScopeArg(ScopeSpec::Agent(s.to_string())))
+            }
+            _ => Err("use global, project:<folder>, conversation:<id> or agent:<name>".into()),
         }
     }
 }
@@ -774,6 +786,9 @@ pub struct MemorySearchArgs {
     /// Look as this project (a folder).
     #[arg(long, value_name = "FOLDER")]
     pub project: Option<PathBuf>,
+    /// Look as this agent, which also sees what it remembers for itself.
+    #[arg(long, value_name = "NAME", value_parser = parse_agent_slug)]
+    pub agent: Option<String>,
 }
 
 /// Options for `memory export`.
@@ -1104,6 +1119,10 @@ fn parse_db_grant(text: &str) -> Result<GrantFlag, String> {
 
 fn parse_code_grant(text: &str) -> Result<GrantFlag, String> {
     zorix_hub::grants::code(text).map(GrantFlag)
+}
+
+fn parse_agent_slug(text: &str) -> Result<String, String> {
+    zorix_core::AgentSlug::new(text).map(|s| s.to_string())
 }
 
 fn parse_tool_pattern(text: &str) -> Result<String, String> {
