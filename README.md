@@ -37,6 +37,10 @@ everything. It is not tied to one model or provider, and the core does not know 
 - **Memory you control.** Facts and preferences that a person approves (a model can only propose), the earlier runs of a
   conversation, folders of documents that runs cite, and a record of past work, found by keyword and, if you choose a model, by
   meaning. What a run was given is recorded and shown. See [memory](docs/memory.md).
+- **Connects to the outside, under your rules.** An [MCP client](docs/mcp.md) (stdio and HTTP, OAuth) whose tools are pinned and
+  reviewed by you, [native integrations](docs/integrations.md) (HTTP, GitHub, GitLab, Jira, Slack, Discord, SQLite, Postgres)
+  behind per-resource grants, a [WebAssembly sandbox](docs/sandbox.md) for code, and `zorix mcp serve` to share your memory with
+  other tools, read-only.
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
@@ -47,7 +51,12 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![New run](docs/images/ui-new-run.png) | ![Approval card](docs/images/ui-approval.png) |
 | Choose what a run may use. Anything that changes something says it asks first. | The tool, the exact arguments, why you are asked, and a fingerprint of the call. |
 
-## What is in Phases 1 to 3
+| | |
+|---|---|
+| ![Integrations](docs/screenshots-0.4.0/integrations-connected-light.png) | ![A database change waiting for approval](docs/screenshots-0.4.0/approval-db-light.png) |
+| Servers and services, live. Tools wait for your review. | What a change would do, with the SQL highlighted. |
+
+## What is in Phases 1 to 4
 
 | Area | What it does | Guide |
 |---|---|---|
@@ -64,6 +73,9 @@ everything. It is not tied to one model or provider, and the core does not know 
 | Providers | Anthropic, OpenAI, Gemini, compatible servers, Ollama; keychain keys; routes and fallback | [Providers](docs/providers.md) |
 | Memory | Conversation, approved facts, past work, scopes, frozen recall, calibrated token budgets | [Memory](docs/memory.md) |
 | Documents | Folders of text, code, HTML and PDF; citations; keyword and embeddings search | [Documents](docs/knowledge.md) |
+| MCP | Client for both protocol eras, stdio and HTTP, OAuth, pinned and reviewed tools, catalogue, import; ZORIX as a server | [MCP](docs/mcp.md) |
+| Integrations | HTTP, signed webhooks, GitHub, GitLab, Jira, Slack, Discord, SQLite, Postgres; grants per resource | [Integrations](docs/integrations.md) |
+| Code sandbox | JavaScript (QuickJS) and Python in WebAssembly: no network, hard limits | [Sandbox](docs/sandbox.md) |
 
 ## Install
 
@@ -118,6 +130,9 @@ cargo run -p zorix-runtime --example embed
 | [Providers, models and routing](docs/providers.md) | Anthropic, OpenAI, Gemini, Ollama; keys; routes and fallback |
 | [Memory](docs/memory.md) | What ZORIX remembers, who writes it, how a run finds it, how to forget |
 | [Documents](docs/knowledge.md) | Indexing folders, citations, embeddings |
+| [MCP servers](docs/mcp.md) | Using, trusting and serving MCP |
+| [Integrations](docs/integrations.md) | Connections, grants and what each tool guards |
+| [The code sandbox](docs/sandbox.md) | JavaScript and Python, limits and files |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |
