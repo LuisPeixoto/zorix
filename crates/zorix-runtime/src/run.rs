@@ -353,6 +353,9 @@ impl Run {
         let request = match built {
             Ok(mut request) => {
                 request.phase = self.phase();
+                if let Some(agent) = &self.exec.agent {
+                    request.allowed_models = agent.allowed_models.clone();
+                }
                 request
             }
             Err(error) => {
@@ -382,7 +385,17 @@ impl Run {
         );
         self.commit(&[Trigger::AwaitModel], vec![requested], Extras::default()).await?;
 
+        let allowed = request.allowed_models.clone();
         let response = self.call_model(request).await?;
+        // The router never offers a model outside the list. This is the second lock, for any gateway that is not the router.
+        if !zorix_core::model_allowed(&allowed, response.provider.as_deref(), &response.model) {
+            let message = format!(
+                "The model {} answered, but this agent may not use it (allowed: {}).",
+                response.model,
+                allowed.join(", ")
+            );
+            return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
+        }
         self.engine.inner.calibration.observe(TokenSample {
             requested: self.exec.request.model.clone(),
             answered: response.provider.as_ref().map(|provider| format!("{provider}/{}", response.model)),
