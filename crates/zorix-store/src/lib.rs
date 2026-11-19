@@ -4,12 +4,14 @@
 //! from using it at once.
 
 mod calibration;
+pub mod integrations;
 pub mod memory;
 pub mod paths;
 mod schema;
 mod sqlite;
 
 pub use calibration::SqliteCalibration;
+pub use integrations::SqliteIntegrationStore;
 pub use memory::SqliteMemoryStore;
 pub use paths::{DataDirLock, HOME_VARIABLE, LockError, data_dir, database_path};
 pub use schema::LATEST as SCHEMA_VERSION;

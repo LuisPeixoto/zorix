@@ -208,6 +208,52 @@ const MIGRATIONS: &[&str] = &[
         doc TEXT NOT NULL
     );
     ",
+    // 3: integrations. MCP servers a person added, what was approved about each tool, and connections to services. No secret
+    // is ever stored here: a server or connection only says that one is kept in the keychain.
+    "
+    CREATE TABLE mcp_servers (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        name TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        era TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX mcp_servers_by_name ON mcp_servers (tenant, name);
+
+    CREATE TABLE mcp_tool_pins (
+        server_id TEXT NOT NULL,
+        tool TEXT NOT NULL,
+        listed INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        trust TEXT NOT NULL,
+        approved_hash TEXT,
+        approved TEXT,
+        seen_hash TEXT NOT NULL,
+        seen TEXT NOT NULL,
+        approved_by TEXT,
+        approved_at INTEGER,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (server_id, tool)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE connections (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        settings TEXT NOT NULL,
+        has_secret INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        test_at INTEGER,
+        test_ok INTEGER,
+        test_note TEXT
+    );
+    CREATE UNIQUE INDEX connections_by_name ON connections (tenant, name);
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -253,6 +299,10 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('memory_items','knowledge_roots','knowledge_documents','knowledge_chunks','operations','vectors','context_snapshots','snapshot_items','token_calibration','memory_settings','memory_fts','chunks_fts','operations_fts')", [], |r| r.get(0))
             .unwrap();
         assert_eq!(memory, 13, "FTS5 is compiled into the bundled SQLite on every platform");
+        let integrations: u32 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('mcp_servers','mcp_tool_pins','connections')", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(integrations, 3);
     }
 
     #[test]
@@ -270,6 +320,20 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM operations_fts WHERE operations_fts MATCH '\"hello\"'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(found, 1);
+    }
+
+    #[test]
+    fn a_database_from_zorix_0_3_is_upgraded_and_keeps_its_memory() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.execute_batch(MIGRATIONS[1]).unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute("INSERT INTO memory_settings (tenant, doc) VALUES ('local', '{}')", []).unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let kept: u32 = conn.query_row("SELECT COUNT(*) FROM memory_settings", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 1);
+        conn.execute("INSERT INTO connections (id, tenant, kind, name, settings, has_secret, created_at, updated_at) VALUES ('c1','local','github','gh','{}',1,1,1)", []).unwrap();
     }
 
     #[test]
