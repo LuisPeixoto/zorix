@@ -47,7 +47,9 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
-  view = $state<"runs" | "providers" | "memory" | "design">("runs");
+  view = $state<"runs" | "providers" | "memory" | "design" | "integrations">("runs");
+  /** The Integrations tab to open first. */
+  integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
   palette = $state(false);
   memory = $state<MemoryRow[]>([]);
@@ -145,6 +147,11 @@ class RunsStore {
     } catch (e) {
       this.error = errorText(e);
     }
+  }
+
+  showIntegrations(tab = "connected"): void {
+    this.view = "integrations";
+    this.integrationsTab = tab;
   }
 
   showDesign(): void {

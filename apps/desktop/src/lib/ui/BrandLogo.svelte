@@ -11,7 +11,7 @@
   }: { name?: string; size?: number; class?: string } = $props();
 
   // Catalogue entries that are not brands use a plain icon.
-  const GENERIC: Record<string, string> = { folder: "folder", globe: "globe", playwright: "monitor", deepwiki: "book", server: "server" };
+  const GENERIC: Record<string, string> = { folder: "folder", globe: "globe", http: "globe", webhook: "send", playwright: "monitor", deepwiki: "book", server: "server" };
   const path = $derived(name ? BRANDS[name] : undefined);
   const generic = $derived(name ? (GENERIC[name] ?? "plug") : "plug");
 </script>

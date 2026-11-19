@@ -5,6 +5,8 @@
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
   import Memory from "./lib/components/Memory.svelte";
+  import Integrations from "./lib/components/integrations/Integrations.svelte";
+  import { integrations } from "./lib/stores/integrations.svelte.ts";
   import Providers from "./lib/components/Providers.svelte";
   import DesignSystem from "./lib/views/DesignSystem.svelte";
   import RunView from "./lib/components/RunView.svelte";
@@ -16,12 +18,20 @@
   onMount(() => {
     theme.init();
     void store.init().then(() => {
+      void integrations.init();
       // For screenshots and reviews: open straight to a screen.
-      const [start, tab] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split(":");
+      const [where, forced] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split("@");
+      if (forced === "light" || forced === "dark") theme.preview(forced);
+      const [start, tab] = where.split(":");
       if (start === "design") store.showDesign();
       if (start === "providers") {
         store.startTab = tab || "facts";
         store.showProviders();
+      }
+      if (start === "integrations") store.showIntegrations(tab || "connected");
+      if (start === "server") {
+        store.showIntegrations("connected");
+        void integrations.refresh().then(() => integrations.open(tab || integrations.servers[0]?.name));
       }
       if (start === "memory") {
         store.startTab = tab || "facts";
@@ -36,6 +46,17 @@
   const commands = $derived<Command[]>([
     { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showRuns(); store.showForm(); } },
     { id: "memory", label: "Memory", group: "Go to", icon: "book", keywords: "facts remember knowledge", run: () => store.showMemory() },
+    { id: "integrations", label: "Integrations", group: "Go to", icon: "plug", keywords: "mcp servers connections catalogue github slack database", run: () => store.showIntegrations() },
+    { id: "catalogue", label: "Browse the server catalogue", group: "Integrations", icon: "grid", keywords: "mcp add", run: () => store.showIntegrations("catalogue") },
+    { id: "connections", label: "Connections and sandbox", group: "Integrations", icon: "link", keywords: "github gitlab jira slack discord postgres sqlite webhook python", run: () => store.showIntegrations("connections") },
+    ...integrations.servers.map((server) => ({
+      id: `server-${server.name}`,
+      label: `Server: ${server.name}`,
+      group: "Integrations",
+      icon: "plug",
+      hint: server.state.replaceAll("_", " "),
+      run: () => { store.showIntegrations("connected"); void integrations.open(server.name); },
+    })),
     { id: "providers", label: "Providers & keys", group: "Go to", icon: "key", keywords: "models api settings", run: () => store.showProviders() },
     { id: "theme", label: "Change theme", group: "Actions", icon: "sun", hint: "light, dark, system", keywords: "dark light appearance", run: () => theme.cycle() },
     ...(import.meta.env.DEV ? [{ id: "design", label: "Design system", group: "Go to", icon: "layers", run: () => store.showDesign() }] : []),
@@ -78,6 +99,8 @@
         <DesignSystem />
       {:else if store.view === "memory"}
         <Memory />
+      {:else if store.view === "integrations"}
+        <Integrations />
       {:else if store.view === "providers"}
         <Providers />
       {:else if store.selectedId}

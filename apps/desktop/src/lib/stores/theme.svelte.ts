@@ -54,6 +54,12 @@ class ThemeStore {
     this.#apply();
   }
 
+  /** Show a theme without remembering it (for screenshots: `ZORIX_START_VIEW=memory@dark`). */
+  preview(mode: Mode): void {
+    this.mode = mode;
+    this.#apply();
+  }
+
   /** The toolbar button: light, dark, system. */
   cycle(): void {
     this.set(nextMode(this.mode));
