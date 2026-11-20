@@ -174,6 +174,8 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
             tenant: Some(tenant.clone()),
             conversation: args.conversation.clone(),
             parent: None,
+            root: None,
+            depth: 0,
             request: TaskRequest {
                 instructions: args.instructions.clone(),
                 prompt: args.prompt.clone(),

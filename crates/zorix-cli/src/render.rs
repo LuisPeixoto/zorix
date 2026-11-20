@@ -65,6 +65,13 @@ pub fn event_line(event: &ExecutionEvent) -> String {
             let note = if note.is_empty() { String::new() } else { format!(" — {note}") };
             format!("{} by {}{note}", text(p, "tool"), text(p, "decided_by"))
         }
+        EventKind::WaitingChildren => {
+            format!("{} task(s) delegated; waiting for them", p["children"].as_array().map_or(0, Vec::len))
+        }
+        EventKind::ChildStarted => format!("{} started: {}", text(p, "agent"), shorten(&text(p, "task"), 80)),
+        EventKind::ChildSettled => {
+            format!("{} {} ({} µ$)", text(p, "agent"), text(p, "state"), count(p, "cost_micros"))
+        }
         EventKind::ResultRejected => text(p, "reason"),
         EventKind::Completed => {
             format!("{} characters in {} step(s)", count(p, "result_chars"), count(p, "iterations"))

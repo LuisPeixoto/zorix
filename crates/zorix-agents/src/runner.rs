@@ -51,6 +51,10 @@ pub struct AgentAsk {
     pub metadata: BTreeMap<String, String>,
     /// The execution that asked, when an agent delegates (Phase 6).
     pub parent: Option<ExecutionId>,
+    /// The top of the tree the run belongs to, when it is delegated work.
+    pub root: Option<ExecutionId>,
+    /// How deep in the tree the run is (0 for a root).
+    pub depth: u32,
     /// `Some(false)` keeps the agent's own memory out of this run. It can only turn it off, never on.
     pub agent_memory: Option<bool>,
 }
@@ -204,6 +208,8 @@ pub async fn prepare(
         tenant: Some(tenant),
         conversation: ask.conversation,
         parent: ask.parent,
+        root: ask.root,
+        depth: ask.depth,
         request: TaskRequest {
             instructions: Some(instructions_with_skills(&spec.instructions, &described))
                 .filter(|t| !t.trim().is_empty()),
