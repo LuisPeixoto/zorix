@@ -51,7 +51,9 @@ pub fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolSpec>, String> {
 #[tauri::command]
 pub async fn list_runs(state: State<'_, AppState>, limit: Option<u32>) -> Result<Vec<Execution>, String> {
     let services = services(&state)?;
-    let filter = ListFilter { limit: limit.unwrap_or(50).clamp(1, 500) as usize, ..ListFilter::default() };
+    // The runs somebody asked for. What agents started for them belongs to them and is shown under them.
+    let filter =
+        ListFilter { limit: limit.unwrap_or(50).clamp(1, 500) as usize, roots_only: true, ..ListFilter::default() };
     services.engine.list(&services.tenant, &filter).await.map_err(|e| e.to_string())
 }
 

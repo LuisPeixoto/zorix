@@ -385,6 +385,9 @@ pub struct AskAgent {
     /// The conversation this continues. Left out: a new one starts.
     #[serde(default)]
     conversation: Option<String>,
+    /// Ask a team: its lead (the agent named above) runs and may ask the members.
+    #[serde(default)]
+    team: Option<String>,
     /// Less memory than the agent has. Left out: all of it.
     #[serde(default)]
     memory: Option<AskMemory>,
@@ -421,8 +424,11 @@ pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<
         }),
         ..AgentAsk::default()
     };
-    let new =
-        services.hub.prepare_agent_run(&request.slug, request.version, ask, &*services.router).await.map_err(text)?;
+    let new = match request.team.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
+        Some(team) => services.hub.prepare_team_run(team, ask, &*services.router).await,
+        None => services.hub.prepare_agent_run(&request.slug, request.version, ask, &*services.router).await,
+    }
+    .map_err(text)?;
     let created = services.engine.create(new).await.map_err(text)?;
     services.engine.start(&services.tenant, created.id).await.map_err(text)
 }
@@ -515,6 +521,146 @@ pub async fn watch_live(state: State<'_, AppState>, id: String, on_text: Channel
 pub fn stop_live(state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.unwatch_live(id.parse().map_err(text)?);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Trees and teams
+
+/// An execution and everything it started, nearest first (the execution itself comes first).
+#[tauri::command]
+pub async fn run_tree(state: State<'_, AppState>, id: String) -> Result<Vec<Execution>, String> {
+    let services = services(&state)?;
+    services.engine.tree(&services.tenant, id.parse::<ExecutionId>().map_err(text)?).await.map_err(text)
+}
+
+/// The approvals that wait for a person anywhere below an execution, with the execution that asked.
+#[tauri::command]
+pub async fn tree_approvals(state: State<'_, AppState>, id: String) -> Result<Vec<zorix_core::TreeApproval>, String> {
+    let services = services(&state)?;
+    services.engine.pending_in_tree(&services.tenant, id.parse::<ExecutionId>().map_err(text)?).await.map_err(text)
+}
+
+/// How many sub-runs each of these executions started, so the list can say "3 sub-runs".
+#[tauri::command]
+pub async fn sub_run_counts(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<std::collections::HashMap<String, usize>, String> {
+    let services = services(&state)?;
+    let mut out = std::collections::HashMap::new();
+    for id in ids.iter().take(200) {
+        let parsed: ExecutionId = id.parse().map_err(text)?;
+        let filter = ListFilter { parent: Some(parsed), limit: 1_000, ..ListFilter::default() };
+        let n = services.engine.list(&services.tenant, &filter).await.map_err(text)?.len();
+        if n > 0 {
+            out.insert(id.clone(), n);
+        }
+    }
+    Ok(out)
+}
+
+/// A team with the agents it names, as the screens show it.
+#[derive(Serialize)]
+pub struct TeamView {
+    team: zorix_core::Team,
+    lead: Option<AgentCard>,
+    members: Vec<AgentCard>,
+    missing: Vec<String>,
+}
+
+impl From<zorix_hub::teams::TeamCard> for TeamView {
+    fn from(c: zorix_hub::teams::TeamCard) -> Self {
+        TeamView { team: c.team, lead: c.lead, members: c.members, missing: c.missing }
+    }
+}
+
+#[tauri::command]
+pub async fn teams_list(state: State<'_, AppState>) -> Result<Vec<TeamView>, String> {
+    Ok(services(&state)?.hub.teams().await.map_err(text)?.into_iter().map(Into::into).collect())
+}
+
+/// What the team editor sends.
+#[derive(Deserialize)]
+pub struct SaveTeam {
+    slug: String,
+    name: String,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    emoji: Option<String>,
+    #[serde(default)]
+    color: Option<String>,
+    lead: String,
+    #[serde(default)]
+    members: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn team_save(state: State<'_, AppState>, team: SaveTeam) -> Result<TeamView, String> {
+    let services = services(&state)?;
+    let slug = |s: &str| zorix_core::AgentSlug::new(s).map_err(text);
+    let mut avatar = zorix_core::Avatar::default();
+    if let Some(emoji) = team.emoji.filter(|e| !e.trim().is_empty()) {
+        avatar.emoji = emoji;
+    }
+    if let Some(color) = team.color.filter(|c| !c.trim().is_empty()) {
+        avatar.color = color;
+    }
+    let record = zorix_core::Team {
+        tenant: services.tenant.clone(),
+        slug: slug(&team.slug)?,
+        name: team.name,
+        description: team.description,
+        avatar,
+        lead: slug(&team.lead)?,
+        members: team.members.iter().map(|m| slug(m)).collect::<Result<_, _>>()?,
+        updated_at: zorix_core::Timestamp(0),
+    };
+    services.hub.save_team(record).await.map(Into::into).map_err(text)
+}
+
+#[tauri::command]
+pub async fn team_remove(state: State<'_, AppState>, slug: String) -> Result<(), String> {
+    services(&state)?.hub.remove_team(&slug).await.map_err(text)
+}
+
+/// A starter team, as the gallery offers it.
+#[derive(Serialize)]
+pub struct TeamTemplateView {
+    id: String,
+    name: String,
+    description: String,
+    emoji: String,
+    color: String,
+    lead: String,
+    members: Vec<String>,
+    installed: bool,
+}
+
+#[tauri::command]
+pub async fn team_templates(state: State<'_, AppState>) -> Result<Vec<TeamTemplateView>, String> {
+    Ok(services(&state)?
+        .hub
+        .team_templates()
+        .await
+        .map_err(text)?
+        .into_iter()
+        .map(|t| TeamTemplateView {
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            emoji: t.emoji,
+            color: t.color,
+            lead: t.lead,
+            members: t.members,
+            installed: t.installed,
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn team_add_template(state: State<'_, AppState>, id: String) -> Result<String, String> {
+    services(&state)?.hub.add_team_template(&id).await.map(|done| done.team.slug.to_string()).map_err(text)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
