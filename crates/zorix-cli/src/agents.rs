@@ -20,6 +20,7 @@ use crate::cli::{
     AgentAddArgs, AgentArchiveArgs, AgentCommand, AgentCreateArgs, AgentDiffArgs, AgentExportArgs, AgentImportArgs,
     AgentListArgs, AgentRemoveArgs, AgentRollbackArgs, AgentShowArgs, AgentSlugArg, EvalAddArgs, EvalCommand,
     EvalCompareArgs, EvalRemoveArgs, EvalRunArg, EvalRunArgs, ModelArgs, SkillCommand, SkillImportArgs, SkillNameArg,
+    TeamAddArgs, TeamCommand, TeamCreateArgs, TeamNameArg,
 };
 use crate::follow::{Exit, Printer};
 use crate::render::shorten;
@@ -698,4 +699,182 @@ async fn eval_compare(hub: &Hub, printer: Printer, args: EvalCompareArgs) -> Res
     }
     let broke = rows.iter().any(|r| r.change == Change::Broke);
     Ok(if broke { Exit::Failed } else { Exit::Done })
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// zorix team
+
+pub async fn team(home: &Path, tenant: &TenantId, printer: Printer, command: TeamCommand) -> Result<Exit, CliError> {
+    let hub = open_hub(home, tenant)?;
+    match command {
+        TeamCommand::List => {
+            let teams = hub.teams().await?;
+            if printer.json {
+                print_json(&teams.iter().map(team_json).collect::<Vec<_>>())?;
+            } else if teams.is_empty() {
+                eprintln!(
+                    "No teams yet. `zorix team templates` lists ready-made ones; `zorix team add --template NAME` adds one."
+                );
+            } else {
+                for t in &teams {
+                    let members: Vec<String> = t.team.members.iter().map(ToString::to_string).collect();
+                    let flag = if t.missing.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  (missing: {})", t.missing.join(", "))
+                    };
+                    println!("{:<18} lead {:<16} asks {}{flag}", t.team.slug, t.team.lead, members.join(", "));
+                }
+            }
+        }
+        TeamCommand::Show(TeamNameArg { team }) => {
+            let t = hub.team(&team).await?;
+            if printer.json {
+                print_json(&team_json(&t))?;
+            } else {
+                println!("Team         {} {}", t.team.avatar.emoji, t.team.slug);
+                println!("Name         {}", t.team.name);
+                println!("About        {}", t.team.description);
+                println!("Lead         {}", t.team.lead);
+                println!(
+                    "Asks         {}",
+                    t.team.members.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
+                );
+                if !t.missing.is_empty() {
+                    println!(
+                        "Missing      {}  (not agents any more: `zorix team edit` fixes the team)",
+                        t.missing.join(", ")
+                    );
+                }
+                println!("\nRun it:      zorix run --team {} \"…\"", t.team.slug);
+            }
+        }
+        TeamCommand::Create(args) => {
+            let slug = zorix_core::AgentSlug::new(&args.team).map_err(CliError)?;
+            if hub.team(&args.team).await.is_ok() {
+                return Err(CliError(format!(
+                    "There is already a team called {}. `zorix team edit {}` changes it.",
+                    args.team, args.team
+                )));
+            }
+            let saved = hub.save_team(make_team(&hub, slug, &args)?).await?;
+            report_team(printer, "Made", &saved)?;
+        }
+        TeamCommand::Edit(args) => {
+            let current = hub.team(&args.team).await?.team;
+            let mut next = current.clone();
+            if let Some(lead) = &args.lead {
+                next.lead = zorix_core::AgentSlug::new(lead).map_err(CliError)?;
+            }
+            for name in &args.add {
+                let slug = zorix_core::AgentSlug::new(name).map_err(CliError)?;
+                if !next.members.contains(&slug) {
+                    next.members.push(slug);
+                }
+            }
+            for name in &args.remove {
+                next.members.retain(|m| m.as_str() != name);
+            }
+            if let Some(name) = &args.name {
+                next.name = name.clone();
+            }
+            if let Some(description) = &args.description {
+                next.description = description.clone();
+            }
+            if next == current {
+                eprintln!("{} is unchanged.", args.team);
+                return Ok(Exit::Done);
+            }
+            let saved = hub.save_team(next).await?;
+            report_team(printer, "Changed", &saved)?;
+        }
+        TeamCommand::Remove(args) => {
+            hub.team(&args.team).await?;
+            if !args.yes {
+                return Err(CliError(format!(
+                    "This deletes the team {} (its agents stay). Add --yes to do it.",
+                    args.team
+                )));
+            }
+            hub.remove_team(&args.team).await?;
+            eprintln!("{} was deleted.", args.team);
+        }
+        TeamCommand::Add(TeamAddArgs { template }) => {
+            let done = hub.add_team_template(&template).await?;
+            if printer.json {
+                print_json(&json!({
+                    "team": done.team.slug.as_str(),
+                    "added": done.added.iter().map(|a| a.imported.agent.slug.as_str()).collect::<Vec<_>>(),
+                }))?;
+            } else {
+                let added: Vec<&str> = done.added.iter().map(|a| a.imported.agent.slug.as_str()).collect();
+                eprintln!(
+                    "Added the team {} (lead {}). Agents added: {}. Try it: zorix run --team {} \"…\"",
+                    done.team.slug,
+                    done.team.lead,
+                    if added.is_empty() { "none, they were already here".to_string() } else { added.join(", ") },
+                    done.team.slug
+                );
+            }
+        }
+        TeamCommand::Templates => {
+            let all = hub.team_templates().await?;
+            if printer.json {
+                let rows: Vec<_> = all
+                    .iter()
+                    .map(|t| json!({"template": t.id, "name": t.name, "description": t.description, "lead": t.lead, "members": t.members, "installed": t.installed}))
+                    .collect();
+                print_json(&rows)?;
+            } else {
+                for t in &all {
+                    println!(
+                        "{:<14} {} {:<14} {}  (lead {}, asks {}){}",
+                        t.id,
+                        t.emoji,
+                        t.name,
+                        shorten(&t.description, 60),
+                        t.lead,
+                        t.members.join(", "),
+                        if t.installed { "  (added)" } else { "" }
+                    );
+                }
+            }
+        }
+    }
+    Ok(Exit::Done)
+}
+
+fn make_team(hub: &Hub, slug: zorix_core::AgentSlug, args: &TeamCreateArgs) -> Result<zorix_core::Team, CliError> {
+    let members: Vec<zorix_core::AgentSlug> = args
+        .members
+        .iter()
+        .map(|m| zorix_core::AgentSlug::new(m.as_str()).map_err(CliError))
+        .collect::<Result<_, _>>()?;
+    Ok(zorix_core::Team {
+        tenant: tenant_of(hub),
+        name: args.name.clone().unwrap_or_else(|| args.team.clone()),
+        slug,
+        description: args.description.clone().unwrap_or_default(),
+        avatar: Default::default(),
+        lead: zorix_core::AgentSlug::new(args.lead.as_str()).map_err(CliError)?,
+        members,
+        updated_at: Timestamp(0),
+    })
+}
+
+fn team_json(t: &zorix_hub::teams::TeamCard) -> serde_json::Value {
+    json!({
+        "team": t.team.slug.as_str(), "name": t.team.name, "description": t.team.description,
+        "lead": t.team.lead.as_str(), "members": t.team.members.iter().map(|m| m.as_str()).collect::<Vec<_>>(),
+        "missing": t.missing,
+    })
+}
+
+fn report_team(printer: Printer, what: &str, saved: &zorix_hub::teams::TeamCard) -> Result<(), CliError> {
+    if printer.json {
+        print_json(&team_json(saved))
+    } else {
+        eprintln!("{what} the team {} (lead {}, asks {}).", saved.team.slug, saved.team.lead, saved.team.members.len());
+        Ok(())
+    }
 }

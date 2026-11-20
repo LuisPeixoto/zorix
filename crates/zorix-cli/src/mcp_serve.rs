@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_agents::AgentAsk;
 use zorix_core::{
-    Action, ApprovalStatus, ExecutionEngine, ExecutionId, ExecutionState, Grants, Limits, MemoryOptions, NewExecution,
+    Action, AgentStore, ExecutionEngine, ExecutionId, ExecutionState, Grants, Limits, MemoryOptions, NewExecution,
     Permission, TaskRequest, TenantId, Tool, ToolAnnotations, ToolContext, ToolError, ToolRegistry, ToolSpec,
 };
 use zorix_mcp::{McpServer, ServerConfig};
@@ -185,12 +185,30 @@ impl RunShared {
             "steps": execution.iteration,
             "tokens": execution.usage.total_tokens(),
         });
-        let pending: Vec<Value> = detail
-            .approvals
+        // An approval may wait in a sub-run: it is listed here with who asked, and is answered in ZORIX on the run you started.
+        let waiting = engine.pending_in_tree(&self.tenant, id).await.map_err(|e| failed(e.to_string()))?;
+        let pending: Vec<Value> = waiting
             .iter()
-            .filter(|a| a.status == ApprovalStatus::Pending)
-            .map(|a| json!({"approval_id": a.id.to_string(), "tool": a.tool, "reason": a.reason}))
+            .map(|w| {
+                json!({"approval_id": w.approval.id.to_string(), "tool": w.approval.tool, "reason": w.approval.reason,
+                       "asked_by": w.agent, "depth": w.depth})
+            })
             .collect();
+        let below = engine.tree(&self.tenant, id).await.map_err(|e| failed(e.to_string()))?;
+        if below.len() > 1 {
+            out["sub_runs"] = json!(
+                below
+                    .iter()
+                    .skip(1)
+                    .map(|e| json!({
+                        "execution_id": e.id.to_string(),
+                        "agent": e.agent.as_ref().map(|a| a.slug.to_string()),
+                        "state": e.state.as_str(),
+                        "depth": e.depth,
+                    }))
+                    .collect::<Vec<_>>()
+            );
+        }
         if !pending.is_empty() {
             out["waiting_for_approval"] = json!(pending);
             out["note"] = json!(
@@ -307,7 +325,7 @@ fn agents_spec() -> ToolSpec {
         "zorix.agents",
         "List ZORIX agents",
         "The agents the person made in ZORIX: each one's name, what it is for, its newest version and the skills it \
-         has. Use the name (slug) with zorix.run_agent when that is offered.",
+         has, and the teams (a lead and the agents it may ask). Use a name (slug) with zorix.run_agent when that is offered.",
         json!({"type": "object", "properties": {}, "additionalProperties": false}),
     );
     spec.annotations = ToolAnnotations::safe_read();
@@ -330,7 +348,18 @@ impl Tool for AgentsTool {
                        "version": c.version, "skills": c.skills})
             })
             .collect();
-        Ok(json!({"agents": agents}))
+        let teams: Vec<Value> = self
+            .store
+            .teams(&self.tenant)
+            .await
+            .map_err(|e| failed(e.to_string()))?
+            .into_iter()
+            .map(|t| {
+                json!({"team": t.slug.as_str(), "name": t.name, "description": t.description, "lead": t.lead.as_str(),
+                       "members": t.members.iter().map(|m| m.as_str()).collect::<Vec<_>>()})
+            })
+            .collect();
+        Ok(json!({"agents": agents, "teams": teams}))
     }
 }
 
@@ -343,20 +372,22 @@ fn run_agent_spec() -> ToolSpec {
     let mut spec = ToolSpec::new(
         "zorix.run_agent",
         "Run a ZORIX agent",
-        "Ask one of the agents zorix.agents lists to do something, and wait for it for a while. The agent uses its own \
+        "Ask one of the agents (or teams) zorix.agents lists to do something, and wait for it for a while. The agent uses its own \
          instructions, skills and memory, but only the tools and resources the person allowed when they started this \
-         server, whatever the agent could do in ZORIX itself. Returns the execution id and either the result or where \
-         it stands; follow a long one with zorix.status and zorix.result.",
+         server, whatever the agent could do in ZORIX itself; a lead can only ask the other agents of its team if the \
+         server allows agents.delegate and those agents. Returns the execution id and either the result or where it \
+         stands; follow a long one with zorix.status and zorix.result.",
         json!({
             "type": "object",
             "properties": {
                 "agent": {"type": "string", "minLength": 1, "maxLength": 48, "description": "The agent's name (slug)."},
+                "team": {"type": "string", "minLength": 1, "maxLength": 48, "description": "A team's name instead of an agent: its lead runs and may ask the members. Use either agent or team."},
                 "prompt": {"type": "string", "minLength": 1, "maxLength": 20000},
                 "input": {"description": "Data that goes with the prompt (any JSON)."},
                 "model": {"type": "string", "maxLength": 200, "description": "A model the agent is allowed to use. Leave out for its own."},
                 "wait_seconds": {"type": "integer", "minimum": 0, "maximum": MAX_WAIT_SECONDS}
             },
-            "required": ["agent", "prompt"],
+            "required": ["prompt"],
             "additionalProperties": false
         }),
     );
@@ -374,7 +405,8 @@ impl Tool for RunAgentTool {
     async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
         let shared = &self.shared;
         let wait = args["wait_seconds"].as_u64().unwrap_or(30).min(MAX_WAIT_SECONDS);
-        let slug = args["agent"].as_str().unwrap_or_default();
+        let slug = args["agent"].as_str().filter(|s| !s.is_empty());
+        let team = args["team"].as_str().filter(|s| !s.is_empty());
         let ask = AgentAsk {
             prompt: args["prompt"].as_str().unwrap_or_default().to_string(),
             input: args.get("input").filter(|v| !v.is_null()).cloned(),
@@ -385,17 +417,22 @@ impl Tool for RunAgentTool {
             metadata: [("client".to_string(), "mcp".to_string())].into(),
             ..AgentAsk::default()
         };
-        let new = shared
-            .app
-            .hub
-            .prepare_agent_run(slug, None, ask, &*shared.app.router)
-            .await
-            .map_err(|e| failed(e.to_string()))?;
+        let hub = &shared.app.hub;
+        let new = match (slug, team) {
+            (Some(_), Some(_)) => return Err(failed("Name an agent or a team, not both.")),
+            (Some(slug), None) => hub.prepare_agent_run(slug, None, ask, &*shared.app.router).await,
+            (None, Some(team)) => hub.prepare_team_run(team, ask, &*shared.app.router).await,
+            (None, None) => return Err(failed("Name the agent or the team to ask.")),
+        }
+        .map_err(|e| failed(e.to_string()))?;
         let binding = new.agent.clone();
         let created = shared.app.engine.create(new).await.map_err(|e| failed(e.to_string()))?;
         let mut out = shared.start_and_wait(ctx, created.id, wait).await?;
         if let Some(binding) = binding {
             out["agent"] = json!({"slug": binding.slug.to_string(), "version": binding.version});
+            if let Some(team) = &binding.team {
+                out["agent"]["team"] = json!(team);
+            }
         }
         Ok(out)
     }

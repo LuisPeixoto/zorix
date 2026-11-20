@@ -2,8 +2,10 @@
 
 use std::io::{IsTerminal, Write};
 
+use std::collections::HashMap;
+
 use futures_util::StreamExt;
-use futures_util::stream::BoxStream;
+use futures_util::stream::{BoxStream, SelectAll};
 use serde_json::Value;
 use zorix_core::{
     ApprovalDecision, ApprovalId, EventKind, ExecutionEngine, ExecutionEvent, ExecutionId, ExecutionState, TenantId,
@@ -94,23 +96,48 @@ pub fn hint_for_pending(id: ExecutionId, approval: &Value) {
     );
 }
 
+/// A short name for a sub-run in the output: the agent it belongs to, or its id.
+fn label_of(payload: &Value) -> String {
+    payload["agent"].as_str().map(str::to_string).unwrap_or_else(|| "sub-run".into())
+}
+
 /// Follow `stream` until the execution finishes, pauses or has to wait for a person. Returns how it ended.
+///
+/// When the execution delegates, the sub-runs are followed too: their events are shown, indented under the agent's name, and an
+/// approval asked anywhere in the tree is answered here (or left waiting) just like one of the root's own.
 pub async fn follow(
     engine: &Engine,
     tenant: &TenantId,
     id: ExecutionId,
-    mut stream: BoxStream<'static, ExecutionEvent>,
+    stream: BoxStream<'static, ExecutionEvent>,
     mode: ApproveMode,
     printer: Printer,
 ) -> Result<Exit, CliError> {
     let mut pause_requested = false;
+    let mut streams: SelectAll<BoxStream<'static, ExecutionEvent>> = SelectAll::new();
+    streams.push(stream);
+    let mut labels: HashMap<ExecutionId, String> = HashMap::new();
     loop {
         tokio::select! {
-            next = stream.next() => {
+            next = streams.next() => {
                 let Some(event) = next else { break };
-                printer.event(&event);
+                let at = event.execution_id;
+                match labels.get(&at) {
+                    Some(label) if !printer.json => eprintln!("  ↳ {label}  {}", event_line(&event)),
+                    _ => printer.event(&event),
+                }
                 match event.kind {
-                    EventKind::Paused => return finish(engine, tenant, id, printer).await,
+                    EventKind::Paused if at == id => return finish(engine, tenant, id, printer).await,
+                    EventKind::ChildStarted => {
+                        // Follow the sub-run too, from its beginning.
+                        let child: Option<ExecutionId> = event.payload["child"].as_str().and_then(|t| t.parse().ok());
+                        if let Some(child) = child {
+                            labels.insert(child, label_of(&event.payload));
+                            if let Ok(sub) = engine.subscribe(tenant, child, 0).await {
+                                streams.push(sub);
+                            }
+                        }
+                    }
                     EventKind::WaitingApproval => {
                         let payload = &event.payload;
                         let approval: Option<ApprovalId> = payload["approval_id"].as_str().and_then(|t| t.parse().ok());
@@ -120,16 +147,19 @@ pub async fn follow(
                         let approve = match mode {
                             ApproveMode::Yes if person_only => {
                                 eprintln!("This call must be approved by a person, so --approve yes leaves it waiting.");
-                                hint_for_pending(id, payload);
+                                hint_for_pending(at, payload);
                                 return finish(engine, tenant, id, printer).await;
                             }
                             ApproveMode::Never => {
-                                hint_for_pending(id, payload);
+                                hint_for_pending(at, payload);
                                 return finish(engine, tenant, id, printer).await;
                             }
                             ApproveMode::Yes => true,
                             ApproveMode::No => false,
                             ApproveMode::Ask => {
+                                if let Some(label) = labels.get(&at) {
+                                    eprintln!("\n  Asked by {label}");
+                                }
                                 eprintln!("{}", describe_approval(payload));
                                 ask("  Allow this?".to_string()).await
                             }
@@ -141,7 +171,7 @@ pub async fn follow(
                             call_hash: payload["call_hash"].as_str().map(str::to_string),
                             automatic: mode != ApproveMode::Ask,
                         };
-                        engine.decide(tenant, id, approval, decision).await?;
+                        engine.decide(tenant, at, approval, decision).await?;
                     }
                     _ => {}
                 }
@@ -190,6 +220,25 @@ pub async fn finish(engine: &Engine, tenant: &TenantId, id: ExecutionId, printer
             Exit::Paused
         }
         ExecutionState::WaitingForApproval => Exit::Waiting,
+        ExecutionState::WaitingForChildren => {
+            // Only reachable while something below waits for a person (or the program was stopped): say which.
+            let waiting = engine.pending_in_tree(tenant, id).await.unwrap_or_default();
+            if waiting.is_empty() {
+                eprintln!("\nStopped while waiting for sub-runs. Continue with: zorix recover");
+                Exit::Failed
+            } else {
+                for item in &waiting {
+                    eprintln!(
+                        "\n  {} asks to run {}. Answer with:\n    zorix approve {id} {}\n    zorix deny {id} {}",
+                        item.agent.as_deref().unwrap_or("A sub-run"),
+                        item.approval.tool,
+                        item.approval.id,
+                        item.approval.id
+                    );
+                }
+                Exit::Waiting
+            }
+        }
         other => {
             eprintln!("\nStopped while {other}. Continue with: zorix recover");
             Exit::Failed

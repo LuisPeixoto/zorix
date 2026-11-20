@@ -105,13 +105,43 @@ pub fn footer(execution: &Execution) -> String {
 /// A short table row for `list`.
 pub fn execution_row(execution: &Execution) -> String {
     format!(
-        "{}  {:<20} {}  {:<8} {}",
+        "{}{}  {:<20} {}  {:<8} {}",
+        if execution.parent.is_some() { "↳ " } else { "" },
         execution.id,
         execution.state,
         execution.created_at.to_rfc3339().chars().take(19).collect::<String>().replace('T', " "),
         execution.request.model,
         shorten(&execution.request.prompt, 48)
     )
+}
+
+/// The executions of one tree (the root first, as `ExecutionEngine::tree` returns them) drawn as a tree, one line each: state, who made
+/// it, what it used and what it was asked.
+pub fn tree_text(all: &[Execution]) -> String {
+    fn line(e: &Execution) -> String {
+        let who = e.agent.as_ref().map(|a| format!("{} v{}", a.slug, a.version)).unwrap_or_else(|| "plain run".into());
+        format!(
+            "{} {:<20} {:<22} {} step(s), ${:.4}  {}",
+            e.id,
+            e.state,
+            who,
+            e.usage.model_calls,
+            e.usage.cost_micros as f64 / 1_000_000.0,
+            shorten(&e.request.prompt, 50)
+        )
+    }
+    fn walk(all: &[Execution], parent: &Execution, prefix: &str, out: &mut Vec<String>) {
+        let kids: Vec<&Execution> = all.iter().filter(|e| e.parent == Some(parent.id)).collect();
+        for (i, kid) in kids.iter().enumerate() {
+            let last = i + 1 == kids.len();
+            out.push(format!("{prefix}{}{}", if last { "└─ " } else { "├─ " }, line(kid)));
+            walk(all, kid, &format!("{prefix}{}", if last { "   " } else { "│  " }), out);
+        }
+    }
+    let Some(root) = all.first() else { return String::new() };
+    let mut out = vec![line(root)];
+    walk(all, root, "", &mut out);
+    out.join("\n")
 }
 
 #[cfg(test)]
@@ -130,6 +160,33 @@ mod tests {
             kind,
             payload,
         })
+    }
+
+    #[test]
+    fn a_tree_is_drawn_with_its_branches_and_a_sub_run_is_marked_in_lists() {
+        use zorix_core::{NewExecution, TaskRequest};
+        let make = |prompt: &str, parent: Option<&Execution>| {
+            let new = NewExecution {
+                parent: parent.map(|p| p.id),
+                root: parent.map(|p| p.root.unwrap_or(p.id)),
+                request: TaskRequest { prompt: prompt.into(), model: "demo".into(), ..TaskRequest::default() },
+                ..NewExecution::default()
+            };
+            Execution::new(ExecutionId::new(), new, Timestamp(1))
+        };
+        let root = make("the question", None);
+        let a = make("part a", Some(&root));
+        let b = make("part b", Some(&root));
+        let a1 = make("part a one", Some(&a));
+        let text = tree_text(&[root.clone(), a.clone(), b.clone(), a1.clone()]);
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines.len(), 4);
+        assert!(lines[0].contains("the question") && !lines[0].starts_with("├") && !lines[0].starts_with("└"));
+        assert!(lines[1].starts_with("├─ ") && lines[1].contains("part a"));
+        assert!(lines[2].starts_with("│  └─ ") && lines[2].contains("part a one"), "{}", lines[2]);
+        assert!(lines[3].starts_with("└─ ") && lines[3].contains("part b"));
+        assert!(execution_row(&a).starts_with("↳ ") && !execution_row(&root).starts_with("↳"));
+        assert_eq!(tree_text(&[]), "");
     }
 
     #[test]
