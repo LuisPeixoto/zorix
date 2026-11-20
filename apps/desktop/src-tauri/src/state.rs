@@ -153,7 +153,13 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
     hub.register_native_tools().map_err(|e| e.to_string())?;
     let calibration = Arc::new(SqliteCalibration::open(&database).map_err(|e| e.to_string())?);
     let engine = memory
-        .install(Engine::builder(repository, gateway).tools(registry).calibration(calibration.clone()).config(config))
+        .install(
+            Engine::builder(repository, gateway)
+                .tools(registry)
+                .delegation(hub.planner(router.clone()))
+                .calibration(calibration.clone())
+                .config(config),
+        )
         .build();
     {
         // What was recorded before this version, or while a queue was full, is caught up in the background.

@@ -118,10 +118,16 @@ impl Hub {
         tools.extend(db_tools(self.services()));
         tools.extend(sandbox_tools(self.sandbox.clone()));
         tools.extend(zorix_agents::skill_tools(self.agents.clone(), self.skills.clone(), self.sandbox.clone()));
+        tools.push(Arc::new(zorix_core::DelegateTool::new()));
         for tool in tools {
             self.registry.register(tool)?;
         }
         Ok(())
+    }
+
+    /// The planner an engine needs for `agents.delegate`: it finds agents in this hub's store and resolves models with `resolver`.
+    pub fn planner(&self, resolver: Arc<dyn zorix_agents::ModelResolver>) -> Arc<zorix_agents::AgentPlanner> {
+        Arc::new(zorix_agents::AgentPlanner::new(self.agents.clone(), resolver))
     }
 
     /// Whether the skill tools are registered (tests).

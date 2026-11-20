@@ -2,6 +2,7 @@
 //! load and the evaluations that compare them.
 
 pub mod cards;
+pub mod delegation;
 pub mod diff;
 pub mod evals;
 pub mod format;
@@ -11,5 +12,6 @@ pub mod starters;
 pub mod yaml;
 
 pub use cards::{AgentCard, cards};
+pub use delegation::AgentPlanner;
 pub use runner::{AgentAsk, ModelResolver, RunnerError, agent_grants, prepare};
 pub use skills::{SkillError, SkillLibrary, skill_tools};

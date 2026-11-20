@@ -57,6 +57,10 @@ pub struct AgentAsk {
     pub depth: u32,
     /// `Some(false)` keeps the agent's own memory out of this run. It can only turn it off, never on.
     pub agent_memory: Option<bool>,
+    /// The team the run is made for: the agent is its lead, and the team's members may be asked (ADR-0031).
+    pub team: Option<String>,
+    /// Access the run gets besides the agent's own (a team's members). A request can still only narrow what results.
+    pub extra_access: Vec<String>,
 }
 
 /// Why a run could not be made.
@@ -128,6 +132,62 @@ pub fn instructions_with_skills(instructions: &str, skills: &[(String, String)])
     text
 }
 
+/// The instructions with the agents the run may ask, so the model knows whom to delegate to and what delegation costs.
+pub fn instructions_with_agents(instructions: &str, agents: &[(String, String, String)]) -> String {
+    if agents.is_empty() {
+        return instructions.to_string();
+    }
+    let mut text = instructions.trim_end().to_string();
+    text.push_str("\n\n<available_agents>\n");
+    for (slug, name, description) in agents {
+        text.push_str(&format!("- {slug}: {name}. {}\n", description.replace('\n', " ")));
+    }
+    text.push_str(&format!(
+        "</available_agents>\nYou can ask these agents for help with the agents.delegate tool: up to {} tasks in one call, which run at \
+         the same time, and you get one result for each. They do not see this conversation, so write each task with its goal, the form \
+         of the answer you need and where to look. What they use counts against your own limits, and delegation is nested at most {} \
+         levels deep. Ask for what you cannot do well yourself or what can be done in parallel; do the rest yourself.",
+        zorix_core::MAX_TASKS,
+        zorix_core::MAX_DEPTH
+    ));
+    text
+}
+
+/// The agents that access entries (`agent:SLUG`, `agent:*`) let a run ask, as `(slug, name, description)`. The agent itself and
+/// archived agents are left out.
+async fn askable_agents(
+    entries: &[String],
+    me: &Agent,
+    store: &dyn AgentStore,
+) -> Result<Vec<(String, String, String)>, RunnerError> {
+    let wanted: Vec<&str> = entries.iter().filter_map(|e| e.strip_prefix("agent:")).collect();
+    if wanted.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut slugs: Vec<String> = Vec::new();
+    if wanted.contains(&"*") {
+        for other in store.agents(&me.tenant, false).await? {
+            slugs.push(other.slug.to_string());
+        }
+    } else {
+        slugs.extend(wanted.iter().map(|s| s.to_string()));
+    }
+    slugs.sort();
+    slugs.dedup();
+    let mut out = Vec::new();
+    for slug in slugs.into_iter().filter(|s| *s != me.slug.as_str()) {
+        let Ok(parsed) = zorix_core::AgentSlug::new(slug.as_str()) else { continue };
+        let Some(other) = store.agent_by_slug(&me.tenant, &parsed).await? else { continue };
+        if other.archived {
+            continue;
+        }
+        if let Some(version) = store.version(&me.tenant, other.id, other.current_version).await? {
+            out.push((slug, version.spec.name, version.spec.description));
+        }
+    }
+    Ok(out)
+}
+
 /// What an agent may do before any request narrows it: its tools and access, and the skill tools when it has skills
 /// (`skill.run` only if it may run code).
 pub fn agent_grants(spec: &zorix_core::AgentSpec) -> Result<Grants, zorix_core::Error> {
@@ -184,6 +244,13 @@ pub async fn prepare(
 
     // 3. Grants: the agent's tools and access, plus the skill tools; a request may only narrow them.
     let mut grants = agent_grants(spec)?;
+    if !ask.extra_access.is_empty() {
+        let more = zorix_core::access::compile_access(&ask.extra_access).map_err(RunnerError::Refused)?;
+        for permission in more.iter() {
+            grants = grants.with(permission.clone());
+        }
+    }
+    binding.team = ask.team.clone();
     if let Some(narrow) = &ask.narrow {
         grants = grants.intersect(narrow);
     }
@@ -198,6 +265,11 @@ pub async fn prepare(
         None => spec.memory,
     };
 
+    // The agents this run may ask, from its own access and from a team.
+    let mut asking: Vec<String> = spec.access.clone();
+    asking.extend(ask.extra_access.iter().cloned());
+    let askable = askable_agents(&asking, agent, store).await?;
+
     // 5. Labels: the agent's, the request's, and which version made the run.
     let mut metadata = spec.metadata.clone();
     metadata.extend(ask.metadata);
@@ -211,8 +283,11 @@ pub async fn prepare(
         root: ask.root,
         depth: ask.depth,
         request: TaskRequest {
-            instructions: Some(instructions_with_skills(&spec.instructions, &described))
-                .filter(|t| !t.trim().is_empty()),
+            instructions: Some(instructions_with_agents(
+                &instructions_with_skills(&spec.instructions, &described),
+                &askable,
+            ))
+            .filter(|t| !t.trim().is_empty()),
             prompt: ask.prompt,
             input: ask.input,
             model,
