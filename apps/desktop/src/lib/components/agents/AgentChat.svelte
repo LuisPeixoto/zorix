@@ -4,24 +4,32 @@
   import {
     type AgentConversation,
     type AgentDetail,
+    type Execution,
     type StoredCase,
     type ThreadRun,
+    type TreeApproval,
     agentAsk,
     agentThreads,
     decideRun,
     errorText,
     evalCases,
     openExternal,
+    runTree,
     stopLive,
     threadRuns,
+    treeApprovals,
     watchLive,
   } from "../../api.ts";
   import { ago, shorten } from "../../format.ts";
   import { agents } from "../../stores/agents.svelte.ts";
   import { toast } from "../../stores/toast.svelte.ts";
+  import { DELEGATE, childRows } from "../../delegation.ts";
   import { buildThread, canSend, openRun } from "../../thread.ts";
-  import { Avatar, Badge, Button, ChatBubble, Chip, Composer, Icon, Markdown, ToolCallCard } from "../../ui/index.ts";
+  import { Avatar, Badge, Button, ChatBubble, Chip, Composer, DelegationCard, Icon, Markdown, ToolCallCard } from "../../ui/index.ts";
+  import TreeApprovals from "./TreeApprovals.svelte";
   import type { ToolStatus } from "../../ui/ToolCallCard.svelte";
+
+  import { store as runs_store } from "../../stores/runs.svelte.ts";
 
   let { detail }: { detail: AgentDetail } = $props();
   const slug = $derived(detail.agent.slug);
@@ -39,6 +47,13 @@
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let watching: string | null = null;
   let alive = true;
+  // Sub-runs: the tree under each run of this chat that delegated, what each one is writing, and what waits for a person.
+  let family = $state<Execution[]>([]);
+  let asked = $state<TreeApproval[]>([]);
+  let childLive = $state<Record<string, string>>({});
+  const childWatch = new Set<string>();
+  const needsYou = $derived(new Set(asked.map((a) => a.execution)));
+  const team = $derived(agents.chatTeam ? agents.team(agents.chatTeam) : undefined);
 
   const items = $derived(buildThread(runs, live));
   const ready = $derived(canSend(runs));
@@ -60,10 +75,49 @@
     const conversation = active;
     try {
       const next = await threadRuns(slug, conversation);
-      if (alive && active === conversation) runs = next;
+      if (alive && active === conversation) {
+        runs = next;
+        void loadFamily(next);
+      }
     } catch (e) {
       toast.err(errorText(e));
     }
+  }
+
+  const settledState = (e: Execution) => ["completed", "failed", "cancelled"].includes(e.state);
+  const face = (e: Execution) => {
+    const card = e.agent ? agents.card(e.agent.slug) : undefined;
+    return { name: card?.name ?? e.agent?.slug ?? "Agent", emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted" };
+  };
+
+  /** Read the sub-runs of every run here that delegated, and follow the text of those that are writing. */
+  async function loadFamily(from: ThreadRun[]) {
+    const owners = from.filter((r) => r.tool_calls.some((c) => c.tool === DELEGATE)).map((r) => r.execution.id);
+    if (owners.length === 0) {
+      family = [];
+      asked = [];
+      return;
+    }
+    try {
+      const trees = await Promise.all(owners.map((id) => runTree(id)));
+      const open = from.filter((r) => owners.includes(r.execution.id) && !settledState(r.execution)).map((r) => r.execution.id);
+      const waiting = (await Promise.all(open.map((id) => treeApprovals(id)))).flat();
+      if (!alive) return;
+      family = trees.flat();
+      asked = waiting;
+      for (const e of family) {
+        if (e.depth && !settledState(e) && !childWatch.has(e.id)) followChild(e.id);
+      }
+    } catch {
+      /* The card then shows what the run itself stored. */
+    }
+  }
+
+  function followChild(id: string) {
+    childWatch.add(id);
+    void watchLive(id, (batch) => {
+      childLive[id] = batch.reset ? batch.text : (childLive[id] ?? "") + batch.text;
+    }).catch(() => {});
   }
 
   function schedule() {
@@ -110,7 +164,7 @@
   async function send(text: string) {
     sending = true;
     try {
-      const run = await agentAsk({ slug, prompt: text, conversation: active ?? undefined });
+      const run = await agentAsk({ slug, prompt: text, conversation: active ?? undefined, team: agents.chatTeam ?? undefined });
       active = run.conversation ?? active;
       stick = true;
       await loadRuns();
@@ -122,6 +176,8 @@
       sending = false;
     }
   }
+
+  const answered = () => void loadRuns();
 
   async function decide(runId: string, approvalId: string, hash: string, yes: boolean) {
     try {
@@ -162,6 +218,7 @@
     alive = false;
     if (pollTimer) clearTimeout(pollTimer);
     if (watching) void stopLive(watching).catch(() => {});
+    for (const id of childWatch) void stopLive(id).catch(() => {});
   });
 </script>
 
@@ -193,8 +250,8 @@
         {#if items.length === 0}
           <div class="mx-auto flex max-w-md flex-col items-center py-16 text-center">
             <Avatar emoji={spec.avatar.emoji} color={spec.avatar.color} size="xl" />
-            <h2 class="mt-4 text-2xl font-semibold">Ask {spec.name}</h2>
-            <p class="mt-1.5 text-base text-muted">{spec.description || "Say what you want done."}</p>
+            <h2 class="mt-4 text-2xl font-semibold">{team ? `Ask ${team.team.name}` : `Ask ${spec.name}`}</h2>
+            <p class="mt-1.5 text-base text-muted">{team ? `${spec.name} leads and can hand work to ${team.team.members.length} other agent${team.team.members.length === 1 ? "" : "s"}.` : spec.description || "Say what you want done."}</p>
             {#if suggestions.length}
               <div class="mt-5 flex flex-wrap justify-center gap-2" aria-label="Things to try">
                 {#each suggestions as s (s.id)}
@@ -213,6 +270,19 @@
               {#snippet avatar()}<Avatar emoji={spec.avatar.emoji} color={spec.avatar.color} />{/snippet}
               {#if item.text}<Markdown text={item.text} onlink={(href) => void openExternal(href).catch((e) => toast.err(errorText(e)))} />{:else}<span class="text-muted">Thinking…</span>{/if}
             </ChatBubble>
+          {:else if item.kind === "tool" && item.call.tool === DELEGATE}
+            {@const rows = childRows(item.call, family, needsYou, face, childLive)}
+            <div class="pl-12">
+              {#if rows.length}
+                <DelegationCard children={rows} onopen={(id) => void runs_store.select(id)}>
+                  {#snippet row(r)}
+                    <TreeApprovals items={asked.filter((a) => a.execution === r.id)} compact onanswered={answered} />
+                  {/snippet}
+                </DelegationCard>
+              {:else}
+                <ToolCallCard tool={item.call.tool} status={toolStatus(item.call.status === "delegated" ? "started" : item.call.status)} args={item.call.arguments} error={item.call.error} />
+              {/if}
+            </div>
           {:else if item.kind === "tool"}
             <div class="pl-12">
               {#if item.approval?.status === "pending"}
@@ -247,6 +317,7 @@
           label={`Message ${spec.name}`}
         >
           {#snippet tools()}
+            {#if team}<Badge tone="info" dot>Team · {team.team.name}</Badge>{/if}
             <Badge tone="muted">{spec.models.default}</Badge>
             <Badge tone="accent">v{detail.agent.current_version}</Badge>
           {/snippet}

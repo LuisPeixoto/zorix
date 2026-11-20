@@ -40,6 +40,16 @@
         const [slug, wanted, conversation] = tab ? tab.split("/") : [];
         store.showAgents(slug || null, AGENT_TABS.includes(wanted as AgentTab) ? (wanted as AgentTab) : "chat", conversation || null);
       }
+      if (start === "teams") {
+        // `teams` shows the gallery; `teams:SLUG` opens a team; `teams:SLUG/chat[/CONVERSATION]` talks to it through its lead.
+        const [slug, how, conversation] = tab ? tab.split("/") : [];
+        if (how === "chat") {
+          void agents.refresh().then(() => {
+            const lead = agents.team(slug)?.team.lead;
+            if (lead) store.showAgents(lead, "chat", conversation || null, slug);
+          });
+        } else store.showTeams(slug || null);
+      }
       if (start === "memory") {
         store.startTab = tab || "facts";
         store.showMemory();
@@ -53,6 +63,16 @@
   const commands = $derived<Command[]>([
     { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showRuns(); store.showForm(); } },
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
+    { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
+    ...agents.teams.map((t) => ({
+      id: `team-${t.team.slug}`,
+      label: `Team: ${t.team.name}`,
+      group: "Teams",
+      icon: "users",
+      hint: `${t.team.members.length + 1} agents`,
+      keywords: `${t.team.slug} ${t.team.lead}`,
+      run: () => store.showTeams(t.team.slug),
+    })),
     ...agents.cards.map((card) => ({
       id: `agent-${card.slug}`,
       label: `Agent: ${card.name}`,

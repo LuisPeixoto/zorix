@@ -9,6 +9,11 @@ import {
   agentTemplates,
   agentsList,
   errorText,
+  teamAddTemplate,
+  teamTemplates,
+  teamsList,
+  type TeamTemplate,
+  type TeamView,
 } from "../api.ts";
 import { toast } from "./toast.svelte.ts";
 
@@ -18,6 +23,13 @@ export type AgentTab = (typeof AGENT_TABS)[number];
 class AgentsStore {
   cards = $state<AgentCard[]>([]);
   templates = $state<Template[]>([]);
+  teams = $state<TeamView[]>([]);
+  teamTemplates = $state<TeamTemplate[]>([]);
+  /** Which gallery is showing, and the team that is open (null for the gallery). */
+  section = $state<"agents" | "teams">("agents");
+  teamSlug = $state<string | null>(null);
+  /** The team the open chat talks to: its lead is the agent that is open. */
+  chatTeam = $state<string | null>(null);
   loaded = $state(false);
   error = $state<string | null>(null);
   /** The agent that is open, or null for the gallery. */
@@ -31,7 +43,12 @@ class AgentsStore {
 
   async refresh(): Promise<void> {
     try {
-      [this.cards, this.templates] = await Promise.all([agentsList(false), agentTemplates()]);
+      [this.cards, this.templates, this.teams, this.teamTemplates] = await Promise.all([
+        agentsList(false),
+        agentTemplates(),
+        teamsList(),
+        teamTemplates(),
+      ]);
       this.error = null;
     } catch (e) {
       this.error = errorText(e);
@@ -41,7 +58,10 @@ class AgentsStore {
   }
 
   /** Open an agent, or the gallery when `slug` is null. */
-  async open(slug: string | null, tab: AgentTab = "chat", conversation: string | null = null): Promise<void> {
+  async open(slug: string | null, tab: AgentTab = "chat", conversation: string | null = null, team: string | null = null): Promise<void> {
+    this.section = "agents";
+    this.teamSlug = null;
+    this.chatTeam = team;
     this.slug = slug;
     this.tab = tab;
     this.startConversation = conversation;
@@ -85,6 +105,31 @@ class AgentsStore {
       toast.err(errorText(e));
       return null;
     }
+  }
+
+  /** Open the Teams gallery, or one team. */
+  async openTeams(team: string | null = null): Promise<void> {
+    this.section = "teams";
+    this.slug = null;
+    this.detail = null;
+    this.teamSlug = team;
+    await this.refresh();
+  }
+
+  async addTeamTemplate(id: string): Promise<string | null> {
+    try {
+      const slug = await teamAddTemplate(id);
+      toast.ok(`Added the team ${slug}.`);
+      await this.refresh();
+      return slug;
+    } catch (e) {
+      toast.err(errorText(e));
+      return null;
+    }
+  }
+
+  team(slug: string): TeamView | undefined {
+    return this.teams.find((t) => t.team.slug === slug);
   }
 
   card(slug: string): AgentCard | undefined {

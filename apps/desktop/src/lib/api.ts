@@ -80,9 +80,11 @@ export interface ToolCall {
   call_id: string;
   tool: string;
   arguments: unknown;
-  status: "requested" | "awaiting_approval" | "started" | "succeeded" | "failed" | "denied";
+  status: "requested" | "awaiting_approval" | "started" | "succeeded" | "failed" | "denied" | "delegated";
   attempts: number;
   error: string | null;
+  /** What the tool answered once it succeeded. For a delegation: the sub-runs started, then their results. */
+  result?: unknown;
 }
 
 export interface Summary {
@@ -702,6 +704,8 @@ export interface AskAgent {
   input?: unknown;
   model?: string;
   conversation?: string;
+  /** Ask a team: the agent named above is its lead. */
+  team?: string;
   /** What it may use from memory: each switch is on only if the agent allows it too. */
   memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
 }
@@ -750,3 +754,63 @@ export function watchLive(id: string, onBatch: (batch: LiveBatch) => void): Prom
   channel.onmessage = onBatch;
   return invoke<void>("watch_live", { id, onText: channel });
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Trees of work and teams
+
+export interface TreeApproval {
+  /** The execution that waits (a sub-run, or the root itself). */
+  execution: string;
+  agent: string | null;
+  depth: number;
+  approval: Approval;
+}
+
+export interface Team {
+  tenant: string;
+  slug: string;
+  name: string;
+  description: string;
+  avatar: { emoji: string; color: string };
+  lead: string;
+  members: string[];
+  updated_at: number;
+}
+
+export interface TeamView {
+  team: Team;
+  lead: AgentCard | null;
+  members: AgentCard[];
+  /** Names the team lists that are not agents any more. */
+  missing: string[];
+}
+
+export interface TeamTemplate {
+  id: string;
+  name: string;
+  description: string;
+  emoji: string;
+  color: string;
+  lead: string;
+  members: string[];
+  installed: boolean;
+}
+
+export interface SaveTeam {
+  slug: string;
+  name: string;
+  description?: string;
+  emoji?: string;
+  color?: string;
+  lead: string;
+  members: string[];
+}
+
+export const runTree = (id: string) => invoke<Execution[]>("run_tree", { id });
+export const treeApprovals = (id: string) => invoke<TreeApproval[]>("tree_approvals", { id });
+export const subRunCounts = (ids: string[]) => invoke<Record<string, number>>("sub_run_counts", { ids });
+export const teamsList = () => invoke<TeamView[]>("teams_list");
+export const teamSave = (team: SaveTeam) => invoke<TeamView>("team_save", { team });
+export const teamRemove = (slug: string) => invoke<void>("team_remove", { slug });
+export const teamTemplates = () => invoke<TeamTemplate[]>("team_templates");
+export const teamAddTemplate = (id: string) => invoke<string>("team_add_template", { id });

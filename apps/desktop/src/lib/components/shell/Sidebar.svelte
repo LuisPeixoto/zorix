@@ -7,7 +7,7 @@
   import StatusBadge from "../StatusBadge.svelte";
   import NavItem from "./NavItem.svelte";
 
-  const waiting = $derived(store.runs.filter((r) => r.state === "waiting_for_approval").length);
+  const waiting = $derived(store.runs.filter((r) => r.state === "waiting_for_approval" || store.needsYou[r.id]).length);
 </script>
 
 <aside class="flex w-64 shrink-0 flex-col border-r border-line bg-panel-2">
@@ -28,8 +28,8 @@
       >
         <span class="flex items-center gap-1.5 truncate text-md font-medium">{#if run.agent}<Icon name="bot" size={13} class="shrink-0 text-accent" />{/if}<span class="truncate">{shorten(run.request.prompt, 60)}</span></span>
         <span class="mt-0.5 flex items-center justify-between text-xs text-muted">
-          <StatusBadge state={run.state} />
-          <span class="tnum">{ago(run.created_at, store.now)}</span>
+          <span class="flex items-center gap-1.5"><StatusBadge state={run.state} />{#if store.subRuns[run.id]}<span class="tnum inline-flex items-center gap-0.5 rounded-full bg-hover px-1.5 text-2xs whitespace-nowrap text-muted" title="{store.subRuns[run.id]} sub-run{store.subRuns[run.id] === 1 ? '' : 's'} started by agents for this run"><Icon name="branch" size={10} />{store.subRuns[run.id]}</span>{/if}</span>
+          <span class="tnum whitespace-nowrap">{ago(run.created_at, store.now)}</span>
         </span>
       </button>
     {:else}

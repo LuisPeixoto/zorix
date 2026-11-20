@@ -34,7 +34,9 @@ import {
   setProviderKey,
   startRun,
   stopWatch,
+  subRunCounts,
   testProvider,
+  treeApprovals,
   watchRun,
 } from "../api.ts";
 import { isFinished } from "../format.ts";
@@ -45,6 +47,10 @@ class RunsStore {
   info = $state<AppInfo | null>(null);
   tools = $state<ToolSpec[]>([]);
   runs = $state<Execution[]>([]);
+  /** How many sub-runs each listed run started, for the badge in the list. */
+  subRuns = $state<Record<string, number>>({});
+  /** Runs that are waiting for children while one of those children waits for you. */
+  needsYou = $state<Record<string, boolean>>({});
   selectedId = $state<string | null>(null);
   detail = $state<RunDetail | null>(null);
   events = $state<ExecEvent[]>([]);
@@ -158,9 +164,15 @@ class RunsStore {
   }
 
   /** Open the Agents screen: the gallery, or one agent on a tab. */
-  showAgents(slug: string | null = null, tab: AgentTab = "chat", conversation: string | null = null): void {
+  showAgents(slug: string | null = null, tab: AgentTab = "chat", conversation: string | null = null, team: string | null = null): void {
     this.view = "agents";
-    void agents.open(slug, tab, conversation);
+    void agents.open(slug, tab, conversation, team);
+  }
+
+  /** Open the Teams screen, or one team. */
+  showTeams(team: string | null = null): void {
+    this.view = "agents";
+    void agents.openTeams(team);
   }
 
   showDesign(): void {
@@ -196,6 +208,14 @@ class RunsStore {
   async refreshList(): Promise<void> {
     try {
       this.runs = await listRuns();
+      const parents = this.runs.filter((r) => ["waiting_for_children", "completed", "failed"].includes(r.state) && r.agent).map((r) => r.id);
+      if (parents.length) {
+        this.subRuns = await subRunCounts(parents.slice(0, 60));
+        const waiting = this.runs.filter((r) => r.state === "waiting_for_children");
+        const flags: Record<string, boolean> = {};
+        for (const run of waiting) flags[run.id] = (await treeApprovals(run.id)).length > 0;
+        this.needsYou = flags;
+      }
     } catch (e) {
       this.error = errorText(e);
     }
