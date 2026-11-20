@@ -95,6 +95,22 @@ static ALL: &[Starter] = &[
         ],
     },
     Starter {
+        id: "research-lead",
+        agent: include_str!("../starters/research-lead/agent.md"),
+        skills: &[StarterSkill {
+            name: "delegating-well",
+            files: &[
+                file!("research-lead", "delegating-well", "SKILL.md"),
+                file!("research-lead", "delegating-well", "references/task-template.md"),
+            ],
+        }],
+        cases: &[
+            case!("research-lead", "delegates-a-comparison"),
+            case!("research-lead", "answers-small-talk-itself"),
+            case!("research-lead", "says-what-is-missing"),
+        ],
+    },
+    Starter {
         id: "writer",
         agent: include_str!("../starters/writer/agent.md"),
         skills: &[StarterSkill { name: "plain-style", files: &[file!("writer", "plain-style", "SKILL.md")] }],
@@ -121,4 +137,42 @@ impl StarterSkill {
     pub fn owned_files(&self) -> Vec<(String, Vec<u8>)> {
         self.files.iter().map(|f| (f.path.to_string(), f.bytes.to_vec())).collect()
     }
+}
+
+/// A ready-made team: a lead and the colleagues it may ask. The agents are starters too, and are added with the team.
+pub struct StarterTeam {
+    /// What to type after `--template`.
+    pub id: &'static str,
+    /// Its display name.
+    pub name: &'static str,
+    /// What it is for.
+    pub description: &'static str,
+    /// The face.
+    pub emoji: &'static str,
+    /// The colour name.
+    pub color: &'static str,
+    /// The lead's starter id (also its slug).
+    pub lead: &'static str,
+    /// The members' starter ids (also their slugs).
+    pub members: &'static [&'static str],
+}
+
+static TEAMS: &[StarterTeam] = &[StarterTeam {
+    id: "research-desk",
+    name: "Research desk",
+    description: "A lead that splits a question, a researcher that finds and cites, and a writer that puts it into words.",
+    emoji: "🗂️",
+    color: "accent",
+    lead: "research-lead",
+    members: &["researcher", "writer"],
+}];
+
+/// Every starter team.
+pub fn teams() -> &'static [StarterTeam] {
+    TEAMS
+}
+
+/// One starter team by its id.
+pub fn team(id: &str) -> Option<&'static StarterTeam> {
+    TEAMS.iter().find(|t| t.id == id)
 }

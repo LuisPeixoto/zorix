@@ -10,10 +10,10 @@ use zorix_core::access::compile_access;
 use zorix_core::{EvalCase, Timestamp};
 
 #[test]
-fn there_are_four_starters_with_distinct_ids() {
+fn there_are_five_starters_with_distinct_ids() {
     let ids: Vec<&str> = all().iter().map(|s| s.id).collect();
-    assert_eq!(ids, ["researcher", "code-reviewer", "data-analyst", "writer"]);
-    assert_eq!(ids.iter().collect::<HashSet<_>>().len(), 4);
+    assert_eq!(ids, ["researcher", "code-reviewer", "data-analyst", "research-lead", "writer"]);
+    assert_eq!(ids.iter().collect::<HashSet<_>>().len(), 5);
     assert!(get("writer").is_some() && get("nope").is_none());
 }
 
@@ -93,4 +93,23 @@ fn the_profiling_script_is_the_one_the_skill_describes() {
         assert!(script.contains(word) && doc.contains(word), "{word}");
     }
     assert!(!script.contains("import pandas") && !script.contains("import numpy"), "standard library only");
+}
+
+#[test]
+fn the_starter_team_names_starters_and_its_lead_may_ask_exactly_its_members() {
+    use zorix_agents::starters::{team, teams};
+    assert_eq!(teams().iter().map(|t| t.id).collect::<Vec<_>>(), ["research-desk"]);
+    let desk = team("research-desk").unwrap();
+    assert!(team("nope").is_none());
+    // Every agent of the team is a starter, and the lead's own access names the members, so it works alone (for evaluations) too.
+    for id in std::iter::once(&desk.lead).chain(desk.members) {
+        assert!(get(id).is_some(), "{id} is a starter");
+    }
+    let lead = format::parse(get(desk.lead).unwrap().agent).unwrap();
+    let access: Vec<String> = desk.members.iter().map(|m| format!("agent:{m}")).collect();
+    for entry in &access {
+        assert!(lead.spec.access.contains(entry), "{entry} in the lead's access: {:?}", lead.spec.access);
+    }
+    assert!(!lead.spec.access.iter().any(|a| a == "agent:*"), "a starter never asks everyone");
+    assert!(!desk.members.contains(&desk.lead));
 }

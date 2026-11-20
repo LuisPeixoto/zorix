@@ -1,0 +1,27 @@
+{
+  "name": "delegates-a-comparison",
+  "tags": [
+    "smoke",
+    "delegation"
+  ],
+  "prompt": "Compare the boiling points of water and ethanol at sea level, with a source for each.",
+  "checks": [
+    {
+      "kind": "delegated",
+      "agent": "researcher",
+      "min": 1
+    },
+    {
+      "kind": "regex",
+      "pattern": "(?i)(78|173)"
+    },
+    {
+      "kind": "regex",
+      "pattern": "(?i)(100\\s*°?\\s*c|212)"
+    },
+    {
+      "kind": "max_tool_calls",
+      "calls": 8
+    }
+  ]
+}

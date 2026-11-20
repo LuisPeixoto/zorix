@@ -1,0 +1,18 @@
+{
+  "name": "answers-small-talk-itself",
+  "tags": [
+    "smoke",
+    "restraint"
+  ],
+  "prompt": "Hello! What can you help me with?",
+  "checks": [
+    {
+      "kind": "tool_not_used",
+      "pattern": "agents.delegate"
+    },
+    {
+      "kind": "max_steps",
+      "steps": 2
+    }
+  ]
+}

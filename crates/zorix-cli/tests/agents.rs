@@ -90,7 +90,7 @@ fn templates_are_listed_added_once_and_shown_with_their_skills_and_cases() {
     let home = Home::new();
     let listed = home.json(&["agent", "templates"]);
     let ids: Vec<&str> = listed.as_array().unwrap().iter().map(|t| t["template"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["researcher", "code-reviewer", "data-analyst", "writer"]);
+    assert_eq!(ids, ["researcher", "code-reviewer", "data-analyst", "research-lead", "writer"]);
     assert!(home.ok(&["agent", "list"]).1.contains("No agents yet"));
 
     let added = home.json(&["agent", "add", "--template", "researcher"]);
