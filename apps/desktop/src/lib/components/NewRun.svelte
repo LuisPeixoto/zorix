@@ -22,7 +22,10 @@
   // "" means: whatever the default is (shown in the first option).
   let model = $state("");
   // Run as an agent: it brings its own instructions, tools and access, and this form can only narrow them.
-  let agentSlug = $state("");
+  // One choice: nothing, an agent, or a team (`team:slug`), which runs its lead with the members to ask.
+  let choice = $state("");
+  const team = $derived(choice.startsWith("team:") ? agents.team(choice.slice(5)) : undefined);
+  const agentSlug = $derived(team ? team.team.lead : choice.startsWith("team:") ? "" : choice);
   let agentDetail = $state<AgentDetail | null>(null);
   $effect(() => {
     const slug = agentSlug;
@@ -89,6 +92,7 @@
     if (agentSlug) {
       void store.startAgent({
         slug: agentSlug,
+        team: team?.team.slug,
         prompt: prompt.trim(),
         model: model || undefined,
         conversation: continuing?.id,
@@ -137,11 +141,18 @@
 
   {#if agents.cards.length}
     <Card title="Run as" icon="bot">
-      <Field label="Who does it?" hint={agentSlug ? "" : "Pick an agent to use its instructions, skills, tools and own memory. Or leave a plain run and set everything below."}>
+      <Field label="Who does it?" hint={team ? `${team.lead?.name ?? team.team.lead} leads and may hand work to ${team.team.members.length} other agent${team.team.members.length === 1 ? "" : "s"}. Their cost and tokens count against this run.` : agentSlug ? "" : "Pick an agent or a team to use its instructions, skills, tools and own memory. Or leave a plain run and set everything below."}>
         {#snippet children(f)}
-          <Select id={f.id} bind:value={agentSlug}>
+          <Select id={f.id} bind:value={choice}>
             <option value="">No agent: a plain run</option>
-            {#each agents.cards as c (c.slug)}<option value={c.slug}>{c.emoji} {c.name} · v{c.version}</option>{/each}
+            <optgroup label="Agents">
+              {#each agents.cards as c (c.slug)}<option value={c.slug}>{c.emoji} {c.name} · v{c.version}</option>{/each}
+            </optgroup>
+            {#if agents.teams.length}
+              <optgroup label="Teams">
+                {#each agents.teams as t (t.team.slug)}<option value={`team:${t.team.slug}`}>{t.team.avatar.emoji} {t.team.name} · {t.team.members.length + 1} agents</option>{/each}
+              </optgroup>
+            {/if}
           </Select>
         {/snippet}
       </Field>
@@ -304,6 +315,6 @@
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
   <div class="sticky -bottom-8 z-20 -mx-8 -mb-8 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-8 py-4 backdrop-blur">
-    <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>{agentSlug ? "Start with the agent" : "Start run"}</Button>
+    <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>{team ? "Start with the team" : agentSlug ? "Start with the agent" : "Start run"}</Button>
   </div>
 </form>

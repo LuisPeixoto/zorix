@@ -2,7 +2,11 @@
   import { duration, isFinished, isLive, shortId, tokens } from "../format.ts";
   import { store } from "../stores/runs.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
-  import { Badge, Button, Callout, Card, Icon, IconButton, List, ListRow, Stat } from "../ui/index.ts";
+  import { Badge, Button, Callout, Card, Icon, IconButton, List, ListRow, Markdown, Stat, TreeView } from "../ui/index.ts";
+  import { type Execution, type TreeApproval, runTree, treeApprovals } from "../api.ts";
+  import { agents } from "../stores/agents.svelte.ts";
+  import { buildTree, totals } from "../tree.ts";
+  import TreeApprovals from "./agents/TreeApprovals.svelte";
   import ApprovalCard from "./ApprovalCard.svelte";
   import StatusBadge from "./StatusBadge.svelte";
   import Timeline from "./Timeline.svelte";
@@ -18,6 +22,43 @@
   $effect(() => {
     if (runId && runState) void store.loadContext(runId);
   });
+  // The tree this run belongs to: what it started, or what started it. Read again while anything in it is still working.
+  let family = $state<Execution[]>([]);
+  let waitingBelow = $state<TreeApproval[]>([]);
+  let familyTimer: ReturnType<typeof setTimeout> | null = null;
+  const topId = $derived(run?.root ?? run?.id);
+  async function loadFamily() {
+    const id = topId;
+    if (!id) return;
+    try {
+      const [all, waiting] = await Promise.all([runTree(id), treeApprovals(id)]);
+      if (topId === id) {
+        family = all;
+        waitingBelow = waiting.filter((w) => w.execution !== run?.id);
+      }
+    } catch {
+      /* The tree is a nicety: the run itself is shown either way. */
+    }
+    if (familyTimer) clearTimeout(familyTimer);
+    if (topId === id && family.some((e) => !["completed", "failed", "cancelled"].includes(e.state))) familyTimer = setTimeout(loadFamily, 1500);
+  }
+  $effect(() => {
+    void topId;
+    void runState;
+    family = [];
+    waitingBelow = [];
+    void loadFamily();
+    return () => {
+      if (familyTimer) clearTimeout(familyTimer);
+    };
+  });
+  const tree = $derived(family.length > 1 ? buildTree(family) : null);
+  const sums = $derived(tree ? totals(tree) : null);
+  const look = (e: Execution) => {
+    const card = e.agent ? agents.card(e.agent.slug) : undefined;
+    return { emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted", name: card?.name ?? e.agent?.slug ?? "Run" };
+  };
+
   const context = $derived(store.context);
   const kindLabel: Record<string, string> = { fact: "remembered", exchange: "earlier in this conversation", chunk: "document", past_work: "past work" };
   const used = $derived(context?.recall?.items ?? []);
@@ -44,6 +85,11 @@
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
             <StatusBadge state={run.state} />
+            {#if run.parent}
+              <button type="button" class="inline-flex h-6 items-center gap-1.5 rounded-full bg-hover px-2.5 text-xs font-medium text-muted transition hover:text-fg" title="Open the run that asked for this one" onclick={() => void store.select(run.root ?? run.parent!)}>
+                <Icon name="branch" size={12} /> sub-run · level {run.depth ?? 1}
+              </button>
+            {/if}
             {#if run.agent}
               <button type="button" class="inline-flex h-6 items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-xs font-medium text-accent transition hover:bg-select" title="Open {run.agent.slug} and this conversation" onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null)}>
                 <Icon name="bot" size={12} /> {run.agent.slug} · v{run.agent.version}
@@ -84,10 +130,25 @@
       {#each pending as approval (approval.id)}
         <ApprovalCard {approval} />
       {/each}
+      <TreeApprovals items={waitingBelow} onanswered={() => { void loadFamily(); void store.select(run.id); }} />
+
+      {#if tree && sums}
+        <Card title="Work tree" icon="branch">
+          {#snippet actions()}
+            <span class="text-xs text-muted tabular-nums">{sums.runs} runs · {sums.done} done{sums.working ? ` · ${sums.working} working` : ""}{sums.waiting ? ` · ${sums.waiting} waiting for you` : ""}{sums.failed ? ` · ${sums.failed} failed` : ""}</span>
+          {/snippet}
+          <TreeView root={tree} selected={run.id} {look} now={store.now} onselect={(id) => id !== run.id && void store.select(id)} />
+          <p class="mt-3 text-xs text-faint">The cost and tokens above include everything below. Cancelling this run cancels the whole tree.</p>
+        </Card>
+      {/if}
 
       {#if run.result}
         <Card title="Result" icon="check-circle">
-          <pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>
+          {#if run.agent}
+            <Markdown text={run.result.text} />
+          {:else}
+            <pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>
+          {/if}
         </Card>
       {/if}
       {#if run.failure}
