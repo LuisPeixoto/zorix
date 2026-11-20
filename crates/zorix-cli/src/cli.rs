@@ -73,6 +73,11 @@ pub enum Command {
     /// Agents: reusable AI workers with their own instructions, skills, tools, memory and versions.
     #[command(subcommand)]
     Agent(AgentCommand),
+    /// Teams: a lead and the agents it may ask to do part of the work.
+    #[command(subcommand)]
+    Team(TeamCommand),
+    /// Show an execution and everything it started, as a tree.
+    Tree(IdArg),
     /// Skills: folders of instructions and scripts an agent loads when it needs them.
     #[command(subcommand)]
     Skill(SkillCommand),
@@ -646,6 +651,11 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_conversation: bool,
 
+    /// Ask a team instead: its lead runs, and may ask the members to do part of the work at the same time. The other flags only
+    /// narrow what the lead may do.
+    #[arg(long, value_name = "TEAM", value_parser = parse_slug, conflicts_with = "agent")]
+    pub team: Option<String>,
+
     /// Ask an agent instead: it brings its own instructions, skills, tools and memory. The other flags only narrow
     /// what it may do (`--allow…` flags keep only what both the agent and the flag allow).
     #[arg(long, value_name = "AGENT", value_parser = parse_slug)]
@@ -655,8 +665,8 @@ pub struct RunArgs {
     #[arg(long, value_name = "N", requires = "agent")]
     pub agent_version: Option<u32>,
 
-    /// With --agent: data that goes with the prompt, as JSON.
-    #[arg(long, value_name = "JSON", value_parser = parse_json, requires = "agent")]
+    /// With --agent or --team: data that goes with the prompt, as JSON.
+    #[arg(long, value_name = "JSON", value_parser = parse_json)]
     pub input: Option<serde_json::Value>,
 }
 
@@ -836,6 +846,95 @@ pub struct AgentAddArgs {
     /// Add it under another name.
     #[arg(long = "as", value_name = "NAME", value_parser = parse_slug)]
     pub rename: Option<String>,
+}
+
+/// What `zorix team` does.
+#[derive(Debug, Subcommand)]
+pub enum TeamCommand {
+    /// List teams.
+    List,
+    /// Show a team: its lead, its members and whether they all exist.
+    Show(TeamNameArg),
+    /// Make a team from a lead and members that are agents.
+    Create(TeamCreateArgs),
+    /// Change a team's lead, members, name or description.
+    Edit(TeamEditArgs),
+    /// Delete a team. The agents in it stay.
+    Remove(TeamRemoveArgs),
+    /// Add a ready-made team, with the agents it needs that are not here yet.
+    Add(TeamAddArgs),
+    /// List the ready-made teams.
+    Templates,
+}
+
+/// A team's name (slug).
+#[derive(Debug, Args)]
+pub struct TeamNameArg {
+    /// The team's name.
+    #[arg(value_parser = parse_slug)]
+    pub team: String,
+}
+
+/// Options for `team create`.
+#[derive(Debug, Args)]
+pub struct TeamCreateArgs {
+    /// The team's name: lowercase letters, digits and dashes.
+    #[arg(value_parser = parse_slug)]
+    pub team: String,
+    /// The agent that receives the work and may ask the others.
+    #[arg(long, value_parser = parse_slug)]
+    pub lead: String,
+    /// An agent the lead may ask. Repeat for more.
+    #[arg(long = "member", value_name = "AGENT", value_parser = parse_slug)]
+    pub members: Vec<String>,
+    /// The display name.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// What it is for, in a sentence.
+    #[arg(long)]
+    pub description: Option<String>,
+}
+
+/// Options for `team edit`.
+#[derive(Debug, Args)]
+pub struct TeamEditArgs {
+    /// The team's name.
+    #[arg(value_parser = parse_slug)]
+    pub team: String,
+    /// A new lead.
+    #[arg(long, value_parser = parse_slug)]
+    pub lead: Option<String>,
+    /// Add a member. Repeat for more.
+    #[arg(long = "add-member", value_name = "AGENT", value_parser = parse_slug)]
+    pub add: Vec<String>,
+    /// Take a member out. Repeat for more.
+    #[arg(long = "remove-member", value_name = "AGENT", value_parser = parse_slug)]
+    pub remove: Vec<String>,
+    /// A new display name.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// A new description.
+    #[arg(long)]
+    pub description: Option<String>,
+}
+
+/// Options for `team remove`.
+#[derive(Debug, Args)]
+pub struct TeamRemoveArgs {
+    /// The team's name.
+    #[arg(value_parser = parse_slug)]
+    pub team: String,
+    /// Say yes without being asked.
+    #[arg(long)]
+    pub yes: bool,
+}
+
+/// Options for `team add`.
+#[derive(Debug, Args)]
+pub struct TeamAddArgs {
+    /// The ready-made team (see `zorix team templates`).
+    #[arg(long, value_name = "NAME")]
+    pub template: String,
 }
 
 /// What `zorix skill` does.
@@ -1277,6 +1376,10 @@ pub struct ListArgs {
     /// Most rows.
     #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u32).range(1..=1000), value_name = "N")]
     pub limit: u32,
+
+    /// Also list the sub-runs that agents started (by default only the runs somebody asked for are listed).
+    #[arg(long)]
+    pub all: bool,
     /// Only executions made by this agent.
     #[arg(long, value_name = "AGENT", value_parser = parse_slug)]
     pub agent: Option<String>,

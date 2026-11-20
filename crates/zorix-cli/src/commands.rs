@@ -33,6 +33,8 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Resume(args) => resume(&home, tenant, printer, args).await,
         Command::Recover(args) => recover(&home, tenant, printer, args).await,
         Command::Agent(command) => crate::agents::agent(&home, &tenant, printer, command).await,
+        Command::Team(command) => crate::agents::team(&home, &tenant, printer, command).await,
+        Command::Tree(arg) => tree(&home, &tenant, printer, arg).await,
         Command::Skill(command) => crate::agents::skill(&home, &tenant, printer, command).await,
         Command::Eval(command) => crate::agents::eval(&home, &tenant, printer, command).await,
         Command::Tools => tools(&home, printer),
@@ -119,10 +121,10 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         knowledge: if args.no_knowledge { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
         operations: if args.no_memory { zorix_core::RecallMode::Off } else { zorix_core::RecallMode::Auto },
     };
-    let new = if let Some(slug) = &args.agent {
+    let new = if args.agent.is_some() || args.team.is_some() {
         if args.instructions.is_some() {
             return Err(CliError(
-                "An agent has its own instructions; --instructions cannot be used with --agent.".into(),
+                "An agent has its own instructions; --instructions cannot be used with --agent or --team.".into(),
             ));
         }
         // Flags only narrow: without any --allow… flag the agent keeps everything it has.
@@ -162,11 +164,18 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
             idempotency_key: args.idempotency_key.clone(),
             ..zorix_agents::AgentAsk::default()
         };
-        let mut new = app.hub.prepare_agent_run(slug, args.agent_version, ask, &*app.router).await?;
+        let mut new = match (&args.agent, &args.team) {
+            (Some(slug), _) => app.hub.prepare_agent_run(slug, args.agent_version, ask, &*app.router).await?,
+            (None, Some(team)) => app.hub.prepare_team_run(team, ask, &*app.router).await?,
+            (None, None) => unreachable!("one of them is set"),
+        };
         new.tenant = Some(tenant.clone());
         if let Some(binding) = &new.agent {
             app.start_servers(&new.grants).await;
-            eprintln!("zorix: {} v{}", binding.slug, binding.version);
+            match &binding.team {
+                Some(team) => eprintln!("zorix: team {team}, led by {} v{}", binding.slug, binding.version),
+                None => eprintln!("zorix: {} v{}", binding.slug, binding.version),
+            }
         }
         new
     } else {
@@ -222,6 +231,8 @@ async fn list(home: &Path, tenant: &TenantId, printer: Printer, args: ListArgs) 
         states: args.state.into_iter().collect(),
         limit: args.limit as usize,
         agent,
+        // The sub-runs that agents started belong to the run that asked for them; `--all` lists them too.
+        roots_only: !args.all,
         ..ListFilter::default()
     };
     let executions = repository.list(tenant, &filter).await?;
@@ -269,7 +280,20 @@ async fn show(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> R
     println!("Task       {}", shorten(&e.request.prompt, 100));
     println!("Model      {}", summary.model);
     if let Some(agent) = &e.agent {
-        println!("Agent      {} v{}", agent.slug, agent.version);
+        println!(
+            "Agent      {} v{}{}",
+            agent.slug,
+            agent.version,
+            agent.team.as_ref().map(|t| format!(" (team {t})")).unwrap_or_default()
+        );
+    }
+    if let Some(parent) = e.parent {
+        println!("Part of    {parent} (see `zorix tree {}`)", e.root.unwrap_or(parent));
+    } else {
+        let kids = repository.children(tenant, e.id).await?;
+        if !kids.is_empty() {
+            println!("Sub-runs   {} (see `zorix tree {}`)", kids.len(), e.id);
+        }
     }
     if !summary.models.is_empty() {
         println!(
@@ -345,29 +369,37 @@ async fn decide(
     let engine = &app.engine;
     let detail = engine.detail(&tenant, args.id).await?;
     app.start_servers(&detail.execution.grants).await;
-    if detail.execution.state != ExecutionState::WaitingForApproval {
+    // An approval may be asked anywhere in the tree below the execution you name.
+    let pending = engine.pending_in_tree(&tenant, args.id).await?;
+    if pending.is_empty() {
         app.shutdown().await;
         return Err(CliError(format!(
-            "Execution {} is {}, not waiting for an approval.",
+            "Execution {} is {}, not waiting for an approval (and nothing it started is).",
             args.id, detail.execution.state
         )));
     }
-    let pending: Vec<_> = detail.approvals.iter().filter(|a| a.status == ApprovalStatus::Pending).collect();
     let chosen = match (args.approval, pending.as_slice()) {
-        (Some(id), _) => pending.iter().find(|a| a.id == id).copied(),
-        (None, [only]) => Some(*only),
+        (Some(id), _) => pending.iter().find(|p| p.approval.id == id),
+        (None, [only]) => Some(only),
         (None, _) => None,
     };
-    let Some(approval) = chosen else {
+    let Some(item) = chosen else {
         app.shutdown().await;
-        let ids: Vec<String> = pending.iter().map(|a| a.id.to_string()).collect();
+        let ids: Vec<String> = pending
+            .iter()
+            .map(|p| {
+                format!("{} ({} asks for {})", p.approval.id, p.agent.as_deref().unwrap_or("this run"), p.approval.tool)
+            })
+            .collect();
         return Err(CliError(format!("Say which approval to answer. Pending: {}", ids.join(", "))));
     };
+    let (target, approval) = (item.execution, item.approval.clone());
     eprintln!(
-        "{} {} with {}",
+        "{} {} with {}{}",
         if approve { "Approving" } else { "Refusing" },
         approval.tool,
-        shorten(&approval.arguments.to_string(), 200)
+        shorten(&approval.arguments.to_string(), 200),
+        item.agent.as_ref().map(|a| format!(" (asked by {a})")).unwrap_or_default()
     );
     let after = last_seq(engine, &tenant, args.id).await?;
     let stream = engine.subscribe(&tenant, args.id, after).await?;
@@ -378,7 +410,7 @@ async fn decide(
         call_hash: Some(approval.call_hash.clone()),
         automatic: false,
     };
-    engine.decide(&tenant, args.id, approval.id, decision).await?;
+    engine.decide(&tenant, target, approval.id, decision).await?;
     let exit = follow(engine, &tenant, args.id, stream, args.then, printer).await;
     app.shutdown().await;
     exit
@@ -499,6 +531,31 @@ fn tools(home: &Path, printer: Printer) -> Result<Exit, CliError> {
             "changes things"
         };
         println!("{:<22} {:<14} {:<12} {}", spec.id, how, spec.source.label(), shorten(&spec.description, 70));
+    }
+    Ok(Exit::Done)
+}
+
+async fn tree(home: &Path, tenant: &TenantId, printer: Printer, arg: IdArg) -> Result<Exit, CliError> {
+    let repository = open_reader(home)?;
+    let root = repository.get(tenant, arg.id).await?.ok_or(zorix_core::Error::NotFound(arg.id))?;
+    // Name the top of the tree even when a sub-run was given.
+    let top = match root.root {
+        Some(top) => repository.get(tenant, top).await?.unwrap_or(root),
+        None => root,
+    };
+    let mut all = vec![top.clone()];
+    all.extend(repository.descendants(tenant, top.id).await?);
+    if printer.json {
+        println!("{}", serde_json::to_string(&all)?);
+    } else {
+        println!("{}", crate::render::tree_text(&all));
+        let cost: u64 = top.usage.cost_micros;
+        eprintln!(
+            "\n{} execution(s); the root's usage includes theirs: {} tokens, ${:.4}.",
+            all.len(),
+            top.usage.total_tokens(),
+            cost as f64 / 1_000_000.0
+        );
     }
     Ok(Exit::Done)
 }

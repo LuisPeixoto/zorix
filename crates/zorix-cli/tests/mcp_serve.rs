@@ -310,3 +310,77 @@ fn an_access_entry_must_be_valid_and_needs_allow_runs() {
     assert_eq!(code(&out), 2);
     assert!(text(&out.stderr).to_lowercase().contains("ftp"), "{}", text(&out.stderr));
 }
+
+#[tokio::test]
+async fn a_team_runs_through_mcp_and_delegates_only_if_the_server_allows_it() {
+    let home = Home::new();
+    for args in [
+        &["agent", "create", "boss", "--model", "script", "--instructions", "You lead."][..],
+        &["agent", "create", "helper", "--model", "script", "--instructions", "You help."][..],
+        &["team", "create", "duo", "--lead", "boss", "--member", "helper"][..],
+    ] {
+        assert_eq!(code(&home.zorix(args)), 0);
+    }
+    let script = home.dir.path().join("turns.json");
+    std::fs::write(
+        &script,
+        r#"[{"call": {"calls": [{"tool": "agents.delegate", "arguments": {"tasks": [{"agent": "helper", "task": "Find it."}]}}]}},
+            {"say": "The helper found it."}, {"say": "Final: found."}]"#,
+    )
+    .unwrap();
+    let model = format!("script:{}", script.display());
+    let project = home.dir.path().display().to_string();
+
+    // Teams are listed with the agents.
+    let client = home.client(&[]).await;
+    let listed = call(&client, "zorix.agents", json!({})).await.structured.expect("structured");
+    assert_eq!(listed["teams"][0]["team"], "duo");
+    assert_eq!(listed["teams"][0]["lead"], "boss");
+    assert_eq!(listed["teams"][0]["members"], json!(["helper"]));
+    client.close().await;
+
+    // The server allows delegation and the helper: the lead asks it, and the answer says what ran.
+    let client = home
+        .client(&[
+            "--allow-runs",
+            "--model",
+            &model,
+            "--allow",
+            "agents.delegate",
+            "--allow-access",
+            "agent:helper",
+            "--project",
+            &project,
+        ])
+        .await;
+    let done = call(&client, "zorix.run_agent", json!({"team": "duo", "prompt": "Find it.", "wait_seconds": 60})).await;
+    assert!(!done.is_error, "{}", text_of(&done));
+    let done = done.structured.expect("structured");
+    assert_eq!(done["state"], "completed", "{done}");
+    assert_eq!(done["result"], "Final: found.");
+    assert_eq!(done["agent"]["team"], "duo");
+    assert_eq!(done["sub_runs"].as_array().map(Vec::len), Some(1), "{done}");
+    assert_eq!(done["sub_runs"][0]["agent"], "helper");
+    assert_eq!(done["sub_runs"][0]["state"], "completed");
+    let both = call(&client, "zorix.run_agent", json!({"agent": "boss", "team": "duo", "prompt": "x"})).await;
+    assert!(both.is_error && text_of(&both).contains("not both"), "{}", text_of(&both));
+    let neither = call(&client, "zorix.run_agent", json!({"prompt": "x"})).await;
+    assert!(neither.is_error && text_of(&neither).contains("Name the agent or the team"), "{}", text_of(&neither));
+    client.close().await;
+
+    // Without those flags the same lead has nothing to delegate with: the call is refused and nothing below it starts.
+    let refused = home.dir.path().join("refused.json");
+    std::fs::write(
+        &refused,
+        r#"[{"call": {"calls": [{"tool": "agents.delegate", "arguments": {"tasks": [{"agent": "helper", "task": "Find it."}]}}]}},
+            {"say": "I could not ask anyone."}]"#,
+    )
+    .unwrap();
+    let model = format!("script:{}", refused.display());
+    let client = home.client(&["--allow-runs", "--model", &model, "--project", &project]).await;
+    let done = call(&client, "zorix.run_agent", json!({"team": "duo", "prompt": "Find it.", "wait_seconds": 60})).await;
+    let done = done.structured.expect("structured");
+    assert_eq!(done["result"], "I could not ask anyone.", "{done}");
+    assert!(done.get("sub_runs").is_none(), "nothing was started: {done}");
+    client.close().await;
+}
