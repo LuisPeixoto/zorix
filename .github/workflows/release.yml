@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag such as `v0.5.0` to build installers and create a draft GitHub release.
+# Push a tag such as `v0.6.0` to build installers and create a draft GitHub release.
 on:
   push:
     tags: ["v*"]
