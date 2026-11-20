@@ -60,12 +60,20 @@ integrations, more catalogue entries, cloud providers' APIs.
 - Four **starter agents** with skills and evaluation suites; agents over **MCP** (`zorix.agents`, `zorix.run_agent`).
 - The CLI (`agent`, `skill`, `eval`, `run --agent`), and the **Agents screens**: gallery, chat, definition, skills, versions, evals and memory.
 
-Later: skills that need native packages, reasoning-token streaming, agents that call agents (Phase 6).
+Later: skills that need native packages, reasoning-token streaming.
 
-## Phase 6 — Multi-Agent Orchestration
+## ✅ Phase 6 — Multi-Agent Orchestration · v0.6.0
 
-Delegation, parallel work and structured context transfer. An execution can start child executions (the parent id is
-already part of the model), with budgets and permissions that can only shrink down the tree.
+- **Delegation**: the `agents.delegate` tool starts child runs, up to eight at once, three levels deep. A parent waits in a new state, `waiting_for_children`,
+  without holding a worker, and receives each child's answer, structured result, steps and cost ([orchestration](orchestration.md)).
+- **Budgets and permissions only shrink**: a child's grants are its agent's grants intersected with the parent's, the remaining budget is split among the children,
+  and what they spend rolls up. Loops, archived agents and models the parent may not use are refused with a reason.
+- **Approvals rise to the root**: a sub-run's approval stops the tree and is answered from the run you started. Cancelling the root cancels the tree.
+- **Teams**: a lead and the agents it may ask, run from one place, with a ready-made *research desk* ([teams](teams.md)).
+- The CLI (`team`, `run --team`, `tree`, roots-only `list`), **MCP** (`team` on `zorix.run_agent`), and the app: delegation cards in the chat, a work tree in the run view,
+  the Teams screens, and teams in New run and ⌘K. Database schema 5.
+
+Later: adaptive budget splits, a scratchpad shared by siblings, team versions and a team file format.
 
 ## Phase 7 — Workflow Engine
 

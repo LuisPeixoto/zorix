@@ -44,10 +44,18 @@ everything. It is not tied to one model or provider, and the core does not know 
 - **Agents you can trust to change.** Reusable [agents](docs/agents.md) with instructions, [skills](docs/skills.md), tools, memory of their own and
   a list of models they may use. Every change is a version, every run records which one it used, and [evaluations](docs/evals.md) tell you whether a change made
   the agent worse. Start from four ready-made agents, chat with them in the app, or call them over MCP.
+- **Agents that work together.** An agent can ask other agents, several at once and several levels deep, through one tool, `agents.delegate`.
+  [Teams](docs/teams.md) say who leads and who may be asked. A parent waits without holding a worker, what it spends and may do only
+  **shrinks** down the tree, an approval asked anywhere below reaches you at the top, and the app draws the whole [tree](docs/orchestration.md).
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
 ## Screenshots
+
+| | |
+|---|---|
+| ![A run and the agents it asked](docs/screenshots-0.6.0/run-tree-light.png) | ![A team chat](docs/screenshots-0.6.0/team-chat-light.png) |
+| The work tree: who was asked, what each cost, how it ended. | A lead asks its team; each answer arrives in the same conversation. |
 
 | | |
 |---|---|
@@ -64,11 +72,11 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![Integrations](docs/screenshots-0.4.0/integrations-connected-light.png) | ![A database change waiting for approval](docs/screenshots-0.4.0/approval-db-light.png) |
 | Servers and services, live. Tools wait for your review. | What a change would do, with the SQL highlighted. |
 
-## What is in Phases 1 to 5
+## What is in Phases 1 to 6
 
 | Area | What it does | Guide |
 |---|---|---|
-| Execution engine and lifecycle | Create, start, pause, resume, cancel, recover. Ten states, validated transitions | [Runtime](docs/runtime.md) |
+| Execution engine and lifecycle | Create, start, pause, resume, cancel, recover. Eleven states, validated transitions | [Runtime](docs/runtime.md) |
 | The loop | Context, model call, tool calls, validation, limits, retries, timeouts | [Runtime](docs/runtime.md) |
 | Context builder | Ordered, budgeted sources; memory plugs in through it | [ADR-0007](docs/adr/0007-context-builder.md) |
 | Tools | MCP-shaped contract, schema validation, timeouts, output caps, eight demo tools | [Tools](docs/tools.md) |
@@ -84,6 +92,8 @@ everything. It is not tied to one model or provider, and the core does not know 
 | MCP | Client for both protocol eras, stdio and HTTP, OAuth, pinned and reviewed tools, catalogue, import; ZORIX as a server | [MCP](docs/mcp.md) |
 | Integrations | HTTP, signed webhooks, GitHub, GitLab, Jira, Slack, Discord, SQLite, Postgres; grants per resource | [Integrations](docs/integrations.md) |
 | Code sandbox | JavaScript (QuickJS) and Python in WebAssembly: no network, hard limits | [Sandbox](docs/sandbox.md) |
+| Agents | Versioned agents, skills, memory of their own, model allow-list, evaluations, starter agents | [Agents](docs/agents.md) |
+| Orchestration | Parallel and nested delegation, structured handoff, budgets and permissions that only shrink, approvals up the tree, teams | [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) |
 
 ## Install
 
@@ -141,6 +151,8 @@ cargo run -p zorix-runtime --example embed
 | [MCP servers](docs/mcp.md) | Using, trusting and serving MCP |
 | [Integrations](docs/integrations.md) | Connections, grants and what each tool guards |
 | [The code sandbox](docs/sandbox.md) | JavaScript and Python, limits and files |
+| [Agents](docs/agents.md), [Skills](docs/skills.md), [Evaluations](docs/evals.md) | Reusable agents you can version and test |
+| [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) | Agents asking agents: delegation, trees, budgets, approvals |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |
