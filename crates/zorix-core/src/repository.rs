@@ -55,6 +55,8 @@ pub enum ToolCallStatus {
     Failed,
     /// Refused by the policy or by a person.
     Denied,
+    /// Handed to other executions, which are still working; the result arrives when they finish (ADR-0029).
+    Delegated,
 }
 
 impl ToolCallStatus {
@@ -153,6 +155,10 @@ pub struct ListFilter {
     pub conversation: Option<ConversationId>,
     /// Only runs of this agent.
     pub agent: Option<crate::ids::AgentId>,
+    /// Only the executions this one started.
+    pub parent: Option<crate::ids::ExecutionId>,
+    /// Only executions nobody started (the tops of trees).
+    pub roots_only: bool,
     /// At most this many (newest first). Zero means the default of 100.
     pub limit: usize,
 }
@@ -178,6 +184,33 @@ pub trait ExecutionRepository: Send + Sync {
 
     /// Executions of this tenant, newest first.
     async fn list(&self, tenant: &TenantId, filter: &ListFilter) -> Result<Vec<Execution>>;
+
+    /// The executions one execution started, oldest first.
+    async fn children(&self, tenant: &TenantId, parent: ExecutionId) -> Result<Vec<Execution>> {
+        let filter = ListFilter { parent: Some(parent), limit: 1_000, ..ListFilter::default() };
+        let mut found = self.list(tenant, &filter).await?;
+        found.sort_by_key(|e| (e.created_at, e.id));
+        Ok(found)
+    }
+
+    /// Every execution below `root` (children, their children, and so on), nearest first. The root itself is not included.
+    async fn descendants(&self, tenant: &TenantId, root: ExecutionId) -> Result<Vec<Execution>> {
+        let mut out: Vec<Execution> = Vec::new();
+        let mut frontier = vec![root];
+        while let Some(next) = frontier.pop() {
+            for child in self.children(tenant, next).await? {
+                // A guard against a tree that somehow loops: nothing is visited twice.
+                if child.id != root && !out.iter().any(|e| e.id == child.id) {
+                    frontier.insert(0, child.id);
+                    out.push(child);
+                }
+            }
+            if out.len() > 10_000 {
+                break;
+            }
+        }
+        Ok(out)
+    }
 
     /// Executions of every tenant that are in one of these states (used by recovery and by the scheduler).
     async fn in_states(&self, states: &[ExecutionState]) -> Result<Vec<Execution>>;

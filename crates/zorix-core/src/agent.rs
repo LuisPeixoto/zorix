@@ -321,6 +321,66 @@ pub fn valid_skill_name(name: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Most teams a tenant may have.
+pub const MAX_TEAMS: usize = 100;
+
+/// A lead and the colleagues it may ask (ADR-0031). A plain, editable record: it grants, it does not script.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Team {
+    /// The owner.
+    pub tenant: TenantId,
+    /// Its short name (never changes).
+    pub slug: AgentSlug,
+    /// What people call it.
+    pub name: String,
+    /// One sentence about what it is for.
+    #[serde(default)]
+    pub description: String,
+    /// How it looks.
+    #[serde(default)]
+    pub avatar: Avatar,
+    /// The agent that receives the work and may ask the others.
+    pub lead: AgentSlug,
+    /// The agents the lead may ask.
+    #[serde(default)]
+    pub members: Vec<AgentSlug>,
+    /// When it was last changed.
+    pub updated_at: Timestamp,
+}
+
+impl Team {
+    /// Check what a person typed.
+    pub fn validate(&self) -> Result<()> {
+        let bad = |what: String| Err(Error::InvalidInput(what));
+        if self.name.trim().is_empty() || self.name.chars().count() > 80 {
+            return bad("The name has 1 to 80 characters.".into());
+        }
+        if self.description.chars().count() > MAX_DESCRIPTION {
+            return bad(format!("The description has {MAX_DESCRIPTION} characters at most."));
+        }
+        if self.members.len() > 12 {
+            return bad("A team has 12 members at most.".into());
+        }
+        if self.members.contains(&self.lead) {
+            return bad("The lead is not also a member: the lead asks the members.".into());
+        }
+        for (i, member) in self.members.iter().enumerate() {
+            if self.members[..i].contains(member) {
+                return bad(format!("{member} is in the team twice."));
+            }
+        }
+        if !["accent", "ok", "warn", "err", "info", "muted"].contains(&self.avatar.color.as_str()) {
+            return bad("The colour is accent, ok, warn, err, info or muted.".into());
+        }
+        Ok(())
+    }
+
+    /// The access entries the lead gets for this team: ask each member, and delegate.
+    pub fn access(&self) -> Vec<String> {
+        self.members.iter().map(|m| format!("agent:{m}")).collect()
+    }
+}
+
 /// An agent as listed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Agent {
@@ -377,6 +437,9 @@ pub struct AgentBinding {
     /// Whether the run sees and writes the agent's own memory (ADR-0026).
     #[serde(default = "yes")]
     pub agent_memory: bool,
+    /// The team the run was made for, when one was asked (ADR-0031).
+    #[serde(default)]
+    pub team: Option<String>,
 }
 
 impl AgentBinding {
@@ -394,6 +457,7 @@ impl AgentBinding {
             skills: version.spec.skills.clone(),
             allowed_models: allowed,
             agent_memory: version.spec.agent_memory,
+            team: None,
         }
     }
 
@@ -768,6 +832,37 @@ pub trait AgentStore: Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    fn team(lead: &str, members: &[&str]) -> Team {
+        Team {
+            tenant: TenantId::local(),
+            slug: AgentSlug::new("desk").unwrap(),
+            name: "Desk".into(),
+            description: "A team.".into(),
+            avatar: Avatar::default(),
+            lead: AgentSlug::new(lead).unwrap(),
+            members: members.iter().map(|m| AgentSlug::new(*m).unwrap()).collect(),
+            updated_at: Timestamp(1),
+        }
+    }
+
+    #[test]
+    fn a_team_is_a_lead_and_members_and_gives_the_lead_one_entry_per_member() {
+        let t = team("lead", &["researcher", "writer"]);
+        t.validate().unwrap();
+        assert_eq!(t.access(), ["agent:researcher", "agent:writer"]);
+        let grants = crate::access::compile_access(&t.access()).unwrap();
+        assert!(grants.allows(&crate::permission::Permission::new(crate::permission::Action::Execute, "agent:writer")));
+        assert!(!grants.allows(&crate::permission::Permission::new(crate::permission::Action::Execute, "agent:lead")));
+        assert!(team("lead", &["lead"]).validate().unwrap_err().to_string().contains("not also a member"));
+        assert!(team("lead", &["a", "a"]).validate().unwrap_err().to_string().contains("twice"));
+        let many: Vec<String> = (0..13).map(|i| format!("m{i}")).collect();
+        let refs: Vec<&str> = many.iter().map(String::as_str).collect();
+        assert!(team("lead", &refs).validate().is_err());
+        let mut unnamed = team("lead", &[]);
+        unnamed.name = " ".into();
+        assert!(unnamed.validate().is_err());
+    }
+
     use super::*;
 
     fn spec() -> AgentSpec {

@@ -5,12 +5,13 @@ use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
-use crate::approval::{Approval, ApprovalDecision};
+use crate::approval::{Approval, ApprovalDecision, ApprovalStatus};
 use crate::error::Result;
 use crate::event::ExecutionEvent;
 use crate::execution::{Execution, NewExecution};
 use crate::ids::{ApprovalId, ExecutionId, TenantId};
 use crate::repository::{ListFilter, ToolCallRecord};
+use crate::state::ExecutionState;
 
 /// An execution with the records that belong to it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -21,6 +22,19 @@ pub struct ExecutionDetail {
     pub tool_calls: Vec<ToolCallRecord>,
     /// Its approvals.
     pub approvals: Vec<Approval>,
+}
+
+/// An approval that waits in a tree, with who asked.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TreeApproval {
+    /// The execution that is waiting (a child, a grandchild or the root itself).
+    pub execution: ExecutionId,
+    /// The agent that run belongs to, when an agent made it.
+    pub agent: Option<String>,
+    /// How deep it is in the tree.
+    pub depth: u32,
+    /// The approval, to be decided on `execution`.
+    pub approval: Approval,
 }
 
 /// What recovery did.
@@ -73,6 +87,48 @@ pub trait ExecutionEngine: Send + Sync {
 
     /// Executions of a tenant, newest first.
     async fn list(&self, tenant: &TenantId, filter: &ListFilter) -> Result<Vec<Execution>>;
+
+    /// An execution and everything it started, nearest first (the execution itself comes first).
+    async fn tree(&self, tenant: &TenantId, root: ExecutionId) -> Result<Vec<Execution>> {
+        let top = self.get(tenant, root).await?;
+        let mut all = vec![top];
+        let mut frontier = vec![root];
+        while let Some(next) = frontier.pop() {
+            let filter = ListFilter { parent: Some(next), limit: 1_000, ..ListFilter::default() };
+            let mut children = self.list(tenant, &filter).await?;
+            children.sort_by_key(|e| (e.created_at, e.id));
+            for child in children {
+                if !all.iter().any(|e| e.id == child.id) {
+                    frontier.insert(0, child.id);
+                    all.push(child);
+                }
+            }
+            if all.len() > 10_000 {
+                break;
+            }
+        }
+        Ok(all)
+    }
+
+    /// The approvals waiting for a person anywhere in the tree of `root`, each with the execution that asked.
+    async fn pending_in_tree(&self, tenant: &TenantId, root: ExecutionId) -> Result<Vec<TreeApproval>> {
+        let mut out = Vec::new();
+        for execution in self.tree(tenant, root).await? {
+            if execution.state != ExecutionState::WaitingForApproval {
+                continue;
+            }
+            let detail = self.detail(tenant, execution.id).await?;
+            for approval in detail.approvals.into_iter().filter(|a| a.status == ApprovalStatus::Pending) {
+                out.push(TreeApproval {
+                    execution: execution.id,
+                    agent: execution.agent.as_ref().map(|a| a.slug.to_string()),
+                    depth: execution.depth,
+                    approval,
+                });
+            }
+        }
+        Ok(out)
+    }
 
     /// Stored events after `after_seq`.
     async fn events(&self, tenant: &TenantId, id: ExecutionId, after_seq: u64) -> Result<Vec<ExecutionEvent>>;

@@ -114,13 +114,27 @@ pub fn code(language: &str) -> Result<Vec<Permission>, String> {
     Ok(grants)
 }
 
+/// `agent:SLUG` or `agent:*`: ask this agent (or any agent) to do part of the work with `agents.delegate` (ADR-0029). The agent
+/// asked still gets only what its own grants and its caller's grants share.
+pub fn agent(slug: &str) -> Result<Vec<Permission>, String> {
+    if slug != "*" {
+        crate::agent::AgentSlug::new(slug)
+            .map_err(|_| "agent: takes an agent's name, such as `agent:researcher`, or `*`".to_string())?;
+    }
+    let mut grants = vec![Permission::new(Action::Execute, format!("agent:{slug}"))];
+    grants.extend(tools(&[crate::delegation::TOOL]));
+    Ok(grants)
+}
+
 /// One access entry of an agent, in the syntax of the `--allow-…` flags with a prefix naming the family:
 /// `http:HOST`, `repo:[github:|gitlab:]OWNER/REPO[:write]`, `jira:KEY[:write]`, `chat:slack:#channel[:write]`,
-/// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `read:PATTERN`
+/// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `agent:SLUG` (ask that agent, or `*`), `read:PATTERN`
 /// and `write:PATTERN` (workspace paths, relative).
 pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
     let (family, rest) = entry.split_once(':').ok_or_else(|| {
-        format!("“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, read or write.")
+        format!(
+            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, read or write."
+        )
     })?;
     match family {
         "http" => http(rest),
@@ -135,14 +149,15 @@ pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
             }
             Ok(vec![tool_grant(&format!("mcp.{rest}.*"))?])
         }
+        "agent" => agent(rest),
         "read" | "write" => {
             validate_workspace_pattern(rest)?;
             let action = if family == "read" { Action::Read } else { Action::Write };
             Ok(vec![workspace_grant(action, rest)?])
         }
-        other => {
-            Err(format!("“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, read, write)."))
-        }
+        other => Err(format!(
+            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, read, write)."
+        )),
     }
 }
 
@@ -163,6 +178,20 @@ mod tests {
 
     fn has(grants: &[Permission], action: Action, resource: &str) -> bool {
         grants.iter().any(|g| g.action == action && g.resource == resource)
+    }
+
+    #[test]
+    fn asking_an_agent_grants_execute_on_it_and_the_delegate_tool() {
+        let one = compile_entry("agent:researcher").unwrap();
+        assert!(has(&one, Action::Execute, "agent:researcher") && has(&one, Action::UseTool, "agents.delegate"));
+        let grants = compile_access(&["agent:researcher".into()]).unwrap();
+        assert!(grants.allows(&Permission::new(Action::Execute, "agent:researcher")));
+        assert!(!grants.allows(&Permission::new(Action::Execute, "agent:writer")), "only the one that was named");
+        let any = compile_access(&["agent:*".into()]).unwrap();
+        assert!(any.allows(&Permission::new(Action::Execute, "agent:writer")));
+        for bad in ["agent:", "agent:Not A Slug", "agent:a/b"] {
+            assert!(compile_entry(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]
