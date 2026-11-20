@@ -46,9 +46,22 @@ The other flags only **narrow** it: an `--allow…` flag keeps what both the age
 `--no-memory` and friends switch memory off. `--agent-version N` picks a version, `--input JSON` sends data with the prompt, and `--model`
 must be one the agent may use. `--instructions` cannot be combined with it. The version is printed (`zorix: calc v2`) and shown by `zorix show`.
 
-### `zorix list [--state STATE] [--agent NAME] [--limit N]`
+**As a team.** `--team NAME` runs the team's lead and lets it ask the members (not together with `--agent`). While the run waits for the agents it asked, `--approve ask` answers
+their approvals in the same terminal, and the progress of each sub-run is printed under its agent with `↳`. Without `ask`, a run whose sub-run needs a person exits with code 3 and says
+`zorix approve ROOT`.
 
-Executions, newest first.
+### `zorix list [--state STATE] [--agent NAME] [--all] [--limit N]`
+
+Executions, newest first. Only **root** runs are listed; `--all` adds the sub-runs (marked `↳`).
+
+### `zorix tree <ID>`
+
+The tree the run belongs to, drawn from its top (any run in the tree will do): agent and version, state, steps, cost and the task. `--json` prints the executions.
+
+### `zorix team …`
+
+`team list`, `show NAME`, `create NAME --lead AGENT [--member AGENT]… [--name N] [--description D]`, `edit NAME [--lead A] [--add-member A]… [--remove-member A]…`, `remove NAME --yes`,
+`add --template research-desk` and `templates` ([teams](teams.md)). `approve` and `deny` take the root of a tree and answer the approval that waits anywhere below it.
 
 ### `zorix show <ID> [--context]`
 

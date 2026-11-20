@@ -43,6 +43,8 @@ client passes in.
      result is appended as untrusted data and the loop continues.
    - `RequireApproval` persists an approval bound to the call hash and moves to `WaitingForApproval`. The worker
      releases the execution. `Engine::approve/deny` later re-queues it.
+   - `agents.delegate` is intercepted after the same checks: a `DelegationPlanner` turns the tasks into child executions, the call is marked `Delegated`, the run moves to
+     `WaitingForChildren` and the worker is released. When the last child is finished the engine hands the results back, rolls their usage up and re-queues the parent.
 4. Limits are checked every iteration (iterations, tool calls, tokens, cost, wall-clock). Exceeding one fails the
    execution with a specific error and a final event.
 5. Cancellation (`CancellationToken`) is honoured at every await; pause takes effect at the next step boundary.
@@ -145,6 +147,13 @@ call only the hub. The model allow-list lives in the router (`Router::plan` drop
 provider adapters through a `TextSink` to a `LiveBus` and `ExecutionEngine::live()`, and is never persisted. See [agents](agents.md), [skills](skills.md),
 [evals](evals.md) and ADR-0024 to ADR-0028.
 
+## Orchestration
+
+Delegation lives in three places. `zorix-core` holds the pieces with no I/O: the state and triggers, the `DelegationPlanner` port, the request and result types, the `agent:` access family, and
+`Team`. `zorix-runtime` holds the mechanism: intercepting the call, suspending without a worker, waking the parent when its children settle (`reconcile_children`, also run by recovery),
+cascading cancel, the depth and descendant guards, and `tree` and `pending_in_tree` for approvals. `zorix-agents` holds the policy (`AgentPlanner`): who may be asked, grants intersected with the
+parent's, the budget split, the `<available_agents>` index and the starter team. `zorix-hub` registers the tool and wires the planner. See [orchestration](orchestration.md), [teams](teams.md) and ADR-0029 to ADR-0031.
+
 ## What comes next
 
 | Phase | Plugs into |
@@ -153,7 +162,7 @@ provider adapters through a `TextSink` to a `LiveBus` and `ExecutionEngine::live
 | 3 Context & Memory ✅ | New `ContextSource`s; memory stores |
 | 4 Tool & Integration ✅ | `ToolRegistry` sources: MCP, HTTP, integrations, the sandbox; credentials |
 | 5 AI Agent Engine | Agent definitions that create executions with instructions, tools, grants |
-| 6 Multi-Agent | Executions that create child executions (parent id is already part of the model) |
+| 6 Multi-Agent ✅ | Executions that create child executions through `agents.delegate`; teams |
 | 7 Workflows | A scheduler of executions with conditions; uses events as triggers |
 | 8–9 Tasks, Workforce | Clients of `ExecutionEngine` |
 | 10 Command Center | The full interface over events and queries |

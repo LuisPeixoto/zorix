@@ -22,7 +22,8 @@ A runnable version is in [`crates/zorix-runtime/examples/embed.rs`](../crates/zo
 ```
 Created ──► Queued ──► Running ◄──► WaitingForModel
    │           │          │  ▲ ◄──► WaitingForTool
-   │           │          │  └────► WaitingForApproval
+   │           │          │  ├────► WaitingForApproval
+   │           │          │  └────► WaitingForChildren
    │           │          ├──────► Paused ──► Queued
    ▼           ▼          ▼
 Cancelled   Cancelled   Completed | Failed | Cancelled      (terminal)
@@ -36,8 +37,12 @@ Cancelled   Cancelled   Completed | Failed | Cancelled      (terminal)
 | `waiting_for_model` | A model call is in flight |
 | `waiting_for_tool` | A tool call is in flight |
 | `waiting_for_approval` | Suspended until a person decides. No worker holds it; the process may exit |
+| `waiting_for_children` | The run asked other agents (`agents.delegate`) and waits for all of them. No worker holds it; it is queued again when the last child is finished. See [orchestration](orchestration.md) |
 | `paused` | Stopped on request; resumable |
 | `completed`, `failed`, `cancelled` | Finished. Nothing can change them |
+
+An execution also records where it sits in a tree: `parent` (the run that asked), `root` (the run at the top) and `depth` (0 for a root). `list` can return
+roots only or the children of one run, and `Engine::tree` returns a root with everything below it ([orchestration](orchestration.md)).
 
 Every change goes through one pure function, `transition(state, trigger)`, and the repository refuses a write made from
 an old version, so two workers can never move the same execution. `INITIALIZING` from the brief is not a state: building

@@ -5,6 +5,34 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-20
+
+**Multi-Agent Orchestration**: agents that ask other agents, without ever being allowed more than the one who asked.
+
+### Added
+- **Delegation** with the `agents.delegate` tool: one to eight tasks per call, run at the same time, up to three levels deep and 32 runs below a root. Each task can carry
+  structured input, an expected output (a JSON Schema), notes and workspace patterns. The parent receives, per task, the answer, the structured result, steps, tool calls, cost
+  and the child's id. A child that failed or was cancelled is **reported**, not raised.
+- A new lifecycle state, **`waiting_for_children`** (eleven states, fifteen triggers): a parent that waits holds no worker, so nested delegation cannot deadlock. Recovery reconciles
+  parents whose children finished while ZORIX was stopped; a call is never delegated twice.
+- Rules that only **shrink** down the tree: a child's grants are its agent's grants intersected with the parent's; the parent's remaining cost, tokens and tool calls are split
+  among the children and rolled up when they finish; loops, archived agents and models the parent may not use are refused with a reason.
+- **Approvals rise to the root**: a sub-run's approval keeps the whole tree waiting and is answered from the run you started (`zorix approve ROOT`, the app's *Waiting in the tree*).
+  **Cancelling a root cancels its tree.**
+- **Teams**: a lead and the agents it may ask, run with `zorix run --team`, from the app, or over MCP. The lead's instructions get an `<available_agents>` index. A ready-made
+  **research desk** (`research-lead`, `researcher`, `writer`) installs only what is missing.
+- Evaluations: a `delegated` check, and the whole tree refuses approvals during an evaluation.
+- **Command line**: `zorix team …`, `run --team`, `tree`, `list` of root runs (`--all` for every run), `show` with sub-runs, a follow view that merges the streams of sub-runs.
+- **MCP**: `team` on `zorix.run_agent`, teams in `zorix.agents`, sub-runs in `zorix.status`.
+- **Desktop**: delegation cards in the chat with live text and inline approvals, a *Work tree* card and *Waiting in the tree* approvals in the run view, the Teams gallery, team page and
+  editor, teams in *Run as* and ⌘K, and a sub-run count in the run list. Design system: TreeView, DelegationCard and Sparkbar.
+- Database schema 5 (`parent` and `root` on executions, with indexes, and a `teams` table). A 0.5 database upgrades in one transaction.
+- `tools/live-tests.sh orchestration`, and the guides [orchestration](docs/orchestration.md) and [teams](docs/teams.md), with ADRs 0029 to 0031.
+
+### Fixed
+- The in-memory repository now honours the agent filter like the SQLite one.
+- An agent's versions list is shown newest first in the command line and the app.
+
 ## [0.5.0] - 2026-11-19
 
 The **AI Agent Engine**: reusable agents that you can version, evaluate and trust to change.

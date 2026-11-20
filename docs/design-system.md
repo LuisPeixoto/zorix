@@ -107,6 +107,9 @@ Import from `src/lib/ui/index.ts`. All accept `class`; interactive ones have hov
 | `StatusPill` | `ready`, `starting`, `restarting`, `needs_login`, `failed`, `stopped`, `off`, `review`: a tone, a word and a pulse while something is happening |
 | `CodeBlock` | SQL, JSON, JavaScript and Python, highlighted by a tiny tokenizer with no network and no HTML; scrolls, copies |
 | `DiffView` | What changed between two texts: word by word for a sentence, line by line for more. Added and removed carry `+`/`−` and a label, not only colour |
+| `TreeView` | A tree of runs (`root` from `buildTree`, `selected`, `look`, `now`, `onselect`): rows by depth with face, agent, task, steps, time, a bar for the share of the cost and a state badge. `role="tree"`; arrows move, Left and Right fold, Enter opens |
+| `DelegationCard` | One call to `agents.delegate` (`children` rows, `onopen`; snippet `row`): who was asked, state, steps, cost share, live text or answer, and room for an inline approval |
+| `Sparkbar` | A small bar for a share of a total (`value`, `max`, `label`); the label is read aloud, the colour is never the only signal |
 | `Stepper` | A short flow (`steps`, `current`); done steps carry a check |
 | `KeyValue` · `ToggleRow` | Facts as label and value; a setting with a sentence and a switch |
 | `tooltip` · `trapFocus` | Actions. `tooltip` is plain text only |

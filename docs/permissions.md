@@ -33,6 +33,7 @@ Tools that are not granted are not even shown to the model, and if the model ask
 | `read` / `write` `github:<owner>/<repo>`, `gitlab:<group>/<project>` | A repository; `<owner>/*` covers an owner |
 | `read` / `write` `jira:<KEY>`, `slack:<channel>`, `discord:<channel id>` | A project or a channel |
 | `read` / `write` `db:<connection>` | A database connection. `db.query` is always read-only |
+| `execute agent:<slug>` and `use_tool agents.delegate` | Ask that agent to do part of the work (`agent:*` for any agent). A child run only gets the grants that **both** it and its parent have ([orchestration](orchestration.md#what-only-gets-smaller-down-the-tree)) |
 | `execute code:javascript` / `code:python` | The [sandbox](sandbox.md); `read workspace:*` also lets it see the workspace, read-only |
 
 Writes, sends and statements that change data **always ask a person**, `--approve yes` is for tests and demos. See

@@ -15,7 +15,8 @@ visibility that a state would add). Retrying a model or tool call is an `attempt
 ```
 Created ──► Queued ──► Running ◄──► WaitingForModel
    │           │          │  ▲ ◄──► WaitingForTool
-   │           │          │  └────► WaitingForApproval
+   │           │          │  ├────► WaitingForApproval
+   │           │          │  └────► WaitingForChildren   (added in 0.6, ADR-0029)
    │           │          ├──────► Paused ──► Queued
    ▼           ▼          ▼
 Cancelled   Cancelled   Completed | Failed | Cancelled      (terminal)
@@ -28,4 +29,4 @@ workers cannot move one execution. Terminal states accept nothing.
 ## Consequences
 
 - An exhaustive test walks every `(state, trigger)` pair.
-- `Paused` and `WaitingForApproval` survive a restart; `Running` and the other waiting states are re-queued by recovery.
+- `Paused`, `WaitingForApproval` and `WaitingForChildren` survive a restart (recovery reconciles the last one); `Running` and the other waiting states are re-queued by recovery.
