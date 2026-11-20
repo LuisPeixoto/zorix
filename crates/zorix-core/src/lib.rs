@@ -6,6 +6,7 @@ pub mod access;
 pub mod agent;
 pub mod approval;
 pub mod context;
+pub mod delegation;
 pub mod engine;
 pub mod error;
 pub mod event;
@@ -28,13 +29,17 @@ pub mod tool;
 
 pub use agent::{
     Agent, AgentBinding, AgentConversation, AgentModels, AgentSlug, AgentSpec, AgentStore, AgentVersion, Avatar,
-    CheckOutcome, EVAL_LABEL, EvalCase, EvalCheck, EvalJudge, EvalResult, EvalRun, JudgeOutcome, MAX_AGENTS,
-    MAX_VERSIONS, SkillFile, SkillPin, SkillRecord, StoredCase, model_allowed, valid_skill_name,
+    CheckOutcome, EVAL_LABEL, EvalCase, EvalCheck, EvalJudge, EvalResult, EvalRun, JudgeOutcome, MAX_AGENTS, MAX_TEAMS,
+    MAX_VERSIONS, SkillFile, SkillPin, SkillRecord, StoredCase, Team, model_allowed, valid_skill_name,
     validate_model_pattern,
 };
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
-pub use engine::{ExecutionDetail, ExecutionEngine, LiveEvent, RecoveryReport};
+pub use delegation::{
+    ChildResult, DelegateRequest, DelegateTask, DelegationPlanner, MAX_DEPTH, MAX_DESCENDANTS, MAX_TASKS, PlanContext,
+    PlannedChild, child_key,
+};
+pub use engine::{ExecutionDetail, ExecutionEngine, LiveEvent, RecoveryReport, TreeApproval};
 pub use error::{Error, Result};
 pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{

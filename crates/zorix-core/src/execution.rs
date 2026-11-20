@@ -217,9 +217,15 @@ pub struct NewExecution {
     /// The conversation it belongs to, if any.
     #[serde(default)]
     pub conversation: Option<ConversationId>,
-    /// The execution that asked for this one (used by multi-agent work later).
+    /// The execution that asked for this one, when work was delegated (ADR-0029).
     #[serde(default)]
     pub parent: Option<ExecutionId>,
+    /// The execution at the top of the tree this one belongs to. `None` for a root.
+    #[serde(default)]
+    pub root: Option<ExecutionId>,
+    /// How deep it is: 0 for a root, 1 for its children.
+    #[serde(default)]
+    pub depth: u32,
     /// The activity.
     pub request: TaskRequest,
     /// The limits.
@@ -291,6 +297,12 @@ pub struct Execution {
     pub conversation: Option<ConversationId>,
     /// The execution that asked for it, if any.
     pub parent: Option<ExecutionId>,
+    /// The execution at the top of its tree. `None` for a root.
+    #[serde(default)]
+    pub root: Option<ExecutionId>,
+    /// How deep it is: 0 for a root.
+    #[serde(default)]
+    pub depth: u32,
     /// The activity.
     pub request: TaskRequest,
     /// Where it stands.
@@ -350,6 +362,8 @@ impl Execution {
             tenant: new.tenant.unwrap_or_else(TenantId::local),
             conversation: new.conversation,
             parent: new.parent,
+            root: new.root,
+            depth: new.depth,
             request: new.request,
             state: ExecutionState::Created,
             version: 0,

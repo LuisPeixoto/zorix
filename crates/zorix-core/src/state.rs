@@ -24,6 +24,8 @@ pub enum ExecutionState {
     WaitingForTool,
     /// Suspended until a person approves or denies a tool call.
     WaitingForApproval,
+    /// Suspended until the executions it started (delegated work) have finished. No worker holds it (ADR-0029).
+    WaitingForChildren,
     /// Stopped on request; can be resumed.
     Paused,
     /// Finished with a result. Terminal.
@@ -36,13 +38,14 @@ pub enum ExecutionState {
 
 impl ExecutionState {
     /// Every state, for exhaustive tests and listings.
-    pub const ALL: [ExecutionState; 10] = [
+    pub const ALL: [ExecutionState; 11] = [
         ExecutionState::Created,
         ExecutionState::Queued,
         ExecutionState::Running,
         ExecutionState::WaitingForModel,
         ExecutionState::WaitingForTool,
         ExecutionState::WaitingForApproval,
+        ExecutionState::WaitingForChildren,
         ExecutionState::Paused,
         ExecutionState::Completed,
         ExecutionState::Failed,
@@ -68,6 +71,7 @@ impl ExecutionState {
             ExecutionState::WaitingForModel => "waiting_for_model",
             ExecutionState::WaitingForTool => "waiting_for_tool",
             ExecutionState::WaitingForApproval => "waiting_for_approval",
+            ExecutionState::WaitingForChildren => "waiting_for_children",
             ExecutionState::Paused => "paused",
             ExecutionState::Completed => "completed",
             ExecutionState::Failed => "failed",
@@ -107,10 +111,14 @@ pub enum Trigger {
     AwaitTool,
     /// A tool call needs a person's decision.
     AwaitApproval,
+    /// A tool call delegated work to other executions, and the loop waits for them.
+    AwaitChildren,
     /// The model call or the tool call finished.
     StepFinished,
     /// A person approved or denied; the execution goes back to the queue to continue.
     ApprovalResolved,
+    /// Every execution a delegated call started has finished; the parent goes back to the queue to continue.
+    ChildrenSettled,
     /// A pause was requested and the loop reached a step boundary (or the execution was waiting in the queue).
     Pause,
     /// A paused execution was resumed.
@@ -127,14 +135,16 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, for exhaustive tests.
-    pub const ALL: [Trigger; 13] = [
+    pub const ALL: [Trigger; 15] = [
         Trigger::Enqueue,
         Trigger::Start,
         Trigger::AwaitModel,
         Trigger::AwaitTool,
         Trigger::AwaitApproval,
+        Trigger::AwaitChildren,
         Trigger::StepFinished,
         Trigger::ApprovalResolved,
+        Trigger::ChildrenSettled,
         Trigger::Pause,
         Trigger::Resume,
         Trigger::Recover,
@@ -176,6 +186,7 @@ pub fn transition(from: ExecutionState, trigger: Trigger) -> Result<ExecutionSta
         (S::Running, T::AwaitModel) => S::WaitingForModel,
         (S::Running, T::AwaitTool) => S::WaitingForTool,
         (S::Running, T::AwaitApproval) => S::WaitingForApproval,
+        (S::Running, T::AwaitChildren) => S::WaitingForChildren,
         (S::Running, T::Pause) => S::Paused,
         (S::Running, T::Recover) => S::Queued,
         (S::Running, T::Complete) => S::Completed,
@@ -189,6 +200,7 @@ pub fn transition(from: ExecutionState, trigger: Trigger) -> Result<ExecutionSta
 
         (S::WaitingForTool, T::StepFinished) => S::Running,
         (S::WaitingForTool, T::AwaitApproval) => S::WaitingForApproval,
+        (S::WaitingForTool, T::AwaitChildren) => S::WaitingForChildren,
         (S::WaitingForTool, T::Recover) => S::Queued,
         (S::WaitingForTool, T::Fail) => S::Failed,
         (S::WaitingForTool, T::Cancel) => S::Cancelled,
@@ -196,6 +208,10 @@ pub fn transition(from: ExecutionState, trigger: Trigger) -> Result<ExecutionSta
         (S::WaitingForApproval, T::ApprovalResolved) => S::Queued,
         (S::WaitingForApproval, T::Fail) => S::Failed,
         (S::WaitingForApproval, T::Cancel) => S::Cancelled,
+
+        (S::WaitingForChildren, T::ChildrenSettled) => S::Queued,
+        (S::WaitingForChildren, T::Fail) => S::Failed,
+        (S::WaitingForChildren, T::Cancel) => S::Cancelled,
 
         (S::Paused, T::Resume) => S::Queued,
         (S::Paused, T::Cancel) => S::Cancelled,
@@ -221,6 +237,7 @@ mod tests {
         (S::Running, T::AwaitModel, S::WaitingForModel),
         (S::Running, T::AwaitTool, S::WaitingForTool),
         (S::Running, T::AwaitApproval, S::WaitingForApproval),
+        (S::Running, T::AwaitChildren, S::WaitingForChildren),
         (S::Running, T::Pause, S::Paused),
         (S::Running, T::Recover, S::Queued),
         (S::Running, T::Complete, S::Completed),
@@ -232,12 +249,16 @@ mod tests {
         (S::WaitingForModel, T::Cancel, S::Cancelled),
         (S::WaitingForTool, T::StepFinished, S::Running),
         (S::WaitingForTool, T::AwaitApproval, S::WaitingForApproval),
+        (S::WaitingForTool, T::AwaitChildren, S::WaitingForChildren),
         (S::WaitingForTool, T::Recover, S::Queued),
         (S::WaitingForTool, T::Fail, S::Failed),
         (S::WaitingForTool, T::Cancel, S::Cancelled),
         (S::WaitingForApproval, T::ApprovalResolved, S::Queued),
         (S::WaitingForApproval, T::Fail, S::Failed),
         (S::WaitingForApproval, T::Cancel, S::Cancelled),
+        (S::WaitingForChildren, T::ChildrenSettled, S::Queued),
+        (S::WaitingForChildren, T::Fail, S::Failed),
+        (S::WaitingForChildren, T::Cancel, S::Cancelled),
         (S::Paused, T::Resume, S::Queued),
         (S::Paused, T::Cancel, S::Cancelled),
     ];
@@ -323,5 +344,26 @@ mod tests {
         ];
         let end = path.iter().try_fold(S::Created, |state, trigger| transition(state, *trigger)).unwrap();
         assert_eq!(end, S::Completed);
+    }
+
+    #[test]
+    fn delegating_suspends_the_run_and_settling_the_children_queues_it_again() {
+        let path = [
+            T::Enqueue,
+            T::Start,
+            T::AwaitModel,
+            T::StepFinished,
+            T::AwaitChildren,
+            T::ChildrenSettled,
+            T::Start,
+            T::AwaitModel,
+            T::StepFinished,
+            T::Complete,
+        ];
+        let end = path.iter().try_fold(S::Created, |state, trigger| transition(state, *trigger)).unwrap();
+        assert_eq!(end, S::Completed);
+        // A parent that waits for its children is not active: no worker holds it, and a pause waits for it to wake.
+        assert!(!S::WaitingForChildren.is_active() && !S::WaitingForChildren.is_terminal());
+        assert!(transition(S::WaitingForChildren, T::Pause).is_err());
     }
 }

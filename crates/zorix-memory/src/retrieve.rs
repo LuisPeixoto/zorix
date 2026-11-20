@@ -228,7 +228,7 @@ impl Retriever {
             states: vec![ExecutionState::Completed, ExecutionState::Failed, ExecutionState::Cancelled],
             conversation: Some(conversation),
             limit: 100,
-            agent: None,
+            ..ListFilter::default()
         };
         let earlier = self.repository.list(&execution.tenant, &filter).await?;
         let mut allowed = self.shares.conversation.tokens(budget);
