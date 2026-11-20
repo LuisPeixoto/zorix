@@ -97,6 +97,21 @@ fn one(check: &EvalCheck, detail: &ExecutionDetail) -> CheckOutcome {
             let n = calls.len() as u32;
             outcome(format!("made at most {most} tool call(s)"), n <= *most, format!("It made {n}."))
         }
+        EvalCheck::Delegated { agent, min } => {
+            // The record of each delegate call lists the agent every task went to, whatever came of it.
+            let asked: u32 = calls
+                .iter()
+                .filter(|c| c.tool == zorix_core::delegation::TOOL)
+                .filter_map(|c| c.result.as_ref().and_then(|r| r["results"].as_array()))
+                .flatten()
+                .filter(|r| r["agent"].as_str() == Some(agent.as_str()))
+                .count() as u32;
+            outcome(
+                format!("asked {agent} at least {min} time(s)"),
+                asked >= *min,
+                format!("It was asked {asked} time(s)."),
+            )
+        }
         EvalCheck::Status { state } => {
             let now = detail.execution.state.as_str();
             outcome(format!("ended {state}"), now == state, format!("It ended {now}."))

@@ -143,7 +143,13 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     hub.register_native_tools()?;
     let calibration = Arc::new(SqliteCalibration::open(&database)?);
     let engine = stack
-        .install(Engine::builder(repository, gateway).tools(registry).calibration(calibration.clone()).config(config))
+        .install(
+            Engine::builder(repository, gateway)
+                .tools(registry)
+                .delegation(hub.planner(router.clone()))
+                .calibration(calibration.clone())
+                .config(config),
+        )
         .build();
     // What was recorded before this version, or while a queue was full, is caught up in the background.
     let background = stack.clone();

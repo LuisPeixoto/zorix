@@ -8,9 +8,8 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Action, Agent, AgentStore, AgentVersion, ApprovalDecision, ApprovalStatus, Clock, EVAL_LABEL, EvalResult, EvalRun,
-    EvalRunId, ExecutionEngine, ExecutionState, Grants, MemoryOptions, ModelGateway, Permission, StoredCase,
-    SystemClock,
+    Action, Agent, AgentStore, AgentVersion, ApprovalDecision, Clock, EVAL_LABEL, EvalResult, EvalRun, EvalRunId,
+    ExecutionEngine, ExecutionState, Grants, MemoryOptions, ModelGateway, Permission, StoredCase, SystemClock,
 };
 
 use super::checks::run_checks;
@@ -226,7 +225,8 @@ impl Evaluator {
                     break;
                 }
                 Some(Ok(Ok(execution))) => match execution.state {
-                    ExecutionState::WaitingForApproval => {
+                    // A sub-run that needs a person leaves its root waiting for children: the tree is answered as a whole.
+                    ExecutionState::WaitingForApproval | ExecutionState::WaitingForChildren => {
                         if let Err(e) = self.answer_approvals(&tenant, created.id, &case.approve).await {
                             problem = Some(e);
                             break;
@@ -283,17 +283,18 @@ impl Evaluator {
         }
     }
 
-    /// Answer every pending approval: refuse it, unless the case named the tool and only a person could not be the one
-    /// answering (a tool that needs a person is always refused).
+    /// Answer every pending approval anywhere in the tree of `root`: refuse it, unless the case named the tool and only a person
+    /// could not be the one answering (a tool that needs a person is always refused).
     async fn answer_approvals(
         &self,
         tenant: &zorix_core::TenantId,
-        id: zorix_core::ExecutionId,
+        root: zorix_core::ExecutionId,
         approve: &[String],
     ) -> Result<(), String> {
-        let detail = self.engine.detail(tenant, id).await.map_err(|e| e.to_string())?;
-        let events = self.engine.events(tenant, id, 0).await.map_err(|e| e.to_string())?;
-        for approval in detail.approvals.iter().filter(|a| a.status == ApprovalStatus::Pending) {
+        let waiting = self.engine.pending_in_tree(tenant, root).await.map_err(|e| e.to_string())?;
+        for item in waiting {
+            let (id, approval) = (item.execution, item.approval);
+            let events = self.engine.events(tenant, id, 0).await.map_err(|e| e.to_string())?;
             let person_only = events.iter().any(|e| {
                 e.kind.name() == "execution.waiting_approval"
                     && e.payload.get("approval_id").and_then(Value::as_str) == Some(approval.id.to_string().as_str())

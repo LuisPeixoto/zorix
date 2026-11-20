@@ -577,6 +577,14 @@ pub enum EvalCheck {
         /// The state's name.
         state: String,
     },
+    /// The run asked this agent for at least `min` tasks (default 1) with `agents.delegate`.
+    Delegated {
+        /// The agent's slug.
+        agent: String,
+        /// At least this many tasks.
+        #[serde(default = "one")]
+        min: u32,
+    },
 }
 
 fn one() -> u32 {
@@ -647,6 +655,11 @@ impl EvalCase {
             _ => None,
         })) {
             validate_tool_pattern(pattern).map_err(Error::InvalidInput)?;
+        }
+        for check in &self.checks {
+            if let EvalCheck::Delegated { agent, .. } = check {
+                AgentSlug::new(agent.as_str()).map_err(Error::InvalidInput)?;
+            }
         }
         if let Some(judge) = &self.judge
             && (judge.rubric.trim().is_empty() || !(1..=5).contains(&judge.pass_score))
