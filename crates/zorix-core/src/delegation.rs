@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 
 use crate::execution::{Execution, NewExecution};
 use crate::state::ExecutionState;
+use crate::tool::{Tool, ToolAnnotations, ToolContext, ToolError, ToolSpec};
 
 /// The tool a model calls to delegate.
 pub const TOOL: &str = "agents.delegate";
@@ -193,6 +194,57 @@ pub struct PlanContext<'a> {
 pub trait DelegationPlanner: Send + Sync {
     /// The executions for these tasks, in the same order, or the reason the delegation is refused (a sentence for the model).
     async fn plan(&self, context: PlanContext<'_>, request: &DelegateRequest) -> Result<Vec<PlannedChild>, String>;
+}
+
+/// The tool the model sees. The runtime handles its calls itself (it must suspend the caller), so [`Tool::call`] is never reached.
+pub struct DelegateTool {
+    spec: ToolSpec,
+}
+
+impl Default for DelegateTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DelegateTool {
+    /// The tool, described for the model.
+    pub fn new() -> Self {
+        let mut spec = ToolSpec::new(
+            TOOL,
+            "Ask other agents",
+            format!(
+                "Ask other agents to do part of the work, up to {MAX_TASKS} tasks at once, and wait for all of them. Each task goes to one \
+                 agent you may ask (they are listed in <available_agents>). The agent does not see this conversation: write the goal, \
+                 the form of the answer you need, and where to look. You get one result per task, each with its answer or the reason it \
+                 failed. Ask for what can be done at the same time in one call. Work can be nested {MAX_DEPTH} levels deep."
+            ),
+            DelegateRequest::schema(),
+        );
+        // It starts work but changes nothing itself; repeating it after a crash finds the same children (idempotency keys).
+        spec.annotations =
+            ToolAnnotations { read_only: false, destructive: false, idempotent: true, open_world: false };
+        spec.timeout_ms = 30_000;
+        spec.max_output_bytes = 192 * 1024;
+        Self { spec }
+    }
+}
+
+#[async_trait]
+impl Tool for DelegateTool {
+    fn spec(&self) -> &ToolSpec {
+        &self.spec
+    }
+
+    async fn call(&self, _ctx: &ToolContext, _args: Value) -> Result<Value, ToolError> {
+        Err(ToolError::Failed("Delegation is carried out by the runtime, which is not available here.".into()))
+    }
+
+    fn describe_call(&self, args: &Value) -> Option<String> {
+        let request = DelegateRequest::parse(args).ok()?;
+        let names: Vec<&str> = request.tasks.iter().map(|t| t.agent.as_str()).collect();
+        Some(format!("Ask {} to do {} task(s)", names.join(", "), request.tasks.len()))
+    }
 }
 
 /// The key that makes creating the same child twice return the first one.

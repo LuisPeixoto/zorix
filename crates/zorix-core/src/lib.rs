@@ -36,8 +36,8 @@ pub use agent::{
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
 pub use delegation::{
-    ChildResult, DelegateRequest, DelegateTask, DelegationPlanner, MAX_DEPTH, MAX_DESCENDANTS, MAX_TASKS, PlanContext,
-    PlannedChild, child_key,
+    ChildResult, DelegateRequest, DelegateTask, DelegateTool, DelegationPlanner, MAX_DEPTH, MAX_DESCENDANTS, MAX_TASKS,
+    PlanContext, PlannedChild, child_key,
 };
 pub use engine::{ExecutionDetail, ExecutionEngine, LiveEvent, RecoveryReport, TreeApproval};
 pub use error::{Error, Result};

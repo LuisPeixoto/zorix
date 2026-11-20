@@ -14,11 +14,12 @@ use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Approval, ApprovalDecision, ApprovalId, ApprovalStatus, Clock, Commit, ContextBuilder, CreateOutcome, Error,
-    EventKind, EventPublisher, Execution, ExecutionDetail, ExecutionEngine, ExecutionEvent, ExecutionId,
-    ExecutionRepository, ExecutionScheduler, ExecutionState, InvalidTransition, ListFilter, ModelGateway, NewEvent,
-    NewExecution, NoCalibration, PolicyEngine, RecoveryReport, Result, ResultValidator, SystemClock, TenantId,
-    Timestamp, TokenCalibration, ToolCallRecord, ToolCallStatus, ToolRegistry, Trigger,
+    Approval, ApprovalDecision, ApprovalId, ApprovalStatus, ChildResult, Clock, Commit, ContextBuilder, CreateOutcome,
+    DelegateRequest, DelegateTask, DelegationPlanner, Error, EventKind, EventPublisher, Execution, ExecutionDetail,
+    ExecutionEngine, ExecutionEvent, ExecutionId, ExecutionRepository, ExecutionScheduler, ExecutionState,
+    InvalidTransition, ListFilter, ModelGateway, NewEvent, NewExecution, NoCalibration, PolicyEngine, RecoveryReport,
+    Result, ResultValidator, SystemClock, TenantId, Timestamp, TokenCalibration, ToolCallRecord, ToolCallStatus,
+    ToolRegistry, Trigger, Usage,
 };
 
 use crate::context::DefaultContextBuilder;
@@ -82,6 +83,7 @@ pub(crate) struct Inner {
     pub live: crate::live::LiveBus,
     pub publishers: Vec<Arc<dyn EventPublisher>>,
     pub validators: Vec<Arc<dyn ResultValidator>>,
+    pub planner: Option<Arc<dyn DelegationPlanner>>,
     pub config: EngineConfig,
     pub runs: Mutex<HashMap<ExecutionId, Arc<RunControl>>>,
     pub shutdown: CancellationToken,
@@ -101,6 +103,7 @@ pub struct EngineBuilder {
     clock: Option<Arc<dyn Clock>>,
     publishers: Vec<Arc<dyn EventPublisher>>,
     validators: Vec<Arc<dyn ResultValidator>>,
+    planner: Option<Arc<dyn DelegationPlanner>>,
     config: EngineConfig,
 }
 
@@ -118,6 +121,7 @@ impl EngineBuilder {
             clock: None,
             publishers: Vec::new(),
             validators: Vec::new(),
+            planner: None,
             config: EngineConfig::default(),
         }
     }
@@ -125,6 +129,12 @@ impl EngineBuilder {
     /// Where tools are found.
     pub fn tools(mut self, tools: Arc<dyn ToolRegistry>) -> Self {
         self.tools = Some(tools);
+        self
+    }
+
+    /// Who turns the tasks of a delegate call into executions. Without one, `agents.delegate` fails with a sentence.
+    pub fn delegation(mut self, planner: Arc<dyn DelegationPlanner>) -> Self {
+        self.planner = Some(planner);
         self
     }
 
@@ -193,6 +203,7 @@ impl EngineBuilder {
             bus: EventBus::new(),
             live: crate::live::LiveBus::new(),
             publishers: self.publishers,
+            planner: self.planner,
             validators,
             owner: format!("engine-{}", ExecutionId::new()),
             config: self.config,
@@ -302,7 +313,115 @@ impl Engine {
     pub(crate) async fn commit(&self, commit: Commit) -> Result<zorix_core::Committed> {
         let done = self.inner.repository.commit(commit).await?;
         self.publish(&done.events);
+        self.wake_parent_of(&done.execution);
         Ok(done)
+    }
+
+    /// A child that has finished may be the last one its parent waits for. This runs in the background so the child's own commit
+    /// is never slowed or failed by it; `recover` finds anything this misses.
+    fn wake_parent_of(&self, execution: &Execution) {
+        let Some(parent) = execution.parent else { return };
+        if !execution.state.is_terminal() {
+            return;
+        }
+        let engine = self.clone();
+        tokio::spawn(async move {
+            if let Err(error) = engine.reconcile_children(parent).await {
+                tracing::warn!(%parent, %error, "could not settle the children of an execution");
+            }
+        });
+    }
+
+    /// If `parent` waits for children and every one of them has finished, give the parent their results, add what they used to its
+    /// own usage, and queue it. Returns whether it did. Safe to call at any time and from several places at once.
+    pub(crate) async fn reconcile_children(&self, parent_id: ExecutionId) -> Result<bool> {
+        let repository = &self.inner.repository;
+        let Some(parent) = repository.load(parent_id).await? else { return Ok(false) };
+        if parent.state != ExecutionState::WaitingForChildren {
+            return Ok(false);
+        }
+        let Some(record) =
+            repository.tool_calls(parent_id).await?.into_iter().find(|r| r.status == ToolCallStatus::Delegated)
+        else {
+            return Ok(false);
+        };
+        let ids: Vec<ExecutionId> = record
+            .result
+            .as_ref()
+            .and_then(|r| r["delegated"].as_array())
+            .map(|list| list.iter().filter_map(|d| d["child"].as_str().and_then(|s| s.parse().ok())).collect())
+            .unwrap_or_default();
+        let mut children = Vec::with_capacity(ids.len());
+        for id in ids {
+            match repository.get(&parent.tenant, id).await? {
+                Some(child) if child.state.is_terminal() => children.push(child),
+                _ => return Ok(false),
+            }
+        }
+        let tasks = DelegateRequest::parse(&record.arguments).map(|r| r.tasks).unwrap_or_default();
+        let results: Vec<ChildResult> = children
+            .iter()
+            .enumerate()
+            .map(|(i, child)| {
+                let task = tasks.get(i).cloned().unwrap_or_else(|| DelegateTask {
+                    agent: child.agent.as_ref().map(|a| a.slug.to_string()).unwrap_or_default(),
+                    task: child.request.prompt.clone(),
+                    input: None,
+                    expected_output: None,
+                    context: Vec::new(),
+                    files: Vec::new(),
+                });
+                ChildResult::of(&task, child)
+            })
+            .collect();
+        let mut rolled = Usage::default();
+        for child in &children {
+            rolled.add(&child.usage);
+        }
+        const ALREADY: &str = "the children were already settled";
+        let settled = self
+            .update(parent_id, |execution, now| {
+                if execution.state != ExecutionState::WaitingForChildren {
+                    return Err(Error::InvalidInput(ALREADY.into()));
+                }
+                execution.apply(Trigger::ChildrenSettled, now)?;
+                // What the children used is what the parent used: the next limit check sees it.
+                execution.usage.add(&rolled);
+                execution.tool_calls_requested = execution.tool_calls_requested.saturating_add(rolled.tool_calls);
+                let mut done = record.clone();
+                done.status = ToolCallStatus::Succeeded;
+                done.result = Some(json!({ "results": results }));
+                done.finished_at = Some(now);
+                let mut events: Vec<NewEvent> = results
+                    .iter()
+                    .map(|r| {
+                        self.event(
+                            EventKind::ChildSettled,
+                            json!({
+                                "child": r.child_id, "agent": r.agent, "state": r.state,
+                                "steps": r.steps, "tool_calls": r.tool_calls, "cost_micros": r.cost_micros,
+                            }),
+                        )
+                    })
+                    .collect();
+                events.push(self.event(EventKind::Queued, json!({})));
+                Ok(Change { events, tool_calls: vec![done], ..Change::default() })
+            })
+            .await;
+        match settled {
+            Ok(_) => {
+                self.inner.scheduler.enqueue(parent_id).await?;
+                Ok(true)
+            }
+            Err(Error::InvalidInput(message)) if message == ALREADY => Ok(false),
+            Err(other) => Err(other),
+        }
+    }
+
+    /// Whether anything below `id` waits for a person.
+    async fn tree_waits_for_a_person(&self, tenant: &TenantId, id: ExecutionId) -> Result<bool> {
+        let below = self.inner.repository.descendants(tenant, id).await?;
+        Ok(below.iter().any(|e| e.state == ExecutionState::WaitingForApproval))
     }
 
     async fn scoped(&self, tenant: &TenantId, id: ExecutionId) -> Result<Execution> {
@@ -350,7 +469,10 @@ impl Engine {
                 || matches!(
                     current.state,
                     ExecutionState::Created | ExecutionState::WaitingForApproval | ExecutionState::Paused
-                );
+                )
+                // Waiting for children is still working, unless something below waits for a person: then the tree is waiting.
+                || (current.state == ExecutionState::WaitingForChildren
+                    && self.tree_waits_for_a_person(tenant, id).await.unwrap_or(false));
             if settled || deadline.is_some_and(|d| tokio::time::Instant::now() >= d) {
                 return Ok(current);
             }
@@ -394,7 +516,8 @@ impl ExecutionEngine for Engine {
             | ExecutionState::Running
             | ExecutionState::WaitingForModel
             | ExecutionState::WaitingForTool
-            | ExecutionState::WaitingForApproval => return Ok(current),
+            | ExecutionState::WaitingForApproval
+            | ExecutionState::WaitingForChildren => return Ok(current),
             from => return Err(InvalidTransition { from, trigger: Trigger::Enqueue }.into()),
         }
         let started = self
@@ -478,45 +601,16 @@ impl ExecutionEngine for Engine {
     }
 
     async fn cancel(&self, tenant: &TenantId, id: ExecutionId, reason: Option<String>) -> Result<Execution> {
-        let current = self.scoped(tenant, id).await?;
-        if current.state.is_terminal() {
-            return Err(InvalidTransition { from: current.state, trigger: Trigger::Cancel }.into());
+        let top = self.cancel_one(tenant, id, reason.clone()).await?;
+        // Cancelling a run cancels everything it started, top down, so no parent is woken only to find its children gone.
+        let below = self.inner.repository.descendants(tenant, id).await?;
+        let because = Some(reason.unwrap_or_else(|| "The execution that asked for this was cancelled.".into()));
+        for child in below.into_iter().filter(|e| !e.state.is_terminal()) {
+            if let Err(error) = self.cancel_one(tenant, child.id, because.clone()).await {
+                tracing::warn!(execution = %child.id, %error, "a sub-run could not be cancelled");
+            }
         }
-        let active = self.inner.runs.lock().get(&id).cloned();
-        if let Some(control) = active {
-            *control.reason.lock() = reason;
-            control.cancel.cancel();
-            return self.wait_terminal(tenant, id).await;
-        }
-        let pending: Vec<Approval> = self
-            .inner
-            .repository
-            .approvals(id)
-            .await?
-            .into_iter()
-            .filter(|a| a.status == ApprovalStatus::Pending)
-            .collect();
-        self.update(id, |execution, now| {
-            execution.apply(Trigger::Cancel, now)?;
-            execution.cancel_reason = reason.clone();
-            let approvals = pending
-                .iter()
-                .cloned()
-                .map(|mut approval| {
-                    approval.status = ApprovalStatus::Denied;
-                    approval.decided_at = Some(now);
-                    approval.decided_by = Some("system".into());
-                    approval.note = Some("The execution was cancelled.".into());
-                    approval
-                })
-                .collect();
-            Ok(Change {
-                events: vec![self.event(EventKind::Cancelled, json!({ "reason": reason }))],
-                approvals,
-                ..Change::default()
-            })
-        })
-        .await
+        Ok(top)
     }
 
     async fn decide(
@@ -592,7 +686,15 @@ impl ExecutionEngine for Engine {
         if self.inner.config.sole_owner {
             self.inner.repository.release_all_leases().await?;
         }
-        let states = [S::Queued, S::Running, S::WaitingForModel, S::WaitingForTool, S::WaitingForApproval, S::Paused];
+        let states = [
+            S::Queued,
+            S::Running,
+            S::WaitingForModel,
+            S::WaitingForTool,
+            S::WaitingForApproval,
+            S::WaitingForChildren,
+            S::Paused,
+        ];
         for execution in self.inner.repository.in_states(&states).await? {
             let id = execution.id;
             if self.inner.runs.lock().contains_key(&id) {
@@ -605,6 +707,15 @@ impl ExecutionEngine for Engine {
                     report.untouched += 1;
                 }
                 S::WaitingForApproval | S::Paused => report.untouched += 1,
+                S::WaitingForChildren => {
+                    // Children that finished while this program was down (or between the child's commit and the wake-up) are
+                    // given to their parent now; children that did not finish recover on their own.
+                    if self.reconcile_children(id).await? {
+                        report.requeued.push(id);
+                    } else {
+                        report.untouched += 1;
+                    }
+                }
                 S::Running | S::WaitingForModel | S::WaitingForTool => {
                     // A live engine that works on it holds its lease. Only take over what nobody holds.
                     let repository = &self.inner.repository;
@@ -633,6 +744,49 @@ enum TakeOver {
 }
 
 impl Engine {
+    /// Cancel one execution, not what it started.
+    async fn cancel_one(&self, tenant: &TenantId, id: ExecutionId, reason: Option<String>) -> Result<Execution> {
+        let current = self.scoped(tenant, id).await?;
+        if current.state.is_terminal() {
+            return Err(InvalidTransition { from: current.state, trigger: Trigger::Cancel }.into());
+        }
+        let active = self.inner.runs.lock().get(&id).cloned();
+        if let Some(control) = active {
+            *control.reason.lock() = reason;
+            control.cancel.cancel();
+            return self.wait_terminal(tenant, id).await;
+        }
+        let pending: Vec<Approval> = self
+            .inner
+            .repository
+            .approvals(id)
+            .await?
+            .into_iter()
+            .filter(|a| a.status == ApprovalStatus::Pending)
+            .collect();
+        self.update(id, |execution, now| {
+            execution.apply(Trigger::Cancel, now)?;
+            execution.cancel_reason = reason.clone();
+            let approvals = pending
+                .iter()
+                .cloned()
+                .map(|mut approval| {
+                    approval.status = ApprovalStatus::Denied;
+                    approval.decided_at = Some(now);
+                    approval.decided_by = Some("system".into());
+                    approval.note = Some("The execution was cancelled.".into());
+                    approval
+                })
+                .collect();
+            Ok(Change {
+                events: vec![self.event(EventKind::Cancelled, json!({ "reason": reason }))],
+                approvals,
+                ..Change::default()
+            })
+        })
+        .await
+    }
+
     async fn wait_terminal(&self, tenant: &TenantId, id: ExecutionId) -> Result<Execution> {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
         loop {

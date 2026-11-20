@@ -11,11 +11,13 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use zorix_core::{
-    Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, Error, EventKind, Execution, ExecutionId,
-    ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState, Message, ModelError, ModelRequest,
-    ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role, StepPhase, Timestamp, TokenSample, Tool,
-    ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash,
+    Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, DelegateRequest, Error, EventKind, Execution,
+    ExecutionEngine, ExecutionId, ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState,
+    Message, ModelError, ModelRequest, ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role,
+    StepPhase, Timestamp, TokenSample, Tool, ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext,
+    ToolSpec, Trigger, Validation, call_hash, child_key,
 };
+use zorix_core::{MAX_DEPTH, MAX_DESCENDANTS, PlanContext};
 
 use crate::engine::{Engine, RunControl};
 use crate::tools::{CallError, ToolExecutor};
@@ -56,6 +58,9 @@ fn with(mut events: Vec<NewEvent>, last: NewEvent) -> Vec<NewEvent> {
     events.push(last);
     events
 }
+
+/// Children that were just created for a delegate call: what the record keeps about them, and the executions themselves.
+type Fresh = (Vec<Value>, Vec<(zorix_core::DelegateTask, Execution)>);
 
 /// Records that travel with a commit.
 #[derive(Default)]
@@ -626,6 +631,17 @@ impl Run {
             self.commit(&[], vec![event], Extras { tool_calls: vec![record], ..Extras::default() }).await?;
         }
 
+        // A delegated call comes back here when its children have finished (or when the run was queued again by mistake).
+        if call.tool == zorix_core::delegation::TOOL
+            && let Some(record) = self.records.iter().find(|r| r.call_id == call.id).cloned()
+        {
+            match record.status {
+                ToolCallStatus::Succeeded => return self.deliver_delegation(&call, record).await,
+                ToolCallStatus::Delegated => return self.suspend_for_children(&call, None).await,
+                _ => {}
+            }
+        }
+
         let Some(tool) = tool else {
             let message = format!("There is no tool called {}.", call.tool);
             return self.settle_failed(&call, message, EventKind::ToolDenied, "runtime").await;
@@ -678,6 +694,9 @@ impl Run {
                 .await
             }
             (_, Some(approval)) if approval.status == ApprovalStatus::Pending => self.wait_for(approval, false).await,
+            (_, Some(_)) | (PolicyDecision::Allow, None) if call.tool == zorix_core::delegation::TOOL => {
+                self.delegate(&call).await
+            }
             (_, Some(_)) | (PolicyDecision::Allow, None) => self.run_tool(&call, tool).await,
             (PolicyDecision::RequireApproval { reason }, None) => {
                 let approval = Approval {
@@ -842,11 +861,157 @@ impl Run {
         }
     }
 
+    /// Hand the work to other executions and suspend until they finish (ADR-0029). The worker is free while they work.
+    async fn delegate(&mut self, call: &ToolCallRequest) -> Step {
+        let request = match DelegateRequest::parse(&call.arguments) {
+            Ok(request) => request,
+            Err(message) => return self.settle_failed(call, message, EventKind::ToolFailed, "validation").await,
+        };
+        let Some(planner) = self.engine.inner.planner.clone() else {
+            let message = "Delegation is not set up in this program.".to_string();
+            return self.settle_failed(call, message, EventKind::ToolFailed, "runtime").await;
+        };
+        let repository = self.engine.inner.repository.clone();
+        let root = self.exec.root.unwrap_or(self.exec.id);
+        if self.exec.depth >= MAX_DEPTH {
+            let message =
+                format!("Delegation is nested {MAX_DEPTH} levels deep at most, and this is the deepest level.");
+            return self.settle_failed(call, message, EventKind::ToolFailed, "delegation").await;
+        }
+        let mut ancestors = Vec::new();
+        let mut next = self.exec.parent;
+        while let Some(id) = next {
+            if ancestors.len() > MAX_DEPTH as usize + 1 {
+                break;
+            }
+            match repository.load(id).await? {
+                Some(parent) => {
+                    next = parent.parent;
+                    ancestors.push(parent);
+                }
+                None => break,
+            }
+        }
+        let descendants = repository.descendants(&self.exec.tenant, root).await?.len();
+        if descendants + request.tasks.len() > MAX_DESCENDANTS {
+            let message = format!(
+                "This work already has {descendants} sub-runs and at most {MAX_DESCENDANTS} are allowed, so {} more cannot start.",
+                request.tasks.len()
+            );
+            return self.settle_failed(call, message, EventKind::ToolFailed, "delegation").await;
+        }
+        let context = PlanContext { parent: &self.exec, call_id: call.id.0.as_str(), ancestors, descendants };
+        let planned = match planner.plan(context, &request).await {
+            Ok(planned) if planned.len() == request.tasks.len() => planned,
+            Ok(_) => return Err(Stop::Halt("the planner returned a different number of tasks".into())),
+            Err(why) => return self.settle_failed(call, why, EventKind::ToolFailed, "delegation").await,
+        };
+
+        // Create the children. The keys make this safe to repeat: after a crash the same children are found again.
+        let mut children = Vec::with_capacity(planned.len());
+        for (index, mut child) in planned.into_iter().enumerate() {
+            child.new.tenant = Some(self.exec.tenant.clone());
+            child.new.parent = Some(self.exec.id);
+            child.new.root = Some(root);
+            child.new.depth = self.exec.depth + 1;
+            child.new.conversation = None;
+            child.new.idempotency_key = Some(child_key(&self.exec.id.to_string(), call.id.0.as_str(), index));
+            match self.engine.create(child.new).await {
+                Ok(created) => children.push((child.task, created)),
+                Err(error) => {
+                    let started: Vec<ExecutionId> = children.iter().map(|(_, c)| c.id).collect();
+                    for id in started {
+                        let _ = self
+                            .engine
+                            .cancel(&self.exec.tenant, id, Some("The delegation could not be completed.".into()))
+                            .await;
+                    }
+                    let message = format!("The task for {} could not be started: {error}", child.task.agent);
+                    return self.settle_failed(call, message, EventKind::ToolFailed, "delegation").await;
+                }
+            }
+        }
+        let delegated: Vec<Value> = children
+            .iter()
+            .map(|(task, child)| {
+                json!({ "child": child.id, "agent": task.agent, "task": task.task.chars().take(200).collect::<String>() })
+            })
+            .collect();
+        self.suspend_for_children(call, Some((delegated, children))).await
+    }
+
+    /// Commit "waiting for children", then start them. With `None` (a call that was already delegated) it only suspends again.
+    async fn suspend_for_children(&mut self, call: &ToolCallRequest, fresh: Option<Fresh>) -> Step {
+        let mut record = self.records.iter().find(|r| r.call_id == call.id).cloned();
+        let mut events = Vec::new();
+        if let Some((delegated, children)) = &fresh {
+            if let Some(record) = record.as_mut() {
+                record.status = ToolCallStatus::Delegated;
+                record.result = Some(json!({ "delegated": delegated }));
+            }
+            let ids: Vec<ExecutionId> = children.iter().map(|(_, c)| c.id).collect();
+            events.push(self.event(
+                EventKind::WaitingChildren,
+                json!({ "call_id": call.id, "children": ids, "tasks": children.len() }),
+            ));
+            for (task, child) in children {
+                events.push(self.event(
+                    EventKind::ChildStarted,
+                    json!({
+                        "child": child.id, "agent": task.agent, "depth": child.depth,
+                        "task": task.task.chars().take(200).collect::<String>(),
+                    }),
+                ));
+            }
+            events.push(self.event(EventKind::Checkpoint, json!({ "step": self.step + 1 })));
+        } else {
+            events.push(
+                self.event(EventKind::WaitingChildren, json!({ "call_id": call.id, "children": [], "again": true })),
+            );
+        }
+        let extras =
+            Extras { tool_calls: record.iter().cloned().collect(), checkpoint: fresh.is_some(), ..Extras::default() };
+        if let Some(record) = record {
+            self.upsert_record(record);
+        }
+        // The parent is suspended before any child starts, so a child that finishes at once finds it waiting.
+        self.commit(&[Trigger::AwaitChildren], events, extras).await?;
+        if let Some((_, children)) = fresh {
+            for (_, child) in children {
+                let current = self.engine.get(&self.exec.tenant, child.id).await?;
+                if current.state == ExecutionState::Created {
+                    self.engine.start(&self.exec.tenant, child.id).await?;
+                }
+            }
+        }
+        // Children that were already finished (a repeat after a crash) must not leave the parent waiting for nothing.
+        self.engine.reconcile_children(self.exec.id).await?;
+        Err(Stop::Done)
+    }
+
+    /// The children finished and the engine wrote their results into the record: the model gets them as the tool's result.
+    async fn deliver_delegation(&mut self, call: &ToolCallRequest, record: ToolCallRecord) -> Step {
+        let text = record.result.as_ref().map(Value::to_string).unwrap_or_else(|| "{}".into());
+        self.state.transcript.push(Message::tool_result(call.id.clone(), text.clone(), false));
+        let event = self.event(
+            EventKind::ToolCompleted,
+            json!({ "call_id": call.id, "tool": call.tool, "duration_ms": 0, "output_bytes": text.len() }),
+        );
+        self.finish_tool(call, record, event).await
+    }
+
     async fn finish_tool(&mut self, call: &ToolCallRequest, record: ToolCallRecord, event: NewEvent) -> Step {
         self.state.pending.retain(|p| p.id != call.id);
         self.exec.usage.tool_calls += 1;
         self.upsert_record(record.clone());
         let extras = Extras { tool_calls: vec![record], checkpoint: true, ..Extras::default() };
-        self.commit(&[Trigger::StepFinished], vec![event], extras).await
+        // A tool that ran left the state at WaitingForTool. A delegated call comes back with the run just started, so it passes
+        // through that state in the same commit.
+        let triggers: &[Trigger] = if self.exec.state == ExecutionState::Running {
+            &[Trigger::AwaitTool, Trigger::StepFinished]
+        } else {
+            &[Trigger::StepFinished]
+        };
+        self.commit(triggers, vec![event], extras).await
     }
 }
