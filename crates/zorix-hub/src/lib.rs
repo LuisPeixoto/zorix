@@ -6,6 +6,7 @@
 pub mod agents;
 pub mod connections;
 pub mod grants;
+pub mod teams;
 
 use std::path::Path;
 use std::sync::Arc;

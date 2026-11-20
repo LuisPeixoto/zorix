@@ -174,7 +174,7 @@ async fn the_templates_are_listed_and_installing_one_brings_its_skills_cases_and
     let before = hub.templates().await.unwrap();
     assert_eq!(
         before.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
-        ["researcher", "code-reviewer", "data-analyst", "writer"]
+        ["researcher", "code-reviewer", "data-analyst", "research-lead", "writer"]
     );
     assert!(before.iter().all(|t| !t.installed && t.cases >= 3 && !t.skills.is_empty() && !t.description.is_empty()));
 
@@ -225,4 +225,107 @@ async fn every_template_installs_and_makes_a_run_that_carries_its_skill_tools() 
         assert!(new.request.instructions.as_deref().unwrap_or("").contains("<available_skills>"), "{}", info.id);
         assert!(new.grants.allows(&zorix_core::Permission::use_tool("skill.load")), "{}", info.id);
     }
+}
+
+#[tokio::test]
+async fn a_starter_team_installs_its_agents_once_and_never_overwrites_what_a_person_changed() {
+    let (hub, _dir) = hub();
+    let templates = hub.team_templates().await.unwrap();
+    assert_eq!(templates.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["research-desk"]);
+    assert!(!templates[0].installed);
+
+    // The researcher was added earlier and changed by a person.
+    hub.add_template("researcher", None).await.unwrap();
+    let mine =
+        hub.export_agent("researcher", None).await.unwrap().replace("careful researcher", "very careful researcher");
+    hub.import_agent(&mine, None, Some("my change".into())).await.unwrap();
+
+    let done = hub.add_team_template("research-desk").await.unwrap();
+    let added: Vec<&str> = done.added.iter().map(|a| a.imported.agent.slug.as_str()).collect();
+    assert_eq!(added, ["research-lead", "writer"], "only what was missing");
+    assert_eq!(done.team.lead.as_str(), "research-lead");
+    assert_eq!(done.team.members.iter().map(|m| m.as_str()).collect::<Vec<_>>(), ["researcher", "writer"]);
+    assert!(
+        hub.export_agent("researcher", None).await.unwrap().contains("very careful researcher"),
+        "their change stays"
+    );
+    assert_eq!(hub.agent("researcher").await.unwrap().0.current_version, 2);
+
+    let card = hub.team("research-desk").await.unwrap();
+    assert!(card.missing.is_empty());
+    assert_eq!((card.lead.as_ref().unwrap().slug.as_str(), card.members.len()), ("research-lead", 2));
+    assert!(hub.team_templates().await.unwrap()[0].installed);
+    // Doing it again changes nothing and adds nothing.
+    let again = hub.add_team_template("research-desk").await.unwrap();
+    assert!(again.added.is_empty());
+    let error = hub.add_team_template("nope").await.unwrap_err().to_string();
+    assert!(error.contains("no team template called nope") && error.contains("research-desk"), "{error}");
+}
+
+#[tokio::test]
+async fn running_a_team_runs_its_lead_with_the_members_added_and_records_the_team() {
+    let (hub, _dir) = hub();
+    hub.add_team_template("research-desk").await.unwrap();
+    let new = hub
+        .prepare_team_run(
+            "research-desk",
+            AgentAsk { prompt: "Compare two things.".into(), ..AgentAsk::default() },
+            &Anything,
+        )
+        .await
+        .unwrap();
+    let binding = new.agent.as_ref().unwrap();
+    assert_eq!((binding.slug.as_str(), binding.team.as_deref()), ("research-lead", Some("research-desk")));
+    use zorix_core::{Action, Permission};
+    assert!(new.grants.allows(&Permission::new(Action::Execute, "agent:researcher")));
+    assert!(new.grants.allows(&Permission::new(Action::Execute, "agent:writer")));
+    assert!(!new.grants.allows(&Permission::new(Action::Execute, "agent:code-reviewer")));
+    assert!(new.grants.allows(&Permission::use_tool("agents.delegate")));
+    let text = new.request.instructions.unwrap();
+    assert!(
+        text.contains("<available_agents>") && text.contains("- researcher:") && text.contains("- writer:"),
+        "{text}"
+    );
+    assert!(
+        hub.prepare_team_run("nobody", AgentAsk::default(), &Anything)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("no team called nobody")
+    );
+}
+
+#[tokio::test]
+async fn a_team_needs_agents_that_exist_and_says_so_when_one_goes_away() {
+    let (hub, _dir) = hub();
+    hub.import_agent(FILE, None, None).await.unwrap();
+    let team = |lead: &str, members: &[&str]| zorix_core::Team {
+        tenant: TenantId::local(),
+        slug: zorix_core::AgentSlug::new("duo").unwrap(),
+        name: "Duo".into(),
+        description: String::new(),
+        avatar: Default::default(),
+        lead: zorix_core::AgentSlug::new(lead).unwrap(),
+        members: members.iter().map(|m| zorix_core::AgentSlug::new(*m).unwrap()).collect(),
+        updated_at: Timestamp(1),
+    };
+    let error = hub.save_team(team("writer", &["ghost"])).await.unwrap_err().to_string();
+    assert!(error.contains("no agent called ghost"), "{error}");
+    hub.import_agent(&FILE.replace("slug: writer", "slug: helper"), None, None).await.unwrap();
+    let saved = hub.save_team(team("writer", &["helper"])).await.unwrap();
+    assert!(saved.missing.is_empty());
+
+    // The member is removed later: the team still lists it, and a run says what is wrong instead of starting.
+    hub.remove_agent("helper").await.unwrap();
+    let card = hub.team("duo").await.unwrap();
+    assert_eq!(card.missing, ["helper"]);
+    let error = hub
+        .prepare_team_run("duo", AgentAsk { prompt: "go".into(), ..AgentAsk::default() }, &Anything)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("helper") && error.contains("not an agent any more"), "{error}");
+    hub.remove_team("duo").await.unwrap();
+    assert!(hub.remove_team("duo").await.unwrap_err().to_string().contains("no team called duo"));
+    assert_eq!(hub.teams().await.unwrap().len(), 0);
 }
