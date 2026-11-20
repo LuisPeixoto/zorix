@@ -828,6 +828,15 @@ pub trait AgentStore: Send + Sync {
     async fn eval_run(&self, tenant: &TenantId, id: EvalRunId) -> Result<Option<EvalRun>>;
     /// The eval runs of an agent, newest first.
     async fn eval_runs(&self, tenant: &TenantId, agent: AgentId, limit: usize) -> Result<Vec<EvalRun>>;
+
+    /// The teams of a tenant, by slug.
+    async fn teams(&self, tenant: &TenantId) -> Result<Vec<Team>>;
+    /// One team.
+    async fn team(&self, tenant: &TenantId, slug: &AgentSlug) -> Result<Option<Team>>;
+    /// Make a team, or replace the one with the same slug. Fails when the tenant has [`MAX_TEAMS`].
+    async fn put_team(&self, tenant: &TenantId, team: Team) -> Result<Team>;
+    /// Delete a team. The agents in it are not touched.
+    async fn remove_team(&self, tenant: &TenantId, slug: &AgentSlug) -> Result<bool>;
 }
 
 #[cfg(test)]

@@ -242,6 +242,54 @@ pub async fn all_leases_can_be_dropped<R: ExecutionRepository>(repo: &R) {
     assert_eq!(repo.release_all_leases().await.unwrap(), 2);
 }
 
+/// Children are found by their parent, roots are the executions nobody started, a tree is walked nearest first, and a tenant never
+/// sees another's tree.
+pub async fn trees_are_queries<R: ExecutionRepository>(repo: &R) {
+    let tenant = TenantId::new("acme").unwrap();
+    let child_of = |parent: &Execution, root: &Execution, depth: u32, at: i64| {
+        let new = NewExecution {
+            tenant: Some(tenant.clone()),
+            parent: Some(parent.id),
+            root: Some(root.id),
+            depth,
+            request: TaskRequest { prompt: "part of it".into(), model: "sim".into(), ..TaskRequest::default() },
+            ..NewExecution::default()
+        };
+        Execution::new(ExecutionId::new(), new, Timestamp(at))
+    };
+    let root = stored(repo, "acme", None).await;
+    let alone = stored(repo, "acme", None).await;
+    let first = child_of(&root, &root, 1, 2_000);
+    let second = child_of(&root, &root, 1, 3_000);
+    let grandchild = child_of(&first, &root, 2, 4_000);
+    for e in [&first, &second, &grandchild] {
+        repo.create(e.clone(), vec![event(EventKind::Created)]).await.unwrap();
+    }
+    // Someone else's execution never shows up, even if it names this parent.
+    let mut stranger = child_of(&root, &root, 1, 5_000);
+    stranger.tenant = TenantId::new("globex").unwrap();
+    repo.create(stranger, vec![event(EventKind::Created)]).await.unwrap();
+
+    let kids = repo.children(&tenant, root.id).await.unwrap();
+    assert_eq!(
+        kids.iter().map(|e| e.id).collect::<Vec<_>>(),
+        vec![first.id, second.id],
+        "oldest first, only this tenant's"
+    );
+    assert!(repo.children(&tenant, alone.id).await.unwrap().is_empty());
+    let below = repo.descendants(&tenant, root.id).await.unwrap();
+    assert_eq!(below.len(), 3);
+    assert_eq!(below.last().unwrap().id, grandchild.id, "nearest first: the grandchild comes last");
+    assert_eq!(below.iter().find(|e| e.id == grandchild.id).unwrap().depth, 2);
+
+    let roots = repo.list(&tenant, &ListFilter { roots_only: true, ..ListFilter::default() }).await.unwrap();
+    assert_eq!(roots.len(), 2, "only the two that nobody started");
+    assert!(roots.iter().all(|e| e.parent.is_none()));
+    let filtered = repo.list(&tenant, &ListFilter { parent: Some(first.id), ..ListFilter::default() }).await.unwrap();
+    assert_eq!(filtered.iter().map(|e| e.id).collect::<Vec<_>>(), vec![grandchild.id]);
+    assert_eq!(repo.get(&tenant, grandchild.id).await.unwrap().unwrap().root, Some(root.id));
+}
+
 /// Generates one `#[tokio::test]` per repository contract case. `$make` is an expression that builds a fresh repository.
 #[macro_export]
 macro_rules! repository_contract_tests {
@@ -255,6 +303,7 @@ macro_rules! repository_contract_tests {
         $crate::repository_contract_tests!(@case $make, in_states_spans_tenants);
         $crate::repository_contract_tests!(@case $make, events_can_be_paged);
         $crate::repository_contract_tests!(@case $make, records_are_replaced_by_id);
+        $crate::repository_contract_tests!(@case $make, trees_are_queries);
         $crate::repository_contract_tests!(@case $make, leases_exclude_other_owners);
         $crate::repository_contract_tests!(@case $make, all_leases_can_be_dropped);
     };

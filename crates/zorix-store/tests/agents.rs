@@ -247,3 +247,97 @@ async fn a_run_remembers_its_agent_and_the_agent_has_a_list_of_conversations() {
     assert_eq!(conversations[1].title, "Hello there", "the first prompt names the conversation");
     assert_eq!(conversations[1].runs, 2);
 }
+
+fn team(slug: &str, lead: &str, members: &[&str]) -> zorix_core::Team {
+    zorix_core::Team {
+        tenant: tenant("local"),
+        slug: AgentSlug::new(slug).unwrap(),
+        name: "Research desk".into(),
+        description: "Finds things out and writes them up.".into(),
+        avatar: Default::default(),
+        lead: AgentSlug::new(lead).unwrap(),
+        members: members.iter().map(|m| AgentSlug::new(*m).unwrap()).collect(),
+        updated_at: NOW,
+    }
+}
+
+#[tokio::test]
+async fn teams_are_saved_replaced_listed_per_tenant_and_removed() {
+    let store = SqliteAgentStore::open_in_memory().unwrap();
+    let (local, other) = (tenant("local"), tenant("acme"));
+    assert!(store.teams(&local).await.unwrap().is_empty());
+
+    let made = store.put_team(&local, team("desk", "lead", &["researcher", "writer"])).await.unwrap();
+    assert_eq!(made.members.len(), 2);
+    let slug = AgentSlug::new("desk").unwrap();
+    assert_eq!(store.team(&local, &slug).await.unwrap().unwrap().lead.as_str(), "lead");
+
+    // The same slug replaces the team; the members are the new ones.
+    let mut changed = team("desk", "lead", &["researcher"]);
+    changed.updated_at = Timestamp(2_000);
+    store.put_team(&local, changed).await.unwrap();
+    let all = store.teams(&local).await.unwrap();
+    assert_eq!(all.len(), 1);
+    assert_eq!((all[0].members.len(), all[0].updated_at), (1, Timestamp(2_000)));
+
+    // Another tenant never sees it, and may use the same name. Its tenant is the one asked for, not what the record says.
+    assert!(store.team(&other, &slug).await.unwrap().is_none());
+    store.put_team(&other, team("desk", "boss", &[])).await.unwrap();
+    assert_eq!(store.team(&other, &slug).await.unwrap().unwrap().lead.as_str(), "boss");
+    assert_eq!(store.team(&local, &slug).await.unwrap().unwrap().lead.as_str(), "lead");
+
+    // A team that does not make sense is refused with a reason.
+    let error = store.put_team(&local, team("bad", "lead", &["lead"])).await.unwrap_err().to_string();
+    assert!(error.contains("not also a member"), "{error}");
+
+    assert!(store.remove_team(&local, &slug).await.unwrap());
+    assert!(!store.remove_team(&local, &slug).await.unwrap());
+    assert!(store.team(&local, &slug).await.unwrap().is_none());
+    assert!(store.team(&other, &slug).await.unwrap().is_some());
+}
+
+#[tokio::test]
+async fn a_tenant_may_have_only_so_many_teams() {
+    let store = SqliteAgentStore::open_in_memory().unwrap();
+    let local = tenant("local");
+    for i in 0..zorix_core::MAX_TEAMS {
+        store.put_team(&local, team(&format!("t{i}"), "lead", &[])).await.unwrap();
+    }
+    let error = store.put_team(&local, team("one-too-many", "lead", &[])).await.unwrap_err().to_string();
+    assert!(error.contains("most"), "{error}");
+    // Replacing an existing one is still fine.
+    store.put_team(&local, team("t0", "lead", &["a"])).await.unwrap();
+}
+
+#[tokio::test]
+async fn the_sqlite_repository_writes_parent_and_root_so_trees_survive_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("zorix.sqlite");
+    let tenant = tenant("local");
+    let (root_id, child_id);
+    {
+        let repo = SqliteRepository::open(&path).unwrap();
+        let root = new_execution(None, None, 0);
+        root_id = root.id;
+        repo.create(root, vec![]).await.unwrap();
+        let child = new_execution(Some(root_id), Some(root_id), 1);
+        child_id = child.id;
+        repo.create(child, vec![]).await.unwrap();
+    }
+    let repo = SqliteRepository::open(&path).unwrap();
+    let kids = repo.children(&tenant, root_id).await.unwrap();
+    assert_eq!(kids.iter().map(|e| e.id).collect::<Vec<_>>(), vec![child_id]);
+    let roots = repo.list(&tenant, &ListFilter { roots_only: true, ..ListFilter::default() }).await.unwrap();
+    assert_eq!(roots.iter().map(|e| e.id).collect::<Vec<_>>(), vec![root_id]);
+}
+
+fn new_execution(parent: Option<ExecutionId>, root: Option<ExecutionId>, depth: u32) -> Execution {
+    let new = NewExecution {
+        parent,
+        root,
+        depth,
+        request: TaskRequest { prompt: "work".into(), model: "demo".into(), ..TaskRequest::default() },
+        ..NewExecution::default()
+    };
+    Execution::new(ExecutionId::new(), new, NOW)
+}

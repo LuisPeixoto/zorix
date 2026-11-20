@@ -124,6 +124,9 @@ impl ExecutionRepository for MemoryRepository {
             .filter(|e| &e.tenant == tenant)
             .filter(|e| filter.states.is_empty() || filter.states.contains(&e.state))
             .filter(|e| filter.conversation.is_none() || e.conversation == filter.conversation)
+            .filter(|e| filter.agent.is_none() || e.agent.as_ref().map(|a| a.agent) == filter.agent)
+            .filter(|e| filter.parent.is_none() || e.parent == filter.parent)
+            .filter(|e| !filter.roots_only || e.parent.is_none())
             .cloned()
             .collect();
         found.sort_by_key(|e| std::cmp::Reverse((e.created_at, e.id)));

@@ -318,6 +318,23 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX eval_runs_by_agent ON eval_runs (tenant, agent_id, started_at DESC);
     ",
+    // 5: orchestration. Which execution started which, so a tree is a query and not a scan, and teams. Runs stored before this
+    // have no parent unless their document says so; the columns are filled from the document.
+    "
+    ALTER TABLE executions ADD COLUMN parent TEXT;
+    ALTER TABLE executions ADD COLUMN root TEXT;
+    UPDATE executions SET parent = json_extract(doc, '$.parent'), root = json_extract(doc, '$.root');
+    CREATE INDEX executions_by_parent ON executions (parent, created_at) WHERE parent IS NOT NULL;
+    CREATE INDEX executions_by_root ON executions (root) WHERE root IS NOT NULL;
+
+    CREATE TABLE teams (
+        tenant TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (tenant, slug)
+    ) WITHOUT ROWID;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -346,6 +363,37 @@ mod tests {
 
     fn version(conn: &Connection) -> u32 {
         conn.pragma_query_value(None, "user_version", |row| row.get(0)).unwrap()
+    }
+
+    #[test]
+    fn a_database_of_version_0_5_upgrades_to_trees_and_teams_and_fills_the_parent_from_the_document() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(4) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        for (id, doc) in [("e1", "{}"), ("e2", r#"{"parent":"e1","root":"e1"}"#)] {
+            conn.execute(
+                "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc) VALUES (?1,'local',NULL,'completed',1,NULL,1,?2)",
+                rusqlite::params![id, doc],
+            )
+            .unwrap();
+        }
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let rows: Vec<(String, Option<String>, Option<String>)> = conn
+            .prepare("SELECT id, parent, root FROM executions ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(rows[0], ("e1".into(), None, None));
+        assert_eq!(rows[1], ("e2".into(), Some("e1".into()), Some("e1".into())));
+        let teams: u32 = conn
+            .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'teams'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(teams, 1);
     }
 
     #[test]

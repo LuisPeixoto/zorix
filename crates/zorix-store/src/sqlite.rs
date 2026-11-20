@@ -169,8 +169,8 @@ impl ExecutionRepository for SqliteRepository {
             let mut stored = execution;
             stored.version = 1;
             tx.execute(
-                "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc, agent)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc, agent, parent, root)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 params![
                     stored.id.to_string(),
                     stored.tenant.as_str(),
@@ -181,6 +181,8 @@ impl ExecutionRepository for SqliteRepository {
                     stored.created_at.millis(),
                     encode(&stored)?,
                     stored.agent.as_ref().map(|a| a.agent.to_string()),
+                    stored.parent.map(|p| p.to_string()),
+                    stored.root.map(|r| r.to_string()),
                 ],
             )
             .map_err(storage)?;
@@ -262,6 +264,13 @@ impl ExecutionRepository for SqliteRepository {
             if let Some(agent) = &filter.agent {
                 sql.push_str(" AND agent = ?");
                 args.push(agent.to_string());
+            }
+            if let Some(parent) = &filter.parent {
+                sql.push_str(" AND parent = ?");
+                args.push(parent.to_string());
+            }
+            if filter.roots_only {
+                sql.push_str(" AND parent IS NULL");
             }
             sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?");
             let limit = if filter.limit == 0 { 100 } else { filter.limit };
