@@ -4,11 +4,13 @@
   import { toast } from "../stores/toast.svelte.ts";
   import { MODE_LABEL, type Mode } from "../theme.ts";
   import {
-    Avatar, Badge, BrandLogo, ChatBubble, Composer, Markdown, ScoreMatrix, ToolCallCard, VersionTimeline, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
+    Avatar, Badge, BrandLogo, ChatBubble, DelegationCard, Sparkbar, TreeView, type ChildRow, Composer, Markdown, ScoreMatrix, ToolCallCard, VersionTimeline, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
     ICON_NAMES, Icon, IconButton, Input, Kbd, KeyValue, List, ListRow, Modal, PageHeader, Segmented, Select, Skeleton, Spinner,
     Stat, StatusPill, Stepper, Switch, Tabs, Textarea, ToggleRow, type Command,
   } from "../ui/index.ts";
   import { TONES } from "../ui/tone.ts";
+  import { buildTree } from "../tree.ts";
+  import type { Execution } from "../api.ts";
 
   const surfaces = ["bg", "panel", "panel-2", "elevated", "hover"];
   const textTokens = ["fg", "muted", "faint"];
@@ -63,6 +65,31 @@
   const matrixRuns = [{ id: "a", label: "v1 · demo", sub: "Today 10:02" }, { id: "b", label: "v2 · demo", sub: "Today 10:41" }];
   const matrixCases = ["cites-its-sources", "says-when-it-found-nothing", "stays-short"];
   const matrixCell = (c: string, r: string) => ({ state: (r === "b" || c !== "stays-short" ? "pass" : "fail") as "pass" | "fail", note: c });
+  const sampleRun = (id: string, parent: string | null, agent: string, prompt: string, state: string, cost: number, at: number): Execution =>
+    ({
+      id, parent, root: parent ? "r" : null, depth: parent ? (parent === "r" ? 1 : 2) : 0, state, created_at: at, started_at: at, finished_at: state === "completed" ? at + 4200 : null,
+      request: { prompt, instructions: null, model: "demo" }, agent: { agent, slug: agent, version: 2, hash: "h" },
+      usage: { input_tokens: 800, output_tokens: 200, cost_micros: cost, model_calls: 3, tool_calls: 1 },
+    }) as unknown as Execution;
+  const sampleTree = buildTree([
+    sampleRun("r", null, "research-lead", "Compare the boiling points of water and ethanol, with sources.", "waiting_for_children", 5200, 1),
+    sampleRun("r1", "r", "researcher", "Find the boiling point of water at sea level.", "completed", 1800, 2),
+    sampleRun("r2", "r", "researcher", "Find the boiling point of ethanol at sea level.", "running", 1500, 3),
+    sampleRun("r21", "r2", "writer", "Tidy the citation format.", "waiting_for_approval", 400, 4),
+  ])!;
+  const faces: Record<string, { emoji: string; color: string; name: string }> = {
+    "research-lead": { emoji: "🧭", color: "accent", name: "Research lead" },
+    researcher: { emoji: "🔎", color: "info", name: "Researcher" },
+    writer: { emoji: "✍️", color: "accent", name: "Writer" },
+  };
+  const look = (run: Execution) => faces[run.agent?.slug ?? ""] ?? { emoji: "🤖", color: "muted", name: "Run" };
+  let pickedRun = $state<string | null>("r2");
+  const delegated: ChildRow[] = [
+    { id: "c1", agent: "researcher", name: "Researcher", emoji: "🔎", color: "info", task: "Find the boiling point of water at sea level.", state: "completed", steps: 3, cost_micros: 1800, answer: "Water boils at **100 °C** at sea level [1].\n\n1. [Boiling point](https://en.wikipedia.org/wiki/Boiling_point)" },
+    { id: "c2", agent: "researcher", name: "Researcher", emoji: "🔎", color: "info", task: "Find the boiling point of ethanol at sea level.", state: "working", steps: 2, cost_micros: 1500, live: "Ethanol boils at about 78.4 °C, according to the" },
+    { id: "c3", agent: "writer", name: "Writer", emoji: "✍️", color: "accent", task: "Tidy the citation format.", state: "waiting", steps: 1, cost_micros: 400 },
+    { id: "c4", agent: "code-reviewer", name: "Code reviewer", emoji: "🧐", color: "warn", task: "Check the script that converts the units.", state: "failed", steps: 2, cost_micros: 600, error: "The model refused: the request had no code to review." },
+  ];
   let loading = $state(false);
   function fakeLoad() {
     loading = true;
@@ -334,6 +361,26 @@
           <div class="mt-4 space-y-2"><Skeleton class="h-4 w-2/3" /><Skeleton class="h-4 w-full" /><Skeleton class="h-4 w-5/6" /></div>
         </Card>
       </div>
+
+      <Card title="Orchestration" icon="branch">
+        <p class="mb-4 text-base text-muted">When an agent asks others for help, the work becomes a tree. These show who asked whom, what each is doing and what it costs, and keep the person in charge of every approval.</p>
+        <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div>
+            <h4 class="mb-2 text-sm font-semibold">The tree of one piece of work</h4>
+            <TreeView root={sampleTree} selected={pickedRun} {look} now={1_000_000} onselect={(id) => (pickedRun = id)} />
+          </div>
+          <div>
+            <h4 class="mb-2 text-sm font-semibold">A delegation in the conversation</h4>
+            <DelegationCard children={delegated} onopen={(id) => toast.info(`Open ${id}`)}>
+              {#snippet row(r)}{#if r.state === "waiting"}<div class="flex gap-2"><Button size="sm" variant="primary" icon="check">Approve</Button><Button size="sm" icon="x">Refuse</Button></div>{/if}{/snippet}
+            </DelegationCard>
+            <h4 class="mt-5 mb-2 text-sm font-semibold">Share of the cost</h4>
+            <div class="flex items-center gap-4 text-xs text-muted">
+              {#each [[0.1, "ok"], [0.35, "info"], [0.7, "accent"], [1, "warn"]] as [v, t]}<span class="flex items-center gap-2"><Sparkbar value={Number(v)} tone={t as any} label="Share" />{Math.round(Number(v) * 100)}%</span>{/each}
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card title="Agents" icon="bot">
         <p class="mb-4 text-base text-muted">An agent has a face, a conversation, tool calls in the flow, versions and a score. These are the pieces its screens are made of.</p>

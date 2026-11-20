@@ -34,6 +34,8 @@ export function buildThread(runs: ThreadRun[], live: Live | null = null): Thread
       items.push({ kind: "problem", id: `${run.id}:problem`, runId: run.id, tone: "muted", title: "Stopped", text: run.cancel_reason ?? "This run was cancelled." });
     } else if (run.state === "waiting_for_approval") {
       items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Waiting for you to decide on the step above." });
+    } else if (run.state === "waiting_for_children") {
+      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Waiting for the agents it asked." });
     } else if (run.state === "paused") {
       items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Paused." });
     } else if (WORKING.has(run.state)) {

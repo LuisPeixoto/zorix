@@ -9,6 +9,7 @@ export type ExecutionState =
   | "waiting_for_model"
   | "waiting_for_tool"
   | "waiting_for_approval"
+  | "waiting_for_children"
   | "paused"
   | "completed"
   | "failed"
@@ -34,7 +35,13 @@ export interface Execution {
   usage: Usage;
   conversation?: string | null;
   /** The agent (and version) that made this run, when one did. */
-  agent?: { agent: string; slug: string; version: number; hash: string } | null;
+  agent?: { agent: string; slug: string; version: number; hash: string; team?: string | null } | null;
+  /** The run that asked for this one, when work was delegated. */
+  parent?: string | null;
+  /** The run at the top of its tree (none for a root). */
+  root?: string | null;
+  /** How deep it is: 0 for a root. */
+  depth?: number;
   result: { text: string; structured: unknown } | null;
   failure: { kind: string; message: string; limit: string | null } | null;
   cancel_reason: string | null;
