@@ -7,10 +7,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::{Connection as Db, OptionalExtension, params};
-use zorix_core::agent::{MAX_AGENTS, MAX_VERSIONS};
+use zorix_core::agent::{MAX_AGENTS, MAX_TEAMS, MAX_VERSIONS};
 use zorix_core::{
     Agent, AgentConversation, AgentId, AgentSlug, AgentSpec, AgentStore, AgentVersion, ConversationId, Error, EvalCase,
-    EvalCaseId, EvalRun, EvalRunId, Result, SkillRecord, StoredCase, TenantId, Timestamp,
+    EvalCaseId, EvalRun, EvalRunId, Result, SkillRecord, StoredCase, Team, TenantId, Timestamp,
 };
 
 /// Stores agents in the same SQLite file as everything else.
@@ -575,6 +575,69 @@ impl AgentStore for SqliteAgentStore {
                 .query_map(params![tenant.as_str(), agent.to_string(), limit.max(1) as i64], |r| r.get::<_, String>(0))
                 .map_err(storage)?;
             rows.map(|r| parse(&r.map_err(storage)?)).collect()
+        })
+    }
+
+    async fn teams(&self, tenant: &TenantId) -> Result<Vec<Team>> {
+        self.with(|db| {
+            let mut statement = db.prepare("SELECT doc FROM teams WHERE tenant = ?1 ORDER BY slug").map_err(storage)?;
+            let rows = statement.query_map(params![tenant.as_str()], |r| r.get::<_, String>(0)).map_err(storage)?;
+            rows.map(|r| parse(&r.map_err(storage)?)).collect()
+        })
+    }
+
+    async fn team(&self, tenant: &TenantId, slug: &AgentSlug) -> Result<Option<Team>> {
+        self.with(|db| {
+            let doc: Option<String> = db
+                .query_row(
+                    "SELECT doc FROM teams WHERE tenant = ?1 AND slug = ?2",
+                    params![tenant.as_str(), slug.as_str()],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(storage)?;
+            doc.map(|d| parse(&d)).transpose()
+        })
+    }
+
+    async fn put_team(&self, tenant: &TenantId, mut team: Team) -> Result<Team> {
+        team.tenant = tenant.clone();
+        team.validate()?;
+        self.with(|db| {
+            let existing: i64 = db
+                .query_row(
+                    "SELECT COUNT(*) FROM teams WHERE tenant = ?1 AND slug != ?2",
+                    params![tenant.as_str(), team.slug.as_str()],
+                    |r| r.get(0),
+                )
+                .map_err(storage)?;
+            let known: Option<i64> = db
+                .query_row(
+                    "SELECT 1 FROM teams WHERE tenant = ?1 AND slug = ?2",
+                    params![tenant.as_str(), team.slug.as_str()],
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(storage)?;
+            if known.is_none() && existing as usize >= MAX_TEAMS {
+                return Err(invalid(format!("There are {MAX_TEAMS} teams already, which is the most.")));
+            }
+            db.execute(
+                "INSERT INTO teams (tenant, slug, updated_at, doc) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT (tenant, slug) DO UPDATE SET updated_at = excluded.updated_at, doc = excluded.doc",
+                params![tenant.as_str(), team.slug.as_str(), team.updated_at.millis(), encode(&team)?],
+            )
+            .map_err(storage)?;
+            Ok(team.clone())
+        })
+    }
+
+    async fn remove_team(&self, tenant: &TenantId, slug: &AgentSlug) -> Result<bool> {
+        self.with(|db| {
+            let n = db
+                .execute("DELETE FROM teams WHERE tenant = ?1 AND slug = ?2", params![tenant.as_str(), slug.as_str()])
+                .map_err(storage)?;
+            Ok(n > 0)
         })
     }
 }
