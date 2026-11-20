@@ -2,10 +2,20 @@
   import { agents } from "../../stores/agents.svelte.ts";
   import { ago } from "../../format.ts";
   import { store } from "../../stores/runs.svelte.ts";
-  import { Avatar, Badge, Button, Callout, Card, EmptyState, Icon, Modal, PageHeader, Skeleton, Field, Input, Textarea } from "../../ui/index.ts";
+  import { Avatar, Badge, Button, Callout, Card, EmptyState, Icon, Modal, PageHeader, Segmented, Skeleton, Field, Input, Textarea } from "../../ui/index.ts";
   import AgentPage from "./AgentPage.svelte";
+  import TeamPage from "./TeamPage.svelte";
+  import TeamsGallery from "./TeamsGallery.svelte";
 
   let adding = $state<string | null>(null);
+  // The switch between the two galleries follows the store, and changing it opens the other one.
+  let section = $state<"agents" | "teams">(agents.section);
+  $effect(() => {
+    if (section !== agents.section) void (section === "teams" ? agents.openTeams(null) : agents.open(null));
+  });
+  $effect(() => {
+    section = agents.section;
+  });
   let importOpen = $state(false);
   let file = $state("");
   let rename = $state("");
@@ -35,18 +45,33 @@
 
 {#if agents.slug}
   <AgentPage />
+{:else if agents.section === "teams" && agents.teamSlug}
+  <TeamPage slug={agents.teamSlug} />
 {:else}
   <div class="h-full overflow-y-auto">
     <div class="mx-auto max-w-[1100px] p-8">
-      <PageHeader title="Agents" subtitle="Reusable AI workers. Each has its own instructions, skills, tools, memory and versions, and is checked by evaluations." glow>
+      <PageHeader
+        title={agents.section === "teams" ? "Teams" : "Agents"}
+        subtitle={agents.section === "teams"
+          ? "Agents that work together: a lead asks the others, several at once, and puts the answers together."
+          : "Reusable AI workers. Each has its own instructions, skills, tools, memory and versions, and is checked by evaluations."}
+        glow
+      >
         {#snippet actions()}
-          <Button icon="download" onclick={() => (importOpen = true)}>Import a file</Button>
+          <Segmented
+            label="Agents or teams"
+            options={[{ value: "agents", label: "Agents", icon: "bot" }, { value: "teams", label: "Teams", icon: "users" }]}
+            bind:value={section}
+          />
+          {#if agents.section === "agents"}<Button icon="download" onclick={() => (importOpen = true)}>Import a file</Button>{/if}
         {/snippet}
       </PageHeader>
 
       {#if agents.error}<Callout tone="err" title="Agents could not be read">{agents.error}</Callout>{/if}
 
-      {#if !agents.loaded}
+      {#if agents.section === "teams"}
+        <TeamsGallery />
+      {:else if !agents.loaded}
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{#each [0, 1, 2] as i (i)}<Skeleton class="h-40 rounded-2xl" />{/each}</div>
       {:else}
         {#if agents.cards.length === 0}
