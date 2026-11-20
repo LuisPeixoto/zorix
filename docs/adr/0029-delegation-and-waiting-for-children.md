@@ -22,7 +22,7 @@ nothing could make progress. The runtime already has a pattern for a run that mu
 - A failed or cancelled child is **reported in the result**, not raised: the parent's model decides what to do.
 - **`recover`** includes `WaitingForChildren`: if every child is terminal it settles and re-queues the parent; otherwise the parent keeps
   waiting and each child recovers on its own. Idempotency keys make a repeated create after a crash return the existing child.
-- **Cancel cascades**: cancelling a run cancels its non-terminal descendants, leaves first. A child cancelled alone is only a result.
+- **Cancel cascades**: cancelling a run cancels its non-terminal descendants, from the top down: the run is marked first so that it cannot start anything new, then each child, then theirs. A child cancelled alone is only a result.
 - `settle` treats `WaitingForChildren` as still working, except when a descendant is waiting for a person: then the tree is waiting.
 - Events: `execution.waiting_children`, `execution.child.started` and `execution.child.settled`. The call's result is the typed object
   `{agent, version, task, state, answer, structured?, error?, steps, tool_calls, cost_micros, child_id}` per task.
