@@ -35,21 +35,34 @@ impl Home {
             .expect("start zorix")
     }
 
+    /// Start `zorix mcp serve` and connect. A server that writes takes the data folder's lock, and the one before it may still be
+    /// shutting down (slowly, on a busy Windows runner), in which case the new one exits at once: try again for a few seconds.
     async fn client(&self, args: &[&str]) -> McpClient {
         let mut all = vec!["--home".to_string(), self.path().display().to_string(), "mcp".into(), "serve".into()];
         all.extend(args.iter().map(|a| a.to_string()));
-        let transport = Arc::new(
-            StdioTransport::spawn(StdioConfig {
+        let mut last = String::new();
+        for _ in 0..40 {
+            let spawned = StdioTransport::spawn(StdioConfig {
                 command: env!("CARGO_BIN_EXE_zorix").into(),
-                args: all,
+                args: all.clone(),
                 env: vec![("ZORIX_SECRETS".into(), "env".into())],
                 cwd: None,
             })
-            .expect("start zorix mcp serve"),
-        );
-        McpClient::connect_with(transport, &CancellationToken::new(), Duration::from_secs(5), Duration::from_secs(30))
-            .await
-            .expect("connect")
+            .expect("start zorix mcp serve");
+            let connected = McpClient::connect_with(
+                Arc::new(spawned),
+                &CancellationToken::new(),
+                Duration::from_secs(5),
+                Duration::from_secs(30),
+            )
+            .await;
+            match connected {
+                Ok(client) => return client,
+                Err(error) => last = error.to_string(),
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        panic!("connect: {last}");
     }
 }
 
