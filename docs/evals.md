@@ -32,7 +32,9 @@ case. The design is in ADR [0028](adr/0028-evals.md).
 | `tool_used` (`pattern`, `min`), `tool_not_used` | A tool matching the pattern was (or was never) called; a prefix ends in `*` |
 | `max_steps`, `max_tool_calls`, `max_cost_usd` | The run stayed within the limit |
 | `status` | The run ended in this state (`completed` unless you say otherwise) |
+| `delegated` (`agent`, `min`) | The run asked this agent (or, without `agent`, any agent) at least `min` times ([orchestration](orchestration.md)) |
 
+Evaluations refuse approvals across the **whole tree**: a sub-run that asks for a person fails the case like the lead would, and a case's `approve` patterns apply to sub-runs too.
 A run that did not complete fails its case. Every failed check says why.
 
 ## The judge

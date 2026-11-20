@@ -104,6 +104,11 @@ The New run form has a **Run as** picker. With an agent chosen the form shows wh
 limits) and the sections that can still be narrowed: the model (it must be allowed) and the memory switches. The run view shows
 an **agent · vN** chip that opens the agent's chat.
 
+## Agents that ask agents
+
+An agent whose access has `agent:researcher` (or `agent:*`) can hand part of its work to that agent with the `agents.delegate` tool, several at once, and a **team** (a lead plus the agents it
+may ask) is the shortcut for that. A child run gets only what both it and its parent may do, and what it spends counts against the parent. See [orchestration](orchestration.md) and [teams](teams.md).
+
 ## From the command line
 
 ```

@@ -119,3 +119,24 @@ switches. The run view shows an **agent · vN** chip that opens the agent's chat
 ![The agent page in dark](screenshots-0.5.0/agents-chat-dark.png)
 
 See [agents](agents.md), [skills](skills.md) and [evals](evals.md).
+
+## Teams and trees (version 0.6)
+
+The Agents screen has a switch, **Agents | Teams**. The **Teams** gallery shows each team with the faces of its lead and members, and *Add from templates* installs the research desk.
+A team page shows *How it works* (the lead, the agents it asks at the same time), the rule that members only get what the lead has, and the team's recent work; *Chat with the team* opens the
+lead's chat in team mode, and the pencil edits the lead and members.
+
+![The Teams gallery](screenshots-0.6.0/teams-gallery-light.png)
+
+When an agent delegates, the chat shows a **delegation card**: "Asked 2 agents", a row per agent with its task, state, steps and a bar for its share of the cost, the live text of those
+that are working, the answer of those that are done, and an approval inline when one needs you. The arrow opens that sub-run.
+
+In the run view, a run that asked others (or was asked) has a **Work tree** card with state, steps, time and cost for each run; click one to open it. An approval asked below shows as
+**Waiting in the tree** above it, answered with the same buttons. A sub-run has a *sub-run · level N* chip that goes back up. The run list shows root runs only, with a small
+count of sub-runs, and **New run** lists the teams under *Run as*. ⌘K finds teams.
+
+![The team page in dark](screenshots-0.6.0/team-page-dark.png)
+
+For reviews: `ZORIX_START_VIEW` accepts `teams`, `teams:SLUG` and `teams:SLUG/chat[/CONVERSATION]` (and `@light` or `@dark`) besides the earlier screens.
+
+See [orchestration](orchestration.md) and [teams](teams.md).

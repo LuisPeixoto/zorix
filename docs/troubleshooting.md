@@ -167,3 +167,24 @@ Scripts run in the sandbox with the standard library only. A skill that needs a 
 
 The agent tried a tool that asks first. Evaluations never approve by themselves: list the tool in the case's `approve`, or check that the agent did not need it.
 `memory.remember` can never be approved this way.
+
+## A run stays in `waiting_for_children`
+
+It asked other agents and is waiting for them. Look at the tree (`zorix tree RUN`, or the *Work tree* card): the run that is still working, or waiting for a person, is the reason. A sub-run that
+needs an approval keeps the whole tree waiting: answer it with `zorix approve ROOT` (or *Waiting in the tree* in the app). If ZORIX was closed while the children ran, `zorix recover` settles
+the parent when they are all finished.
+
+## "…was refused" when an agent tries to ask another
+
+The message says why. The usual causes: the lead's access has no `agent:NAME` entry (or the team does not list that member), the agent is already above in the chain (it would loop), it is
+archived, the tree is already three levels deep, one call lists more than eight tasks, or the root already has 32 runs below it. A model the asked agent could use that the lead may not use is
+refused too. Add the access or the member, and run again.
+
+## A sub-run says "No default model is set"
+
+A sub-run uses its own agent's model, not the lead's. A starter member such as `researcher` uses the app's default model, so set one (an alias named `default` in `providers.toml`, see [providers](providers.md), or change the agent's model) before
+running the team.
+
+## "…is not an agent any more" when running a team
+
+The team lists an agent that was deleted. `zorix team show NAME` names it; remove it with `zorix team edit NAME --remove-member AGENT` or bring the agent back.

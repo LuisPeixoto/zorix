@@ -99,6 +99,10 @@ whatever the agent can do in ZORIX: `--allow TOOL`, `--allow-read`, `--allow-wri
 `--allow` flags a client gets an agent with nothing to use, which is safe and usually not what you want: add what the agents need, for
 example `--allow 'skill.*' --allow-access code:python`. `zorix.status` and `zorix.result` follow either kind of run.
 
+**Teams.** `zorix.agents` also lists the teams (name, description, lead, members), and `zorix.run_agent` takes `team`: the run is the lead's, and the lead may ask the members
+([teams](teams.md)). The same `--allow` flags apply to the lead and, intersected, to every sub-run. `zorix.status` reports `sub_runs` (state, agent, cost) so a client can show
+progress; an approval asked by a sub-run still waits in ZORIX.
+
 ## Troubleshooting
 
 - **"Sign in"** on a card, or `needs sign-in` in `zorix mcp tools`: `zorix mcp login <name>`.

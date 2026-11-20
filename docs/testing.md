@@ -1,7 +1,7 @@
 # Testing
 
 The runtime is tested without any external service: models are simulated, and tests are deterministic. At the time of
-writing there are ** Rust tests** plus **7** for the interface helpers.
+writing there are **913** Rust tests plus **61** for the interface helpers.
 
 ```bash
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --exclude zorix-desktop
@@ -55,6 +55,17 @@ wrapper, and a rule-based demo model.
 | The four starter agents parse, import, pin their skills and have valid cases | `zorix-agents/tests/starters.rs` |
 | The commands as real programs; agents over MCP with only what the server allows | `zorix-cli/tests/agents.rs`, `tests/mcp_serve.rs` |
 | The Markdown renderer cannot produce markup or unsafe links; the thread builder | `apps/desktop/src/lib/ui/markdown.test.ts`, `src/lib/thread.test.ts` |
+
+## Orchestration
+
+| What | Where |
+|---|---|
+| The new state and triggers, every pair, every state still reachable | `zorix-core` `state::` tests |
+| Parallel results in order, no deadlock with one worker and four parents, failures reported, cascading cancel, a child cancelled alone, an approval below decided from the root, depth and descendant limits, a refused plan, the same call after a restart, recovery, roots listing | `zorix-runtime/tests/delegation.rs`, and `trees_are_queries` in the repository contract (both repositories) |
+| Grants only shrink, the budget split, loops, archived agents, the parent's model list, the `<available_agents>` index, the `delegated` check, tree-wide approval refusal | `zorix-agents/tests/delegation.rs`, `tests/evals.rs` |
+| A 0.5 database upgrades to schema 5; teams; children and roots queries | `zorix-store` schema and `tests/agents.rs` |
+| Teams and trees as real programs, a sub-run's approval answered from the root, MCP with `team` | `zorix-cli/tests/orchestration.rs`, `tests/mcp_serve.rs` |
+| The tree builder, totals and cost shares; the card rows of a delegation | `apps/desktop/src/lib/tree.test.ts`, `src/lib/delegation.test.ts` |
 
 ## Security cases
 
@@ -113,6 +124,13 @@ tests for `mcp`, `connect` and `sandbox`, using `zorix mcp serve` as the server 
 `tools/live-tests.sh integrations` runs the real command line against real servers: DeepWiki and Cloudflare docs, the
 `server-everything` and `server-filesystem` packages through `npx`, a public GitHub read with no token, and Python in the
 sandbox. It uses no account of yours.
+
+### Orchestration
+
+`tools/live-tests.sh orchestration` runs the real command line on a throwaway data folder and always checks, with a scripted model: the research desk installs; a lead asks two members at once and
+the tree, the list of roots and the cost roll-up are right; delegation nests three levels and an agent outside the lead's access is refused with a reason; a sub-run's approval is answered from the
+run you started; cancelling the root cancels the sub-run; and a tool call made by a sub-run counts against the parent's limit. The scripted model is shared by a whole run, so each script lists the turns of the
+lead and its sub-runs in the order they are used. When Ollama **already** runs here (this script never starts it) the research desk answers with a real local model; the result is shown, not asserted.
 
 ### Agents
 
