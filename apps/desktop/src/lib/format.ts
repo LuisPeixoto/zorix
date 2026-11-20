@@ -10,6 +10,7 @@ const LABELS: Record<ExecutionState, string> = {
   waiting_for_model: "Thinking",
   waiting_for_tool: "Using a tool",
   waiting_for_approval: "Needs your approval",
+  waiting_for_children: "Waiting for sub-runs",
   paused: "Paused",
   completed: "Completed",
   failed: "Failed",
@@ -27,6 +28,7 @@ export function stateTone(state: ExecutionState): Tone {
     case "waiting_for_approval":
       return "warn";
     case "running":
+    case "waiting_for_children":
     case "waiting_for_model":
     case "waiting_for_tool":
     case "queued":
@@ -119,6 +121,20 @@ export function describeEvent(event: ExecEvent): EventView {
       return { title: `${tool} failed`, detail: shorten(String(p.error ?? p.reason ?? ""), 160), tone: "err" };
     case "execution.tool.denied":
       return { title: `${tool} was refused`, detail: shorten(`${p.reason ?? ""} (by ${p.by})`, 160), tone: "warn" };
+    case "execution.waiting_children": {
+      const n = Array.isArray(p.children) ? p.children.length : Number(p.tasks ?? 0);
+      return { title: "Asked other agents", detail: `${n} task${n === 1 ? "" : "s"} at the same time`, tone: "info" };
+    }
+    case "execution.child.started":
+      return { title: `${p.agent ?? "An agent"} started`, detail: shorten(String(p.task ?? ""), 140), tone: "info" };
+    case "execution.child.settled": {
+      const state = String(p.state ?? "");
+      return {
+        title: `${p.agent ?? "An agent"} ${state}`,
+        detail: `${p.steps ?? 0} step${Number(p.steps) === 1 ? "" : "s"}`,
+        tone: state === "completed" ? "ok" : state === "failed" ? "err" : "muted",
+      };
+    }
     case "execution.waiting_approval":
       return { title: `Waiting for approval: ${tool}`, detail: String(p.reason ?? ""), tone: "warn" };
     case "execution.approval.granted":
@@ -167,6 +183,7 @@ export function keyTone(key: string): Tone {
 
 /** An icon for each kind of event, so the timeline can be scanned. */
 export function eventIcon(kind: string): string {
+  if (kind.includes("waiting_children") || kind.includes(".child.")) return "branch";
   if (kind.includes("fallback")) return "route";
   if (kind.includes("approval") || kind.includes("waiting_approval")) return "shield";
   if (kind.includes(".tool.")) return "wrench";

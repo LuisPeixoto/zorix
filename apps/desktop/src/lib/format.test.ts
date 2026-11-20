@@ -21,6 +21,16 @@ test("states have a label and a tone, and approval stands out", () => {
   assert.equal(stateTone("paused"), "muted");
 });
 
+test("waiting for sub-runs reads as work in progress, not as a stop", () => {
+  assert.equal(stateLabel("waiting_for_children"), "Waiting for sub-runs");
+  assert.equal(stateTone("waiting_for_children"), "info");
+  assert.ok(!isFinished("waiting_for_children") && !isLive("waiting_for_children"), "nobody may pause it: it is suspended");
+  assert.deepEqual(describeEvent(event("execution.waiting_children", { children: ["a", "b"] })).detail, "2 tasks at the same time");
+  assert.equal(describeEvent(event("execution.child.settled", { agent: "writer", state: "failed", steps: 1 })).tone, "err");
+  assert.equal(describeEvent(event("execution.child.started", { agent: "researcher", task: "Find it." })).title, "researcher started");
+  assert.equal(eventIcon("execution.child.settled"), "branch");
+});
+
 test("live and finished states do not overlap", () => {
   for (const state of ["queued", "running", "waiting_for_model", "waiting_for_tool"] as const) {
     assert.ok(isLive(state) && !isFinished(state), state);

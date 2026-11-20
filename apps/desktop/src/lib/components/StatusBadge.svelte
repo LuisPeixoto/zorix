@@ -5,7 +5,7 @@
 
   let { state, compact = false }: { state: ExecutionState; compact?: boolean } = $props();
 
-  const live = $derived(["running", "waiting_for_model", "waiting_for_tool", "queued"].includes(state));
+  const live = $derived(["running", "waiting_for_model", "waiting_for_tool", "waiting_for_children", "queued"].includes(state));
 </script>
 
 {#if compact}
