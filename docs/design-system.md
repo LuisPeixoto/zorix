@@ -199,20 +199,27 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 
 | Screen | Difference | Reason |
 |---|---|---|
-| Sidebar | Projects, Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
+| Sidebar | Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
 | Toolbar, sidebar | No account avatar, no daily budget beside "Spend today" | No accounts or budget setting yet ([roadmap](roadmap.md#across-phases), Command Center) |
 | Run | "This run" lists the model, who started it and the cost, not the grants, what asks first and the limits | The run record does not return its grants and limits yet; the roadmap lists them |
 | Run | The work tree is the kit's TreeView (state, steps, time, cost bar), not a four-column table | Same facts; TreeView adds folding and keyboard navigation |
 | New run | No budget, time or steps fields, no estimate, no "Always for this run", no *Run as Workflow* | Not wired in the start request yet; Phase 7 and the Command Center bring them |
 | Providers | No price per million tokens, p95 latency or spend; routes show their names only | Prices and timings are not stored per model; routes live in `providers.toml` |
 | Integrations | Cards without a 24-hour history strip; filters are All and Needs attention, and Native sits on its own tab | No health history is recorded yet; `HealthGrid` is in the kit for when it is |
-| Workflows | The palette also lists *After workflow* and *Manual* under Triggers; it has no *Pull request* action and no *Add a task* (Projects) action | Both trigger kinds exist in the model and the TriggerChip; no tool opens pull requests yet and Projects is Phase 8 |
+| Workflows | The palette also lists *After workflow* and *Manual* under Triggers; it has no *Pull request* action and no *Add a task* action | Both trigger kinds exist in the model and the TriggerChip; no tool opens pull requests yet, and a workflow step that makes a task is left for later |
 | Workflows | *Time saved* shows a dash until a workflow says how many minutes a run saves; *Waiting for people* names the oldest wait, not an on-call rotation | Nothing is estimated or invented; people and rotations arrive with Phase 10 |
 | Workflow editor | *Who decides* is not a field: an approval is answered by the person using ZORIX. The On switch sits in the settings of the workflow, and a *Runs* button sits beside *Versions* | There are no accounts or rotations yet; the run view opens from the Runs drawer, as the design system says |
 | Workflows list | Bars are as tall as the run was long (square root, at least 40%) | The design system draws bars of different heights without saying why; duration is the one real figure |
 | Memory | A *To approve* tab replaces the proposals list; no *Scopes* tab | Proposals are approvals of `memory.remember`, answered here or in the run |
 | Agents | No evaluation score on a card, no Mine, Templates or Archived filters | The card does not carry the latest score, where an agent came from, or archived agents |
 | Agent chat | The rail shows the team or the agent and the cost so far, not *Sources cited* or *Memory used* | Citations and the memory a chat used are not exposed per conversation yet |
+| Project board, timeline | No *Share* button; *Ask the manager* (when the project has one) and a settings button stand in its place | There are no accounts or other people until Phase 10 |
+| Projects | A person is a round avatar with a person icon, not initials; the *People* filter shows the tasks you have | ZORIX does not know a name to take initials from, and the only person is you |
+| Projects | An agent's face is the emoji and colour of its record, not an icon | The kit's Avatar draws agents that way everywhere |
+| Board | A card drops its due date for a deliverables count once it is Done, and its parts wrap in a narrow lane | The design system shows the Done count and no completion date; a task does not record when it finished |
+| Board, list | A lane has the kit's 16 px radius, not 14 | One radius for cards and lanes in the kit |
+| Task | The drawer edits the task in place (fields, dependencies, links, deliverables), and its Stepper only shows where the task is | The design system draws a read-out; moves are the footer buttons, the board and the keyboard |
+| Timeline | Tasks with no dates sit in a *Not scheduled* row under the grid; arrows are drawn between a task and what it waits for | Added to the design system for this phase, logged in `design/local-additions.md` |
 
 ### Contrast in the design system itself
 

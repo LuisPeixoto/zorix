@@ -15,6 +15,15 @@
   {#snippet avatar(view)}{#if view.task.assignee}<WhoAvatar who={view.task.assignee} size="xs" />{/if}{/snippet}
 </Timeline>
 
+<!-- The arrows are a drawing; this says the same in words for a screen reader. -->
+{#if hasArrows}
+  <ul class="sr-only" aria-label="What waits for what">
+    {#each timeline.bars.filter((b) => b.view.task.depends_on.length > 0) as bar (bar.view.task.key)}
+      <li>{bar.view.task.key} waits for {bar.view.task.depends_on.join(" and ")}{timeline.bars.some((o) => bar.view.task.depends_on.includes(o.view.task.key) && o.end >= bar.start) ? ", and starts before one of them is due" : ""}.</li>
+    {/each}
+  </ul>
+{/if}
+
 {#if timeline.unscheduled.length > 0}
   <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
     <b class="font-semibold text-fg">Not scheduled · {timeline.unscheduled.length}</b>

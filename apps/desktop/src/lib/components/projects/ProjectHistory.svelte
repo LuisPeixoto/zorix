@@ -34,10 +34,9 @@
   const shown = $derived(events.filter((e) => filter === "all" || eventGroup(e) === filter));
   const groups = $derived(groupByDay(shown, todayOf(store.now)));
 
-  function badge(event: ProjectEvent): { text: string; tone: "ok" | "warn" } | null {
+  function badge(event: ProjectEvent): { text: string; tone: "ok" } | null {
     const k = event.kind;
     if (k.type === "moved" && k.approved_by) return { text: `Approved by ${k.approved_by}`, tone: "ok" };
-    if (k.type === "moved" && k.to === "review" && !event.by) return { text: "Needs you", tone: "warn" };
     return null;
   }
 </script>

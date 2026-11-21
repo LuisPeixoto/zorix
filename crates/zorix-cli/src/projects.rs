@@ -38,13 +38,6 @@ fn usd(micros: u64) -> String {
     format!("${:.2}", micros as f64 / 1_000_000.0)
 }
 
-/// A command's `--model` also decides what the runs it starts use.
-fn use_model(app: &crate::app::App, args: &crate::cli::ModelArgs) {
-    if args.model.is_some() {
-        app.projects.set_model(Some(app.model.clone()));
-    }
-}
-
 /// What stands in for the engine when a command only manages: it can read nothing and start nothing.
 struct NoEngine;
 
@@ -364,7 +357,6 @@ async fn remove(service: &ProjectService, printer: Printer, key: &str) -> Result
 
 async fn ask(home: &Path, tenant: TenantId, printer: Printer, args: ProjectAskArgs) -> Result<Exit, CliError> {
     let app = open_engine(home, &tenant, &args.model)?;
-    use_model(&app, &args.model);
     let result = async {
         let key = project_key(&args.project)?;
         let execution = app.projects.ask_manager(&key, args.prompt.as_deref()).await?;
@@ -497,7 +489,6 @@ async fn add(service: &ProjectService, printer: Printer, args: TaskAddArgs) -> R
 
 async fn add_with_engine(home: &Path, tenant: TenantId, printer: Printer, args: TaskAddArgs) -> Result<Exit, CliError> {
     let app = open_engine(home, &tenant, &args.model)?;
-    use_model(&app, &args.model);
     let result = async {
         let key = app.projects.add_task(&project_key(&args.project)?, new_task(&args)?, None).await?.key;
         follow_task(&app.projects, printer, &key, true).await
@@ -633,7 +624,6 @@ async fn edit_with_engine(
     args: TaskEditArgs,
 ) -> Result<Exit, CliError> {
     let app = open_engine(home, &tenant, &args.model)?;
-    use_model(&app, &args.model);
     let result = async {
         let key = task_key(&args.task)?;
         let current = app.projects.task(&key).await?.task.task;
@@ -703,7 +693,6 @@ async fn move_task(home: &Path, tenant: TenantId, printer: Printer, args: TaskMo
         }
     }
     let app = open_engine(home, &tenant, &args.model)?;
-    use_model(&app, &args.model);
     let result = async {
         let task = app
             .projects
@@ -741,7 +730,6 @@ fn moved(printer: Printer, task: &zorix_core::Task) -> Result<Exit, CliError> {
 
 async fn restart(home: &Path, tenant: TenantId, printer: Printer, args: TaskRestartArgs) -> Result<Exit, CliError> {
     let app = open_engine(home, &tenant, &args.model)?;
-    use_model(&app, &args.model);
     let result = async {
         let key = task_key(&args.task)?;
         app.projects.restart_task(&key, args.note.clone(), None).await?;
