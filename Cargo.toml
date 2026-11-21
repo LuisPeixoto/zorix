@@ -27,6 +27,7 @@ zorix-hub = { path = "crates/zorix-hub" }
 zorix-agents = { path = "crates/zorix-agents" }
 zorix-memory = { path = "crates/zorix-memory" }
 zorix-workflows = { path = "crates/zorix-workflows" }
+zorix-projects = { path = "crates/zorix-projects" }
 
 async-trait = "0.1"
 globset = "0.4"
