@@ -8,14 +8,10 @@
   import TeamsGallery from "./TeamsGallery.svelte";
 
   let adding = $state<string | null>(null);
-  // The switch between the two galleries follows the store, and changing it opens the other one.
-  let section = $state<"agents" | "teams">(agents.section);
-  $effect(() => {
-    if (section !== agents.section) void (section === "teams" ? agents.openTeams(null) : agents.open(null));
-  });
-  $effect(() => {
-    section = agents.section;
-  });
+  // Agents that belong to at least one team, for the filter.
+  let show = $state("all");
+  const inTeams = $derived(new Set(agents.teams.flatMap((t) => [t.team.lead, ...t.team.members])));
+  const listed = $derived(show === "teams" ? agents.cards.filter((c) => inTeams.has(c.slug)) : agents.cards);
   let importOpen = $state(false);
   let file = $state("");
   let rename = $state("");
@@ -58,11 +54,6 @@
         glow
       >
         {#snippet actions()}
-          <Segmented
-            label="Agents or teams"
-            options={[{ value: "agents", label: "Agents", icon: "bot" }, { value: "teams", label: "Teams", icon: "users" }]}
-            bind:value={section}
-          />
           {#if agents.section === "agents"}<Button icon="download" onclick={() => (importOpen = true)}>Import a file</Button>{/if}
         {/snippet}
       </PageHeader>
@@ -79,8 +70,20 @@
             <EmptyState icon="bot" title="No agents yet" text="Start from a ready-made agent below, or import a file. Each one comes with a skill and a few checks you can run." />
           </Card>
         {:else}
+          {#if agents.teams.length}
+            <div class="mb-4">
+              <Segmented
+                label="Show"
+                bind:value={show}
+                options={[
+                  { value: "all", label: `All ${agents.cards.length}` },
+                  { value: "teams", label: `In teams ${agents.cards.filter((c) => inTeams.has(c.slug)).length}` },
+                ]}
+              />
+            </div>
+          {/if}
           <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Your agents">
-            {#each agents.cards as card (card.slug)}
+            {#each listed as card (card.slug)}
               <li>
               <button
                 type="button"
