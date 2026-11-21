@@ -1,0 +1,12 @@
+<!-- @dsCard group="Runs" height=330 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ApprovalCard</title></head>
+<body>
+<div id="root">
+<div class="zx-approval" style="max-width:600px"><div class="zx-approval__head"><span class="zx-approval__icon"><i data-i="shield" data-s="17"></i></span><div style="flex:1;min-width:0"><div class="zx-approval__title"><span class="zx-mono">db.execute</span> wants to change data</div><div class="zx-approval__why">It writes to <b>db:analytics</b>. Asked by data-analyst, 1 level below Research desk.</div></div><span class="zx-badge tone-warn"><span class="zx-dot zx-live"></span>Waiting</span></div><div class="zx-approval__args"><pre class="zx-code"><span class="tok-kw">UPDATE</span> accounts <span class="tok-kw">SET</span> plan <span class="tok-punct">=</span> <span class="tok-str">'annual'</span>
+<span class="tok-kw">WHERE</span> id <span class="tok-kw">IN</span> <span class="tok-punct">(</span><span class="tok-num">4021</span><span class="tok-punct">,</span> <span class="tok-num">4388</span><span class="tok-punct">);</span>  <span class="tok-com">-- 2 rows</span></pre></div><div class="zx-approval__foot"><span class="zx-fp"><i data-i="lock" data-s="12"></i>sha256 9f2c…a1b3</span><button class="zx-btn zx-btn--ghost zx-btn--sm"><span>Always for this run</span></button><button class="zx-btn zx-btn--secondary"><span>Refuse</span></button><button class="zx-btn zx-btn--primary"><i data-i="check" data-s="14"></i><span>Approve</span></button></div></div>
+</div>
+<script>Zorix.hydrate();</script>
+</body>
+</html>

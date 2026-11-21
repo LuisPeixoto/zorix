@@ -1,0 +1,72 @@
+<!-- @dsCard height=300 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ZORIX cover</title>
+<style>
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  .cv { position: relative; width: 960px; height: 300px; overflow: hidden; background: var(--bg); }
+  .cv svg { position: absolute; inset: 0; }
+  .violet { fill: var(--accent); }
+  .cyan { fill: var(--accent-2); }
+  .ink { fill: var(--fg); }
+  .tint { fill: var(--select); }
+  .slot { fill: var(--line-strong); }
+  .cut { fill: var(--bg); }
+  .blk { rx: var(--radius-2xl); }
+  .tile { rx: var(--radius-lg); }
+  .txt { position: absolute; left: 48px; bottom: 40px; max-width: 440px; }
+  .name { font-family: var(--font-sans); font-weight: 600; font-size: 120px; line-height: .92; letter-spacing: -0.04em; color: var(--fg); margin: 0; }
+  .tag { font-family: var(--font-sans); font-size: 14px; line-height: 1.5; color: var(--muted); margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<div class="cv">
+<svg width="960" height="300" viewBox="0 0 960 300" aria-hidden="true">
+  <!--
+    blocks: accent 208x180, accent-2 152x128, fg 120x136, select 240x116; corners radius-2xl (16)
+    arrangement: one tall violet slab bleeding off the top, cyan bleeding right, ink and the tint bleeding off the bottom
+    pattern: geometric, modular, dense UI -> tiles cut by radius-lg, some merged two-wide like workflow nodes and the logo tile;
+             chosen because ZORIX is built from nodes, rows and tiles (runs, trees, workflows)
+    scales: tile 24 (space-6) at a 32 pitch (space-8), merged tiles 56 wide; radius-lg 8 for tiles, radius-2xl 16 for blocks
+  -->
+  <rect class="violet blk" x="600" y="-16" width="208" height="180"/>
+  <rect class="cyan blk" x="824" y="56" width="152" height="128"/>
+  <rect class="ink blk" x="600" y="180" width="120" height="136"/>
+  <rect class="tint blk" x="736" y="200" width="240" height="116"/>
+
+  <rect class="cut tile" x="632" y="24" width="56" height="24"/>
+  <rect class="cut tile" x="632" y="56" width="24" height="24"/>
+  <rect class="cut tile" x="664" y="56" width="24" height="24"/>
+  <rect class="cut tile" x="632" y="88" width="56" height="24"/>
+  <rect class="cut tile" x="856" y="88" width="24" height="24"/>
+  <rect class="cut tile" x="888" y="88" width="56" height="24"/>
+
+  <rect class="slot tile" x="496" y="24" width="24" height="24"/>
+  <rect class="slot tile" x="528" y="24" width="56" height="24"/>
+  <rect class="slot tile" x="496" y="56" width="24" height="24"/>
+  <rect class="violet tile" x="528" y="56" width="24" height="24"/>
+  <rect class="slot tile" x="560" y="56" width="24" height="24"/>
+  <rect class="slot tile" x="496" y="88" width="56" height="24"/>
+  <rect class="slot tile" x="560" y="88" width="24" height="24"/>
+  <rect class="slot tile" x="496" y="120" width="24" height="24"/>
+  <rect class="cyan tile" x="528" y="120" width="24" height="24"/>
+  <rect class="slot tile" x="560" y="120" width="24" height="24"/>
+  <rect class="slot tile" x="496" y="152" width="24" height="24"/>
+  <rect class="slot tile" x="528" y="152" width="56" height="24"/>
+  <rect class="violet tile" x="496" y="184" width="56" height="24"/>
+  <rect class="slot tile" x="560" y="184" width="24" height="24"/>
+  <rect class="slot tile" x="496" y="216" width="24" height="24"/>
+  <rect class="slot tile" x="528" y="216" width="24" height="24"/>
+  <rect class="slot tile" x="560" y="216" width="24" height="24"/>
+  <rect class="slot tile" x="496" y="248" width="24" height="24"/>
+  <rect class="slot tile" x="528" y="248" width="56" height="24"/>
+  <rect class="slot tile" x="824" y="24" width="24" height="24"/>
+  <rect class="slot tile" x="856" y="24" width="56" height="24"/>
+  <rect class="violet tile" x="760" y="232" width="56" height="24"/>
+  <rect class="cyan tile" x="824" y="232" width="24" height="24"/>
+  <rect class="violet tile" x="856" y="264" width="24" height="24"/>
+</svg>
+<div class="txt"><h1 class="name">ZORIX</h1><p class="tag">A harness for AI. Explicit permissions, human approval, limits and a complete record, whichever model does the thinking.</p></div>
+</div>
+</body>
+</html>

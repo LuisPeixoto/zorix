@@ -1,0 +1,16 @@
+<!-- @dsCard group="Status" height=330 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Callout</title></head>
+<body>
+<div id="root">
+<div class="zx-col" style="gap:10px;max-width:560px">
+  <div class="zx-callout tone-warn"><i data-i="alert" data-s="16"></i><div><b>notes.put wants to run</b><p>It saves a note and asks first.</p><div class="zx-row" style="margin-top:10px"><button class="zx-btn zx-btn--primary zx-btn--sm"><i data-i="check" data-s="13"></i><span>Approve</span></button><button class="zx-btn zx-btn--secondary zx-btn--sm"><span>Refuse</span></button></div></div></div>
+  <div class="zx-callout tone-err" role="alert"><i data-i="x-circle" data-s="16"></i><div><b>It did not finish</b><p>The provider answered 401: the key was refused. Replace it in Providers.</p></div></div>
+  <div class="zx-callout tone-info"><i data-i="info" data-s="16"></i><div><p>Cloud providers receive the conversation of a run. Use local only to keep it here.</p></div></div>
+  <div class="zx-callout tone-ok"><i data-i="check-circle" data-s="16"></i><div><b>Workflow published</b><p>Version 4 runs on the next trigger. Version 3 stays available for rollback.</p></div></div>
+</div>
+</div>
+<script>Zorix.hydrate();</script>
+</body>
+</html>

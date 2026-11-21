@@ -1,0 +1,470 @@
+{
+  "manifestVersion": 3,
+  "name": "ZORIX",
+  "namespace": "Zorix",
+  "files": [
+    "assets/Logos/README.md",
+    "components/ApprovalCard/README.md",
+    "components/AutonomyDial/README.md",
+    "components/Avatar/README.md",
+    "components/Badge/README.md",
+    "components/BrandLogo/README.md",
+    "components/BrandMark/README.md",
+    "components/Button/README.md",
+    "components/Callout/README.md",
+    "components/Card/README.md",
+    "components/ChartPanel/README.md",
+    "components/ChatBubble/README.md",
+    "components/Chip/README.md",
+    "components/CodeBlock/README.md",
+    "components/CommandPalette/README.md",
+    "components/Composer/README.md",
+    "components/DelegationCard/README.md",
+    "components/DiffView/README.md",
+    "components/Drawer/README.md",
+    "components/EmptyState/README.md",
+    "components/Field/README.md",
+    "components/HealthGrid/README.md",
+    "components/Icon/README.md",
+    "components/IconButton/README.md",
+    "components/KeyValue/README.md",
+    "components/List/README.md",
+    "components/ListingCard/README.md",
+    "components/LogStream/README.md",
+    "components/Markdown/README.md",
+    "components/MetricTile/README.md",
+    "components/Modal/README.md",
+    "components/OrgChart/README.md",
+    "components/PageHeader/README.md",
+    "components/Primitives/README.md",
+    "components/ScoreMatrix/README.md",
+    "components/ScreenAgentChat/README.md",
+    "components/ScreenAgentVersions/README.md",
+    "components/ScreenAgents/README.md",
+    "components/ScreenCommandCenter/README.md",
+    "components/ScreenIntegrations/README.md",
+    "components/ScreenLogs/README.md",
+    "components/ScreenMarketplace/README.md",
+    "components/ScreenMemory/README.md",
+    "components/ScreenNewRun/README.md",
+    "components/ScreenProjectBoard/README.md",
+    "components/ScreenProjectTimeline/README.md",
+    "components/ScreenProviders/README.md",
+    "components/ScreenRun/README.md",
+    "components/ScreenSettings/README.md",
+    "components/ScreenWorkflowEditor/README.md",
+    "components/ScreenWorkflows/README.md",
+    "components/ScreenWorkforce/README.md",
+    "components/Sparkbar/README.md",
+    "components/Stat/README.md",
+    "components/StatusPill/README.md",
+    "components/Stepper/README.md",
+    "components/Switch/README.md",
+    "components/Tabs/README.md",
+    "components/TaskBoard/README.md",
+    "components/TaskCard/README.md",
+    "components/Toast/README.md",
+    "components/ToggleRow/README.md",
+    "components/ToolCallCard/README.md",
+    "components/TreeView/README.md",
+    "components/TriggerChip/README.md",
+    "components/VersionTimeline/README.md",
+    "components/WorkerCard/README.md",
+    "components/WorkflowCanvas/README.md",
+    "components/WorkflowNode/README.md",
+    "components/bundle.css",
+    "components/bundle.js",
+    "components/index.d.ts",
+    "fonts/InterVariable-latin-ext.woff2",
+    "fonts/InterVariable-latin.woff2",
+    "fonts/JetBrainsMonoVariable-latin-ext.woff2",
+    "fonts/JetBrainsMonoVariable-latin.woff2",
+    "surfaces.md",
+    "tokens.css"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "ApprovalCard",
+      "group": "Runs",
+      "summary": "The moment ZORIX stops and asks a person: the tool, the exact arguments, why, and a fingerprint of the call."
+    },
+    {
+      "name": "AutonomyDial",
+      "group": "Workforce",
+      "summary": "How much a virtual employee or manager may do without asking: five levels, set per role."
+    },
+    {
+      "name": "Avatar",
+      "group": "Agents",
+      "summary": "The face of an agent, a virtual employee or a person."
+    },
+    {
+      "name": "Badge",
+      "group": "Status",
+      "summary": "A word or two of state, in a tone: ok, warn, err, info, muted, accent."
+    },
+    {
+      "name": "BrandLogo",
+      "group": "Agents",
+      "summary": "A service's mark (Simple Icons, CC0) on a quiet tile; a plug for anything without one."
+    },
+    {
+      "name": "BrandMark",
+      "group": "Foundations",
+      "summary": "The ZORIX mark: the layers icon on a tile filled with the brand gradient, beside the word ZORIX set in lead."
+    },
+    {
+      "name": "Button",
+      "group": "Actions",
+      "summary": "The one way to start an action: primary, secondary, ghost, danger and subtle, in three sizes."
+    },
+    {
+      "name": "Callout",
+      "group": "Status",
+      "summary": "A message inside a page: a request, an error, a notice, a confirmation."
+    },
+    {
+      "name": "Card",
+      "group": "Surfaces",
+      "summary": "The surface for one subject: a header with an icon and actions, a body, an optional footer."
+    },
+    {
+      "name": "ChartPanel",
+      "group": "Command Center",
+      "summary": "A chart in a Card: a headline figure, a range control, the chart and a breakdown."
+    },
+    {
+      "name": "ChatBubble",
+      "group": "Conversation",
+      "summary": "One message in a conversation with an agent or a team."
+    },
+    {
+      "name": "Chip",
+      "group": "Status",
+      "summary": "A removable or selectable value: a filter, a granted tool, a tag."
+    },
+    {
+      "name": "CodeBlock",
+      "group": "Data",
+      "summary": "SQL, JSON, JavaScript and Python, highlighted by a tiny tokenizer with no network and no HTML."
+    },
+    {
+      "name": "CommandPalette",
+      "group": "Surfaces",
+      "summary": "⌘K / Ctrl K: go anywhere, start anything, by typing."
+    },
+    {
+      "name": "Composer",
+      "group": "Conversation",
+      "summary": "Where a person writes to an agent, a team or a workflow."
+    },
+    {
+      "name": "DelegationCard",
+      "group": "Runs",
+      "summary": "One call to agents.delegate: who was asked, their state, steps, share of the cost, and their answer."
+    },
+    {
+      "name": "DiffView",
+      "group": "Data",
+      "summary": "What changed between two texts: word by word for a sentence, line by line for more."
+    },
+    {
+      "name": "Drawer",
+      "group": "Surfaces",
+      "summary": "A sheet from the right for looking at one thing beside its list."
+    },
+    {
+      "name": "EmptyState",
+      "group": "Surfaces",
+      "summary": "What a screen shows before it has anything: an icon tile, one sentence and the first action."
+    },
+    {
+      "name": "Field",
+      "group": "Forms",
+      "summary": "Label, control, hint and error as one unit."
+    },
+    {
+      "name": "HealthGrid",
+      "group": "Command Center",
+      "summary": "The health of every provider, integration and server at a glance: a state and 24 hours of history."
+    },
+    {
+      "name": "Icon",
+      "group": "Foundations",
+      "summary": "Lucide-style strokes on a 24px grid with a round 1.8px stroke, drawn as static markup from one file."
+    },
+    {
+      "name": "IconButton",
+      "group": "Actions",
+      "summary": "A square button with only an icon, for toolbar and row actions."
+    },
+    {
+      "name": "KeyValue",
+      "group": "Data",
+      "summary": "Facts about one thing as label and value (items)."
+    },
+    {
+      "name": "List",
+      "group": "Data",
+      "summary": "The divided list (List, ListRow with active and onclick)."
+    },
+    {
+      "name": "ListingCard",
+      "group": "Marketplace",
+      "summary": "An agent, team, skill, integration or workflow offered in the Marketplace."
+    },
+    {
+      "name": "LogStream",
+      "group": "Command Center",
+      "summary": "Events and logs as they happen: time, level, source and message, one line each."
+    },
+    {
+      "name": "Markdown",
+      "group": "Data",
+      "summary": "Model answers and instructions rendered as Markdown, with citations to documents."
+    },
+    {
+      "name": "MetricTile",
+      "group": "Command Center",
+      "summary": "A live number with its trend: label, value, change, a detail line and a sparkline."
+    },
+    {
+      "name": "Modal",
+      "group": "Surfaces",
+      "summary": "A dialog that asks one question and blocks the page until it is answered."
+    },
+    {
+      "name": "OrgChart",
+      "group": "Workforce",
+      "summary": "The AI workforce as an organisation: virtual managers, department leads, virtual employees and the people they answer to."
+    },
+    {
+      "name": "PageHeader",
+      "group": "Surfaces",
+      "summary": "The title, subtitle and actions of a screen, over a faint accent wash."
+    },
+    {
+      "name": "Primitives",
+      "group": "Status",
+      "summary": "The small parts: Spinner, Dot, Kbd, Skeleton and Divider."
+    },
+    {
+      "name": "ScoreMatrix",
+      "group": "Data",
+      "summary": "Evaluation results: cases by version or model, each cell a score with its tone."
+    },
+    {
+      "name": "ScreenAgentChat",
+      "group": "Screens",
+      "summary": "A conversation with an agent or a team: messages, delegations, tool calls and approvals in the order they happened, with what the team knows and spent beside i…",
+      "page": true
+    },
+    {
+      "name": "ScreenAgentVersions",
+      "group": "Screens",
+      "summary": "How an agent changed and whether it got worse: every saved version, the difference between two, and evaluation scores by version and model.",
+      "page": true
+    },
+    {
+      "name": "ScreenAgents",
+      "group": "Screens",
+      "summary": "The gallery of agents: face, version, model, eval score, tools, and the last thing each did.",
+      "page": true
+    },
+    {
+      "name": "ScreenCommandCenter",
+      "group": "Screens",
+      "summary": "The home of an operator: live figures, spend against budget, everything waiting for a person, the health of every connection and the live log.",
+      "page": true
+    },
+    {
+      "name": "ScreenIntegrations",
+      "group": "Screens",
+      "summary": "Services and MCP servers, live: their state, what is granted, and the tools that wait for your review.",
+      "page": true
+    },
+    {
+      "name": "ScreenLogs",
+      "group": "Screens",
+      "summary": "The live log with filters, the trace of one workflow run as a waterfall of spans, and the details of the selected line.",
+      "page": true
+    },
+    {
+      "name": "ScreenMarketplace",
+      "group": "Screens",
+      "summary": "Browse and install agents, teams, workflows, skills and integrations.",
+      "page": true
+    },
+    {
+      "name": "ScreenMemory",
+      "group": "Screens",
+      "summary": "What ZORIX remembers: facts agents propose and people approve, folders of documents with their indexing state, and a place to try a question.",
+      "page": true
+    },
+    {
+      "name": "ScreenNewRun",
+      "group": "Screens",
+      "summary": "The form that starts a run: who runs it, what it should do, what it may use, its limits, and a summary of what it can do before you start.",
+      "page": true
+    },
+    {
+      "name": "ScreenProjectBoard",
+      "group": "Screens",
+      "summary": "A project's tasks by state, assigned to people and agents, with the project's progress, members and manager.",
+      "page": true
+    },
+    {
+      "name": "ScreenProjectTimeline",
+      "group": "Screens",
+      "summary": "The project's tasks across weeks: each a bar from start to due date, filled by progress, with who has it and a line for today.",
+      "page": true
+    },
+    {
+      "name": "ScreenProviders",
+      "group": "Screens",
+      "summary": "Where models come from: providers with their keys and health, the models each offers with prices, and routes that fall back when one fails.",
+      "page": true
+    },
+    {
+      "name": "ScreenRun",
+      "group": "Screens",
+      "summary": "One execution as it happens: its figures, the tree of agents it asked, each step, and the approval it is waiting for.",
+      "page": true
+    },
+    {
+      "name": "ScreenSettings",
+      "group": "Screens",
+      "summary": "The rules that decide what anything in ZORIX may do, how approvals behave, and who can approve.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkflowEditor",
+      "group": "Screens",
+      "summary": "The visual editor of a workflow: a palette of step kinds, the canvas, and the inspector of the selected step.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkflows",
+      "group": "Screens",
+      "summary": "Every workflow with its trigger, the result of its last 14 runs, its live version and whether it is on.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkforce",
+      "group": "Screens",
+      "summary": "The AI workforce: an org chart of virtual managers, leads and employees under the people they answer to, with the selected worker's figures, autonomy and week.",
+      "page": true
+    },
+    {
+      "name": "Sparkbar",
+      "group": "Status",
+      "summary": "A small bar for a share of a total (value, max, label)."
+    },
+    {
+      "name": "Stat",
+      "group": "Data",
+      "summary": "A figure with a label, an icon and a detail line (label, value, detail, icon)."
+    },
+    {
+      "name": "StatusPill",
+      "group": "Status",
+      "summary": "The state of a server, integration or service: a dot, a word, a pulse while something is happening."
+    },
+    {
+      "name": "Stepper",
+      "group": "Status",
+      "summary": "A short flow of three to five steps (steps, current)."
+    },
+    {
+      "name": "Switch",
+      "group": "Forms",
+      "summary": "Checkbox and Switch: yes-or-no choices, with the label as children and an optional description."
+    },
+    {
+      "name": "Tabs",
+      "group": "Actions",
+      "summary": "Segmented control and tabs: switch between views of the same thing."
+    },
+    {
+      "name": "TaskBoard",
+      "group": "Projects",
+      "summary": "A project's tasks in columns by state, assigned to people or agents."
+    },
+    {
+      "name": "TaskCard",
+      "group": "Projects",
+      "summary": "One task: key, priority, title, progress, due date, dependencies and who has it."
+    },
+    {
+      "name": "Toast",
+      "group": "Status",
+      "summary": "A short confirmation that floats in from the corner and leaves on its own."
+    },
+    {
+      "name": "ToggleRow",
+      "group": "Forms",
+      "summary": "A setting as a sentence and a switch, stacked inside a Card."
+    },
+    {
+      "name": "ToolCallCard",
+      "group": "Runs",
+      "summary": "One tool call in a run or a chat: the tool, its state, and the arguments and result on demand."
+    },
+    {
+      "name": "TreeView",
+      "group": "Runs",
+      "summary": "The work tree of a run: who was asked, by whom, what each cost and how it ended."
+    },
+    {
+      "name": "TriggerChip",
+      "group": "Workflows",
+      "summary": "How a workflow starts, shown on its card, in lists and in the canvas header."
+    },
+    {
+      "name": "VersionTimeline",
+      "group": "Agents",
+      "summary": "The versions of an agent, a team or a workflow: every save is a new version; rollback writes a new one."
+    },
+    {
+      "name": "WorkerCard",
+      "group": "Workforce",
+      "summary": "A virtual employee: face, name, role, status and three figures that matter for the role."
+    },
+    {
+      "name": "WorkflowCanvas",
+      "group": "Workflows",
+      "summary": "The visual editor and live view of a workflow: triggers, agents, conditions, approvals and actions joined by edges."
+    },
+    {
+      "name": "WorkflowNode",
+      "group": "Workflows",
+      "summary": "One step of a workflow."
+    }
+  ],
+  "assetGroups": [
+    {
+      "name": "Logos",
+      "order": [
+        "zorix-app-icon.png"
+      ],
+      "files": [
+        {
+          "path": "assets/Logos/zorix-app-icon.png",
+          "id": "17ff41e30800ac9e87ca55f2ce438ea1"
+        }
+      ]
+    }
+  ],
+  "storage": {
+    "files": {
+      "assets/Logos/zorix-app-icon.png": {
+        "store": "blob",
+        "id": "17ff41e30800ac9e87ca55f2ce438ea1",
+        "bytes": 23056,
+        "type": "image/png"
+      }
+    },
+    "blobBytesUsed": 23056
+  }
+}
