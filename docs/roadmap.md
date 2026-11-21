@@ -75,27 +75,64 @@ Later: skills that need native packages, reasoning-token streaming.
 
 Later: adaptive budget splits, a scratchpad shared by siblings, team versions and a team file format.
 
+## Design system v3 · v0.6.1
+
+The app follows the [design system v3](design-system.md) strictly: tokens generated from `design/tokens.json`, a design lint in the gates, the kit matched to its
+specifications, and the shell, Runs, Run, New run, Providers, Memory, Documents, Integrations, Agents, Teams, Agent chat and Settings rebuilt to the assembled screens in
+`design/screens/`. New: an **Inbox** with everything waiting for a person, a Runs page, and spend and running counts in the sidebar ([ADR-0032](adr/0032-design-system-v3-is-the-contract.md)).
+
+Every later phase below lists its screens and the design system components they are built from (from `design/surfaces.md`). A screen the design system lacks is added there first.
+
 ## Phase 7 — Workflow Engine
 
-Visual workflows with conditions, parallel branches, human approvals, schedules, webhooks and events as triggers.
-Versioned and reusable.
+Visual workflows with conditions, parallel branches, human approvals, schedules, webhooks and events as triggers. Versioned and reusable.
+Screens: Workflows, Workflow editor, workflow run view. Built from WorkflowCanvas, WorkflowNode, TriggerChip, Drawer, VersionTimeline and ApprovalCard.
+
+- **Triggers:** a schedule ("Weekdays at 08:00"), a webhook (for example a GitHub issue labelled `incident`), and an event (another workflow finishing, a new ticket).
+- **Steps:** an agent or a team; logic (condition, loop, wait); people (an **approval** step, and a step that asks a question); actions (send a message, open a pull request, an HTTP request).
+- **Approval step:** who decides (a person or an on-call rotation), what they are shown (summary, severity, diff, cost), a time-out and what happens then (refuse, or continue), and a reminder in Slack.
+- **Editor:** a canvas with a palette of triggers, work, logic, people and actions; an inspector for the selected step with the last runs of that step and its median wait; zoom and fit.
+- **Versions:** a draft beside the live version, a **test run**, and **Publish vN**, shown with VersionTimeline and compared with DiffView.
+- **List:** active, paused, runs this week and success rate, workflows waiting for people, time saved; each row shows what starts it, the last 14 runs, the version and the state, with an on/off switch and templates.
+- **In New run:** *Run as Workflow* and *Save as workflow*.
 
 ## Phase 8 — Task & Project Management
 
 Projects, tasks, assignment to people or agents, priorities, dependencies, deadlines, history and deliverables.
+Screens: Projects, board, list, timeline, task. Built from TaskBoard, TaskCard, Avatar, Drawer and Stepper.
+
+- **Projects** with an owner, an agent manager, a due date and progress ("18 of 29 tasks"), shared with people.
+- **Tasks** with a key (`OPS-38`), priority (urgent, high, normal, low), assignee (a person or an agent), progress, due date, links (a pull request), and a *Needs you* flag when a person must act.
+- **Views:** Board, List and Timeline (bars fill with progress; dependencies are drawn), plus Deliverables and History, with filters for everyone, agents, people, and urgent and high.
+- A task moving to Done under a manager asks for approval like any other change.
 
 ## Phase 9 — AI Workforce Management
 
-Virtual employees, departments, hierarchies and virtual managers that plan, assign, monitor and report within configurable
-autonomy.
+Virtual employees, departments, hierarchies and virtual managers that plan, assign, monitor and report within configurable autonomy.
+Screens: Organisation (org chart, list, activity), worker profile, autonomy. Built from OrgChart, WorkerCard, AutonomyDial, MetricTile and LogStream.
+
+- **Workers** (agents and people) in departments, with who they report to; a virtual manager plans the week, assigns tasks and reports on Fridays.
+- **Autonomy** in five levels: Suggest, Ask, Notify, Budgeted and Full, with a weekly budget and a time limit per task; writes still ask.
+- A worker's tasks, on-time rate, eval score, weekly spend and activity; *Hire a worker* and *Org settings*; a weekly spend against a budget.
 
 ## Phase 10 — Command Center
 
 The complete interface: dashboards, monitoring, logs and observability, reports, settings and permissions.
+Screens: Overview, Logs and traces, Settings (permissions and policy, members, secrets, retention, updates). Built from MetricTile, ChartPanel, LogStream, HealthGrid, ToggleRow and KeyValue.
+
+- **Overview:** runs today, **spend against a daily budget**, runs waiting for people, success rate, spend per day against the previous period, spend by provider, the waiting queue, health with 24 hours of history, a live log, periods (today, 7 and 30 days) and *Export report*.
+- **Logs and traces:** a live view with filters by source and level, a trace waterfall for a run or workflow, the selected line with its span and run, secrets redacted before anything is stored, export and alerts.
+- **Settings:** permission and policy rules (ask first, allow or deny, with the hits of the week), the approval switches ("Always for this run" off for databases and money), members and roles (Owner, Approver, Viewer), secrets, retention and updates.
+- Per-provider latency (p95) and spend; today's budget in the sidebar.
 
 ## Phase 11 — Marketplace & Ecosystem
 
 Sharing agents, skills, integrations and workflows.
+Screens: Browse, listing, publish. Built from ListingCard, Tabs, Stepper, Callout and Modal.
+
+- Search, categories (agents, teams, workflows, skills, integrations), sorting, ratings and install counts, and the publisher.
+- Every item lists the permissions it asks for before install, and nothing is granted until a person says so.
+- The listing page and the publish flow.
 
 ## Across phases
 
@@ -103,6 +140,7 @@ Sharing agents, skills, integrations and workflows.
 - **Accounts, organisations and a shared store** for teams, behind the existing repository trait (the tenant is already part of every record).
 - **OpenTelemetry export** once the GenAI conventions stabilise.
 - **Retention policies** for stored executions.
+- A **cost and time estimate** before a run starts, **attachments** with `@` and drop in New run, and **accounts and avatars** for people.
 
 ## Ideas
 
