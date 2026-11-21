@@ -1,13 +1,32 @@
 # Design system
 
-Everything the desktop app draws comes from one set of **tokens** and one small **component kit**. Light is the default
-theme; Dark and System are one click away. The kit lives in `apps/desktop/src/lib/ui/`, the tokens in
-`apps/desktop/src/app.css`, and both are shown live in the app on the **Design system** screen
+ZORIX has one design system, and the app follows it strictly. The system is a package, vendored in [`design/`](../design/README.md): the
+**tokens** (`design/tokens.json`), a **specification for every component** (`design/components/<Name>/README.md` with a live
+preview and `index.d.ts`), the **surfaces** of the product (`design/surfaces.md`) and **17 assembled screens** at 1440 px
+(`design/screens/*.png`). The app implements it: the kit lives in `apps/desktop/src/lib/ui/`, the tokens in
+`apps/desktop/src/app.css` (generated from `design/tokens.json`), and both are shown live on the **Design system** screen
 (<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>D</kbd>, or the sidebar item in development builds).
+[ADR-0032](adr/0032-design-system-v3-is-the-contract.md) is the rule; this page is how to follow it. Light is the default theme.
 
 | Light | Dark |
 |---|---|
 | ![The design system in the light theme](images/ds-light.png) | ![The design system in the dark theme](images/ds-dark.png) |
+
+## The contract
+
+1. **Look first.** Before building or changing a screen, open its image in `design/screens/` and the README of every component it
+   uses (`design/surfaces.md` lists them).
+2. **Tokens only.** Colours, sizes, radii, shadows and durations come from the tokens. `node tools/check-design.mjs` fails on a colour
+   literal, an arbitrary Tailwind value for those, a duration over 200 ms, or an emoji in interface copy. An exception goes in the
+   allowlist at the top of that script, with its reason.
+3. **The kit, as specified.** Use the components of `src/lib/ui/` and give them the props their README names. A component the design
+   system has and the kit lacks is built from its README.
+4. **Missing in the design system? Add it there first.** Update the design system, re-vendor `design/` (see below), then build.
+5. **Missing in ZORIX? Leave it out.** A screen element that needs data or a feature ZORIX does not have yet is not mocked. The
+   [roadmap](roadmap.md) lists it under the phase that brings it.
+6. **Done means checked.** Light and Dark screenshots of the real app at 1440 px beside the matching `design/screens` image, a design
+   critique and an accessibility review with their findings fixed, and every remaining difference written down under
+   [Known differences](#known-differences).
 
 ## Principles
 
@@ -71,6 +90,24 @@ Surfaces gained depth and the motion got a language, without changing a single c
 
 Syntax colours (`.tok-kw`, `.tok-str`, `.tok-num`, `.tok-com`, `.tok-fn`) reuse accent, ok, warn, faint and info, so code in
 `CodeBlock` is as readable as any other text.
+
+### Tokens added in version 3
+
+Generated into `app.css` from `design/tokens.json`. They are used by the phases that need them (workflows, projects, the workforce,
+the Command Center) and are available now.
+
+| Token | Tailwind | Use |
+|---|---|---|
+| `series-1` … `series-5` | `text-series-1`, `bg-series-1`, `stroke-series-1` | Chart series in order: the subject, the comparison (dashed), then three more |
+| `node-trigger` · `node-agent` · `node-logic` · `node-approval` · `node-action` | `text-node-agent`, … | The kind of a workflow step |
+| `priority-urgent` · `priority-high` · `priority-normal` · `priority-low` | `text-priority-high`, … | A task's priority |
+| `duration-fast` · `duration-base` · `duration-slow` | `duration-fast` … (120 · 150 · 200 ms) | Hover and press · controls · dialogs, drawers and toasts. Nothing is slower |
+| `radius-sm` … `radius-full` | `rounded-sm` … `rounded-full` | 4 · 6 · 8 · 12 · 16 · full. Cards and dialogs are `rounded-2xl` |
+
+**Names.** The design system names text styles by role and the app keeps Tailwind's class names for them:
+`display` = `text-4xl` · `page-title` = `text-3xl` · `section` = `text-2xl` · `dialog-title` = `text-xl` · `lead` = `text-lg` ·
+`emphasis` = `text-md` · `body` = `text-base` · `control` = `text-sm` · `caption` = `text-xs` · `label` = `text-2xs` uppercase.
+`sh-1` / `sh-2` / `sh-3` / `sh-card` / `sh-pop` / `sh-raised` are `shadow-1` … `shadow-raised`.
 
 ## Themes
 
@@ -141,7 +178,24 @@ markup written in that file and never come from user input.
 
 ## Changing the system
 
-1. Edit the token in `app.css` (both themes) and run `npm test`; the contrast test says if a pair got unreadable.
-2. Open the Design system screen in both themes and look.
-3. Retake the two screenshots: serve with `VITE_START_VIEW=design VITE_START_THEME=light npx vite` (and `dark`) and capture the
-   full page with a headless browser.
+The design system is owned by the package in `design/`; the app does not edit it.
+
+1. Change the design system (its artifact), export the package, and replace the contents of `design/` (`tokens.json`, `tokens.css`,
+   `components/`, `api/`, `surfaces.md`, `manifest.json`, `README.md`, `assets/`). Re-render `design/screens/*.png` from the screens
+   bundle when the screens changed. Fonts are not vendored twice: the app bundles them.
+2. Run `node tools/design-tokens.mjs` to regenerate the token block of `app.css`, then `npm test` (the token test and the contrast
+   test say if a value drifted or a pair became unreadable).
+3. Update the kit components the change touches, open the **Design system** screen in both themes, and look.
+4. Retake the two screenshots of that screen: serve with `VITE_START_VIEW=design VITE_START_THEME=light npx vite` (and `dark`) and
+   capture the full page with a headless browser.
+
+## Known differences
+
+Where the app deliberately differs from `design/screens`, and why. Each line is removed when the reason goes away.
+
+| Screen | Difference | Reason |
+|---|---|---|
+| Sidebar | Workflows, Projects, Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
+| Toolbar | No account avatar | There are no accounts yet ([roadmap](roadmap.md#across-phases)) |
+| Sidebar foot | No daily budget beside "Spend today" | There is no budget setting until the Command Center |
+| Run, New run | No cost and time estimate, no "Always for this run", no *Run as Workflow* | Not built yet; see the roadmap |
