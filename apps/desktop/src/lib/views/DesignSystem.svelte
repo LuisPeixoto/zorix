@@ -4,7 +4,7 @@
   import { toast } from "../stores/toast.svelte.ts";
   import { MODE_LABEL, type Mode } from "../theme.ts";
   import {
-    Avatar, Badge, BrandLogo, ChatBubble, DelegationCard, Sparkbar, TreeView, type ChildRow, Composer, Markdown, ScoreMatrix, ToolCallCard, VersionTimeline, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
+    Avatar, Badge, BrandLogo, BrandMark, HealthGrid, type HealthItem, ChatBubble, DelegationCard, Sparkbar, TreeView, type ChildRow, Composer, Markdown, ScoreMatrix, ToolCallCard, VersionTimeline, Button, Callout, Card, Checkbox, Chip, CodeBlock, CommandPalette, DiffView, Dot, Drawer, EmptyState, Field,
     ICON_NAMES, Icon, IconButton, Input, Kbd, KeyValue, List, ListRow, Modal, PageHeader, Segmented, Select, Skeleton, Spinner,
     Stat, StatusPill, Stepper, Switch, Tabs, Textarea, ToggleRow, type Command,
   } from "../ui/index.ts";
@@ -16,6 +16,17 @@
   const textTokens = ["fg", "muted", "faint"];
   const accents = ["accent", "accent-2", "ok", "warn", "err", "info"];
   const lines = ["line", "line-strong"];
+  // Added in design system v3 for charts, workflow steps and task priorities (design/tokens.json).
+  const series = ["series-1", "series-2", "series-3", "series-4", "series-5"];
+  const nodes = ["node-trigger", "node-agent", "node-logic", "node-approval", "node-action"];
+  const priorities = ["priority-urgent", "priority-high", "priority-normal", "priority-low"];
+  const day = (kinds: Record<number, "warn" | "err">) => Array.from({ length: 24 }, (_, hour) => kinds[hour] ?? "ok");
+  const health: HealthItem[] = [
+    { id: "anthropic", name: "Anthropic", brand: "anthropic", state: "ready", history: day({}), note: "14 models" },
+    { id: "ollama", name: "Ollama", icon: "laptop", state: "ready", history: day({}), note: "local · qwen3:1.7b" },
+    { id: "slack", name: "Slack", brand: "slack", state: "failed", history: day({ 21: "err", 22: "err", 23: "err" }), note: "403 since 08:14" },
+    { id: "linear", name: "Linear", brand: "linear", state: "review", history: day({ 20: "warn" }), note: "2 tools to review" },
+  ];
 
   // The values of the tokens in the theme being shown (read from the page, so this never drifts from app.css).
   let values = $state<Record<string, string>>({});
@@ -23,7 +34,7 @@
     void theme.resolved;
     const style = getComputedStyle(document.documentElement);
     const next: Record<string, string> = {};
-    for (const name of [...surfaces, ...textTokens, ...accents, ...lines, "accent-fg"]) next[name] = style.getPropertyValue(`--${name}`).trim();
+    for (const name of [...surfaces, ...textTokens, ...accents, ...lines, ...series, ...nodes, ...priorities, "accent-fg"]) next[name] = style.getPropertyValue(`--${name}`).trim();
     values = next;
   });
   const ratio = (a: string, b: string) => {
@@ -123,7 +134,7 @@
 
 <div class="selectable h-full overflow-y-auto">
   <div class="mx-auto max-w-[1100px] p-8">
-    <PageHeader title="Design system" subtitle="The tokens and components every ZORIX screen is built from. Showing the {MODE_LABEL[theme.mode].toLowerCase()} theme." glow>
+    <PageHeader title="Design system" subtitle="Version 3: the tokens and components every ZORIX screen is built from, as specified in design/. Showing the {MODE_LABEL[theme.mode].toLowerCase()} theme." glow>
       {#snippet actions()}
         <Segmented
           label="Theme"
@@ -165,6 +176,19 @@
         </div>
       </Card>
 
+      <Card title="Charts, workflow steps and task priorities" icon="activity">
+        <p class="mb-4 text-base text-muted">Added in version 3. Charts use the series in order: the subject, the comparison, then three more. A step's kind and a task's priority also carry a word, never colour alone.</p>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {#each series as name}{@render swatch(name)}{/each}
+        </div>
+        <div class="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+          {#each nodes as name}{@render swatch(name)}{/each}
+        </div>
+        <div class="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          {#each priorities as name}{@render swatch(name)}{/each}
+        </div>
+      </Card>
+
       <div class="grid items-start gap-6 lg:grid-cols-2">
         <Card title="Type" icon="list">
           <p class="mb-3 text-xs text-muted">Inter for text, JetBrains Mono for ids, paths and numbers. Tabular figures on stats.</p>
@@ -187,6 +211,15 @@
           </div>
         </Card>
       </div>
+
+      <Card title="Brand and health" icon="gauge">
+        <div class="flex flex-wrap items-center gap-8">
+          <BrandMark wordmark />
+          <BrandMark size="lg" />
+        </div>
+        <p class="mt-4 mb-3 text-base text-muted">Health shows a state and 24 hours of history for each connection. Failing cells come first, and a cell opens its logs.</p>
+        <HealthGrid items={health} onopen={(item) => toast.info(`${item.name}: ${item.note}`)} />
+      </Card>
 
       <Card title="Icons" icon="sparkles">
         <div class="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-10">

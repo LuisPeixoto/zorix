@@ -2,7 +2,7 @@
   import { store } from "../../stores/runs.svelte.ts";
   import { theme } from "../../stores/theme.svelte.ts";
   import { MODE_LABEL } from "../../theme.ts";
-  import { Icon, IconButton, Kbd } from "../../ui/index.ts";
+  import { BrandMark, Icon, IconButton, Kbd } from "../../ui/index.ts";
 
   // On macOS the window controls sit on top of this bar (titleBarStyle Overlay), so leave room for them.
   const isMac =
@@ -16,10 +16,7 @@
   class="glass relative z-30 flex h-13 shrink-0 items-center gap-3 border-b pr-3 {isMac ? 'pl-[84px]' : 'pl-4'}"
 >
   <div data-tauri-drag-region class="flex items-center gap-2.5">
-    <span class="brand-gradient grid size-7 place-items-center rounded-lg text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.28),0_6px_16px_-6px_var(--accent)]">
-      <Icon name="layers" size={15} stroke={2} />
-    </span>
-    <span data-tauri-drag-region class="text-lg font-semibold tracking-tight">ZORIX</span>
+    <BrandMark wordmark />
   </div>
   <div data-tauri-drag-region class="flex h-full flex-1 items-center justify-center">
     <button

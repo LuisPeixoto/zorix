@@ -231,7 +231,7 @@
       {#each threads as t (t.conversation)}
         <button
           type="button"
-          class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {active === t.conversation ? 'bg-accent-soft shadow-[inset_2px_0_0_var(--accent)]' : ''}"
+          class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {active === t.conversation ? 'bg-accent-soft' : ''}"
           aria-current={active === t.conversation ? "true" : undefined}
           onclick={() => select(t.conversation)}
         >
