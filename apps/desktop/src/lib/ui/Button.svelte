@@ -41,7 +41,7 @@
   )}
   {...rest}
 >
-  <span class={cn("inline-flex items-center gap-1.5", loading && "invisible")}>
+  <span class={cn("inline-flex flex-1 items-center justify-center gap-1.5", loading && "invisible")}>
     {#if icon}<Icon name={icon} size={iconSize[size]} />{/if}
     {@render children?.()}
     {#if iconRight}<Icon name={iconRight} size={iconSize[size]} />{/if}

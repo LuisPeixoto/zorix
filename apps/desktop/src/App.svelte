@@ -4,7 +4,10 @@
   import { store } from "./lib/stores/runs.svelte.ts";
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
+  import Documents from "./lib/components/Documents.svelte";
   import Memory from "./lib/components/Memory.svelte";
+  import RunsPage from "./lib/components/RunsPage.svelte";
+  import Settings from "./lib/components/Settings.svelte";
   import Agents from "./lib/components/agents/Agents.svelte";
   import { AGENT_TABS, type AgentTab, agents } from "./lib/stores/agents.svelte.ts";
   import Integrations from "./lib/components/integrations/Integrations.svelte";
@@ -50,6 +53,10 @@
           });
         } else store.showTeams(slug || null);
       }
+      if (start === "runs") store.showRuns();
+      if (start === "new") store.showForm();
+      if (start === "documents") store.showDocuments();
+      if (start === "settings") store.showSettings();
       if (start === "memory") {
         store.startTab = tab || "facts";
         store.showMemory();
@@ -61,7 +68,8 @@
 
   // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.
   const commands = $derived<Command[]>([
-    { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showRuns(); store.showForm(); } },
+    { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showForm(); } },
+    { id: "runs", label: "Runs", group: "Go to", icon: "history", keywords: "history list all", run: () => store.showRuns() },
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
     { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
     ...agents.teams.map((t) => ({
@@ -82,7 +90,9 @@
       keywords: card.slug,
       run: () => store.showAgents(card.slug),
     })),
-    { id: "memory", label: "Memory", group: "Go to", icon: "book", keywords: "facts remember knowledge", run: () => store.showMemory() },
+    { id: "memory", label: "Memory", group: "Go to", icon: "book", keywords: "facts remember preferences", run: () => store.showMemory() },
+    { id: "documents", label: "Documents", group: "Go to", icon: "folder", keywords: "knowledge folders files search index pdf", run: () => store.showDocuments() },
+    { id: "settings", label: "Settings", group: "Go to", icon: "sliders", keywords: "appearance theme about data folder version", run: () => store.showSettings() },
     { id: "integrations", label: "Integrations", group: "Go to", icon: "plug", keywords: "mcp servers connections catalogue github slack database", run: () => store.showIntegrations() },
     { id: "catalogue", label: "Browse the server catalogue", group: "Integrations", icon: "grid", keywords: "mcp add", run: () => store.showIntegrations("catalogue") },
     { id: "connections", label: "Connections and sandbox", group: "Integrations", icon: "link", keywords: "github gitlab jira slack discord postgres sqlite webhook python", run: () => store.showIntegrations("connections") },
@@ -113,6 +123,12 @@
       store.palette = !store.palette;
       return;
     }
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      store.continuing = null;
+      store.showForm();
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "d") {
       event.preventDefault();
       store.showDesign();
@@ -138,15 +154,21 @@
         <Agents />
       {:else if store.view === "memory"}
         <Memory />
+      {:else if store.view === "documents"}
+        <Documents />
+      {:else if store.view === "settings"}
+        <Settings />
       {:else if store.view === "integrations"}
         <Integrations />
       {:else if store.view === "providers"}
         <Providers />
+      {:else if store.view === "new"}
+        <NewRun />
       {:else if store.selectedId}
         {#if store.error}<p class="border-b border-line bg-err/10 px-6 py-2 text-err" role="alert">{store.error}</p>{/if}
         <RunView />
       {:else}
-        <NewRun />
+        <RunsPage />
       {/if}
     </main>
   </div>

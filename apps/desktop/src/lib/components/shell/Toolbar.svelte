@@ -17,6 +17,7 @@
 >
   <div data-tauri-drag-region class="flex items-center gap-2.5">
     <BrandMark wordmark />
+    {#if store.info?.version}<span class="mono rounded-full border border-line bg-panel px-2 text-xs text-muted">{store.info.version}</span>{/if}
   </div>
   <div data-tauri-drag-region class="flex h-full flex-1 items-center justify-center">
     <button
@@ -26,7 +27,7 @@
       class="flex h-8 w-full max-w-md items-center gap-2 rounded-lg border border-line bg-panel-2/70 px-3 text-base text-faint transition duration-150 hover:border-line-strong hover:bg-panel hover:text-muted"
     >
       <Icon name="search" size={14} />
-      <span class="flex-1 text-left">Search runs, servers and actions</span>
+      <span class="flex-1 text-left">Search runs, agents, teams and actions</span>
       <Kbd>{shortcut}</Kbd>
     </button>
   </div>

@@ -56,7 +56,8 @@ class RunsStore {
   events = $state<ExecEvent[]>([]);
   error = $state<string | null>(null);
   busy = $state(false);
-  view = $state<"runs" | "providers" | "memory" | "design" | "integrations" | "agents">("runs");
+  /** Which screen is showing. `runs` is the list of runs, or one run when `selectedId` is set; `new` is the form that starts one. */
+  view = $state<"runs" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -179,8 +180,18 @@ class RunsStore {
     this.view = "design";
   }
 
+  /** The list of runs. */
   showRuns(): void {
     this.view = "runs";
+    this.#leaveRun();
+  }
+
+  showDocuments(): void {
+    this.view = "documents";
+  }
+
+  showSettings(): void {
+    this.view = "settings";
   }
 
   async saveKey(name: string, key: string): Promise<boolean> {
@@ -234,6 +245,7 @@ class RunsStore {
   async select(id: string): Promise<void> {
     const previous = this.selectedId;
     if (previous && previous !== id) void stopWatch(previous).catch(() => {});
+    this.view = "runs";
     this.selectedId = id;
     this.detail = null;
     this.events = [];
@@ -250,8 +262,13 @@ class RunsStore {
     });
   }
 
-  /** Go back to the "new run" form. */
+  /** The "new run" form. */
   showForm(): void {
+    this.view = "new";
+    this.#leaveRun();
+  }
+
+  #leaveRun(): void {
     if (this.selectedId) void stopWatch(this.selectedId).catch(() => {});
     this.selectedId = null;
     this.detail = null;
