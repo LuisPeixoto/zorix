@@ -5,6 +5,28 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-21
+
+**Design system v3**: the app follows the design system strictly, and every later phase will.
+
+### Added
+- The design system is vendored in `design/` (tokens, a specification for each component, the surfaces of the product and 17 assembled screens as images) and is the contract
+  for every screen ([ADR-0032](docs/adr/0032-design-system-v3-is-the-contract.md)).
+- `tools/design-tokens.mjs` writes the tokens of `app.css` from `design/tokens.json` (`--check` in the gates and CI), and `tools/check-design.mjs` fails on colour literals,
+  arbitrary values for colour, type, radius, shadow and duration, transitions over 200 ms and emoji in the interface. New tokens: chart series, workflow node kinds and task
+  priorities, plus twenty icons for the phases to come.
+- Kit: `BrandMark` and `HealthGrid`; every other component corrected to its specification (Tabs underlined, Badge, Chip, Switch, Segmented, Card, Callout, Stat, Stepper, Kbd, Avatar,
+  EmptyState and the primary button's surface).
+- An **Inbox** with everything waiting for a person (tool approvals anywhere in a tree of runs, and servers whose tools or sign-in need a review) and an approvals bell that opens it.
+- A **Runs** page, **Documents** and **Settings** (General, Appearance, About) as screens of their own, ⌘N for a new run, and spend today and runs in progress at the foot of the sidebar.
+- Run screen: the stat row, tabs for Work tree, Steps, Events, Context and Cost, and a *This run* panel. New run: *Run as* plain, agent or team, chips that mark what asks, where the
+  conversation goes, and *Before you start*. Providers: a models table. Memory: *To approve*. Integrations: failures and an attention filter. Agent chat: a rail with the team and the cost.
+
+### Changed
+- The sidebar follows the design system's groups (Work, Organisation, Connect, Operate) and lists only what has shipped. Documents moved out of Memory, and Teams out of the Agents switch.
+- Attention counts and the *asks* mark pass WCAG AA contrast; "Review" names what it opens. [Known differences](docs/design-system.md#known-differences) from the design system's screens are listed with their reasons.
+- The roadmap details phases 7 to 11 from the design system's screens.
+
 ## [0.6.0] - 2026-11-20
 
 **Multi-Agent Orchestration**: agents that ask other agents, without ever being allowed more than the one who asked.
