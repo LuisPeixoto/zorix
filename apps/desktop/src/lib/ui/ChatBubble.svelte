@@ -27,7 +27,7 @@
       class={cn(
         "min-w-0 rounded-2xl px-4 py-2.5 text-base",
         role === "user"
-          ? "rounded-tr-md bg-[image:var(--accent-grad)] bg-accent text-accent-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.18),0_6px_16px_-10px_var(--accent)]"
+          ? "rounded-tr-md bg-[image:var(--accent-grad)] bg-accent text-accent-fg"
           : "raised rounded-tl-md border border-line bg-panel",
         streaming && "stream-caret",
       )}

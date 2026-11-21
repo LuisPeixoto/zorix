@@ -85,8 +85,8 @@
         disabled={!ready}
         aria-label="Send"
         class={cn(
-          "grid size-8 place-items-center rounded-full transition duration-150 active:scale-95",
-          ready ? "bg-[image:var(--accent-grad)] bg-accent text-accent-fg shadow-[0_6px_14px_-8px_var(--accent)] hover:brightness-105" : "bg-hover text-faint",
+          "grid size-8 place-items-center rounded-xl transition duration-150 active:scale-95",
+          ready ? "surface-send hover:brightness-105" : "bg-hover text-faint",
         )}
       >
         <Icon name="arrow-up" size={16} stroke={2.2} />

@@ -15,8 +15,8 @@
 
 <span
   class={cn(
-    "inline-flex h-7 items-center rounded-full border text-xs transition duration-150",
-    selected ? "border-accent/50 bg-accent-soft text-accent" : "border-line bg-panel-2 text-muted hover:border-line-strong hover:text-fg",
+    "inline-flex h-6.5 items-center rounded-full border text-sm font-medium transition duration-150",
+    selected ? "border-accent/50 bg-accent-soft text-accent" : "border-line bg-panel text-fg hover:border-line-strong",
     klass,
   )}
 >

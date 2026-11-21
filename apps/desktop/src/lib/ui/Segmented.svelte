@@ -20,12 +20,12 @@
   aria-label={label}
   tabindex="-1"
   onkeydown={onkey}
-  class={cn("relative grid rounded-xl bg-panel-2 p-1 ring-1 ring-line ring-inset", klass)}
+  class={cn("relative grid rounded-xl border border-line-soft bg-hover p-0.75", klass)}
   style:grid-template-columns="repeat({options.length}, minmax(0, 1fr))"
 >
   <span
-    class="pointer-events-none absolute top-1 bottom-1 left-1 rounded-lg bg-panel shadow-card transition-transform duration-200 ease-out"
-    style:width="calc((100% - 0.5rem) / {options.length})"
+    class="pointer-events-none absolute top-0.75 bottom-0.75 left-0.75 rounded-md bg-panel shadow-raised transition-transform duration-200 ease-out"
+    style:width="calc((100% - 1.5px * 4) / {options.length})"
     style:transform="translateX({index * 100}%)"
     aria-hidden="true"
   ></span>
@@ -37,7 +37,7 @@
       tabindex={value === option.value ? 0 : -1}
       onclick={() => (value = option.value)}
       class={cn(
-        "relative z-10 inline-flex h-7 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150",
+        "relative z-10 inline-flex h-6.5 items-center justify-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors duration-150",
         value === option.value ? "text-fg" : "text-muted hover:text-fg",
       )}
       data-index={i}

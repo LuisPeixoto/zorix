@@ -29,18 +29,18 @@
 
 <section
   class={cn(
-    "raised overflow-hidden rounded-2xl border border-line bg-panel",
+    "overflow-hidden rounded-2xl border border-line bg-panel shadow-card",
     interactive && "transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3",
     klass,
   )}
 >
   {#if title || actions}
-    <header class="flex items-center gap-2 border-b border-line-soft px-4 py-3">
+    <header class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-4 py-3">
       {#if icon}<Icon name={icon} size={15} class="text-accent" />{/if}
-      <h3 class="min-w-0 flex-1 truncate text-md font-semibold">{title}</h3>
+      <h3 class="min-w-0 flex-1 truncate text-base font-semibold">{title}</h3>
       {@render actions?.()}
     </header>
   {/if}
   <div class={pad[padding]}>{@render children?.()}</div>
-  {#if footer}<footer class="border-t border-line bg-panel-2 px-4 py-2.5">{@render footer()}</footer>{/if}
+  {#if footer}<footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5">{@render footer()}</footer>{/if}
 </section>
