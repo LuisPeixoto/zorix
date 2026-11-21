@@ -126,14 +126,37 @@ pub fn agent(slug: &str) -> Result<Vec<Permission>, String> {
     Ok(grants)
 }
 
+/// `project:KEY[:write]`: read the tasks of a project with `tasks.list` and `tasks.get`; with `:write`, plan it too with
+/// `tasks.create`, `tasks.update`, `tasks.move` and `tasks.comment`. Every write still asks a person (ADR-0037).
+pub fn project(text: &str) -> Result<Vec<Permission>, String> {
+    let (key, write) = split_write(text);
+    crate::project::ProjectKey::new(key)?;
+    let mut grants = with_actions("project", key, write);
+    grants.extend(tools(&["tasks.list", "tasks.get"]));
+    if write {
+        grants.extend(tools(&["tasks.create", "tasks.update", "tasks.move", "tasks.comment"]));
+    }
+    Ok(grants)
+}
+
+/// `task:KEY`: report progress, add deliverables and leave notes on this one task, with `task.report_progress`,
+/// `task.add_deliverable` and `task.note`. A run a task started gets this and nothing wider.
+pub fn task(key: &str) -> Result<Vec<Permission>, String> {
+    key.parse::<crate::project::TaskKey>()?;
+    let mut grants = vec![Permission::new(Action::Write, format!("task:{key}"))];
+    grants.extend(tools(&["task.report_progress", "task.add_deliverable", "task.note"]));
+    Ok(grants)
+}
+
 /// One access entry of an agent, in the syntax of the `--allow-…` flags with a prefix naming the family:
 /// `http:HOST`, `repo:[github:|gitlab:]OWNER/REPO[:write]`, `jira:KEY[:write]`, `chat:slack:#channel[:write]`,
-/// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `agent:SLUG` (ask that agent, or `*`), `read:PATTERN`
+/// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `agent:SLUG` (ask that agent, or `*`),
+/// `project:KEY[:write]` (a project's tasks), `task:KEY` (one task), `read:PATTERN`
 /// and `write:PATTERN` (workspace paths, relative).
 pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
     let (family, rest) = entry.split_once(':').ok_or_else(|| {
         format!(
-            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, read or write."
+            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, project, task, read or write."
         )
     })?;
     match family {
@@ -150,13 +173,15 @@ pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
             Ok(vec![tool_grant(&format!("mcp.{rest}.*"))?])
         }
         "agent" => agent(rest),
+        "project" => project(rest),
+        "task" => task(rest),
         "read" | "write" => {
             validate_workspace_pattern(rest)?;
             let action = if family == "read" { Action::Read } else { Action::Write };
             Ok(vec![workspace_grant(action, rest)?])
         }
         other => Err(format!(
-            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, read, write)."
+            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, project, task, read, write)."
         )),
     }
 }
@@ -237,6 +262,35 @@ mod tests {
         for bad in ["nocolon", "ftp:host", "repo:nonsense", "mcp:Bad Name", "read:../etc", "chat:teams:x"] {
             let error = compile_access(&[bad.to_string()]).unwrap_err();
             assert!(!error.is_empty(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_project_grant_reads_its_tasks_and_writing_adds_the_planning_tools() {
+        let read = compile_access(&["project:OPS".into()]).unwrap();
+        assert!(read.allows(&Permission::new(Action::Read, "project:OPS")));
+        assert!(read.allows(&Permission::use_tool("tasks.list")));
+        assert!(
+            !read.allows(&Permission::use_tool("tasks.move"))
+                && !read.allows(&Permission::new(Action::Write, "project:OPS"))
+        );
+        let write = compile_access(&["project:OPS:write".into()]).unwrap();
+        assert!(
+            write.allows(&Permission::new(Action::Write, "project:OPS"))
+                && write.allows(&Permission::use_tool("tasks.move"))
+        );
+        assert!(!write.allows(&Permission::new(Action::Write, "project:WEB")), "only the project that was named");
+        let one = compile_access(&["task:OPS-38".into()]).unwrap();
+        assert!(
+            one.allows(&Permission::new(Action::Write, "task:OPS-38"))
+                && one.allows(&Permission::use_tool("task.add_deliverable"))
+        );
+        assert!(
+            !one.allows(&Permission::new(Action::Write, "task:OPS-39"))
+                && !one.allows(&Permission::use_tool("tasks.move"))
+        );
+        for bad in ["project:ops", "project:", "task:OPS", "task:ops-1", "project:TOOLONG"] {
+            assert!(compile_entry(bad).is_err(), "{bad}");
         }
     }
 

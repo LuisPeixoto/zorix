@@ -8163,6 +8163,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorix-projects"
+version = "0.7.0"
+dependencies = [
+ "async-trait",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "zorix-core",
+ "zorix-hub",
+ "zorix-runtime",
+ "zorix-store",
+ "zorix-workflows",
+]
+
+[[package]]
 name = "zorix-providers"
 version = "0.7.0"
 dependencies = [

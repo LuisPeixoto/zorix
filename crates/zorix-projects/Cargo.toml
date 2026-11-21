@@ -1,0 +1,28 @@
+[package]
+name = "zorix-projects"
+description = "ZORIX projects: tasks that start runs, a manager that plans through tools, deliverables and history."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-hub.workspace = true
+zorix-runtime.workspace = true
+zorix-store.workspace = true
+zorix-workflows.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+url = "2"
+
+[dev-dependencies]
+tempfile.workspace = true

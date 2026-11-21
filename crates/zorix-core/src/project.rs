@@ -417,6 +417,19 @@ pub struct TaskRun {
     pub cost_micros: u64,
 }
 
+/// A run a task is waiting to start: set when an agent's or a team's task moves to In progress (or is run again), cleared when the
+/// run starts. Whatever keeps tasks moving starts it as soon as the task is not blocked.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RunRequest {
+    /// What the person said when sending the task back, which the run must address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Why the run could not be started, when it could not. The request then waits for a person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 /// What a person must do about a task. Never stored: it is read from the task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -475,6 +488,9 @@ pub struct Task {
     /// The runs it started, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub runs: Vec<TaskRun>,
+    /// A run waiting to start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_requested: Option<RunRequest>,
     /// Place in the lane: lower is higher up.
     #[serde(default)]
     pub rank: i64,
@@ -507,6 +523,7 @@ impl Task {
             links: Vec::new(),
             deliverables: Vec::new(),
             runs: Vec::new(),
+            run_requested: None,
             rank: 0,
             revision: 0,
             created_at: now,
@@ -584,6 +601,9 @@ impl Task {
     pub fn needs_you(&self) -> Option<NeedsYou> {
         if self.state == TaskState::Done {
             return None;
+        }
+        if self.state == TaskState::InProgress && self.run_requested.as_ref().is_some_and(|r| r.error.is_some()) {
+            return Some(NeedsYou::RunFailed);
         }
         match self.runs.last().map(|run| run.outcome) {
             Some(RunOutcome::Failed) if self.state == TaskState::InProgress => return Some(NeedsYou::RunFailed),
@@ -773,6 +793,11 @@ pub enum ProjectEventKind {
     RunFailed {
         /// The execution.
         execution: ExecutionId,
+        /// Why.
+        reason: String,
+    },
+    /// A run could not be started (the agent is missing, or the model refused).
+    StartFailed {
         /// Why.
         reason: String,
     },

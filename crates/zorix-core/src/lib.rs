@@ -77,7 +77,8 @@ pub use ports::{EventPublisher, ExecutionScheduler, ResultValidator, Validation}
 pub use project::{
     Date, Deliverable, DeliverableKind, MAX_DELIVERABLES, MAX_DEPENDENCIES, MAX_LINKS, MAX_PROJECT_TASKS, MAX_PROJECTS,
     MAX_TASK_RUNS, NeedsYou, Project, ProjectEvent, ProjectEventDraft, ProjectEventKind, ProjectKey, ProjectStore,
-    RunOutcome, Task, TaskCount, TaskKey, TaskLink, TaskPriority, TaskRun, TaskState, Who, check_dependencies,
+    RunOutcome, RunRequest, Task, TaskCount, TaskKey, TaskLink, TaskPriority, TaskRun, TaskState, Who,
+    check_dependencies,
 };
 pub use redact::{redact, redact_text};
 pub use repository::{

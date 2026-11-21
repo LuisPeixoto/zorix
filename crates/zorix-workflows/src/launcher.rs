@@ -50,6 +50,8 @@ pub struct RunStart {
     pub key: String,
     /// Labels that link the execution back to the workflow.
     pub metadata: BTreeMap<String, String>,
+    /// Access the run gets besides the agent's own, in the syntax of an agent's access list (`task:OPS-38`).
+    pub access: Vec<String>,
 }
 
 /// How an execution a step started is going.
@@ -206,6 +208,7 @@ impl StepLauncher for HubLauncher {
             limits: Some(cost_only(start.max_cost_micros)),
             idempotency_key: Some(start.key),
             metadata: start.metadata,
+            extra_access: start.access,
             ..AgentAsk::default()
         };
         let new = match &start.target {
