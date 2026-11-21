@@ -204,7 +204,12 @@
     const target = event.target as HTMLElement;
     if (target.closest("[data-chrome]") && target.tagName !== "DIV") return;
     const key = event.key;
-    if ((key === "Delete" || key === "Backspace") && !readonly) {
+    const focused = target.closest<HTMLElement>("[data-node]");
+    if ((key === "Enter" || key === " ") && focused) {
+      event.preventDefault();
+      selected = focused.dataset.node ?? null;
+      selectedEdge = null;
+    } else if ((key === "Delete" || key === "Backspace") && !readonly) {
       event.preventDefault();
       remove();
     } else if (key.startsWith("Arrow") && selected && !readonly) {

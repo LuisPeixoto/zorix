@@ -225,7 +225,7 @@ async fn what_a_workflow_names_and_the_computer_lacks_is_listed() {
     let made = rig.service.add_template("weekly-report").await.unwrap();
     let missing = rig.service.missing(&made.draft).await.unwrap();
     let names: Vec<(&str, &str)> = missing.iter().map(|m| (m.kind, m.name.as_str())).collect();
-    assert_eq!(names, vec![("team", "research-desk"), ("connection", "slack")]);
+    assert_eq!(names, vec![("team", "research-desk"), ("connection", "Slack")]);
 
     // An agent that exists is no longer missing.
     rig.hub

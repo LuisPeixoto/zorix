@@ -522,7 +522,7 @@ impl WorkflowService {
                         .iter()
                         .any(|c| c.kind == wanted && connection.as_deref().is_none_or(|name| c.name == name));
                     if !found {
-                        let name = connection.clone().unwrap_or_else(|| format!("{service:?}").to_lowercase());
+                        let name = connection.clone().unwrap_or_else(|| format!("{service:?}"));
                         out.push(Missing { step: step.id.clone(), kind: "connection", name });
                     }
                 }
