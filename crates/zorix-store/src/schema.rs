@@ -399,6 +399,47 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (tenant, key)
     ) WITHOUT ROWID;
     ",
+    // 7: projects and tasks. A project and a task keep their whole record in `doc`; a task has a revision for optimistic writes and
+    // the project holds the counter that numbers its tasks, so a key is never reused. `project_events` is the history.
+    "
+    CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        key TEXT NOT NULL,
+        archived INTEGER NOT NULL DEFAULT 0,
+        next_task INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX projects_by_key ON projects (tenant, key);
+
+    CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        state TEXT NOT NULL,
+        rank INTEGER NOT NULL,
+        revision INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX tasks_by_key ON tasks (tenant, key);
+    CREATE INDEX tasks_by_project ON tasks (tenant, project_id, rank);
+    CREATE INDEX tasks_by_state ON tasks (tenant, state);
+
+    CREATE TABLE project_events (
+        tenant TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        task TEXT,
+        at INTEGER NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (project_id, seq)
+    ) WITHOUT ROWID;
+    CREATE INDEX project_events_by_task ON project_events (project_id, task, seq);
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -571,5 +612,31 @@ mod tests {
         let runs: u32 = conn.query_row("SELECT COUNT(*) FROM executions", [], |r| r.get(0)).unwrap();
         let teams: u32 = conn.query_row("SELECT COUNT(*) FROM teams", [], |r| r.get(0)).unwrap();
         assert_eq!((runs, teams), (1, 1));
+    }
+
+    #[test]
+    fn a_database_of_schema_6_upgrades_to_projects_and_keeps_its_data() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(6) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO workflows (id, tenant, slug, enabled, live_version, created_at, updated_at, doc) VALUES ('w1','local','daily',0,NULL,1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        for table in ["projects", "tasks", "project_events"] {
+            let found: u32 = conn
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert_eq!(found, 1, "{table} was not created");
+        }
+        let workflows: u32 = conn.query_row("SELECT COUNT(*) FROM workflows", [], |r| r.get(0)).unwrap();
+        assert_eq!(workflows, 1);
     }
 }
