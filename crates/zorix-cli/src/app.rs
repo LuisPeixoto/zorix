@@ -162,6 +162,10 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
         let _ = calibration.backfill();
     });
     let projects = zorix_projects::runtime::open(home, tenant.clone(), hub.clone(), engine.clone(), router.clone())?;
+    // A command's `--model` also decides what the runs that tasks start use.
+    if args.model.is_some() {
+        projects.set_model(Some(model.clone()));
+    }
     Ok(App { engine, stack, hub, model, router, projects, _lock: lock })
 }
 

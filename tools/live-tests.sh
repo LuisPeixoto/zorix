@@ -11,6 +11,8 @@
 #                                  cancel, budgets) and, only when Ollama already runs, a real local model
 #   tools/live-tests.sh workflows  workflows through the real command line (publish, approvals, versions, `zorix serve` and a signed
 #                                  webhook); the demo model only
+#   tools/live-tests.sh projects   projects and tasks through the real command line (a task runs when it moves to In progress, a
+#                                  dependency waits, `zorix serve` starts it, the manager is asked); the demo model only
 #   tools/live-tests.sh embeddings embeddings and memory: Ollama (all-minilm, plus qwen3:1.7b for the run that cites a
 #                                  document) and, with a stored key, OpenAI and Gemini embeddings
 #
@@ -39,6 +41,10 @@ fi
 
 if [ "$filter" = workflows ]; then
   exec tools/live-workflows.sh
+fi
+
+if [ "$filter" = projects ]; then
+  exec tools/live-projects.sh
 fi
 
 if [ "$filter" = embeddings ]; then
