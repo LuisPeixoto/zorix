@@ -9,6 +9,8 @@
 #                                  and, when Ollama runs, a real local model
 #   tools/live-tests.sh orchestration teams and delegation through the real command line (parallel, nested, approvals up the tree,
 #                                  cancel, budgets) and, only when Ollama already runs, a real local model
+#   tools/live-tests.sh workflows  workflows through the real command line (publish, approvals, versions, `zorix serve` and a signed
+#                                  webhook); the demo model only
 #   tools/live-tests.sh embeddings embeddings and memory: Ollama (all-minilm, plus qwen3:1.7b for the run that cites a
 #                                  document) and, with a stored key, OpenAI and Gemini embeddings
 #
@@ -33,6 +35,10 @@ fi
 
 if [ "$filter" = orchestration ]; then
   exec tools/live-orchestration.sh
+fi
+
+if [ "$filter" = workflows ]; then
+  exec tools/live-workflows.sh
 fi
 
 if [ "$filter" = embeddings ]; then
