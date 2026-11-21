@@ -1,0 +1,55 @@
+{
+  "zorix": "workflow/1",
+  "slug": "weekly-report",
+  "workflow": {
+    "name": "Weekly report",
+    "description": "On Friday afternoon the research desk summarises the week, you approve it, and it goes to Slack.",
+    "group": "Operations",
+    "saves_minutes": 45,
+    "steps": [
+      {
+        "id": "friday",
+        "title": "Fridays at 16:00",
+        "x": 192,
+        "y": 32,
+        "kind": { "type": "schedule", "when": { "type": "daily", "times": ["16:00"], "days": ["fri"] } }
+      },
+      {
+        "id": "week",
+        "title": "Summarise the week",
+        "x": 192,
+        "y": 176,
+        "kind": {
+          "type": "team",
+          "team": "research-desk",
+          "prompt": "Summarise this week's work from the documents and notes you can search: what was done, what is blocked, and what comes next. Keep it under 300 words."
+        }
+      },
+      {
+        "id": "review",
+        "title": "You approve the report",
+        "x": 192,
+        "y": 320,
+        "kind": {
+          "type": "approval",
+          "message": "Send this week's report to #reports?",
+          "show": ["steps.week.output.text", "run.cost_micros"],
+          "timeout_ms": 172800000,
+          "then": "refuse"
+        }
+      },
+      {
+        "id": "send",
+        "title": "Post to #reports",
+        "x": 192,
+        "y": 464,
+        "kind": { "type": "send", "service": "slack", "channel": "#reports", "text": "{{steps.week.output.text}}" }
+      }
+    ],
+    "edges": [
+      { "from": "friday", "to": "week" },
+      { "from": "week", "to": "review" },
+      { "from": "review", "to": "send" }
+    ]
+  }
+}

@@ -11,6 +11,7 @@ mod memory;
 mod providers;
 mod render;
 mod serve;
+mod workflows;
 
 use std::process::ExitCode;
 

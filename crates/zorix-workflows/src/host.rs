@@ -165,6 +165,45 @@ pub fn random_secret() -> Result<String> {
     Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// The secret in a workflow's webhook address, made when first asked.
+pub async fn webhook_token(secrets: &Arc<dyn SecretStore>, workflow: WorkflowId) -> Result<String> {
+    secret_or_create(secrets, token_key(workflow)).await
+}
+
+/// Replace the secret in a workflow's webhook address: the old address stops working.
+pub async fn reset_webhook_token(secrets: &Arc<dyn SecretStore>, workflow: WorkflowId) -> Result<String> {
+    forget(secrets, token_key(workflow)).await?;
+    webhook_token(secrets, workflow).await
+}
+
+/// The secret a sender signs its requests with (`X-Hub-Signature-256`), made when first asked.
+pub async fn signing_secret(secrets: &Arc<dyn SecretStore>, workflow: WorkflowId) -> Result<String> {
+    secret_or_create(secrets, signing_key(workflow)).await
+}
+
+async fn secret_or_create(secrets: &Arc<dyn SecretStore>, key: String) -> Result<String> {
+    let reading = secrets.clone();
+    let name = key.clone();
+    if let Some(found) =
+        tokio::task::spawn_blocking(move || reading.get(&name)).await.map_err(storage)?.map_err(storage)?
+    {
+        return Ok(found.expose().to_string());
+    }
+    let fresh = random_secret()?;
+    let (writing, value) = (secrets.clone(), fresh.clone());
+    tokio::task::spawn_blocking(move || writing.set(&key, &Secret::new(value)))
+        .await
+        .map_err(storage)?
+        .map_err(storage)?;
+    Ok(fresh)
+}
+
+async fn forget(secrets: &Arc<dyn SecretStore>, key: String) -> Result<()> {
+    let secrets = secrets.clone();
+    tokio::task::spawn_blocking(move || secrets.remove(&key)).await.map_err(storage)?.map_err(storage)?;
+    Ok(())
+}
+
 impl Inner {
     pub(crate) async fn secret(&self, key: String) -> Result<Option<String>> {
         let secrets = self.secrets.clone();
@@ -173,25 +212,6 @@ impl Inner {
             .map_err(storage)?
             .map(|s| s.map(|s| s.expose().to_string()))
             .map_err(storage)
-    }
-
-    async fn secret_or_create(&self, key: String) -> Result<String> {
-        if let Some(found) = self.secret(key.clone()).await? {
-            return Ok(found);
-        }
-        let fresh = random_secret()?;
-        let (secrets, value) = (self.secrets.clone(), fresh.clone());
-        tokio::task::spawn_blocking(move || secrets.set(&key, &Secret::new(value)))
-            .await
-            .map_err(storage)?
-            .map_err(storage)?;
-        Ok(fresh)
-    }
-
-    async fn forget(&self, key: String) -> Result<()> {
-        let secrets = self.secrets.clone();
-        tokio::task::spawn_blocking(move || secrets.remove(&key)).await.map_err(storage)?.map_err(storage)?;
-        Ok(())
     }
 
     /// The enabled workflows with their live definitions, re-read when stale or when asked.
@@ -520,18 +540,17 @@ impl WorkflowHost {
 
     /// The secret in a workflow's webhook address, made when first asked.
     pub async fn webhook_token(&self, workflow: WorkflowId) -> Result<String> {
-        self.inner.secret_or_create(token_key(workflow)).await
+        webhook_token(&self.inner.secrets, workflow).await
     }
 
     /// Replace the secret in a workflow's webhook address: the old address stops working.
     pub async fn reset_webhook_token(&self, workflow: WorkflowId) -> Result<String> {
-        self.inner.forget(token_key(workflow)).await?;
-        self.webhook_token(workflow).await
+        reset_webhook_token(&self.inner.secrets, workflow).await
     }
 
     /// The secret a sender signs its requests with (`X-Hub-Signature-256`), made when first asked.
     pub async fn signing_secret(&self, workflow: WorkflowId) -> Result<String> {
-        self.inner.secret_or_create(signing_key(workflow)).await
+        signing_secret(&self.inner.secrets, workflow).await
     }
 
     /// Stop everything the host started and wait for it.
