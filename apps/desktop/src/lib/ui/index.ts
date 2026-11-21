@@ -1,5 +1,6 @@
 // The component kit. Import from here: `import { Button, Card } from "../ui/index.ts"`.
 export { default as Avatar } from "./Avatar.svelte";
+export { default as AvatarStack } from "./AvatarStack.svelte";
 export { default as BrandLogo } from "./BrandLogo.svelte";
 export { default as BrandMark } from "./BrandMark.svelte";
 export { default as ChatBubble } from "./ChatBubble.svelte";
@@ -16,6 +17,9 @@ export { default as KeyValue } from "./KeyValue.svelte";
 export { default as ScoreMatrix, type Cell, type MatrixRun } from "./ScoreMatrix.svelte";
 export { default as StatusPill, type PillState } from "./StatusPill.svelte";
 export { default as Stepper } from "./Stepper.svelte";
+export { default as TaskBoard } from "./TaskBoard.svelte";
+export { default as TaskCard } from "./TaskCard.svelte";
+export { default as Timeline } from "./Timeline.svelte";
 export { default as TreeView } from "./TreeView.svelte";
 export { default as ToggleRow } from "./ToggleRow.svelte";
 export { default as ToolCallCard, type ToolStatus } from "./ToolCallCard.svelte";

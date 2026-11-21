@@ -13,7 +13,7 @@ pub mod tools;
 pub use links::{HubPullReader, PullReader, PullState};
 pub use rules::{LinkKind, sentence};
 pub use service::{
-    Board, Counts, DeliverableRow, LinkState, ManagerRun, Move, NewProject, NewTask, ProjectCard, ProjectFields,
-    ProjectService, RUN_GOING, TaskDetail, TaskFields, TaskView,
+    Board, Counts, LinkState, ManagerRun, Move, NewProject, NewTask, ProjectCard, ProjectFields, ProjectService,
+    RUN_GOING, TaskDetail, TaskFields, TaskIndexRow, TaskNeed, TaskView,
 };
 pub use tools::{ProjectTicker, project_tools};

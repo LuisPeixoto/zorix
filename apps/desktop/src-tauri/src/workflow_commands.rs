@@ -53,7 +53,9 @@ pub async fn workflow_settings_set(
     if let Some(old) = host.take() {
         old.shutdown().await;
     }
-    let started = services.workflows.start_host(services.secrets.clone(), listen).await;
+    let tickers =
+        || -> Vec<Arc<dyn zorix_workflows::host::Ticker>> { vec![zorix_projects::runtime::ticker(&services.projects)] };
+    let started = services.workflows.start_host_with(services.secrets.clone(), listen, tickers()).await;
     match started {
         Ok(new) => {
             *host = Some(Arc::new(new));
@@ -62,7 +64,7 @@ pub async fn workflow_settings_set(
         Err(error) => {
             // The old setting stays: start again with it so schedules keep working.
             let previous = Settings::load(&state.home).listen().ok().flatten();
-            if let Ok(again) = services.workflows.start_host(services.secrets.clone(), previous).await {
+            if let Ok(again) = services.workflows.start_host_with(services.secrets.clone(), previous, tickers()).await {
                 *host = Some(Arc::new(again));
             }
             return Err(error.to_string());

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Approval, ServerRow, TreeApproval } from "./api.ts";
-import type { WfWait } from "./api.ts";
-import { approvalItems, oldestFirst, serverItems, targetOf, workflowItems } from "./inbox.ts";
+import type { TaskNeed, WfWait } from "./api.ts";
+import { approvalItems, oldestFirst, serverItems, targetOf, taskItems, workflowItems } from "./inbox.ts";
 
 const approval = (id: string, at: number, status: Approval["status"] = "pending", args: unknown = { path: "notes/a.md" }): Approval => ({
   id,
@@ -83,4 +83,16 @@ test("approvals and workflow waits are ordered together by how long they have wa
     ...approvalItems([run("r1")], { r1: [tree(approval("mid", 30))] }),
   ]);
   assert.deepEqual(items.map((i) => i.id), ["wf-early", "mid", "wf-late", "server:linear"]);
+});
+
+test("a task that needs you is an item with its project and why, and sits among the others by age", () => {
+  const need = (key: string, at: number, needs: TaskNeed["needs"]): TaskNeed => ({ key, title: `Task ${key}`, project: "OPS", project_name: "Q4 Operations", needs, assignee: null, at });
+  const items = taskItems([need("OPS-36", 50, "review"), need("OPS-38", 5, "run_failed")]);
+  assert.deepEqual(items.map((i) => i.id), ["task:OPS-36", "task:OPS-38"]);
+  const first = items[0];
+  assert.ok(first && first.kind === "task");
+  assert.equal(first.project, "Q4 Operations");
+  assert.equal(first.why, "review");
+  const ordered = oldestFirst([...items, ...workflowItems([wait("w", 20)]), ...serverItems([server("linear", { tools_to_review: 1 })])]);
+  assert.deepEqual(ordered.map((i) => i.id), ["task:OPS-38", "w", "task:OPS-36", "server:linear"]);
 });
