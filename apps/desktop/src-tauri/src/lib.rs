@@ -5,7 +5,9 @@ mod commands;
 mod integration_commands;
 mod knowledge_commands;
 mod memory_commands;
+mod settings;
 mod state;
+mod workflow_commands;
 
 use tauri::{Manager, RunEvent};
 
@@ -31,6 +33,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            workflow_commands::workflow_host,
+            workflow_commands::workflow_settings_set,
             commands::app_info,
             commands::list_tools,
             commands::list_runs,

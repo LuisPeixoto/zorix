@@ -10,6 +10,7 @@ mod mcp_serve;
 mod memory;
 mod providers;
 mod render;
+mod serve;
 
 use std::process::ExitCode;
 
