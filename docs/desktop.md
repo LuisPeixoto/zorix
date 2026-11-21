@@ -160,3 +160,11 @@ Memory, Documents) and **Operate** (Settings), and shows only what has shipped. 
 
 For reviews, `ZORIX_START_VIEW` also accepts `inbox`, `runs`, `new`, `documents` and `settings`, and `memory:approve`. Where the app differs from the design system's screens, and why, is
 listed in [design system](design-system.md#known-differences).
+
+## Workflows (version 0.7)
+
+*Workflows* sits in the Work group of the sidebar. It has the list (what starts each workflow, its last 14 runs, version, state and an On switch), the editor (palette, canvas,
+inspector, versions, runs, test run and publish) and the run view (the canvas with the state of every step and the card of the step that waits). Waits for a person also appear in the Inbox, New
+run can run a workflow (*Run as › Workflow*) or save a run as one (*Save as workflow*), a run started by a workflow links back to it, and Settings › General turns webhooks on. The app hosts the
+triggers while it is open. See [workflows](workflows.md); screenshots are in `docs/screenshots-0.7.0/`.
+

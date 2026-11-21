@@ -122,3 +122,9 @@ inside text. Counts of tokens (`input_tokens`) are not secrets and stay readable
 [SECURITY.md](../SECURITY.md).
 
 The arguments of a call are stored as they are in the tool call record, because the tool must receive them.
+
+## Workflows
+
+A workflow's actions ask first by default, bound to the exact call. A step set to run without asking is confirmed by a person when publishing, and the version records who and when. It is
+refused for nothing a person must approve, and its resource grants (a channel, a host) come from the step itself. See [workflows](workflows.md#people).
+

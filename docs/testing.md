@@ -13,6 +13,7 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Kind | Where | What it proves |
 |---|---|---|
 | Unit | next to the code | The lifecycle table, permission matching, the calculator parser, path rules, redaction, budgeting, retry backoff… |
+| Workflows | `zorix-workflows/tests`, `tools/live-workflows.sh` | Expressions, templates and schedules (across daylight saving); the engine with a scripted launcher and a manual clock (joins, skips, budgets, time-outs, restarts); the host and a webhook over a real socket; and the command line end to end |
 | Contract | `zorix-runtime/src/testing.rs` | Every `ExecutionRepository` behaves the same. The in-memory and the SQLite repositories run the **same** cases |
 | Integration | `zorix-runtime/tests` | The engine with a scripted model and small tools: lifecycle, tools, approvals, failures, recovery, observability |
 | Durability | `zorix-store/tests/durability.rs` | What only a real file shows: reopening, concurrent writers, crash recovery |

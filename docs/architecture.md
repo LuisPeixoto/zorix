@@ -154,6 +154,12 @@ Delegation lives in three places. `zorix-core` holds the pieces with no I/O: the
 cascading cancel, the depth and descendant guards, and `tree` and `pending_in_tree` for approvals. `zorix-agents` holds the policy (`AgentPlanner`): who may be asked, grants intersected with the
 parent's, the budget split, the `<available_agents>` index and the starter team. `zorix-hub` registers the tool and wires the planner. See [orchestration](orchestration.md), [teams](teams.md) and ADR-0029 to ADR-0031.
 
+## Workflows (zorix-workflows)
+
+A workflow is a versioned DAG in `zorix-core` (`workflow.rs`) and `zorix-store` (schema 6). `zorix-workflows` runs it as a client of `ExecutionEngine`: `WorkflowEngine` advances a run one
+settled step at a time (agents and teams become ordinary executions through the hub; waits for people and timers are records), and `WorkflowHost` fires schedules, starts workflows for
+events, and serves webhooks. It runs in the desktop app or under `zorix serve`. See [workflows](workflows.md).
+
 ## What comes next
 
 | Phase | Plugs into |
