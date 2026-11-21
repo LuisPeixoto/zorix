@@ -133,6 +133,12 @@ Screens: Organisation (org chart, list, activity), worker profile, autonomy. Bui
 - **Autonomy** in five levels: Suggest, Ask, Notify, Budgeted and Full, with a weekly budget and a time limit per task; writes still ask.
 - A worker's tasks, on-time rate, eval score, weekly spend and activity; *Hire a worker* and *Org settings*; a weekly spend against a budget.
 
+Decisions: [ADR-0038](adr/0038-workers-are-records-over-agents.md) (workers are records over agents; chains end at you; trees shrink; figures are derived)
+and [ADR-0039](adr/0039-autonomy-is-decided-by-the-policy.md) (autonomy is decided by the policy; what still asks; budgets are narrowings).
+The screens add the Workforce *List* and *Activity* tabs, *Worker*, *Hire a worker* and *Org settings* to the design system, logged in `design/local-additions.md`.
+
+Later: people other than you and hiring them (Phase 10), a **daily** budget (Phase 10), moving workers between departments by drag, teams as workers, and importing an org chart.
+
 ## Phase 10 — Command Center
 
 The complete interface: dashboards, monitoring, logs and observability, reports, settings and permissions.
