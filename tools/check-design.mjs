@@ -19,23 +19,6 @@ const src = join(root, "apps/desktop/src");
  * Keep this list short. A line leaves it when the design system gains the token.
  */
 const ALLOW = [
-  // Temporary: the kit audit (branch design/kit-v3) replaces each of these with the design system's own value, and removes the line.
-  { file: "lib/components/agents/AgentChat.svelte", text: "shadow-[inset_2px_0_0_var(--accent)]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/components/agents/AgentPage.svelte", text: "rounded-[20px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/components/shell/Sidebar.svelte", text: "shadow-[inset_2px_0_0_var(--accent)]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/components/shell/Toolbar.svelte", text: "shadow-[inset_0_1px_0_rgb(255_255_255/0.28)", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Avatar.svelte", text: "text-[11px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Avatar.svelte", text: "text-[14px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Avatar.svelte", text: "text-[18px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Avatar.svelte", text: "text-[24px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Avatar.svelte", text: "text-[32px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/BrandLogo.svelte", text: "rounded-[10px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Button.svelte", text: "shadow-[inset_0_1px_0_rgb(255_255_255/0.2)", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/ChatBubble.svelte", text: "shadow-[inset_0_1px_0_rgb(255_255_255/0.18)", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Checkbox.svelte", text: "rounded-[5px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/Composer.svelte", text: "shadow-[0_6px_14px_-8px_var(--accent)]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/EmptyState.svelte", text: "rounded-[18px]", reason: "pending the kit audit against design/components (design/kit-v3)" },
-  { file: "lib/ui/TreeView.svelte", text: "shadow-[inset_3px_0_0_var(--accent)]", reason: "pending the kit audit against design/components (design/kit-v3)" },
   { file: "lib/theme.ts", text: "#f5f6fa", reason: "the native window background must be a literal; tokens.test.ts checks it equals the bg token" },
 ];
 
@@ -78,6 +61,8 @@ for (const path of walk(src)) {
       if (HEX.test(code)) at(`colour literal ${code.match(HEX)[0]}: use a colour token`);
       if (COLOUR_FN.test(code)) at(`colour function ${code.match(COLOUR_FN)[0]}…): use a colour token`);
       for (const m of code.matchAll(UTILITY)) {
+        // A border, ring or outline width (`border-[1.5px]`) is a size, not a colour: it is allowed.
+        if (/^(?:border|ring|outline)/.test(m[2]) && /^[0-9.]+(?:px)?$/.test(m[3])) continue;
         if (!onlyTokens(m[3])) at(`arbitrary value ${m[2]}-[${m[3]}]: use a token or a scale step`);
       }
       for (const m of code.matchAll(/(?<![\w-])duration-(\d+)(?![\w\]])/g)) {
