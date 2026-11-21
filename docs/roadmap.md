@@ -105,7 +105,7 @@ The screens add *Workflow run* to the design system, logged in `design/local-add
 Later: a **pull request** action (no tool creates branches or commits yet), the **new ticket** event (needs polling of integrations),
 an **on-call rotation** as the approver (needs people and accounts, Phase 10), and per-period workflow budgets.
 
-## Phase 8 — Task & Project Management
+## ✅ Phase 8 — Task & Project Management · v0.8.0
 
 Projects, tasks, assignment to people or agents, priorities, dependencies, deadlines, history and deliverables.
 Screens: Projects, board, list, timeline, task. Built from TaskBoard, TaskCard, Avatar, Drawer and Stepper.
@@ -115,10 +115,14 @@ Screens: Projects, board, list, timeline, task. Built from TaskBoard, TaskCard, 
 - **Views:** Board, List and Timeline (bars fill with progress; dependencies are drawn), plus Deliverables and History, with filters for everyone, agents, people, and urgent and high.
 - A task moving to Done under a manager asks for approval like any other change.
 
+Guide: [projects](projects.md). Shipped: the model and store (schema 7), `zorix-projects`, `zorix project` and `zorix task`, and the Projects screens in the app.
+
 Decisions: [ADR-0036](adr/0036-projects-and-tasks-are-records-that-create-runs.md) (projects and tasks are records that create runs; fixed lanes; *Needs you* is derived)
 and [ADR-0037](adr/0037-project-tools-and-the-manager.md) (project tools and the manager; a move to Done always asks).
 The screens add *Projects*, the project's *List*, *Deliverables* and *History*, *Task* and *New project* to the design system, and dependency arrows to the timeline,
 logged in `design/local-additions.md`. Until accounts exist (Phase 10) the only person is you, so there is no *Share*.
+
+Later: **people and sharing** (Phase 10), custom lanes, recurring tasks, a workflow step and trigger for tasks, import and export of a project, and the day a task finished.
 
 ## Phase 9 — AI Workforce Management
 

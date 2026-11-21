@@ -160,6 +160,13 @@ A workflow is a versioned DAG in `zorix-core` (`workflow.rs`) and `zorix-store` 
 settled step at a time (agents and teams become ordinary executions through the hub; waits for people and timers are records), and `WorkflowHost` fires schedules, starts workflows for
 events, and serves webhooks. It runs in the desktop app or under `zorix serve`. See [workflows](workflows.md).
 
+## Projects (zorix-projects)
+
+Projects and tasks are records in `zorix-core` (`project.rs`) and `zorix-store` (schema 7). `zorix-projects` holds the rules in `ProjectService`: it starts an agent's or a team's task as an
+ordinary execution through the hub, reads the run to send the task to Review or mark it failed, holds a run back while a dependency is open, and keeps the history. `reconcile` does that on every
+read and on the workflow host's beat (a `Ticker`), so the command line works with no host and the app or `zorix serve` keeps tasks moving. The `tasks.*` and `task.*` tools are registered with
+the native tools. See [projects](projects.md) and ADR-0036 and ADR-0037.
+
 ## What comes next
 
 | Phase | Plugs into |
