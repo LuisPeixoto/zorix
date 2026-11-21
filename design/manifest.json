@@ -42,6 +42,8 @@
     "components/ScreenAgentVersions/README.md",
     "components/ScreenAgents/README.md",
     "components/ScreenCommandCenter/README.md",
+    "components/ScreenHireWorker/README.md",
+    "components/ScreenHireWorker/preview.html",
     "components/ScreenIntegrations/README.md",
     "components/ScreenLogs/README.md",
     "components/ScreenMarketplace/README.md",
@@ -49,6 +51,8 @@
     "components/ScreenNewProject/README.md",
     "components/ScreenNewProject/preview.html",
     "components/ScreenNewRun/README.md",
+    "components/ScreenOrgSettings/README.md",
+    "components/ScreenOrgSettings/preview.html",
     "components/ScreenProjectBoard/README.md",
     "components/ScreenProjectDeliverables/README.md",
     "components/ScreenProjectDeliverables/preview.html",
@@ -64,11 +68,17 @@
     "components/ScreenSettings/README.md",
     "components/ScreenTask/README.md",
     "components/ScreenTask/preview.html",
+    "components/ScreenWorker/README.md",
+    "components/ScreenWorker/preview.html",
     "components/ScreenWorkflowEditor/README.md",
     "components/ScreenWorkflowRun/README.md",
     "components/ScreenWorkflowRun/preview.html",
     "components/ScreenWorkflows/README.md",
     "components/ScreenWorkforce/README.md",
+    "components/ScreenWorkforceActivity/README.md",
+    "components/ScreenWorkforceActivity/preview.html",
+    "components/ScreenWorkforceList/README.md",
+    "components/ScreenWorkforceList/preview.html",
     "components/Sparkbar/README.md",
     "components/Stat/README.md",
     "components/StatusPill/README.md",
@@ -293,6 +303,12 @@
       "page": true
     },
     {
+      "name": "ScreenHireWorker",
+      "group": "Screens",
+      "summary": "The modal that makes an agent a worker: role, department, who it reports to, autonomy and its budget and time limits.",
+      "page": true
+    },
+    {
       "name": "ScreenIntegrations",
       "group": "Screens",
       "summary": "Services and MCP servers, live: their state, what is granted, and the tools that wait for your review.",
@@ -326,6 +342,12 @@
       "name": "ScreenNewRun",
       "group": "Screens",
       "summary": "The form that starts a run: who runs it, what it should do, what it may use, its limits, and a summary of what it can do before you start.",
+      "page": true
+    },
+    {
+      "name": "ScreenOrgSettings",
+      "group": "Screens",
+      "summary": "The modal for the whole organisation: the weekly budget, the day the week starts, the level of new workers and the departments.",
       "page": true
     },
     {
@@ -389,6 +411,12 @@
       "page": true
     },
     {
+      "name": "ScreenWorker",
+      "group": "Screens",
+      "summary": "One worker: four metric tiles, its autonomy with budget, time and the access that always asks, a manager's schedule, plan, report and reports, and its week.",
+      "page": true
+    },
+    {
       "name": "ScreenWorkflowEditor",
       "group": "Screens",
       "summary": "The visual editor of a workflow: a palette of step kinds, the canvas, and the inspector of the selected step.",
@@ -410,6 +438,18 @@
       "name": "ScreenWorkforce",
       "group": "Screens",
       "summary": "The AI workforce: an org chart of virtual managers, leads and employees under the people they answer to, with the selected worker's figures, autonomy and week.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkforceActivity",
+      "group": "Screens",
+      "summary": "What the workers did as it happens: a live stream of calls that ran without asking, proposals, waiting approvals, budget warnings, level changes and the weekly plan and report.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkforceList",
+      "group": "Screens",
+      "summary": "The workforce as a table: worker and role, department, who it reports to, autonomy, tasks, on-time rate, eval and spend, with a manager's figures including its reports.",
       "page": true
     },
     {
