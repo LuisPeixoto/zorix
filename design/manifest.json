@@ -53,6 +53,8 @@
     "components/ScreenRun/README.md",
     "components/ScreenSettings/README.md",
     "components/ScreenWorkflowEditor/README.md",
+    "components/ScreenWorkflowRun/README.md",
+    "components/ScreenWorkflowRun/preview.html",
     "components/ScreenWorkflows/README.md",
     "components/ScreenWorkforce/README.md",
     "components/Sparkbar/README.md",
@@ -342,6 +344,12 @@
       "name": "ScreenWorkflowEditor",
       "group": "Screens",
       "summary": "The visual editor of a workflow: a palette of step kinds, the canvas, and the inspector of the selected step.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkflowRun",
+      "group": "Screens",
+      "summary": "One run of a workflow: the read-only canvas with the state of each step, and the rail of the selected step with its approval.",
       "page": true
     },
     {

@@ -41,8 +41,8 @@ export interface ApprovalCardProps { tool: string; args: unknown; reason: string
 export interface DelegationCardProps { children: { agent: string; task: string; state: string; steps: number; cost: number; share: number }[]; onopen?: (id: string) => void; row?: Snippet; }
 export interface TreeViewProps { root: unknown; selected?: string; now?: number; onselect?: (id: string) => void; }
 export interface VersionTimelineProps { versions: { n: number; note: string; by: string; at: string; score?: number }[]; current: number; }
-/** v3 */ export interface WorkflowCanvasProps { nodes: WorkflowNodeProps[]; edges: { from: string; to: string; label?: string; state?: 'idle' | 'live' | 'done' }[]; selected?: string; readonly?: boolean; }
-/** v3 */ export interface WorkflowNodeProps { id: string; kind: 'trigger' | 'agent' | 'logic' | 'approval' | 'action'; title: string; detail?: string; state?: 'idle' | 'running' | 'waiting' | 'done' | 'failed'; x: number; y: number; }
+/** v3 */ export interface WorkflowCanvasProps { nodes: WorkflowNodeProps[]; edges: { from: string; to: string; label?: string; state?: 'idle' | 'live' | 'done' | 'skip' }[]; selected?: string; readonly?: boolean; }
+/** v3 */ export interface WorkflowNodeProps { id: string; kind: 'trigger' | 'agent' | 'logic' | 'approval' | 'action'; title: string; detail?: string; state?: 'idle' | 'running' | 'waiting' | 'done' | 'failed' | 'skipped'; x: number; y: number; }
 /** v3 */ export interface TriggerChipProps { kind: 'schedule' | 'webhook' | 'event' | 'manual' | 'workflow'; label: string; }
 /** v3 */ export interface TaskBoardProps { lanes: { id: string; name: string; tone: Tone }[]; tasks: TaskCardProps[]; onmove?: (task: string, lane: string) => void; }
 /** v3 */ export interface TaskCardProps { key: string; title: string; priority: 'urgent' | 'high' | 'normal' | 'low'; assignees: AvatarProps[]; due?: string; late?: boolean; progress?: number; deps?: number; deliverables?: number; }

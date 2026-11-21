@@ -346,6 +346,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .zx-canvas svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .zx-canvas svg.edges path { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
 .zx-canvas svg.edges path.live { stroke: var(--accent); stroke-dasharray: 5 5; animation: zx-flow 1s linear infinite; }
+.zx-canvas svg.edges path.skip { stroke: var(--line); stroke-dasharray: 3 4; }
 .zx-canvas svg.edges path.done { stroke: color-mix(in srgb, var(--ok) 60%, var(--line-strong)); }
 .zx-canvas svg.edges text { fill: var(--muted); font: 500 10.5px var(--font-sans); }
 .zx-canvas svg.edges rect.lbl { fill: var(--panel); stroke: var(--line); }
@@ -359,6 +360,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .zx-node--sel { border-color: var(--accent); box-shadow: var(--ring), var(--sh-2); }
 .zx-node--running { border-color: color-mix(in srgb, var(--info) 55%, var(--line)); }
 .zx-node--waiting { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 10%, transparent), var(--sh-2); }
+.zx-node--done { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.zx-node--failed { border-color: var(--err); }
+.zx-node--skipped { opacity: .6; border-style: dashed; box-shadow: none; }
 .zx-port { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 2px solid var(--line-strong); top: 50%; margin-top: -5px; }
 .zx-port--in { left: -6px; }
 .zx-port--out { right: -6px; }
