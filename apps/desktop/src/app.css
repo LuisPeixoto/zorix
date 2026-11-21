@@ -292,6 +292,23 @@ button:disabled {
 .raised {
   box-shadow: var(--sh-raised);
 }
+/* Surfaces that component specs define in design/components/bundle.css, written once here so components carry no arbitrary values. */
+.surface-primary {
+  background-color: var(--accent);
+  background-image: var(--accent-grad);
+  color: var(--accent-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(18, 22, 33, 0.22), 0 8px 16px -8px var(--accent);
+}
+.surface-send {
+  background-color: var(--accent);
+  background-image: var(--accent-grad);
+  color: var(--accent-fg);
+  box-shadow: 0 6px 14px -6px var(--accent);
+}
+.brand-tile {
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 16px -6px var(--accent);
+}
 .page-wash {
   background-image: var(--page-wash);
   background-repeat: no-repeat;
