@@ -17,7 +17,7 @@
 </script>
 
 <span
-  class={cn("grid shrink-0 place-items-center rounded-[10px] border border-line bg-panel-2 text-fg shadow-1 raised", klass)}
+  class={cn("grid shrink-0 place-items-center rounded-xl border border-line bg-panel-2 text-fg shadow-1 raised", klass)}
   style="width:{size}px;height:{size}px"
   aria-hidden="true"
 >
