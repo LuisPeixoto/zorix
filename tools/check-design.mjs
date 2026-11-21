@@ -51,7 +51,8 @@ const allowed = (file, line) => {
 };
 
 for (const path of walk(src)) {
-  const file = relative(src, path);
+  // Forward slashes on every system, so the allowlist reads the same on Windows.
+  const file = relative(src, path).replaceAll("\\", "/");
   readFileSync(path, "utf8")
     .split("\n")
     .forEach((line, index) => {
