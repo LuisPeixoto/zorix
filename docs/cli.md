@@ -137,6 +137,11 @@ stops it between files and exits with code 4; what was done stays indexed. See [
 Workflows: list, show, create, edit, import, export, versions, diff, publish, rollback, enable, disable, remove, run, runs, run-show, cancel, waits, answer, webhook, templates and add.
 `serve` runs schedules, events and (with `--webhooks` or `--bind`) webhooks until Ctrl-C. See [workflows](workflows.md#the-command-line).
 
+### `zorix project …`, `zorix task …`
+
+Projects: list, create, show, edit, archive, restore, remove and ask. Tasks: list, add, show, edit, move, restart, comment, link, deliver, remove and history. `task move` to *In progress*,
+`task restart` and `project ask` start a run and follow it (exit 3 when it waits for a person); the rest needs no engine. See [projects](projects.md#the-command-line).
+
 ### `zorix mcp …`
 
 Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.

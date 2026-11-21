@@ -123,6 +123,11 @@ inside text. Counts of tokens (`input_tokens`) are not secrets and stay readable
 
 The arguments of a call are stored as they are in the tool call record, because the tool must receive them.
 
+## Projects
+
+A manager gets `project:KEY[:write]` and reads and plans only that project. Every write asks, and `tasks.move` asks a person who is looking (no automatic approval can give it), so a move to Done
+under a manager is an ordinary approval. A run a task started gets `task:KEY` and can only report progress, add a deliverable and leave a note on that task. See [projects](projects.md#the-manager).
+
 ## Workflows
 
 A workflow's actions ask first by default, bound to the exact call. A step set to run without asking is confirmed by a person when publishing, and the version records who and when. It is

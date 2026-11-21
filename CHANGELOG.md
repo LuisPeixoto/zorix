@@ -5,6 +5,25 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-21
+
+**Projects**: tasks for you and your agents, on a board, a list and a timeline ([guide](docs/projects.md)).
+
+### Added
+- Projects and tasks, with keys (`OPS-38`), four fixed lanes, priority, who has them, progress, dates, dependencies, links, deliverables and a history. A task given to an agent or a team starts an
+  ordinary run when it moves to *In progress*; a finished run sends it to *Review* with the answer as a deliverable, a failed run says so, and a task waits for the tasks it depends on
+  ([ADR-0036](docs/adr/0036-projects-and-tasks-are-records-that-create-runs.md)). Database schema 7.
+- A manager: an agent that plans a project through the tools `tasks.list`, `tasks.get`, `tasks.create`, `tasks.update`, `tasks.move` and `tasks.comment`. Every write asks, a move asks a person who is
+  looking, and the grant is one project. A task's own run can report progress and add deliverables with `task.*`, on that task only
+  ([ADR-0037](docs/adr/0037-project-tools-and-the-manager.md)).
+- `zorix project` and `zorix task`; the task ticker runs in the app and under `zorix serve`; `tools/live-tests.sh projects`: 17 checks through the real command line.
+- The Projects screens: the index, the board (drag with the pointer or the keyboard), the list, the timeline with dependency arrows, deliverables, history and the task drawer; kit `TaskCard`,
+  `TaskBoard`, `Timeline`, `AvatarStack` and a round avatar for people; tasks that need you in the Inbox; tasks in ⌘K search; *From task* on a run. The design system gained these screens and the
+  timeline arrows (logged in `design/local-additions.md`).
+
+### Fixed
+- A write that read before it wrote could fail with "database is locked" when the engine wrote at the same moment; project writes now wait for each other.
+
 ## [0.7.0] - 2026-11-21
 
 **Workflows**: triggers, steps and people joined into a graph that runs by itself and stops where a person must decide ([guide](docs/workflows.md)).

@@ -161,6 +161,13 @@ Memory, Documents) and **Operate** (Settings), and shows only what has shipped. 
 For reviews, `ZORIX_START_VIEW` also accepts `inbox`, `runs`, `new`, `documents` and `settings`, and `memory:approve`. Where the app differs from the design system's screens, and why, is
 listed in [design system](design-system.md#known-differences).
 
+## Projects (version 0.8)
+
+*Projects* sits in the Work group of the sidebar: the projects as cards, and in a project the board (drag with the pointer or the keyboard), the list, the timeline, the deliverables and the
+history, with the task in a drawer. Tasks that need you appear in the Inbox, a run a task started links back to it, and ⌘K finds tasks by key and title. The app keeps tasks moving while it is
+open. See [projects](projects.md); screenshots are in `docs/screenshots-0.8.0/`. `ZORIX_START_VIEW=projects` also accepts `projects:KEY`, `projects:KEY/list|timeline|deliverables|history` and
+`projects:KEY/OPS-38`.
+
 ## Workflows (version 0.7)
 
 *Workflows* sits in the Work group of the sidebar. It has the list (what starts each workflow, its last 14 runs, version, state and an On switch), the editor (palette, canvas,

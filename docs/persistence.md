@@ -89,6 +89,17 @@ program refuses a schema-5 database instead of guessing.
 **Recovery** also looks at `waiting_for_children`: a parent whose children are all finished is settled and queued; otherwise it is left waiting and each child recovers by itself.
 A call is delegated at most once (the children's idempotency keys), so a restart never doubles the work.
 
+### Projects (schema 7)
+
+| Table | What it holds |
+|---|---|
+| `projects` | One row per project: key, whether it is archived, the counter that numbers its tasks (never goes down, so keys are not reused) and the record (`doc`) |
+| `tasks` | One row per task: key, lane, place in the lane, a `revision` for optimistic writes and the record (its runs, deliverables, links and dependencies) |
+| `project_events` | The history of a project, numbered from 1, with the task it concerns |
+
+Writes begin immediate transactions, so two programs writing at once wait for each other instead of failing. Opening a schema-6 database upgrades it in one transaction; a 0.7 program refuses a
+schema-7 database. Deleting a project removes its tasks and history.
+
 ### Workflows (schema 6)
 
 | Table | Holds |
