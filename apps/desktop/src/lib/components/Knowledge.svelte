@@ -198,7 +198,7 @@
       </div>
       {#if p}
         <div class="mt-4" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent(p)} aria-label="Indexing progress">
-          <div class="h-1.5 overflow-hidden rounded-full bg-hover"><div class="brand-gradient h-full rounded-full transition-all duration-300" style:width="{percent(p)}%"></div></div>
+          <div class="h-1.5 overflow-hidden rounded-full bg-hover"><div class="brand-gradient h-full rounded-full transition-all duration-200" style:width="{percent(p)}%"></div></div>
           <p class="mt-1.5 truncate text-xs text-muted">{phaseText(p)}{p.file ? ` · ${p.file}` : ""}{p.errors ? ` · ${p.errors} failed` : ""}</p>
         </div>
       {/if}
