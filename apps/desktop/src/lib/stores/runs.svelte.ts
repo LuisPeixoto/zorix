@@ -43,6 +43,7 @@ import {
 import { isFinished } from "../format.ts";
 import { type AgentTab, agents } from "./agents.svelte.ts";
 import { inbox } from "./inbox.svelte.ts";
+import { type ProjectTab, projects } from "./projects.svelte.ts";
 import { type WorkflowSection, workflows } from "./workflows.svelte.ts";
 import { toast } from "./toast.svelte.ts";
 
@@ -60,7 +61,7 @@ class RunsStore {
   error = $state<string | null>(null);
   busy = $state(false);
   /** Which screen is showing. `runs` is the list of runs, or one run when `selectedId` is set; `new` is the form that starts one. */
-  view = $state<"inbox" | "runs" | "workflows" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
+  view = $state<"inbox" | "runs" | "workflows" | "projects" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -198,6 +199,14 @@ class RunsStore {
     else workflows.openList();
   }
 
+  /** The Projects screen: the list, one project on a tab, or one task open in its project. */
+  showProjects(key: string | null = null, tab: ProjectTab = "board", task: string | null = null): void {
+    this.view = "projects";
+    this.#leaveRun();
+    if (key) projects.openProject(key, tab, task);
+    else projects.openList();
+  }
+
   /** The list of runs. */
   showRuns(): void {
     this.view = "runs";
@@ -248,6 +257,8 @@ class RunsStore {
       this.needsYou = Object.fromEntries(holding.filter((r) => r.state === "waiting_for_children").map((r) => [r.id, (byRoot[r.id]?.length ?? 0) > 0]));
       inbox.setApprovals(this.runs, byRoot);
       inbox.setWaits(await workflowWaits().catch(() => []));
+      await projects.refreshNeeds();
+      inbox.setTasks(projects.needs);
     } catch (e) {
       this.error = errorText(e);
     }

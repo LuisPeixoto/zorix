@@ -1036,3 +1036,271 @@ export const workflowDecide = (wait: string, fingerprint: string, verdict: "appr
   invoke<WfWait>("workflow_decide", { request: { wait, fingerprint, verdict, text: text ?? null, note: note ?? null } });
 export const workflowStepHistory = (id: string, step: string) => invoke<WfStepHistory>("workflow_step_history", { id, step });
 export const workflowWebhook = (id: string, reset = false) => invoke<WfWebhook>("workflow_webhook", { id, reset });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Projects and tasks
+
+export type Who = { type: "you" } | { type: "agent"; slug: string } | { type: "team"; slug: string };
+export type TaskState = "backlog" | "in_progress" | "review" | "done";
+export type TaskPriority = "urgent" | "high" | "normal" | "low";
+export type RunOutcome = "running" | "waiting" | "finished" | "failed" | "cancelled";
+export type NeedsYou = "review" | "run_failed" | "run_waiting";
+
+export interface TaskRun {
+  execution: string;
+  started_at: number;
+  ended_at: number | null;
+  outcome: RunOutcome;
+  note: string | null;
+  reason: string | null;
+  cost_micros: number;
+}
+
+export interface TaskLink {
+  url: string;
+  title: string | null;
+}
+
+export interface Deliverable {
+  id: string;
+  kind: "answer" | "link" | "file";
+  title: string;
+  body: string;
+  by: Who | null;
+  at: number;
+  execution: string | null;
+}
+
+export interface Task {
+  id: string;
+  project: string;
+  key: string;
+  title: string;
+  description: string;
+  state: TaskState;
+  priority: TaskPriority;
+  assignee: Who | null;
+  progress: number;
+  start: string | null;
+  due: string | null;
+  depends_on: string[];
+  links: TaskLink[];
+  deliverables: Deliverable[];
+  runs: TaskRun[];
+  run_requested: { note: string | null; error: string | null } | null;
+  rank: number;
+  revision: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface TaskView {
+  task: Task;
+  blocked_by: string[];
+  needs_you: NeedsYou | null;
+  working: boolean;
+}
+
+export interface Project {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  manager: string | null;
+  start: string | null;
+  due: string | null;
+  cost_limit_micros: number | null;
+  archived: boolean;
+  next_task: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface Counts {
+  backlog: number;
+  in_progress: number;
+  review: number;
+  done: number;
+}
+
+export interface ProjectCard {
+  project: Project;
+  counts: Counts;
+  needs_you: number;
+  assignees: Who[];
+}
+
+export interface Board {
+  project: Project;
+  tasks: TaskView[];
+  manager_run: { execution: string; waiting: boolean } | null;
+}
+
+export type ProjectEventKind =
+  | { type: "project_created" }
+  | { type: "project_edited" }
+  | { type: "project_archived"; archived: boolean }
+  | { type: "task_created"; title: string }
+  | { type: "task_edited" }
+  | { type: "moved"; from: TaskState; to: TaskState; approved_by?: string; note?: string }
+  | { type: "assigned"; to?: Who }
+  | { type: "run_started"; execution: string }
+  | { type: "run_finished"; execution: string }
+  | { type: "run_failed"; execution: string; reason: string }
+  | { type: "start_failed"; reason: string }
+  | { type: "run_cancelled"; execution: string }
+  | { type: "blocked"; by: string[] }
+  | { type: "progress"; percent: number }
+  | { type: "deliverable"; title: string }
+  | { type: "comment"; text: string }
+  | { type: "linked"; url: string }
+  | { type: "manager_asked"; execution: string };
+
+export interface ProjectEvent {
+  seq: number;
+  project: string;
+  task: string | null;
+  by: Who | null;
+  kind: ProjectEventKind;
+  at: number;
+}
+
+export interface PullState {
+  number: number;
+  title: string;
+  state: string;
+  draft: boolean;
+}
+
+export interface TaskPage {
+  task: TaskView;
+  events: ProjectEvent[];
+  links: { url: string; pull: PullState | null }[];
+}
+
+export interface DeliverableRow {
+  task: string;
+  title: string;
+  state: TaskState;
+  assignee: Who | null;
+  deliverable: Deliverable;
+}
+
+export interface TaskNeed {
+  key: string;
+  title: string;
+  project: string;
+  project_name: string;
+  needs: NeedsYou;
+  assignee: Who | null;
+  at: number;
+}
+
+export interface TaskIndexRow {
+  key: string;
+  title: string;
+  project: string;
+  state: TaskState;
+}
+
+export interface NewProjectRequest {
+  key: string;
+  name: string;
+  description: string;
+  manager: string | null;
+  start: string | null;
+  due: string | null;
+  cost_limit_micros: number | null;
+}
+
+export interface ProjectFields {
+  name: string;
+  description: string;
+  manager: string | null;
+  start: string | null;
+  due: string | null;
+  cost_limit_micros: number | null;
+  archived: boolean;
+}
+
+export interface NewTaskRequest {
+  title: string;
+  description?: string;
+  state?: TaskState | null;
+  priority?: TaskPriority;
+  assignee?: Who | null;
+  start?: string | null;
+  due?: string | null;
+  depends_on?: string[];
+  links?: TaskLink[];
+}
+
+export interface TaskFields {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  assignee: Who | null;
+  start: string | null;
+  due: string | null;
+  depends_on: string[];
+  links: TaskLink[];
+  progress: number;
+}
+
+export interface TaskMove {
+  to: TaskState;
+  index?: number | null;
+  note?: string | null;
+  cancel_run?: boolean;
+}
+
+/** The words a failed move starts with when a run is going and would be stopped. */
+export const RUN_GOING = "run going:";
+
+// The store leaves out lists that are empty and fields that are not set; the screens always get all of them.
+const fillTask = (t: Partial<Task> & Pick<Task, "key">): Task =>
+  ({
+    description: "",
+    assignee: null,
+    start: null,
+    due: null,
+    progress: 0,
+    depends_on: [],
+    links: [],
+    deliverables: [],
+    runs: [],
+    run_requested: null,
+    ...t,
+  }) as Task;
+const fillView = (v: TaskView): TaskView => ({ ...v, task: fillTask(v.task) });
+const fillProject = (p: Project): Project => ({
+  ...p,
+  description: p.description ?? "",
+  manager: p.manager ?? null,
+  start: p.start ?? null,
+  due: p.due ?? null,
+  cost_limit_micros: p.cost_limit_micros ?? null,
+});
+
+export const projectsOverview = (archived = false) =>
+  invoke<ProjectCard[]>("projects_overview", { archived }).then((cards) => cards.map((c) => ({ ...c, project: fillProject(c.project) })));
+export const projectCreate = (request: NewProjectRequest) => invoke<Project>("project_create", { new: request }).then(fillProject);
+export const projectUpdate = (key: string, fields: ProjectFields) => invoke<Project>("project_update", { key, fields }).then(fillProject);
+export const projectRemove = (key: string) => invoke<void>("project_remove", { key });
+export const projectBoard = (key: string) =>
+  invoke<Board>("project_board", { key }).then((b) => ({ ...b, project: fillProject(b.project), tasks: b.tasks.map(fillView) }));
+export const projectAsk = (key: string, prompt?: string) => invoke<string>("project_ask", { key, prompt: prompt ?? null });
+export const projectDeliverables = (key: string) => invoke<DeliverableRow[]>("project_deliverables", { key });
+export const projectHistory = (key: string, limit = 100) => invoke<ProjectEvent[]>("project_history", { key, limit });
+export const taskAdd = (project: string, request: NewTaskRequest) => invoke<Task>("task_add", { project, new: request }).then(fillTask);
+export const taskUpdate = (key: string, fields: TaskFields) => invoke<Task>("task_update", { key, fields }).then(fillTask);
+export const taskMove = (key: string, mv: TaskMove) => invoke<Task>("task_move", { key, mv }).then(fillTask);
+export const taskRestart = (key: string, note?: string) => invoke<Task>("task_restart", { key, note: note ?? null }).then(fillTask);
+export const taskRemove = (key: string) => invoke<void>("task_remove", { key });
+export const taskDetail = (key: string) => invoke<TaskPage>("task_detail", { key }).then((p) => ({ ...p, task: fillView(p.task) }));
+export const taskComment = (key: string, body: string) => invoke<void>("task_comment", { key, body });
+export const taskLink = (key: string, url: string, title?: string) => invoke<Task>("task_link", { key, url, title: title ?? null }).then(fillTask);
+export const taskDeliver = (key: string, kind: "answer" | "link", title: string, body: string) =>
+  invoke<Task>("task_deliver", { key, kind, title, body }).then(fillTask);
+export const tasksNeedingYou = () => invoke<TaskNeed[]>("tasks_needing_you");
+export const tasksIndex = () => invoke<TaskIndexRow[]>("tasks_index");

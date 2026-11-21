@@ -1,17 +1,23 @@
 <script lang="ts">
+  import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
   import { type UiTone, toneClass } from "./tone.ts";
 
-  /** An agent's face: an emoji on a soft tinted square. Decorative unless a label is given. People are round initials, never this. */
+  /**
+   * An agent's face: an emoji on a soft tinted square. Decorative unless a label is given. A person is round, so a human is never
+   * mistaken for an agent: with `human` it shows `initials`, or a person's icon when there are none.
+   */
   let {
     emoji = "🤖",
     color = "accent",
     size = "md",
     label,
+    human = false,
+    initials,
     class: klass = "",
-  }: { emoji?: string; color?: string; size?: "xs" | "sm" | "md" | "lg" | "xl"; label?: string; class?: string } = $props();
+  }: { emoji?: string; color?: string; size?: "xs" | "sm" | "md" | "lg" | "xl"; label?: string; human?: boolean; initials?: string; class?: string } = $props();
 
-  const tone = $derived((["accent", "ok", "warn", "err", "info", "muted"].includes(color) ? color : "accent") as UiTone);
+  const tone = $derived((human ? "muted" : ["accent", "ok", "warn", "err", "info", "muted"].includes(color) ? color : "accent") as UiTone);
   // The box is a scale step and the radius a token; the emoji is half the box, as in the design system's 32 px avatar with a 16 px face.
   const sizes = {
     xs: { box: "size-5 rounded-md", px: 20 },
@@ -23,9 +29,9 @@
 </script>
 
 <span
-  class={cn("inline-grid shrink-0 place-items-center border border-current/25 leading-none select-none", toneClass(tone, "soft"), sizes[size].box, klass)}
-  style:font-size="{sizes[size].px / 2}px"
+  class={cn("inline-grid shrink-0 place-items-center border border-current/25 leading-none select-none", toneClass(tone, "soft"), sizes[size].box, human && "rounded-full font-semibold", klass)}
+  style:font-size="{human ? sizes[size].px * 0.36 : sizes[size].px / 2}px"
   role={label ? "img" : undefined}
   aria-label={label}
   aria-hidden={label ? undefined : "true"}
->{emoji}</span>
+>{#if human}{#if initials}{initials}{:else}<Icon name="user" size={Math.round(sizes[size].px * 0.5)} />{/if}{:else}{emoji}{/if}</span>

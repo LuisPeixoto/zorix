@@ -1,6 +1,6 @@
 // What is waiting for a person, in one list: tool approvals anywhere in a tree of runs, and tools or sign-ins MCP servers want a person to review.
 // Pure functions, tested in inbox.test.ts.
-import type { Approval, Execution, ServerRow, TreeApproval, WfWait } from "./api.ts";
+import type { Approval, Execution, NeedsYou, ServerRow, TaskNeed, TreeApproval, WfWait } from "./api.ts";
 import { shorten } from "./format.ts";
 
 export type InboxItem =
@@ -32,6 +32,16 @@ export type InboxItem =
       title: string;
       message: string;
       what: "approval" | "question" | "action";
+      at: number;
+    }
+  | {
+      /** A task that needs you: it is in Review, or its run failed or waits for an approval. */
+      kind: "task";
+      id: string;
+      key: string;
+      title: string;
+      project: string;
+      why: NeedsYou;
       at: number;
     };
 
@@ -95,6 +105,11 @@ export function workflowItems(waits: readonly WfWait[], names: Readonly<Record<s
       what: w.kind as "approval" | "question" | "action",
       at: w.created_at,
     }));
+}
+
+/** One item per task that needs a person. */
+export function taskItems(needs: readonly TaskNeed[]): InboxItem[] {
+  return needs.map((n): InboxItem => ({ kind: "task", id: `task:${n.key}`, key: n.key, title: n.title, project: n.project_name, why: n.needs, at: n.at }));
 }
 
 /** Oldest ask first, as the design system says: what has a time (approvals, workflow waits) by time, then servers (which have none) by name. */

@@ -10,6 +10,8 @@
   import RunsPage from "./lib/components/RunsPage.svelte";
   import Settings from "./lib/components/Settings.svelte";
   import Agents from "./lib/components/agents/Agents.svelte";
+  import Projects from "./lib/components/projects/Projects.svelte";
+  import { PROJECT_TABS, type ProjectTab, projects } from "./lib/stores/projects.svelte.ts";
   import Workflows from "./lib/components/workflows/Workflows.svelte";
   import { workflows } from "./lib/stores/workflows.svelte.ts";
   import { AGENT_TABS, type AgentTab, agents } from "./lib/stores/agents.svelte.ts";
@@ -29,6 +31,8 @@
     void store.init().then(() => {
       void integrations.init();
       void agents.refresh();
+      void projects.loadPeople();
+      void projects.refreshIndex();
       // For screenshots and reviews: open straight to a screen.
       const [where, forced] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split("@");
       if (forced === "light" || forced === "dark") theme.preview(forced);
@@ -70,6 +74,13 @@
           store.showWorkflows("editor", card.workflow.id, null, how === "versions" || how === "runs" ? how : null);
         });
       }
+      if (start === "projects") {
+        // `projects` is the list; `projects:KEY` the board; `projects:KEY/list|timeline|deliverables|history` a tab; `projects:KEY/task:OPS-38` a task.
+        const [project, how] = tab ? tab.split("/") : [];
+        if (!project) store.showProjects();
+        else if (how?.startsWith("task:")) store.showProjects(project, "board", how.slice(5));
+        else store.showProjects(project, PROJECT_TABS.includes(how as ProjectTab) ? (how as ProjectTab) : "board");
+      }
       if (start === "inbox") store.showInbox();
       if (start === "runs") store.showRuns();
       if (start === "new") store.showForm();
@@ -98,6 +109,25 @@
       hint: card.workflow.enabled ? "on" : "off",
       keywords: card.workflow.slug,
       run: () => store.showWorkflows("editor", card.workflow.id),
+    })),
+    { id: "projects", label: "Projects", group: "Go to", icon: "kanban", keywords: "tasks board list timeline deliverables history manager", run: () => store.showProjects() },
+    ...projects.cards.map((card) => ({
+      id: `project-${card.project.key}`,
+      label: `Project: ${card.project.name}`,
+      group: "Projects",
+      icon: "kanban",
+      hint: card.project.key,
+      keywords: card.project.key,
+      run: () => store.showProjects(card.project.key),
+    })),
+    ...projects.index.slice(0, 200).map((task) => ({
+      id: `task-${task.key}`,
+      label: `${task.key} ${task.title}`,
+      group: "Tasks",
+      icon: "kanban",
+      hint: task.state.replaceAll("_", " "),
+      keywords: task.project,
+      run: () => store.showProjects(task.project, "board", task.key),
     })),
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
     { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
@@ -183,6 +213,8 @@
         <Agents />
       {:else if store.view === "workflows"}
         <Workflows />
+      {:else if store.view === "projects"}
+        <Projects />
       {:else if store.view === "memory"}
         <Memory />
       {:else if store.view === "documents"}
