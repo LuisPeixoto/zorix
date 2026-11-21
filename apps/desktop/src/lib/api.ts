@@ -1178,14 +1178,6 @@ export interface TaskPage {
   links: { url: string; pull: PullState | null }[];
 }
 
-export interface DeliverableRow {
-  task: string;
-  title: string;
-  state: TaskState;
-  assignee: Who | null;
-  deliverable: Deliverable;
-}
-
 export interface TaskNeed {
   key: string;
   title: string;
@@ -1290,7 +1282,6 @@ export const projectRemove = (key: string) => invoke<void>("project_remove", { k
 export const projectBoard = (key: string) =>
   invoke<Board>("project_board", { key }).then((b) => ({ ...b, project: fillProject(b.project), tasks: b.tasks.map(fillView) }));
 export const projectAsk = (key: string, prompt?: string) => invoke<string>("project_ask", { key, prompt: prompt ?? null });
-export const projectDeliverables = (key: string) => invoke<DeliverableRow[]>("project_deliverables", { key });
 export const projectHistory = (key: string, limit = 100) => invoke<ProjectEvent[]>("project_history", { key, limit });
 export const taskAdd = (project: string, request: NewTaskRequest) => invoke<Task>("task_add", { project, new: request }).then(fillTask);
 export const taskUpdate = (key: string, fields: TaskFields) => invoke<Task>("task_update", { key, fields }).then(fillTask);
