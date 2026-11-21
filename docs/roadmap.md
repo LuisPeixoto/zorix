@@ -115,6 +115,11 @@ Screens: Projects, board, list, timeline, task. Built from TaskBoard, TaskCard, 
 - **Views:** Board, List and Timeline (bars fill with progress; dependencies are drawn), plus Deliverables and History, with filters for everyone, agents, people, and urgent and high.
 - A task moving to Done under a manager asks for approval like any other change.
 
+Decisions: [ADR-0036](adr/0036-projects-and-tasks-are-records-that-create-runs.md) (projects and tasks are records that create runs; fixed lanes; *Needs you* is derived)
+and [ADR-0037](adr/0037-project-tools-and-the-manager.md) (project tools and the manager; a move to Done always asks).
+The screens add *Projects*, the project's *List*, *Deliverables* and *History*, *Task* and *New project* to the design system, and dependency arrows to the timeline,
+logged in `design/local-additions.md`. Until accounts exist (Phase 10) the only person is you, so there is no *Share*.
+
 ## Phase 9 — AI Workforce Management
 
 Virtual employees, departments, hierarchies and virtual managers that plan, assign, monitor and report within configurable autonomy.

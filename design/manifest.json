@@ -46,12 +46,24 @@
     "components/ScreenLogs/README.md",
     "components/ScreenMarketplace/README.md",
     "components/ScreenMemory/README.md",
+    "components/ScreenNewProject/README.md",
+    "components/ScreenNewProject/preview.html",
     "components/ScreenNewRun/README.md",
     "components/ScreenProjectBoard/README.md",
+    "components/ScreenProjectDeliverables/README.md",
+    "components/ScreenProjectDeliverables/preview.html",
+    "components/ScreenProjectHistory/README.md",
+    "components/ScreenProjectHistory/preview.html",
+    "components/ScreenProjectList/README.md",
+    "components/ScreenProjectList/preview.html",
     "components/ScreenProjectTimeline/README.md",
+    "components/ScreenProjects/README.md",
+    "components/ScreenProjects/preview.html",
     "components/ScreenProviders/README.md",
     "components/ScreenRun/README.md",
     "components/ScreenSettings/README.md",
+    "components/ScreenTask/README.md",
+    "components/ScreenTask/preview.html",
     "components/ScreenWorkflowEditor/README.md",
     "components/ScreenWorkflowRun/README.md",
     "components/ScreenWorkflowRun/preview.html",
@@ -305,6 +317,12 @@
       "page": true
     },
     {
+      "name": "ScreenNewProject",
+      "group": "Screens",
+      "summary": "The modal that makes a project: name, key, dates, manager and a cost limit for each task run.",
+      "page": true
+    },
+    {
       "name": "ScreenNewRun",
       "group": "Screens",
       "summary": "The form that starts a run: who runs it, what it should do, what it may use, its limits, and a summary of what it can do before you start.",
@@ -317,9 +335,33 @@
       "page": true
     },
     {
+      "name": "ScreenProjectDeliverables",
+      "group": "Screens",
+      "summary": "What the project has produced, grouped by task, with who made each deliverable and when.",
+      "page": true
+    },
+    {
+      "name": "ScreenProjectHistory",
+      "group": "Screens",
+      "summary": "Everything that happened to the project's tasks, newest first, in plain sentences.",
+      "page": true
+    },
+    {
+      "name": "ScreenProjectList",
+      "group": "Screens",
+      "summary": "The project's tasks as a table: key, priority, assignee, state, progress and due date.",
+      "page": true
+    },
+    {
       "name": "ScreenProjectTimeline",
       "group": "Screens",
       "summary": "The project's tasks across weeks: each a bar from start to due date, filled by progress, with who has it and a line for today.",
+      "page": true
+    },
+    {
+      "name": "ScreenProjects",
+      "group": "Screens",
+      "summary": "Every project as a card: its manager, its progress, its due date and how many tasks need you.",
       "page": true
     },
     {
@@ -338,6 +380,12 @@
       "name": "ScreenSettings",
       "group": "Screens",
       "summary": "The rules that decide what anything in ZORIX may do, how approvals behave, and who can approve.",
+      "page": true
+    },
+    {
+      "name": "ScreenTask",
+      "group": "Screens",
+      "summary": "One task in a Drawer beside the board: its state, fields, run, deliverables and activity.",
       "page": true
     },
     {
