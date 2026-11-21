@@ -1,0 +1,30 @@
+[package]
+name = "zorix-workflows"
+description = "ZORIX workflows: triggers, a graph of steps that start agents and actions, and people who decide."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-agents.workspace = true
+zorix-hub.workspace = true
+zorix-runtime.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url = "2"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+chrono-tz = "0.10.4"
+iana-time-zone = "0.1.65"
+croner = "4.0.3"
+
+[dev-dependencies]
+zorix-store.workspace = true
