@@ -314,6 +314,8 @@ pub struct ProjectService {
     tenant: TenantId,
     clock: Arc<dyn Clock>,
     gate: Mutex<()>,
+    reads_runs: bool,
+    model: parking_lot::Mutex<Option<String>>,
 }
 
 impl ProjectService {
@@ -324,13 +326,34 @@ impl ProjectService {
         tenant: TenantId,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        Self { store, launcher, pulls: None, tenant, clock, gate: Mutex::new(()) }
+        Self {
+            store,
+            launcher,
+            pulls: None,
+            tenant,
+            clock,
+            gate: Mutex::new(()),
+            reads_runs: true,
+            model: parking_lot::Mutex::new(None),
+        }
     }
 
     /// Let the service read the state of pull requests on links.
     pub fn with_pulls(mut self, pulls: Arc<dyn PullReader>) -> Self {
         self.pulls = Some(pulls);
         self
+    }
+
+    /// A service that does not read runs when it is asked for projects and tasks: for a command that has no engine. What is stored
+    /// is shown as it is, and whatever hosts the engine keeps it up to date.
+    pub fn without_runs(mut self) -> Self {
+        self.reads_runs = false;
+        self
+    }
+
+    /// Run tasks with this model instead of their agent's own (a command's `--model`). None leaves it to the agent.
+    pub fn set_model(&self, model: Option<String>) {
+        *self.model.lock() = model;
     }
 
     /// The tenant it works for.
@@ -473,7 +496,7 @@ impl ProjectService {
             target: Target::Agent { agent: manager.clone(), version: None },
             prompt: manager_prompt(&project, ask),
             input: None,
-            model: None,
+            model: self.model.lock().clone(),
             max_cost_micros: project.cost_limit_micros,
             key: format!("pm-{}-{}", project.id, now.millis()),
             metadata: BTreeMap::from([
@@ -947,7 +970,7 @@ impl ProjectService {
             target,
             prompt: task_prompt(&project, &task, &siblings, request.note.as_deref()),
             input: None,
-            model: None,
+            model: self.model.lock().clone(),
             max_cost_micros: project.cost_limit_micros,
             key: format!("task-{}-{}", task.id, task.runs.len()),
             metadata: BTreeMap::from([
@@ -1007,6 +1030,9 @@ impl ProjectService {
     /// Read the runs of tasks and apply what they did, and start the runs that were waiting for something. Returns how many tasks
     /// changed. It never fails because of one task.
     pub async fn reconcile(&self) -> Result<usize> {
+        if !self.reads_runs {
+            return Ok(0);
+        }
         let _turn = self.gate.lock().await;
         let mut changed = 0;
         for task in self.store.tasks_in_state(&self.tenant, TaskState::InProgress).await? {

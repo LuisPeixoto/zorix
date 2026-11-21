@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 zorix-core.workspace = true
+zorix-agents.workspace = true
 zorix-hub.workspace = true
 zorix-runtime.workspace = true
 zorix-store.workspace = true

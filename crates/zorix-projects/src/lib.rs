@@ -6,11 +6,12 @@
 
 pub mod links;
 pub mod rules;
+pub mod runtime;
 pub mod service;
 pub mod tools;
 
 pub use links::{HubPullReader, PullReader, PullState};
-pub use rules::LinkKind;
+pub use rules::{LinkKind, sentence};
 pub use service::{
     Board, Counts, DeliverableRow, LinkState, ManagerRun, Move, NewProject, NewTask, ProjectCard, ProjectFields,
     ProjectService, RUN_GOING, TaskDetail, TaskFields, TaskView,
