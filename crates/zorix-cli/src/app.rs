@@ -72,6 +72,8 @@ pub struct App {
     pub model: String,
     /// Turns model names into candidates, for agents.
     pub router: Arc<Router>,
+    /// Projects and tasks, with their tools registered for the runs that were granted them.
+    pub projects: Arc<zorix_projects::ProjectService>,
     _lock: DataDirLock,
 }
 
@@ -159,7 +161,8 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     tokio::task::spawn_blocking(move || {
         let _ = calibration.backfill();
     });
-    Ok(App { engine, stack, hub, model, router, _lock: lock })
+    let projects = zorix_projects::runtime::open(home, tenant.clone(), hub.clone(), engine.clone(), router.clone())?;
+    Ok(App { engine, stack, hub, model, router, projects, _lock: lock })
 }
 
 impl App {

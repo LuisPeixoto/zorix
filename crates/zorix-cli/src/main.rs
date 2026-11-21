@@ -8,6 +8,7 @@ mod follow;
 mod integrations;
 mod mcp_serve;
 mod memory;
+mod projects;
 mod providers;
 mod render;
 mod serve;

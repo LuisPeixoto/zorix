@@ -79,6 +79,12 @@ pub enum Command {
     /// Workflows: triggers, agents, conditions and people joined into steps that run on their own.
     #[command(subcommand)]
     Workflow(WorkflowCommand),
+    /// Projects: tasks for you and your agents, with a manager that plans through tools.
+    #[command(subcommand)]
+    Project(ProjectCommand),
+    /// Tasks: add, move, assign and review the tasks of a project. Moving an agent's task to in-progress starts its run.
+    #[command(subcommand)]
+    Task(TaskCommand),
     /// Show an execution and everything it started, as a tree.
     Tree(IdArg),
     /// Skills: folders of instructions and scripts an agent loads when it needs them.
@@ -1857,4 +1863,313 @@ pub struct WorkflowWebhookArgs {
 pub struct WorkflowTemplateArg {
     /// The starter, from `workflow templates`.
     pub template: String,
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Projects and tasks
+
+/// What `zorix project` does.
+#[derive(Debug, Subcommand)]
+pub enum ProjectCommand {
+    /// List projects with their progress, due date and manager.
+    List(ProjectListArgs),
+    /// Make a project. Its key starts the keys of its tasks (OPS-1, OPS-2…).
+    Create(ProjectCreateArgs),
+    /// Show a project: its figures and its tasks by lane.
+    Show(ProjectKeyArg),
+    /// Change a project's name, description, manager, dates or cost limit.
+    Edit(ProjectEditArgs),
+    /// Hide a project from the list. Nothing is deleted.
+    Archive(ProjectKeyArg),
+    /// Bring an archived project back.
+    Restore(ProjectKeyArg),
+    /// Delete a project with its tasks and history.
+    Remove(ProjectKeyArg),
+    /// Ask the project's manager to plan it, and follow its run. Every change it makes asks you first.
+    Ask(ProjectAskArgs),
+}
+
+/// A project's key.
+#[derive(Debug, Args)]
+pub struct ProjectKeyArg {
+    /// The project's key, such as OPS.
+    pub project: String,
+}
+
+/// Options for `project list`.
+#[derive(Debug, Args)]
+pub struct ProjectListArgs {
+    /// Show archived projects instead of active ones.
+    #[arg(long)]
+    pub archived: bool,
+}
+
+/// Options for `project create`.
+#[derive(Debug, Args)]
+pub struct ProjectCreateArgs {
+    /// 2 to 5 capital letters or digits, starting with a letter. It cannot be changed or reused.
+    pub key: String,
+    /// What people call the project.
+    pub name: String,
+    /// What it is for.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// The agent that plans it.
+    #[arg(long, value_name = "AGENT")]
+    pub manager: Option<String>,
+    /// The first day (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE")]
+    pub start: Option<String>,
+    /// The last day (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE")]
+    pub due: Option<String>,
+    /// The most one task run may cost, in dollars.
+    #[arg(long, value_name = "USD")]
+    pub cost_limit: Option<f64>,
+}
+
+/// Options for `project edit`. Say `none` to clear a value.
+#[derive(Debug, Args)]
+pub struct ProjectEditArgs {
+    /// The project's key.
+    pub project: String,
+    /// A new name.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// A new description.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// The agent that plans it, or `none`.
+    #[arg(long, value_name = "AGENT")]
+    pub manager: Option<String>,
+    /// The first day, or `none`.
+    #[arg(long, value_name = "DATE")]
+    pub start: Option<String>,
+    /// The last day, or `none`.
+    #[arg(long, value_name = "DATE")]
+    pub due: Option<String>,
+    /// The most one task run may cost, in dollars, or `none`.
+    #[arg(long, value_name = "USD")]
+    pub cost_limit: Option<String>,
+}
+
+/// Options for `project ask`.
+#[derive(Debug, Args)]
+pub struct ProjectAskArgs {
+    /// The project's key.
+    pub project: String,
+    /// What to ask the manager. By default it plans the project.
+    pub prompt: Option<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// What `zorix task` does.
+#[derive(Debug, Subcommand)]
+pub enum TaskCommand {
+    /// List tasks of a project (or of all projects).
+    List(TaskListArgs),
+    /// Add a task to a project.
+    Add(TaskAddArgs),
+    /// Show a task: its details, what it waits for, its deliverables, runs and history.
+    Show(TaskShowArgs),
+    /// Change a task. Say `none` to clear a value.
+    Edit(TaskEditArgs),
+    /// Move a task to a lane. In progress starts the run of an agent's or a team's task.
+    Move(TaskMoveArgs),
+    /// Run a task's agent again, after a failure or with a note.
+    Restart(TaskRestartArgs),
+    /// Comment on a task.
+    Comment(TaskCommentArgs),
+    /// Put a link on a task, such as a pull request.
+    Link(TaskLinkArgs),
+    /// Put something a task produced on it: text, a file's contents or a link.
+    Deliver(TaskDeliverArgs),
+    /// Delete a task.
+    Remove(TaskKeyArg),
+    /// Show what happened in a project, or to one task.
+    History(TaskHistoryArgs),
+}
+
+/// A task's key.
+#[derive(Debug, Args)]
+pub struct TaskKeyArg {
+    /// The task's key, such as OPS-38.
+    pub task: String,
+}
+
+/// Options for `task list`.
+#[derive(Debug, Args)]
+pub struct TaskListArgs {
+    /// Only this project's tasks (its key).
+    pub project: Option<String>,
+    /// Only tasks in this lane: backlog, in-progress, review or done.
+    #[arg(long)]
+    pub state: Option<String>,
+    /// Only tasks you have.
+    #[arg(long)]
+    pub mine: bool,
+    /// Only tasks that need you.
+    #[arg(long)]
+    pub needs_you: bool,
+}
+
+/// Options for `task add`.
+#[derive(Debug, Args)]
+pub struct TaskAddArgs {
+    /// The project's key.
+    pub project: String,
+    /// The task's title.
+    pub title: String,
+    /// What to do.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// Who has it: `you`, an agent, `agent:NAME` or `team:NAME`.
+    #[arg(long, value_name = "WHO")]
+    pub assign: Option<String>,
+    /// urgent, high, normal or low.
+    #[arg(long, default_value = "normal")]
+    pub priority: String,
+    /// The first day (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE")]
+    pub start: Option<String>,
+    /// The last day (YYYY-MM-DD).
+    #[arg(long, value_name = "DATE")]
+    pub due: Option<String>,
+    /// A task that must be done first (repeat for more).
+    #[arg(long, value_name = "TASK")]
+    pub after: Vec<String>,
+    /// The lane it starts in (backlog by default).
+    #[arg(long)]
+    pub state: Option<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `task show`.
+#[derive(Debug, Args)]
+pub struct TaskShowArgs {
+    /// The task's key.
+    pub task: String,
+    /// Print the text of deliverables, not only their titles.
+    #[arg(long)]
+    pub full: bool,
+}
+
+/// Options for `task edit`. Say `none` to clear a value.
+#[derive(Debug, Args)]
+pub struct TaskEditArgs {
+    /// The task's key.
+    pub task: String,
+    /// A new title.
+    #[arg(long)]
+    pub title: Option<String>,
+    /// A new description.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// urgent, high, normal or low.
+    #[arg(long)]
+    pub priority: Option<String>,
+    /// Who has it: `you`, an agent, `agent:NAME`, `team:NAME` or `none`.
+    #[arg(long, value_name = "WHO")]
+    pub assign: Option<String>,
+    /// The first day, or `none`.
+    #[arg(long, value_name = "DATE")]
+    pub start: Option<String>,
+    /// The last day, or `none`.
+    #[arg(long, value_name = "DATE")]
+    pub due: Option<String>,
+    /// How far it is, from 0 to 100.
+    #[arg(long)]
+    pub progress: Option<u8>,
+    /// Replace what it waits for with these tasks (repeat for more; `none` clears).
+    #[arg(long, value_name = "TASK")]
+    pub after: Vec<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `task move`.
+#[derive(Debug, Args)]
+pub struct TaskMoveArgs {
+    /// The task's key.
+    pub task: String,
+    /// The lane: backlog, in-progress, review or done.
+    pub state: String,
+    /// When sending a task back: what to change. It reaches the run that starts again.
+    #[arg(long)]
+    pub note: Option<String>,
+    /// Stop the run that is going when the move takes the task out of In progress.
+    #[arg(long)]
+    pub stop_run: bool,
+    /// Do not wait for the run: return as soon as it has started.
+    #[arg(long)]
+    pub no_wait: bool,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `task restart`.
+#[derive(Debug, Args)]
+pub struct TaskRestartArgs {
+    /// The task's key.
+    pub task: String,
+    /// What to change this time.
+    #[arg(long)]
+    pub note: Option<String>,
+    /// Do not wait for the run.
+    #[arg(long)]
+    pub no_wait: bool,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `task comment`.
+#[derive(Debug, Args)]
+pub struct TaskCommentArgs {
+    /// The task's key.
+    pub task: String,
+    /// What to say.
+    pub text: String,
+}
+
+/// Options for `task link`.
+#[derive(Debug, Args)]
+pub struct TaskLinkArgs {
+    /// The task's key.
+    pub task: String,
+    /// An http or https address.
+    pub url: String,
+    /// A name for the link.
+    #[arg(long)]
+    pub title: Option<String>,
+}
+
+/// Options for `task deliver`. Give exactly one of --text, --file and --url.
+#[derive(Debug, Args)]
+pub struct TaskDeliverArgs {
+    /// The task's key.
+    pub task: String,
+    /// What the deliverable is called.
+    #[arg(long)]
+    pub title: Option<String>,
+    /// The text.
+    #[arg(long)]
+    pub text: Option<String>,
+    /// A file whose text to attach.
+    #[arg(long, value_name = "FILE")]
+    pub file: Option<PathBuf>,
+    /// An address.
+    #[arg(long)]
+    pub url: Option<String>,
+}
+
+/// Options for `task history`.
+#[derive(Debug, Args)]
+pub struct TaskHistoryArgs {
+    /// The project's key, or a task's key to see only that task.
+    pub target: String,
+    /// How many lines.
+    #[arg(long, default_value_t = 30)]
+    pub limit: usize,
 }

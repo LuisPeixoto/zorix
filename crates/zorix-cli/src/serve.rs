@@ -4,6 +4,7 @@
 //! were waiting, and stays until Ctrl-C. Webhooks listen only when asked, and on this computer unless an address says otherwise.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use zorix_core::{StepKind, TenantId, WorkflowStore};
 use zorix_workflows::{DEFAULT_WEBHOOK_ADDRESS, Workflows, parse_address};
@@ -22,7 +23,9 @@ pub async fn serve(home: &Path, tenant: TenantId, printer: Printer, args: ServeA
     let config = crate::app::load_config(home)?;
     let workflows = Workflows::open(home, tenant.clone(), app.hub.clone(), app.engine.clone(), app.router.clone())
         .map_err(|e| CliError(e.to_string()))?;
-    let host = workflows.start_host(secrets(&config), webhook).await.map_err(|e| CliError(e.to_string()))?;
+    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> = vec![zorix_projects::runtime::ticker(&app.projects)];
+    let host =
+        workflows.start_host_with(secrets(&config), webhook, tickers).await.map_err(|e| CliError(e.to_string()))?;
 
     let all = workflows.store.workflows(&tenant).await.map_err(|e| CliError(e.to_string()))?;
     let on = all.iter().filter(|w| w.enabled).count();
