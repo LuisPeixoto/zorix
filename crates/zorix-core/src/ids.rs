@@ -175,6 +175,19 @@ uuid_id!(
     ConnectionId
 );
 
+uuid_id!(
+    /// Identifies one workflow: a versioned graph of triggers and steps.
+    WorkflowId
+);
+uuid_id!(
+    /// Identifies one run of a workflow.
+    WorkflowRunId
+);
+uuid_id!(
+    /// Identifies one wait: a workflow stopped for a person or a timer.
+    WaitId
+);
+
 slug_id!(
     /// The organisation (or the local user) that owns an execution. Data never crosses tenants.
     TenantId

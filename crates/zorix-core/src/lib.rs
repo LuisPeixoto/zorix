@@ -26,6 +26,7 @@ pub mod state;
 pub mod time;
 pub mod tokens;
 pub mod tool;
+pub mod workflow;
 
 pub use agent::{
     Agent, AgentBinding, AgentConversation, AgentModels, AgentSlug, AgentSpec, AgentStore, AgentVersion, Avatar,
@@ -47,7 +48,7 @@ pub use execution::{
 };
 pub use ids::{
     AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,
-    McpServerId, MemoryId, TenantId, ToolCallId,
+    McpServerId, MemoryId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
@@ -83,4 +84,10 @@ pub use time::{Clock, ManualClock, SystemClock, Timestamp};
 pub use tokens::{Calibration, InMemoryCalibration, NoCalibration, TokenCalibration, TokenSample};
 pub use tool::{
     PinnedTool, Tool, ToolAnnotations, ToolContext, ToolDefinition, ToolError, ToolRegistry, ToolSource, ToolSpec,
+};
+pub use workflow::{
+    Ask, Confirm, Confirmation, Day, Edge, EventOn, Fired, MAX_ACTIVE_STEPS, MAX_CHAIN, MAX_LOOP_ITEMS, MAX_STEPS,
+    MAX_WORKFLOW_VERSIONS, MAX_WORKFLOWS, Remind, RunState, Service, Step, StepClass, StepKind, StepRun, StepState,
+    Then, TriggerState, WaitDecision, WaitKind, WaitStatus, When, Workflow, WorkflowRun, WorkflowSlug, WorkflowSpec,
+    WorkflowStore, WorkflowVersion, WorkflowWait, wait_fingerprint,
 };

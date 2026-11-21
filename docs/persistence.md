@@ -89,6 +89,20 @@ program refuses a schema-5 database instead of guessing.
 **Recovery** also looks at `waiting_for_children`: a parent whose children are all finished is settled and queued; otherwise it is left waiting and each child recovers by itself.
 A call is delegated at most once (the children's idempotency keys), so a restart never doubles the work.
 
+### Workflows (schema 6)
+
+| Table | Holds |
+|---|---|
+| `workflows` | One row per workflow: slug, whether it is on, the newest published version and the draft (`doc`) |
+| `workflow_versions` | Published versions: number, hash, note, and the definition with the confirmations given for unattended actions. Never changed after they are written |
+| `workflow_runs` | One row per run: state, start time, a `revision` for optimistic writes, and the whole record (the frozen definition, what started it, every step) |
+| `workflow_waits` | The people and timers a run is stopped for: status, due time, and what the person was shown with its fingerprint |
+| `workflow_triggers` | When each schedule fires next, when it last fired, and the fires missed while nothing was running |
+| `workflow_meta` | Small values the host keeps, such as how far it has read the events |
+
+Opening a schema-5 database upgrades it in one transaction; a 0.6 program refuses a schema-6 database instead of guessing. Deleting a workflow removes its versions and
+trigger state and keeps its runs and waits, which carry their own copy of the definition.
+
 Each search index is its own FTS5 table, kept in step by triggers. Opening a 0.2 database upgrades it in one transaction. Deleting a
 memory or a folder removes its rows, search entries and vectors, scrubs the snapshots and overwrites the freed pages
 (`secure_delete`).
