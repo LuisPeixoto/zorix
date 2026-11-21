@@ -32,7 +32,17 @@ Run all of these from the repository root, chained so a failure stops the chain:
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --exclude zorix-desktop
 ```
 
-For interface changes also run `npm run check && npm run build` in `apps/desktop`.
+For interface changes also run, in `apps/desktop`, `npm run check && npm test && npm run build`, and from the root `node tools/design-tokens.mjs --check && node tools/check-design.mjs && node tools/check-docs.mjs`.
+
+## Design system contract
+
+The app follows the design system in [`design/`](design/README.md) strictly ([ADR-0032](docs/adr/0032-design-system-v3-is-the-contract.md), [how to follow it](docs/design-system.md#the-contract)):
+
+1. Open the screen's image in `design/screens/` and the README of each component it uses before you build.
+2. Use tokens and the kit only. `tools/check-design.mjs` rejects colour literals, arbitrary values for colour, type, radius, shadow and duration, and slow transitions; an exception needs a reason in its allowlist.
+3. A screen or component the design system lacks is added there first, then re-vendored into `design/`.
+4. An element that needs data ZORIX does not have yet is left out and listed in the [roadmap](docs/roadmap.md), never mocked.
+5. Done means real-app Light and Dark screenshots beside the design system's, a design critique and an accessibility review with their findings fixed, and any remaining difference written under [Known differences](docs/design-system.md#known-differences).
 
 ## Conventions
 

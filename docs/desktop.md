@@ -122,7 +122,7 @@ See [agents](agents.md), [skills](skills.md) and [evals](evals.md).
 
 ## Teams and trees (version 0.6)
 
-The Agents screen has a switch, **Agents | Teams**. The **Teams** gallery shows each team with the faces of its lead and members, and *Add from templates* installs the research desk.
+**Teams** is its own place in the sidebar. The **Teams** gallery shows each team with the faces of its lead and members, and *Add from templates* installs the research desk.
 A team page shows *How it works* (the lead, the agents it asks at the same time), the rule that members only get what the lead has, and the team's recent work; *Chat with the team* opens the
 lead's chat in team mode, and the pencil edits the lead and members.
 
@@ -140,3 +140,23 @@ count of sub-runs, and **New run** lists the teams under *Run as*. ⌘K finds te
 For reviews: `ZORIX_START_VIEW` accepts `teams`, `teams:SLUG` and `teams:SLUG/chat[/CONVERSATION]` (and `@light` or `@dark`) besides the earlier screens.
 
 See [orchestration](orchestration.md) and [teams](teams.md).
+
+## The shell and the design system (version 0.6.1)
+
+The app follows the [design system](design-system.md). The sidebar has four groups, **Work** (Inbox, Runs), **Organisation** (Agents, Teams), **Connect** (Providers, Integrations,
+Memory, Documents) and **Operate** (Settings), and shows only what has shipped. Its foot says what was spent today and how many runs are going. The toolbar has the mark and version,
+⌘K, the approvals bell (it opens the Inbox) and the theme control; ⌘N starts a new run.
+
+![The Inbox](screenshots-0.6.1/inbox-light.png)
+
+- **Inbox** lists everything waiting for you, oldest first: tool approvals anywhere in a tree of runs (*Review* opens the run you started) and servers whose tools or sign-in need a review.
+- **Runs** is the list of runs you started, with filters and the cost of what agents started for them. **A run** has the stat row, the tabs *Work tree*, *Steps*, *Events*, *Context* and
+  *Cost*, approvals on the right above a *This run* panel. **New run** starts from *Run as* (plain run, agent or team), shows what the run may use with a mark on what asks, says which
+  provider receives the conversation, and summarises it under *Before you start*; ⌘↵ starts it.
+- **Providers** lists providers with their state; one shows its key, its models and its routes. **Memory** has *To approve* (what runs proposed to remember), *Facts and preferences* and
+  *Past work*; **Documents** is the folders ZORIX searches. **Settings** has General, Appearance and About.
+
+![A run and its tree](screenshots-0.6.1/run-tree-light.png)
+
+For reviews, `ZORIX_START_VIEW` also accepts `inbox`, `runs`, `new`, `documents` and `settings`, and `memory:approve`. Where the app differs from the design system's screens, and why, is
+listed in [design system](design-system.md#known-differences).

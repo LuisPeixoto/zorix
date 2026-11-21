@@ -54,8 +54,8 @@ everything. It is not tied to one model or provider, and the core does not know 
 
 | | |
 |---|---|
-| ![A run and the agents it asked](docs/screenshots-0.6.0/run-tree-light.png) | ![A team chat](docs/screenshots-0.6.0/team-chat-light.png) |
-| The work tree: who was asked, what each cost, how it ended. | A lead asks its team; each answer arrives in the same conversation. |
+| ![A run and the agents it asked](docs/screenshots-0.6.1/run-tree-light.png) | ![The Inbox](docs/screenshots-0.6.1/inbox-dark.png) |
+| The work tree: who was asked, what each cost, how it ended. | Everything waiting for a decision, oldest first, in one place. |
 
 | | |
 |---|---|
