@@ -50,13 +50,23 @@ impl Workflows {
 
     /// Start the host: schedules, events, and webhooks when an address is given.
     pub async fn start_host(&self, secrets: Arc<dyn SecretStore>, webhook: Option<SocketAddr>) -> Result<WorkflowHost> {
+        self.start_host_with(secrets, webhook, Vec::new()).await
+    }
+
+    /// Start the host with more work done at the end of every beat (such as keeping tasks moving).
+    pub async fn start_host_with(
+        &self,
+        secrets: Arc<dyn SecretStore>,
+        webhook: Option<SocketAddr>,
+        tickers: Vec<Arc<dyn crate::host::Ticker>>,
+    ) -> Result<WorkflowHost> {
         let feed = Arc::new(EngineFeed::new(self.executions.clone(), self.engine.tenant().clone()));
         WorkflowHost::start(
             self.engine.clone(),
             feed,
             secrets,
             Arc::new(SystemClock),
-            HostConfig { webhook, ..HostConfig::default() },
+            HostConfig { webhook, tickers, ..HostConfig::default() },
         )
         .await
     }

@@ -34,18 +34,38 @@ const RECONCILE_MS: i64 = 10_000;
 const CURSOR_RUNS: &str = "cursor.workflow_runs";
 const CURSOR_EXECUTIONS: &str = "cursor.executions";
 
+/// Something else that needs the host awake: it is asked once at the end of every beat. Projects use it to start, finish and
+/// unblock tasks (ADR-0036). A ticker must not fail loudly: it logs and returns.
+#[async_trait]
+pub trait Ticker: Send + Sync {
+    /// One round.
+    async fn tick(&self);
+}
+
 /// What the host does.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HostConfig {
     /// Where to listen for webhooks; none means nothing listens.
     pub webhook: Option<SocketAddr>,
     /// How often the host wakes.
     pub tick: Duration,
+    /// Other work done at the end of every beat.
+    pub tickers: Vec<Arc<dyn Ticker>>,
+}
+
+impl std::fmt::Debug for HostConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostConfig")
+            .field("webhook", &self.webhook)
+            .field("tick", &self.tick)
+            .field("tickers", &self.tickers.len())
+            .finish()
+    }
 }
 
 impl Default for HostConfig {
     fn default() -> Self {
-        Self { webhook: None, tick: Duration::from_secs(1) }
+        Self { webhook: None, tick: Duration::from_secs(1), tickers: Vec::new() }
     }
 }
 
@@ -129,6 +149,7 @@ pub(crate) struct Inner {
     pub(crate) tenant: TenantId,
     refresh: AtomicBool,
     live: Mutex<Live>,
+    tickers: Vec<Arc<dyn Ticker>>,
 }
 
 #[derive(Default)]
@@ -451,6 +472,9 @@ impl Inner {
         self.fire_due(now).await?;
         self.poll_events(now).await?;
         self.engine.tick().await?;
+        for ticker in &self.tickers {
+            ticker.tick().await;
+        }
         Ok(())
     }
 }
@@ -482,6 +506,7 @@ impl WorkflowHost {
             tenant,
             refresh: AtomicBool::new(false),
             live: Mutex::new(Live::default()),
+            tickers: config.tickers.clone(),
         });
         inner.engine.recover().await?;
         let cancel = CancellationToken::new();

@@ -77,8 +77,11 @@ async fn rig(webhook: bool) -> Rig {
     let clock = Arc::new(ManualClock::new(Timestamp(START)));
     let engine = Arc::new(WorkflowEngine::new(store.clone(), Arc::new(fake.clone()), clock.clone(), tenant.clone()));
     let feed = Feed::default();
-    let config =
-        HostConfig { webhook: webhook.then(|| "127.0.0.1:0".parse().unwrap()), tick: Duration::from_secs(3600) };
+    let config = HostConfig {
+        webhook: webhook.then(|| "127.0.0.1:0".parse().unwrap()),
+        tick: Duration::from_secs(3600),
+        tickers: Vec::new(),
+    };
     let host =
         WorkflowHost::start(engine, Arc::new(feed.clone()), Arc::new(MemoryStore::default()), clock.clone(), config)
             .await
