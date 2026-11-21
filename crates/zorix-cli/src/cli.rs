@@ -92,8 +92,26 @@ pub enum Command {
     Sandbox(SandboxCommand),
     /// How many real tokens ZORIX's estimates are worth, per model, learned from what providers report.
     Calibration,
+    /// Run schedules, events and (when asked) webhooks for your workflows, until you stop it. Keeps the data folder to itself,
+    /// so the desktop app cannot run at the same time.
+    Serve(ServeArgs),
     /// Print where ZORIX keeps its data.
     DataDir,
+}
+
+/// Options for `serve`.
+#[derive(Debug, Args)]
+pub struct ServeArgs {
+    #[command(flatten)]
+    pub model: ModelArgs,
+
+    /// Receive webhooks on 127.0.0.1:7788 (this computer only).
+    #[arg(long)]
+    pub webhooks: bool,
+
+    /// Receive webhooks on this address, such as `0.0.0.0:7788` behind a proxy you trust. Implies `--webhooks`.
+    #[arg(long, value_name = "ADDRESS")]
+    pub bind: Option<String>,
 }
 
 /// What `zorix mcp` does.

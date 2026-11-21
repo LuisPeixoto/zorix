@@ -33,6 +33,10 @@ pub struct Services {
     pub memory_store: Arc<SqliteMemoryStore>,
     /// Connections: MCP servers, integrations and the sandbox.
     pub hub: Arc<Hub>,
+    /// Workflows: their store and the engine that runs them.
+    pub workflows: zorix_workflows::Workflows,
+    /// What starts workflows by itself while the app is open: schedules, events and (when on) webhooks.
+    pub host: tokio::sync::Mutex<Option<Arc<zorix_workflows::WorkflowHost>>>,
     /// Sign-ins that are waiting for the browser, so they can be cancelled.
     pub logins: Mutex<HashMap<String, CancellationToken>>,
     /// Knowledge syncs that are running, so they can be cancelled.
@@ -125,6 +129,9 @@ impl AppState {
             for (_, token) in services.evals.lock().drain() {
                 token.cancel();
             }
+            if let Some(host) = services.host.lock().await.take() {
+                host.shutdown().await;
+            }
             services.hub.manager.shutdown().await;
             services.engine.shutdown().await;
             let _ = services.memory.backfill_operations().await;
@@ -185,9 +192,26 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
             let _ = hub.manager.start_all().await;
         });
     }
+    let workflows =
+        zorix_workflows::Workflows::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone())
+            .map_err(|e| e.to_string())?;
+    let settings = crate::settings::Settings::load(home);
+    let webhook = settings.listen().unwrap_or_else(|error| {
+        tracing::warn!(%error, "webhooks stay off");
+        None
+    });
+    let host = match workflows.start_host(secrets.clone(), webhook).await {
+        Ok(host) => Some(Arc::new(host)),
+        Err(error) => {
+            tracing::warn!(%error, "the workflow host did not start; schedules and webhooks are off");
+            None
+        }
+    };
     Ok(Arc::new(Services {
         engine,
         hub,
+        workflows,
+        host: tokio::sync::Mutex::new(host),
         logins: Mutex::new(HashMap::new()),
         tenant: TenantId::local(),
         router,

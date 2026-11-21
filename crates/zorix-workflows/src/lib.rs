@@ -6,9 +6,14 @@ pub mod check;
 pub mod engine;
 pub mod expr;
 pub mod graph;
+pub mod host;
 pub mod launcher;
+pub mod runtime;
 pub mod schedule;
 pub mod template;
+pub mod webhook;
 
 pub use engine::{Decision, StartRequest, Verdict, WorkflowEngine};
+pub use host::{EngineFeed, ExecutionFeed, FinishedExecution, HostConfig, MISS_GRACE_MS, WorkflowHost};
 pub use launcher::{HubLauncher, Outcome, RunStart, StepLauncher, Target, ToolCall};
+pub use runtime::{DEFAULT_WEBHOOK_ADDRESS, Workflows, parse_address};

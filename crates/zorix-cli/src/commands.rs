@@ -48,6 +48,7 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Mcp(command) => crate::integrations::mcp(&home, tenant, printer, command).await,
         Command::Connect(command) => crate::integrations::connect(&home, tenant, printer, command).await,
         Command::Sandbox(command) => crate::integrations::sandbox(&home, tenant, printer, command).await,
+        Command::Serve(args) => crate::serve::serve(&home, tenant, printer, args).await,
         Command::Calibration => crate::memory::calibration(&home, printer),
         Command::DataDir => {
             println!("{}", home.display());

@@ -24,6 +24,7 @@ zorix-mcp.workspace = true
 zorix-hub.workspace = true
 zorix-agents.workspace = true
 zorix-sandbox.workspace = true
+zorix-workflows.workspace = true
 serde.workspace = true
 getrandom = "0.3"
 async-trait.workspace = true

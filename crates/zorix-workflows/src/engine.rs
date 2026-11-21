@@ -225,7 +225,7 @@ impl WorkflowEngine {
         let mut count = 0;
         for run in active {
             if let Err(error) = self.advance(run.id).await {
-                eprintln!("workflow run {} could not advance: {error}", run.id);
+                tracing::warn!(run = %run.id, "a workflow run could not advance: {error}");
             }
             count += 1;
         }
@@ -609,7 +609,7 @@ impl WorkflowEngine {
         let text = format!("Reminder: “{}” is waiting for a decision in ZORIX.", wait.title);
         let call = send_call(Service::Slack, Some(&remind.connection), &remind.channel, &text);
         if let Err(error) = self.launcher.call_tool(&call).await {
-            eprintln!("the reminder for wait {} was not sent: {error}", wait.id);
+            tracing::warn!(wait = %wait.id, "a reminder was not sent: {error}");
         }
         Ok(())
     }
