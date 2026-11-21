@@ -4,7 +4,8 @@ import { test } from "node:test";
 
 // The tokens of app.css are generated from design/tokens.json (tools/design-tokens.mjs). This holds them to it from inside the app's own tests.
 const tokens = JSON.parse(readFileSync(new URL("../../../../design/tokens.json", import.meta.url), "utf8"));
-const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+// Git may check files out with CRLF line endings (Windows); the patterns below are written for LF.
+const css = readFileSync(new URL("../app.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 const block = (name: string) => {
   const m = css.match(new RegExp(`/\\* design-tokens:${name}:begin \\*/\\n([\\s\\S]*?)\\n\\s*/\\* design-tokens:${name}:end \\*/`));
