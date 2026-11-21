@@ -35,6 +35,8 @@ pub struct Services {
     pub hub: Arc<Hub>,
     /// Workflows: their store and the engine that runs them.
     pub workflows: zorix_workflows::Workflows,
+    /// Projects and tasks: the rules, and the tools a manager and a task's run use.
+    pub projects: Arc<zorix_projects::ProjectService>,
     /// What starts workflows by itself while the app is open: schedules, events and (when on) webhooks.
     pub host: tokio::sync::Mutex<Option<Arc<zorix_workflows::WorkflowHost>>>,
     /// Sign-ins that are waiting for the browser, so they can be cancelled.
@@ -200,7 +202,10 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
         tracing::warn!(%error, "webhooks stay off");
         None
     });
-    let host = match workflows.start_host(secrets.clone(), webhook).await {
+    let projects = zorix_projects::runtime::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone())
+        .map_err(|e| e.to_string())?;
+    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> = vec![zorix_projects::runtime::ticker(&projects)];
+    let host = match workflows.start_host_with(secrets.clone(), webhook, tickers).await {
         Ok(host) => Some(Arc::new(host)),
         Err(error) => {
             tracing::warn!(%error, "the workflow host did not start; schedules and webhooks are off");
@@ -211,6 +216,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
         engine,
         hub,
         workflows,
+        projects,
         host: tokio::sync::Mutex::new(host),
         logins: Mutex::new(HashMap::new()),
         tenant: TenantId::local(),

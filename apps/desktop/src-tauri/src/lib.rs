@@ -5,6 +5,7 @@ mod commands;
 mod integration_commands;
 mod knowledge_commands;
 mod memory_commands;
+mod project_commands;
 mod settings;
 mod state;
 mod workflow_commands;
@@ -33,6 +34,23 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            project_commands::projects_overview,
+            project_commands::project_create,
+            project_commands::project_update,
+            project_commands::project_remove,
+            project_commands::project_board,
+            project_commands::project_ask,
+            project_commands::project_deliverables,
+            project_commands::project_history,
+            project_commands::task_add,
+            project_commands::task_update,
+            project_commands::task_move,
+            project_commands::task_restart,
+            project_commands::task_remove,
+            project_commands::task_detail,
+            project_commands::task_comment,
+            project_commands::task_link,
+            project_commands::task_deliver,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,

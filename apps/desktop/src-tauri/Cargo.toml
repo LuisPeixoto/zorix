@@ -33,6 +33,7 @@ zorix-mcp.workspace = true
 zorix-sandbox.workspace = true
 zorix-integrations.workspace = true
 zorix-workflows.workspace = true
+zorix-projects.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

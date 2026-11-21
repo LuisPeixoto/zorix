@@ -8050,6 +8050,7 @@ dependencies = [
  "zorix-integrations",
  "zorix-mcp",
  "zorix-memory",
+ "zorix-projects",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sandbox",
