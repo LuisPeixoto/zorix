@@ -72,7 +72,7 @@
       {@const task = bar.view.task}
       <div class="grid h-11 grid-cols-[260px_minmax(0,1fr)] border-b border-line-soft last:border-b-0">
         <button type="button" class="flex min-w-0 items-center gap-2 px-3.5 text-left font-medium outline-none hover:bg-hover focus-visible:bg-hover" onclick={() => onopen(task.key)}>
-          <span class="mono text-2xs text-faint">{task.key}</span>
+          <span class="mono shrink-0 text-2xs whitespace-nowrap text-faint">{task.key}</span>
           <span class="truncate">{task.title}</span>
         </button>
         <div class="relative">
@@ -82,7 +82,7 @@
             aria-label="{task.key}, {task.title}, {task.progress}% done, from {dayLabel(dayText(bar.start))} to {dayLabel(dayText(bar.end))}"
             class={cn("absolute top-2 z-0 flex h-6.5 items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-accent/60", BAR[bar.tone].box)}
             style:left="{bar.left * 100}%"
-            style:width="max({bar.width * 100}%, 2.5rem)"
+            style:width="max({bar.width * 100}%, 4.5rem)"
           >
             <span class={cn("absolute inset-y-0 left-0", BAR[bar.tone].fill)} style:width="{task.progress}%"></span>
             {#if avatar}<span class="relative inline-flex">{@render avatar(bar.view)}</span>{/if}

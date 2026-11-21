@@ -200,9 +200,9 @@
 
 <Drawer bind:open title={task?.title ?? taskKey} subtitle={task ? `${task.key} · ${PRIORITY[task.priority].label} priority` : "Loading…"} icon="kanban" onclose={close}>
   {#if loadError && !task}
-    <Callout tone="err" title="This task could not be opened">{loadError}</Callout>
+    <div class="p-5"><Callout tone="err" title="This task could not be opened">{loadError}</Callout></div>
   {:else if task && view && fields}
-    <div class="flex flex-col gap-5">
+    <div class="flex flex-col gap-5 px-5 py-4">
       {#if view.needs_you === "review"}
         <Callout tone="warn" title="Needs you">
           {agentRuns ? `${who} finished its run and moved the task to Review. Check the deliverables, then mark it done or send it back with a note.` : "It is in Review. Mark it done, or send it back with a note."}

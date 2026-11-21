@@ -75,10 +75,10 @@
         });
       }
       if (start === "projects") {
-        // `projects` is the list; `projects:KEY` the board; `projects:KEY/list|timeline|deliverables|history` a tab; `projects:KEY/task:OPS-38` a task.
+        // `projects` is the list; `projects:KEY` the board; `projects:KEY/list|timeline|deliverables|history` a tab; `projects:KEY/OPS-38` a task.
         const [project, how] = tab ? tab.split("/") : [];
         if (!project) store.showProjects();
-        else if (how?.startsWith("task:")) store.showProjects(project, "board", how.slice(5));
+        else if (/^[A-Z][A-Z0-9]+-\d+$/.test(how ?? "")) store.showProjects(project, "board", how);
         else store.showProjects(project, PROJECT_TABS.includes(how as ProjectTab) ? (how as ProjectTab) : "board");
       }
       if (start === "inbox") store.showInbox();

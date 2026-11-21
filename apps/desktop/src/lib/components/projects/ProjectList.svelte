@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { TaskState, TaskView } from "../../api.ts";
-  import { LANE_NAME, LANE_TONE, PRIORITY, type SortBy, cardStatus, dueLabel, sortTasks } from "../../project.ts";
+  import { LANE_NAME, LANE_TONE, PRIORITY, type SortBy, cardStatus, dayLabel, dueLabel, sortTasks } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
   import { Badge, Button, EmptyState, Icon, Sparkbar } from "../../ui/index.ts";
   import WhoAvatar from "./WhoAvatar.svelte";
@@ -89,7 +89,7 @@
               <td class="px-3.5 py-2.5 whitespace-nowrap">
                 {#if due && task.state !== "done"}
                   <span class="inline-flex items-center gap-1 text-sm {due.late ? 'font-medium text-err' : 'text-muted'}"><Icon name={due.late ? "clock" : "calendar"} size={12} />{due.text}</span>
-                {:else if due}<span class="text-sm text-muted">{due.text}</span>{:else}<span class="text-faint">—</span>{/if}
+                {:else if task.due}<span class="text-sm text-muted">{dayLabel(task.due)}</span>{:else}<span class="text-faint">—</span>{/if}
               </td>
             </tr>
           {/each}

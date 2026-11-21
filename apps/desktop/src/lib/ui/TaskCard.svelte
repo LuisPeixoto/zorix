@@ -67,7 +67,7 @@
       <span class="tnum text-xs text-muted">{progress}%</span>
     </span>
   {/if}
-  <span class="flex items-center gap-2 text-xs text-muted">
+  <span class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs whitespace-nowrap text-muted">
     {#if due}
       <span class={cn("inline-flex items-center gap-1", due.late && "font-medium text-err")}><Icon name={due.late ? "clock" : "calendar"} size={12} />{due.text}</span>
     {/if}
