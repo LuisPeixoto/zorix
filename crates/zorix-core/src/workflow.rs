@@ -480,9 +480,14 @@ impl StepKind {
         })
     }
 
-    /// Whether the step runs an action that a person may let run unattended (`ask: never`).
+    /// Whether the step sends something without asking: an action with `ask: never`, or an approval that reminds in a chat channel.
     pub fn unattended(&self) -> bool {
-        matches!(self, StepKind::Send { ask: Ask::Never, .. } | StepKind::Http { ask: Ask::Never, .. })
+        matches!(
+            self,
+            StepKind::Send { ask: Ask::Never, .. }
+                | StepKind::Http { ask: Ask::Never, .. }
+                | StepKind::Approval { remind: Some(_), .. }
+        )
     }
 }
 
