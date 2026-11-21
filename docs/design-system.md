@@ -2,7 +2,7 @@
 
 ZORIX has one design system, and the app follows it strictly. The system is a package, vendored in [`design/`](../design/README.md): the
 **tokens** (`design/tokens.json`), a **specification for every component** (`design/components/<Name>/README.md` with a live
-preview and `index.d.ts`), the **surfaces** of the product (`design/surfaces.md`) and **17 assembled screens** at 1440 px
+preview and `index.d.ts`), the **surfaces** of the product (`design/surfaces.md`) and **18 assembled screens** at 1440 px
 (`design/screens/*.png`). The app implements it: the kit lives in `apps/desktop/src/lib/ui/`, the tokens in
 `apps/desktop/src/app.css` (generated from `design/tokens.json`), and both are shown live on the **Design system** screen
 (<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>D</kbd>, or the sidebar item in development builds).
@@ -189,13 +189,17 @@ The design system is owned by the package in `design/`; the app does not edit it
 4. Retake the two screenshots of that screen: serve with `VITE_START_VIEW=design VITE_START_THEME=light npx vite` (and `dark`) and
    capture the full page with a headless browser.
 
+When the artifact cannot be reached, a screen the phase needs is specified in `design/` in the same form (README, preview,
+`manifest.json`, `surfaces.md`, a PNG in `design/screens/`) and logged in `design/local-additions.md`, to be ported back into the
+artifact. The screen is built only after it is specified there.
+
 ## Known differences
 
 Where the app deliberately differs from `design/screens`, and why. Each line is removed when the reason goes away.
 
 | Screen | Difference | Reason |
 |---|---|---|
-| Sidebar | Workflows, Projects, Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
+| Sidebar | Projects, Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
 | Toolbar, sidebar | No account avatar, no daily budget beside "Spend today" | No accounts or budget setting yet ([roadmap](roadmap.md#across-phases), Command Center) |
 | Run | "This run" lists the model, who started it and the cost, not the grants, what asks first and the limits | The run record does not return its grants and limits yet; the roadmap lists them |
 | Run | The work tree is the kit's TreeView (state, steps, time, cost bar), not a four-column table | Same facts; TreeView adds folding and keyboard navigation |

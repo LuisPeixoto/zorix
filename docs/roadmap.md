@@ -96,6 +96,14 @@ Screens: Workflows, Workflow editor, workflow run view. Built from WorkflowCanva
 - **List:** active, paused, runs this week and success rate, workflows waiting for people, time saved; each row shows what starts it, the last 14 runs, the version and the state, with an on/off switch and templates.
 - **In New run:** *Run as Workflow* and *Save as workflow*.
 
+Decisions: [ADR-0033](adr/0033-workflows-are-versioned-graphs-that-create-executions.md) (versioned graphs that create executions),
+[ADR-0034](adr/0034-the-workflow-host-and-triggers.md) (the app or `zorix serve` hosts the triggers; webhooks are off by default) and
+[ADR-0035](adr/0035-people-steps-and-unattended-actions.md) (people steps; unattended actions are confirmed when publishing).
+The screens add *Workflow run* to the design system, logged in `design/local-additions.md`.
+
+Later: a **pull request** action (no tool creates branches or commits yet), the **new ticket** event (needs polling of integrations),
+an **on-call rotation** as the approver (needs people and accounts, Phase 10), and per-period workflow budgets.
+
 ## Phase 8 — Task & Project Management
 
 Projects, tasks, assignment to people or agents, priorities, dependencies, deadlines, history and deliverables.
