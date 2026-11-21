@@ -196,6 +196,16 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 | Screen | Difference | Reason |
 |---|---|---|
 | Sidebar | Workflows, Projects, Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
-| Toolbar | No account avatar | There are no accounts yet ([roadmap](roadmap.md#across-phases)) |
-| Sidebar foot | No daily budget beside "Spend today" | There is no budget setting until the Command Center |
-| Run, New run | No cost and time estimate, no "Always for this run", no *Run as Workflow* | Not built yet; see the roadmap |
+| Toolbar, sidebar | No account avatar, no daily budget beside "Spend today" | No accounts or budget setting yet ([roadmap](roadmap.md#across-phases), Command Center) |
+| Run | "This run" lists the model, who started it and the cost, not the grants, what asks first and the limits | The run record does not return its grants and limits yet; the roadmap lists them |
+| Run | The work tree is the kit's TreeView (state, steps, time, cost bar), not a four-column table | Same facts; TreeView adds folding and keyboard navigation |
+| New run | No budget, time or steps fields, no estimate, no "Always for this run", no *Run as Workflow* | Not wired in the start request yet; Phase 7 and the Command Center bring them |
+| Providers | No price per million tokens, p95 latency or spend; routes show their names only | Prices and timings are not stored per model; routes live in `providers.toml` |
+| Integrations | Cards without a 24-hour history strip; filters are All and Needs attention, and Native sits on its own tab | No health history is recorded yet; `HealthGrid` is in the kit for when it is |
+| Memory | A *To approve* tab replaces the proposals list; no *Scopes* tab | Proposals are approvals of `memory.remember`, answered here or in the run |
+| Agents | No evaluation score on a card, no Mine, Templates or Archived filters | The card does not carry the latest score, where an agent came from, or archived agents |
+| Agent chat | The rail shows the team or the agent and the cost so far, not *Sources cited* or *Memory used* | Citations and the memory a chat used are not exposed per conversation yet |
+
+### Contrast in the design system itself
+
+Two pairs in the design system are under 4.5:1, and the app follows it until the design system changes: a warn word on its own 12–14% tint in the light theme (a "Needs your approval" badge, about 4.0:1) and an accent word on the accent tint in the dark theme (the current sidebar entry, about 4.2:1). Everything the app adds on top uses a solid warn fill with `bg` text (4.65:1) or `muted` text instead.
