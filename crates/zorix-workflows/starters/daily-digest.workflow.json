@@ -1,0 +1,41 @@
+{
+  "zorix": "workflow/1",
+  "slug": "daily-digest",
+  "workflow": {
+    "name": "Daily digest",
+    "description": "Every weekday morning, the researcher writes what changed and it is posted to Slack for you to approve.",
+    "group": "Operations",
+    "saves_minutes": 15,
+    "steps": [
+      {
+        "id": "morning",
+        "title": "Weekdays at 08:00",
+        "x": 192,
+        "y": 32,
+        "kind": { "type": "schedule", "when": { "type": "daily", "times": ["08:00"], "days": ["mon", "tue", "wed", "thu", "fri"] } }
+      },
+      {
+        "id": "digest",
+        "title": "Write the digest",
+        "x": 192,
+        "y": 176,
+        "kind": {
+          "type": "agent",
+          "agent": "researcher",
+          "prompt": "Write a short digest (five bullets at most) of what changed since yesterday in the documents and notes you can search. Say so plainly if nothing did."
+        }
+      },
+      {
+        "id": "post",
+        "title": "Post to #general",
+        "x": 192,
+        "y": 320,
+        "kind": { "type": "send", "service": "slack", "channel": "#general", "text": "{{steps.digest.output.text}}" }
+      }
+    ],
+    "edges": [
+      { "from": "morning", "to": "digest" },
+      { "from": "digest", "to": "post" }
+    ]
+  }
+}

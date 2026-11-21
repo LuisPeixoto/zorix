@@ -1,0 +1,78 @@
+{
+  "zorix": "workflow/1",
+  "slug": "incident-triage",
+  "workflow": {
+    "name": "Incident triage",
+    "description": "When a GitHub issue is labelled incident, the researcher triages it and, if it is serious, on-call approves before it is posted.",
+    "group": "Operations",
+    "budget_micros": 1000000,
+    "saves_minutes": 20,
+    "steps": [
+      {
+        "id": "labelled",
+        "title": "Issue labelled incident",
+        "x": 192,
+        "y": 32,
+        "kind": {
+          "type": "webhook",
+          "source": "GitHub",
+          "label": "issue labelled",
+          "filter": "action == \"labeled\" and label.name == \"incident\""
+        }
+      },
+      {
+        "id": "triage",
+        "title": "Triage the issue",
+        "x": 192,
+        "y": 176,
+        "kind": {
+          "type": "agent",
+          "agent": "researcher",
+          "prompt": "Triage this issue. Start your answer with \"Severity: high\" or \"Severity: low\", then give a two-sentence summary and the most likely cause.\n\nTitle: {{trigger.payload.issue.title}}\n\n{{trigger.payload.issue.body}}",
+          "max_cost_micros": 500000
+        }
+      },
+      {
+        "id": "high",
+        "title": "Severity is high?",
+        "x": 192,
+        "y": 320,
+        "kind": { "type": "condition", "expr": "steps.triage.output.text contains \"severity: high\"" }
+      },
+      {
+        "id": "approve",
+        "title": "On-call approves",
+        "x": 32,
+        "y": 480,
+        "kind": {
+          "type": "approval",
+          "message": "Post the triage of “{{trigger.payload.issue.title}}” to #incidents?",
+          "show": ["steps.triage.output.text", "run.cost_micros"],
+          "timeout_ms": 7200000,
+          "then": "refuse"
+        }
+      },
+      {
+        "id": "post",
+        "title": "Post to #incidents",
+        "x": 32,
+        "y": 624,
+        "kind": { "type": "send", "service": "slack", "channel": "#incidents", "text": "{{steps.triage.output.text}}" }
+      },
+      {
+        "id": "log",
+        "title": "Log it quietly",
+        "x": 352,
+        "y": 480,
+        "kind": { "type": "send", "service": "slack", "channel": "#triage-log", "text": "Low severity: {{trigger.payload.issue.title}}" }
+      }
+    ],
+    "edges": [
+      { "from": "labelled", "to": "triage" },
+      { "from": "triage", "to": "high" },
+      { "from": "high", "to": "approve", "label": "yes" },
+      { "from": "high", "to": "log", "label": "no" },
+      { "from": "approve", "to": "post" }
+    ]
+  }
+}

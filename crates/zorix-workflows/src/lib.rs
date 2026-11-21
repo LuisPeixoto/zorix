@@ -10,10 +10,17 @@ pub mod host;
 pub mod launcher;
 pub mod runtime;
 pub mod schedule;
+pub mod service;
 pub mod template;
 pub mod webhook;
 
 pub use engine::{Decision, StartRequest, Verdict, WorkflowEngine};
-pub use host::{EngineFeed, ExecutionFeed, FinishedExecution, HostConfig, MISS_GRACE_MS, WorkflowHost};
+pub use host::{
+    EngineFeed, ExecutionFeed, FinishedExecution, HostConfig, MISS_GRACE_MS, WorkflowHost, reset_webhook_token,
+    signing_secret, webhook_token,
+};
 pub use launcher::{HubLauncher, Outcome, RunStart, StepLauncher, Target, ToolCall};
 pub use runtime::{DEFAULT_WEBHOOK_ADDRESS, Workflows, parse_address};
+pub use service::{
+    Card, DiffLine, Figures, Health, Imported, Missing, StepHistory, Template, WorkflowFile, WorkflowService,
+};

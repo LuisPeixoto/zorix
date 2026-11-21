@@ -76,6 +76,9 @@ pub enum Command {
     /// Teams: a lead and the agents it may ask to do part of the work.
     #[command(subcommand)]
     Team(TeamCommand),
+    /// Workflows: triggers, agents, conditions and people joined into steps that run on their own.
+    #[command(subcommand)]
+    Workflow(WorkflowCommand),
     /// Show an execution and everything it started, as a tree.
     Tree(IdArg),
     /// Skills: folders of instructions and scripts an agent loads when it needs them.
@@ -1653,4 +1656,205 @@ mod tests {
         assert!(Cli::try_parse_from(["zorix", "run", "x", "--max-iterations", "100000"]).is_err());
         assert!(Cli::try_parse_from(["zorix", "list", "--limit", "0"]).is_err());
     }
+}
+
+/// What `zorix workflow` does.
+#[derive(Debug, Subcommand)]
+pub enum WorkflowCommand {
+    /// List workflows with what starts them, their last runs and how they are doing.
+    List,
+    /// Show a workflow: what it does, step by step, and what it needs that is missing.
+    Show(WorkflowShowArgs),
+    /// Make a new workflow with only a manual start, ready to edit.
+    Create(WorkflowNameArg),
+    /// Edit a workflow's draft as a file in $EDITOR. Nothing is published.
+    Edit(WorkflowNameArg),
+    /// Read a `.workflow.json` file into a workflow's draft (making the workflow when it is new).
+    Import(WorkflowImportArgs),
+    /// Print a workflow as a file (the draft, or a published version).
+    Export(WorkflowExportArgs),
+    /// List the published versions of a workflow.
+    Versions(WorkflowNameArg),
+    /// Show what changed between two versions (`draft` means the draft).
+    Diff(WorkflowDiffArgs),
+    /// Publish the draft as the next version. The next trigger uses it.
+    Publish(WorkflowPublishArgs),
+    /// Publish an old version again as a new one.
+    Rollback(WorkflowRollbackArgs),
+    /// Turn a workflow's triggers on.
+    Enable(WorkflowNameArg),
+    /// Turn a workflow's triggers off.
+    Disable(WorkflowNameArg),
+    /// Delete a workflow. Its runs stay.
+    Remove(WorkflowNameArg),
+    /// Start a run now and follow it until it ends or needs a person.
+    Run(WorkflowRunArgs),
+    /// List runs, newest first.
+    Runs(WorkflowRunsArgs),
+    /// Show one run: every step, what it did and what it cost.
+    RunShow(WorkflowRunIdArg),
+    /// Cancel a run.
+    Cancel(WorkflowRunIdArg),
+    /// List what is waiting for a person: approvals, questions and actions.
+    Waits,
+    /// Answer a wait: approve, refuse, or write the answer to a question.
+    Answer(WorkflowAnswerArgs),
+    /// Show a workflow's webhook address and signing secret, or replace them.
+    Webhook(WorkflowWebhookArgs),
+    /// List the starters.
+    Templates,
+    /// Add a starter as a draft that is off.
+    Add(WorkflowTemplateArg),
+}
+
+/// A workflow's name.
+#[derive(Debug, Args)]
+pub struct WorkflowNameArg {
+    /// The workflow's short name.
+    pub workflow: String,
+}
+
+/// Options for `workflow show`.
+#[derive(Debug, Args)]
+pub struct WorkflowShowArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// A published version instead of the draft.
+    #[arg(long)]
+    pub version: Option<u32>,
+}
+
+/// Options for `workflow import`.
+#[derive(Debug, Args)]
+pub struct WorkflowImportArgs {
+    /// The file.
+    pub file: std::path::PathBuf,
+}
+
+/// Options for `workflow export`.
+#[derive(Debug, Args)]
+pub struct WorkflowExportArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// A published version instead of the draft.
+    #[arg(long)]
+    pub version: Option<u32>,
+    /// Write to this file instead of printing.
+    #[arg(long, short = 'o')]
+    pub out: Option<std::path::PathBuf>,
+}
+
+/// Options for `workflow diff`.
+#[derive(Debug, Args)]
+pub struct WorkflowDiffArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// The older version, or `draft`.
+    pub from: String,
+    /// The newer version, or `draft`.
+    pub to: String,
+}
+
+/// Options for `workflow publish`.
+#[derive(Debug, Args)]
+pub struct WorkflowPublishArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// Why, in a few words.
+    #[arg(long)]
+    pub note: Option<String>,
+    /// Confirm that the steps that send without asking (or remind in chat) may do so.
+    #[arg(long)]
+    pub confirm_unattended: bool,
+}
+
+/// Options for `workflow rollback`.
+#[derive(Debug, Args)]
+pub struct WorkflowRollbackArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// The version to publish again.
+    pub version: u32,
+    /// Confirm the steps that send without asking.
+    #[arg(long)]
+    pub confirm_unattended: bool,
+}
+
+/// Options for `workflow run`.
+#[derive(Debug, Args)]
+pub struct WorkflowRunArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// What the trigger carries, as JSON.
+    #[arg(long, value_name = "JSON")]
+    pub input: Option<String>,
+    /// Run the draft as a test: every action asks first.
+    #[arg(long)]
+    pub test: bool,
+    /// Start from this trigger step (the manual one by default).
+    #[arg(long)]
+    pub trigger: Option<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `workflow runs`.
+#[derive(Debug, Args)]
+pub struct WorkflowRunsArgs {
+    /// Only this workflow's runs.
+    pub workflow: Option<String>,
+    /// How many to show.
+    #[arg(long, default_value_t = 20)]
+    pub limit: usize,
+}
+
+/// A workflow run's id.
+#[derive(Debug, Args)]
+pub struct WorkflowRunIdArg {
+    /// The run's id.
+    pub run: String,
+}
+
+/// Options for `workflow answer`.
+#[derive(Debug, Args)]
+pub struct WorkflowAnswerArgs {
+    /// The wait's id (`workflow waits` lists them).
+    pub wait: String,
+    /// Approve.
+    #[arg(long, conflicts_with_all = ["refuse", "text"])]
+    pub approve: bool,
+    /// Refuse.
+    #[arg(long, conflicts_with_all = ["approve", "text"])]
+    pub refuse: bool,
+    /// The answer to a question.
+    #[arg(long, conflicts_with_all = ["approve", "refuse"])]
+    pub text: Option<String>,
+    /// A note to keep with the answer.
+    #[arg(long)]
+    pub note: Option<String>,
+    /// The fingerprint you were shown, to be sure nothing changed. When absent, the current one is used.
+    #[arg(long)]
+    pub fingerprint: Option<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `workflow webhook`.
+#[derive(Debug, Args)]
+pub struct WorkflowWebhookArgs {
+    /// The workflow's short name.
+    pub workflow: String,
+    /// Replace the secret in the address: the old address stops working.
+    #[arg(long)]
+    pub reset: bool,
+    /// The address ZORIX listens on, when it is not the default.
+    #[arg(long, value_name = "ADDRESS")]
+    pub bind: Option<String>,
+}
+
+/// A starter's name.
+#[derive(Debug, Args)]
+pub struct WorkflowTemplateArg {
+    /// The starter, from `workflow templates`.
+    pub template: String,
 }

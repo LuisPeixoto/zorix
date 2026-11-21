@@ -22,6 +22,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 url = "2"
+similar = "3"
 tracing.workspace = true
 hmac = "0.12"
 sha2.workspace = true
@@ -34,3 +35,4 @@ iana-time-zone = "0.1.65"
 croner = "4.0.3"
 
 [dev-dependencies]
+tempfile.workspace = true
