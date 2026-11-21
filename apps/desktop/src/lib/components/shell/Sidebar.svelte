@@ -23,7 +23,7 @@
     {#each store.runs as run (run.id)}
       <button
         type="button"
-        class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {store.view === 'runs' && store.selectedId === run.id ? 'bg-accent-soft shadow-[inset_2px_0_0_var(--accent)]' : ''}"
+        class="mb-0.5 block w-full rounded-lg px-2.5 py-2 text-left transition duration-150 hover:bg-hover {store.view === 'runs' && store.selectedId === run.id ? 'bg-accent-soft' : ''}"
         onclick={() => { store.showRuns(); void store.select(run.id); }}
       >
         <span class="flex items-center gap-1.5 truncate text-md font-medium">{#if run.agent}<Icon name="bot" size={13} class="shrink-0 text-accent" />{/if}<span class="truncate">{shorten(run.request.prompt, 60)}</span></span>

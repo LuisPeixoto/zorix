@@ -103,7 +103,7 @@
     {:else if agents.error}
       <Callout tone="err" title="This agent could not be opened">{agents.error}</Callout>
     {:else}
-      <div class="flex gap-4"><Skeleton class="size-16 rounded-[20px]" /><div class="flex-1 space-y-2"><Skeleton class="h-7 w-64" /><Skeleton class="h-4 w-96" /></div></div>
+      <div class="flex gap-4"><Skeleton class="size-16 rounded-2xl" /><div class="flex-1 space-y-2"><Skeleton class="h-7 w-64" /><Skeleton class="h-4 w-96" /></div></div>
     {/if}
     <Tabs {tabs} bind:value={tab} label="Agent sections" class="mt-4 -mb-px" />
   </header>

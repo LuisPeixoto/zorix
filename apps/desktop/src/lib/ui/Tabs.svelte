@@ -5,7 +5,7 @@
   let { tabs, value = $bindable(), label = "Sections", class: klass = "" }: { tabs: Tab[]; value: string; label?: string; class?: string } = $props();
 </script>
 
-<div role="tablist" aria-label={label} class={cn("flex flex-wrap gap-1", klass)}>
+<div role="tablist" aria-label={label} class={cn("flex flex-wrap gap-x-4.5 border-b border-line", klass)}>
   {#each tabs as tab (tab.value)}
     <button
       type="button"
@@ -13,8 +13,8 @@
       aria-selected={value === tab.value}
       onclick={() => (value = tab.value)}
       class={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium transition duration-150",
-        value === tab.value ? "bg-accent-soft text-accent" : "text-muted hover:bg-hover hover:text-fg",
+        "relative inline-flex items-center gap-1.5 pt-2 pb-2.5 text-base font-medium transition duration-150",
+        value === tab.value ? "text-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-sm after:bg-accent" : "text-muted hover:text-fg",
       )}
     >
       {tab.label}

@@ -1,6 +1,7 @@
 // The component kit. Import from here: `import { Button, Card } from "../ui/index.ts"`.
 export { default as Avatar } from "./Avatar.svelte";
 export { default as BrandLogo } from "./BrandLogo.svelte";
+export { default as BrandMark } from "./BrandMark.svelte";
 export { default as ChatBubble } from "./ChatBubble.svelte";
 export { default as CodeBlock } from "./CodeBlock.svelte";
 export { default as CommandPalette, type Command } from "./CommandPalette.svelte";
@@ -8,6 +9,8 @@ export { default as Composer } from "./Composer.svelte";
 export { default as DelegationCard, type ChildRow } from "./DelegationCard.svelte";
 export { default as DiffView } from "./DiffView.svelte";
 export { default as Drawer } from "./Drawer.svelte";
+export { default as HealthGrid } from "./HealthGrid.svelte";
+export { type HealthBar, type HealthItem } from "./health.ts";
 export { default as Markdown } from "./Markdown.svelte";
 export { default as KeyValue } from "./KeyValue.svelte";
 export { default as ScoreMatrix, type Cell, type MatrixRun } from "./ScoreMatrix.svelte";
