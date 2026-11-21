@@ -56,6 +56,7 @@ test("the oldest ask comes first, and servers come after the approvals", () => {
 test("the target is the first well-known argument, or the arguments in brief", () => {
   assert.equal(targetOf({ channel: "#incidents", text: "hi" }), "#incidents");
   assert.equal(targetOf({ sql: "UPDATE accounts SET plan = 1" }), "UPDATE accounts SET plan = 1");
+  assert.equal(targetOf({ content: "Annual plans are excluded", kind: "fact" }), "Annual plans are excluded");
   assert.equal(targetOf({ n: 3 }), '{"n":3}');
   assert.equal(targetOf({}), "");
   assert.equal(targetOf(null), "");

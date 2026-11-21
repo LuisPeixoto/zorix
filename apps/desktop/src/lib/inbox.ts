@@ -23,7 +23,7 @@ export type InboxItem =
     }
   | { kind: "server"; id: string; server: string; why: "tools" | "login"; tools: number; at: number };
 
-const TARGET_KEYS = ["target", "path", "url", "channel", "repo", "query", "sql", "to", "name", "subject"];
+const TARGET_KEYS = ["target", "path", "url", "channel", "repo", "query", "sql", "to", "name", "subject", "title", "content", "text", "message"];
 
 /** What a tool call is about, taken from its arguments: the first of a few well-known keys, else the arguments in brief. */
 export function targetOf(args: unknown): string {
