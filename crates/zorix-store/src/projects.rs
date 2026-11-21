@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use rusqlite::{Connection as Db, OptionalExtension, Transaction, params};
+use rusqlite::{Connection as Db, OptionalExtension, Transaction, TransactionBehavior, params};
 use zorix_core::project::MAX_PROJECT_TASKS;
 use zorix_core::{
     Error, MAX_PROJECTS, Project, ProjectEvent, ProjectEventDraft, ProjectEventKind, ProjectId, ProjectKey,
@@ -221,7 +221,7 @@ impl ProjectStore for SqliteProjectStore {
         project.tenant = tenant.clone();
         project.next_task = 1;
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let count: i64 = tx
                 .query_row("SELECT COUNT(*) FROM projects WHERE tenant = ?1", [tenant.as_str()], |r| r.get(0))
                 .map_err(storage)?;
@@ -271,7 +271,7 @@ impl ProjectStore for SqliteProjectStore {
     ) -> Result<Project> {
         project.validate()?;
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let stored = load_project(&tx, tenant, project.id)?
                 .ok_or_else(|| Error::Missing(format!("project {}", project.key)))?;
             let mut next = project.clone();
@@ -292,7 +292,7 @@ impl ProjectStore for SqliteProjectStore {
 
     async fn remove_project(&self, tenant: &TenantId, id: ProjectId) -> Result<bool> {
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let removed = tx
                 .execute("DELETE FROM projects WHERE id = ?1 AND tenant = ?2", params![id.to_string(), tenant.as_str()])
                 .map_err(storage)?;
@@ -315,7 +315,7 @@ impl ProjectStore for SqliteProjectStore {
 
     async fn next_task_number(&self, tenant: &TenantId, project: ProjectId) -> Result<u32> {
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let current: u32 = tx
                 .query_row(
                     "SELECT next_task FROM projects WHERE id = ?1 AND tenant = ?2",
@@ -344,7 +344,7 @@ impl ProjectStore for SqliteProjectStore {
     ) -> Result<bool> {
         task.validate()?;
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             if load_project(&tx, tenant, task.project)?.is_none() {
                 return Err(Error::Missing(format!("project of {}", task.key)));
             }
@@ -432,7 +432,7 @@ impl ProjectStore for SqliteProjectStore {
 
     async fn remove_task(&self, tenant: &TenantId, key: &TaskKey) -> Result<bool> {
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             let Some(task) = load_task(&tx, tenant, key)? else {
                 return Ok(false);
             };
@@ -482,7 +482,7 @@ impl ProjectStore for SqliteProjectStore {
 
     async fn add_events(&self, tenant: &TenantId, project: ProjectId, events: &[ProjectEventDraft]) -> Result<()> {
         self.with(|db| {
-            let tx = db.transaction().map_err(storage)?;
+            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(storage)?;
             if load_project(&tx, tenant, project)?.is_none() {
                 return Err(Error::Missing(format!("project {project}")));
             }

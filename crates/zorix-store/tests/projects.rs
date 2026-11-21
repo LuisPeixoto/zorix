@@ -190,3 +190,38 @@ async fn removing_a_project_removes_its_tasks_and_history() {
     assert!(store.events(&me, p.id, None, 10).await.unwrap().is_empty());
     assert!(!store.remove_project(&me, p.id).await.unwrap());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn writers_on_separate_connections_wait_for_each_other_instead_of_failing() {
+    // The engine, the host and a command each hold their own connection to one file. A write that reads first and then writes must
+    // wait for the writer ahead of it (an immediate transaction), not fail with "database is locked".
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("zorix.db");
+    let first = SqliteProjectStore::open(&path).unwrap();
+    let second = SqliteProjectStore::open(&path).unwrap();
+    let me = tenant("local");
+    let p = project(&first, &me, "OPS").await;
+    let mut handles = Vec::new();
+    for n in 0..16 {
+        let store = if n % 2 == 0 { first.clone() } else { second.clone() };
+        let (who, id) = (me.clone(), p.id);
+        handles.push(tokio::spawn(async move {
+            let event = ProjectEventDraft {
+                task: None,
+                by: Some(Who::You),
+                kind: ProjectEventKind::Comment { text: format!("note {n}") },
+                at: NOW,
+            };
+            store.add_events(&who, id, &[event]).await
+        }));
+    }
+    for handle in handles {
+        handle.await.unwrap().unwrap();
+    }
+    let seqs: Vec<u64> = first.events(&me, p.id, None, 100).await.unwrap().iter().map(|e| e.seq).collect();
+    assert_eq!(seqs.len(), 17, "the project's own event and sixteen notes");
+    let mut sorted = seqs.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), 17, "no number was given twice");
+}
