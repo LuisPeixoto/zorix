@@ -11,12 +11,13 @@ asks a person first.
 ## Decision
 
 - **Native tools** `tasks.list`, `tasks.get`, `tasks.create`, `tasks.update`, `tasks.move` and `tasks.comment`, registered with the other
-  native tools. Reads do not ask. Writes ask by the default policy, like `github.create_issue`.
-- **`tasks.move` to Done always asks**, and cannot be granted to run unattended, the rule `memory.remember` follows. A task moving to
-  Done under a manager is therefore an ordinary approval, with the exact change and a fingerprint, in the Inbox.
+  native tools. Reads do not ask. Every write asks, like `github.create_issue`.
+- **`tasks.move` asks a person who is looking**: no automatic approval can give it, the rule `memory.remember` follows. A tool's
+  approval is a property of the tool, not of one argument, so every move asks, a move to Done included. A task moving to Done under a
+  manager is therefore an ordinary approval, with the exact change and a fingerprint, in the Inbox.
 - **Grants are per project.** A run asked to manage a project gets `project:KEY`; the tools refuse any task of another project. This is
   the same shape as `github:owner/repo`.
-- **The assignee's tools.** A task run gets `task:KEY`, which allows `tasks.report_progress`, `tasks.add_deliverable` and `tasks.comment`
+- **The assignee's tools.** A task run gets `task:KEY`, which allows `task.report_progress`, `task.add_deliverable` and `task.note`
   on that one task. They change only the task's own record, so they do not ask. This is where real progress and deliverables come from.
 - **Ask the manager.** *Ask Atlas* starts an ordinary run of the manager agent with the `project:KEY` grant and a prompt that names the
   project. While it is going its tasks say that the manager is planning.
