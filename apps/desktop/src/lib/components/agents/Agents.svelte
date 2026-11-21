@@ -85,7 +85,7 @@
               <button
                 type="button"
                 onclick={() => agents.open(card.slug)}
-                class="group raised flex h-full w-full flex-col rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3"
+                class="group shadow-card flex h-full w-full flex-col rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3"
               >
                 <span class="flex items-start gap-3">
                   <Avatar emoji={card.emoji} color={card.color} size="lg" />
