@@ -89,7 +89,7 @@
       <section class="mt-8" aria-labelledby="runs-title">
         <h2 id="runs-title" class="mb-3 text-lg font-semibold">Recent work</h2>
         {#if runs.length === 0}
-          <Card padding="none"><EmptyState icon="history" title="Nothing yet" text="Start a chat with the team and its work will appear here, with the tree of who did what." /></Card>
+          <EmptyState icon="history" title="Nothing yet" text="Start a chat with the team and its work will appear here, with the tree of who did what." />
         {:else}
           <ul class="space-y-2">
             {#each runs as r (r.id)}

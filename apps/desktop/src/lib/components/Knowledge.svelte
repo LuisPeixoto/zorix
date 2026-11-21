@@ -161,9 +161,7 @@
   </div>
 
   {#if roots.length === 0}
-    <Card>
-      <EmptyState icon="folder" title="No documents yet" text="Add a folder of notes, docs or code and runs can find and cite what is in it." />
-    </Card>
+    <EmptyState icon="folder" title="No documents yet" text="Add a folder of notes, docs or code and runs can find and cite what is in it." />
   {/if}
 
   {#each roots as root (root.id)}

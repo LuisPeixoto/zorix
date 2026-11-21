@@ -459,7 +459,7 @@
         </div>
       </Card>
 
-      <Card padding="none"><EmptyState icon="bot" title="No runs yet" text="Describe an activity and ZORIX runs it under your rules, with every step recorded.">{#snippet actions()}<Button variant="primary" icon="plus">New run</Button><Button>Read the docs</Button>{/snippet}</EmptyState></Card>
+      <EmptyState icon="bot" title="No runs yet" text="Describe an activity and ZORIX runs it under your rules, with every step recorded.">{#snippet actions()}<Button variant="primary" icon="plus">New run</Button><Button>Read the docs</Button>{/snippet}</EmptyState>
     </div>
   </div>
 </div>

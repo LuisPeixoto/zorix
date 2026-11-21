@@ -173,15 +173,13 @@
     </div>
 
     {#if rows.length === 0}
-      <Card>
-        <EmptyState
+      <EmptyState
           icon="book"
           title={store.memory.length ? "Nothing matches" : "Nothing is remembered yet"}
           text={store.memory.length
             ? "Change the search or the scope."
             : "Add a fact or a preference yourself, or let a run propose one and approve it."}
         />
-      </Card>
     {/if}
 
     <div class="space-y-3">

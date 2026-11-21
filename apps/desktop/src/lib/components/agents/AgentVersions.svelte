@@ -84,7 +84,7 @@
         </VersionTimeline>
         <p class="mt-3 text-xs text-faint">A version is never edited. Rolling back writes a new version that copies an old one, so nothing is lost.</p>
       {:else}
-        <Card padding="none"><EmptyState icon="history" title="No versions" /></Card>
+        <EmptyState icon="history" title="No versions" />
       {/if}
     </section>
     <section aria-labelledby="changes-title">

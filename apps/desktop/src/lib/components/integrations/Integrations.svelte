@@ -78,14 +78,12 @@
       {#if !integrations.loaded}
         <div class="grid gap-4 sm:grid-cols-2" aria-busy="true" aria-label="Loading"><div class="skeleton h-28"></div><div class="skeleton h-28"></div></div>
       {:else if integrations.servers.length === 0}
-        <Card padding="none">
-          <EmptyState icon="plug" title="No servers yet" text="MCP servers give a run new tools: your repositories, tickets, documents, a browser. Pick one from the catalogue, bring in the ones you already use, or add your own.">
+        <EmptyState icon="plug" title="No servers yet" text="MCP servers give a run new tools: your repositories, tickets, documents, a browser. Pick one from the catalogue, bring in the ones you already use, or add your own.">
             {#snippet actions()}
               <Button variant="primary" icon="grid" onclick={() => (tab = "catalogue")}>Browse the catalogue</Button>
               <Button icon="download" onclick={() => (importOpen = true)}>Import from another app</Button>
             {/snippet}
           </EmptyState>
-        </Card>
       {:else}
         {#each failed as server (server.name)}
           <Callout tone="err" title="{server.name} failed" class="mb-4">
