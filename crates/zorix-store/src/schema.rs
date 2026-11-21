@@ -335,6 +335,70 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (tenant, slug)
     ) WITHOUT ROWID;
     ",
+    // 6: workflows. A workflow row holds the draft; published versions never change. A run keeps its whole record in `doc` with a
+    // revision for optimistic writes; waits are the people and timers a run is stopped for.
+    "
+    CREATE TABLE workflows (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        slug TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        live_version INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX workflows_by_slug ON workflows (tenant, slug);
+
+    CREATE TABLE workflow_versions (
+        workflow_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        hash TEXT NOT NULL,
+        note TEXT,
+        created_at INTEGER NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (workflow_id, version)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE workflow_runs (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        workflow_id TEXT NOT NULL,
+        state TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        revision INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE INDEX workflow_runs_by_workflow ON workflow_runs (tenant, workflow_id, started_at DESC);
+    CREATE INDEX workflow_runs_by_state ON workflow_runs (tenant, state);
+
+    CREATE TABLE workflow_waits (
+        id TEXT PRIMARY KEY,
+        tenant TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        due_at INTEGER,
+        created_at INTEGER NOT NULL,
+        doc TEXT NOT NULL
+    );
+    CREATE INDEX workflow_waits_by_status ON workflow_waits (tenant, status, created_at);
+    CREATE INDEX workflow_waits_by_run ON workflow_waits (run_id);
+
+    CREATE TABLE workflow_triggers (
+        tenant TEXT NOT NULL,
+        workflow_id TEXT NOT NULL,
+        step TEXT NOT NULL,
+        doc TEXT NOT NULL,
+        PRIMARY KEY (tenant, workflow_id, step)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE workflow_meta (
+        tenant TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        PRIMARY KEY (tenant, key)
+    ) WITHOUT ROWID;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -477,5 +541,35 @@ mod tests {
         conn.pragma_update(None, "user_version", LATEST + 1).unwrap();
         let error = migrate(&mut conn).unwrap_err();
         assert!(error.contains("newer version of ZORIX"), "{error}");
+    }
+
+    #[test]
+    fn a_database_of_schema_5_upgrades_to_workflows_and_keeps_its_data() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(5) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, idempotency_key, created_at, doc) VALUES ('e1','local',NULL,'completed',1,NULL,1,'{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO teams (tenant, slug, updated_at, doc) VALUES ('local','desk',1,'{}')", []).unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        for table in
+            ["workflows", "workflow_versions", "workflow_runs", "workflow_waits", "workflow_triggers", "workflow_meta"]
+        {
+            let found: u32 = conn
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert_eq!(found, 1, "{table} was not created");
+        }
+        let runs: u32 = conn.query_row("SELECT COUNT(*) FROM executions", [], |r| r.get(0)).unwrap();
+        let teams: u32 = conn.query_row("SELECT COUNT(*) FROM teams", [], |r| r.get(0)).unwrap();
+        assert_eq!((runs, teams), (1, 1));
     }
 }
