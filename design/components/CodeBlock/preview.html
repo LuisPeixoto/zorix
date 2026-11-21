@@ -1,0 +1,18 @@
+<!-- @dsCard group="Data" height=250 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CodeBlock</title></head>
+<body>
+<div id="root">
+<div class="zx-col" style="gap:10px;max-width:620px">
+<pre class="zx-code"><div class="zx-code__bar"><span>SQL · db:analytics</span><button class="zx-btn zx-btn--ghost zx-btn--sm"><i data-i="copy" data-s="13"></i><span>Copy</span></button></div><span class="tok-kw">SELECT</span> id<span class="tok-punct">,</span> name<span class="tok-punct">,</span> created_at
+<span class="tok-kw">FROM</span> customers
+<span class="tok-kw">WHERE</span> plan <span class="tok-punct">=</span> <span class="tok-str">'pro'</span>  <span class="tok-com">-- paying</span>
+<span class="tok-kw">ORDER BY</span> created_at <span class="tok-kw">DESC</span>
+<span class="tok-kw">LIMIT</span> <span class="tok-num">20</span><span class="tok-punct">;</span></pre>
+<pre class="zx-code"><span class="tok-punct">{</span><span class="tok-str">"connection"</span><span class="tok-punct">:</span> <span class="tok-str">"prod"</span><span class="tok-punct">,</span> <span class="tok-str">"sql"</span><span class="tok-punct">:</span> <span class="tok-str">"SELECT 1"</span><span class="tok-punct">,</span> <span class="tok-str">"max_rows"</span><span class="tok-punct">:</span> <span class="tok-num">100</span><span class="tok-punct">}</span></pre>
+</div>
+</div>
+<script>Zorix.hydrate();</script>
+</body>
+</html>
