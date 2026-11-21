@@ -95,6 +95,8 @@
           <p class="mt-1.5 max-w-3xl text-md text-muted">{spec.description || "No description yet. Add one on the Definition tab."}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1.5">
+          {#if agents.tab !== "evals"}<Button size="sm" icon="flask" onclick={() => (tab = "evals")}>Run evals</Button>{/if}
+          {#if agents.tab !== "chat"}<Button size="sm" variant="subtle" icon="message" onclick={() => (tab = "chat")}>Chat</Button>{/if}
           <Button size="sm" icon="file-text" onclick={showFile}>Agent file</Button>
           <IconButton icon="archive" label="Archive this agent" onclick={archive} />
           <IconButton icon="trash" label="Delete this agent" onclick={() => (confirmOpen = true)} />

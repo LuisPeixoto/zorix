@@ -25,7 +25,8 @@
   import { toast } from "../../stores/toast.svelte.ts";
   import { DELEGATE, childRows } from "../../delegation.ts";
   import { buildThread, canSend, openRun } from "../../thread.ts";
-  import { Avatar, Badge, Button, ChatBubble, Chip, Composer, DelegationCard, Icon, Markdown, ToolCallCard } from "../../ui/index.ts";
+  import { Avatar, Badge, Button, Card, ChatBubble, Chip, Composer, DelegationCard, Icon, KeyValue, Markdown, ToolCallCard } from "../../ui/index.ts";
+  import { usd } from "../../shell.ts";
   import TreeApprovals from "./TreeApprovals.svelte";
   import type { ToolStatus } from "../../ui/ToolCallCard.svelte";
 
@@ -56,6 +57,9 @@
   const team = $derived(agents.chatTeam ? agents.team(agents.chatTeam) : undefined);
 
   const items = $derived(buildThread(runs, live));
+  // The rail: what this conversation has cost and done so far.
+  const spent = $derived(runs.reduce((n, r) => n + r.execution.usage.cost_micros, 0));
+  const modelSteps = $derived(runs.reduce((n, r) => n + r.execution.usage.model_calls, 0));
   const ready = $derived(canSend(runs));
   const working = $derived(openRun(runs));
 
@@ -325,4 +329,37 @@
       </div>
     </div>
   </section>
+
+  <aside class="hidden w-72 shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel-2 p-4 xl:block" aria-label="About this chat">
+    <Card title={team ? "About this team" : "About this agent"} icon={team ? "users" : "bot"}>
+      {#if team}
+        <ul class="space-y-2.5">
+          {#each [team.lead, ...team.members].filter((m) => m) as m, i (m?.slug)}
+            {#if m}
+              <li class="flex items-center gap-2.5">
+                <Avatar emoji={m.emoji} color={m.color} size="sm" />
+                <span class="min-w-0 flex-1"><span class="block truncate text-base font-medium">{m.name}</span><span class="mono block text-xs text-muted">{i === 0 ? "lead · " : ""}v{m.version}</span></span>
+              </li>
+            {/if}
+          {/each}
+        </ul>
+      {:else}
+        <p class="text-sm text-muted">{spec.description || "No description yet."}</p>
+        {#if detail.version.spec.skills.length}
+          <p class="mt-3 mb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Skills</p>
+          <div class="flex flex-wrap gap-1.5">{#each detail.version.spec.skills as k (k.name)}<Badge tone="info">{k.name}</Badge>{/each}</div>
+        {/if}
+      {/if}
+    </Card>
+    <Card title="This conversation" icon="message">
+      <KeyValue
+        items={[
+          { key: "Spent", value: usd(spent), mono: true },
+          { key: "Model steps", value: modelSteps, mono: true },
+          { key: "Messages", value: runs.length, mono: true },
+          { key: "Model", value: spec.models.default, mono: true },
+        ]}
+      />
+    </Card>
+  </aside>
 </div>
