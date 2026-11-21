@@ -1,7 +1,7 @@
 //! The small pure rules of projects: where a card lands in a lane, what a task asks its agent, and what a link points at.
 
 use serde::Serialize;
-use zorix_core::{Project, Task, TaskState};
+use zorix_core::{Project, ProjectEvent, ProjectEventKind, Task, TaskState, Who};
 
 /// The gap left between ranks, so a card can be placed between two others without moving them.
 pub const RANK_STEP: i64 = 1_000;
@@ -143,6 +143,66 @@ impl LinkKind {
             return LinkKind::GitlabPull { repo: parts[..at].join("/"), number };
         }
         LinkKind::Other
+    }
+}
+
+fn lane(state: TaskState) -> &'static str {
+    match state {
+        TaskState::Backlog => "Backlog",
+        TaskState::InProgress => "In progress",
+        TaskState::Review => "Review",
+        TaskState::Done => "Done",
+    }
+}
+
+/// One line of history in words: who did what to which task.
+pub fn sentence(event: &ProjectEvent) -> String {
+    let who = match &event.by {
+        Some(Who::You) => "You".to_string(),
+        Some(other) => {
+            let label = other.label();
+            let mut chars = label.chars();
+            chars.next().map(|c| c.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or(label)
+        }
+        None => "ZORIX".to_string(),
+    };
+    let task = event.task.as_ref().map(ToString::to_string).unwrap_or_default();
+    match &event.kind {
+        ProjectEventKind::ProjectCreated => format!("{who} made the project"),
+        ProjectEventKind::ProjectEdited => format!("{who} changed the project"),
+        ProjectEventKind::ProjectArchived { archived } => {
+            format!("{who} {} the project", if *archived { "archived" } else { "brought back" })
+        }
+        ProjectEventKind::TaskCreated { title } => format!("{who} added {task}: {title}"),
+        ProjectEventKind::TaskEdited => format!("{who} changed {task}"),
+        ProjectEventKind::Moved { from, to, approved_by, note } => {
+            let mut text = format!("{who} moved {task} from {} to {}", lane(*from), lane(*to));
+            if let Some(by) = approved_by {
+                text.push_str(&format!(" (approved by {by})"));
+            }
+            if let Some(note) = note {
+                text.push_str(&format!(": “{note}”"));
+            }
+            text
+        }
+        ProjectEventKind::Assigned { to } => match to {
+            Some(who_to) => format!("{who} gave {task} to {}", who_to.label()),
+            None => format!("{who} took {task} off whoever had it"),
+        },
+        ProjectEventKind::RunStarted { .. } => format!("A run started on {task}"),
+        ProjectEventKind::RunFinished { .. } => format!("The run on {task} finished"),
+        ProjectEventKind::RunFailed { reason, .. } => format!("The run on {task} failed: {}", clip(reason, 120)),
+        ProjectEventKind::StartFailed { reason } => format!("A run could not start on {task}: {}", clip(reason, 120)),
+        ProjectEventKind::RunCancelled { .. } => format!("The run on {task} was stopped"),
+        ProjectEventKind::Blocked { by } => {
+            let keys: Vec<String> = by.iter().map(ToString::to_string).collect();
+            format!("{task} waits for {}", keys.join(", "))
+        }
+        ProjectEventKind::Progress { percent } => format!("{who} reported {percent}% on {task}"),
+        ProjectEventKind::Deliverable { title } => format!("{who} added a deliverable to {task}: {title}"),
+        ProjectEventKind::Comment { text } => format!("{who} commented on {task}: {}", clip(text, 120)),
+        ProjectEventKind::Linked { url } => format!("{who} linked {url} to {task}"),
+        ProjectEventKind::ManagerAsked { .. } => format!("{who} asked the manager to plan"),
     }
 }
 
