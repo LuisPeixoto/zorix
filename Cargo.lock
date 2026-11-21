@@ -7956,7 +7956,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-agents"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -7984,7 +7984,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-cli"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "clap",
@@ -8014,7 +8014,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-core"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -8029,7 +8029,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-desktop"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "futures-util",
  "parking_lot",
@@ -8060,7 +8060,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-hub"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -8079,7 +8079,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-integrations"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8109,7 +8109,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-mcp"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8139,7 +8139,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-memory"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "globset",
@@ -8164,7 +8164,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-providers"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8190,7 +8190,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-runtime"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -8210,7 +8210,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-sandbox"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "parking_lot",
@@ -8232,7 +8232,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-sim"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "parking_lot",
@@ -8245,7 +8245,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-store"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "dirs 6.0.0",
@@ -8264,7 +8264,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-tools"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "parking_lot",
@@ -8277,7 +8277,7 @@ dependencies = [
 
 [[package]]
 name = "zorix-workflows"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "axum",
