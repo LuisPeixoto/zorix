@@ -26,7 +26,7 @@
   <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{#each [0, 1] as i (i)}<Skeleton class="h-40 rounded-2xl" />{/each}</div>
 {:else}
   {#if agents.teams.length === 0}
-    <Card padding="none"><EmptyState icon="users" title="No teams yet" text="Add a ready-made team below, or make one from agents you already have." /></Card>
+    <EmptyState icon="users" title="No teams yet" text="Add a ready-made team below, or make one from agents you already have." />
   {:else}
     <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Your teams">
       {#each agents.teams as t (t.team.slug)}

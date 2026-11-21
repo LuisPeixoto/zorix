@@ -140,9 +140,9 @@
       </div>
 
       {#if cases.length === 0}
-        <Card padding="none"><EmptyState icon="flask" title="No cases yet" text="A case is something to ask the agent and what its answer must meet. Add a few, then run them whenever you change the agent." /></Card>
+        <EmptyState icon="flask" title="No cases yet" text="A case is something to ask the agent and what its answer must meet. Add a few, then run them whenever you change the agent." />
       {:else if shown.length === 0}
-        <Card padding="none"><EmptyState icon="flask" title="Not run yet" text="Run the evaluation to see which cases pass. Changes never touch your files or the network unless a case allows it." /></Card>
+        <EmptyState icon="flask" title="Not run yet" text="Run the evaluation to see which cases pass. Changes never touch your files or the network unless a case allows it." />
       {:else}
         <ScoreMatrix cases={names} runs={matrixRuns} {cell} {selected} onselect={(caseName, runId) => (selected = { caseName, runId })} />
         {#if result && selected}

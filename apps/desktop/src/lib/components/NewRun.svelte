@@ -217,11 +217,11 @@
 
         {#if !agentSlug}
           <Card title="What it may use" icon="wrench">
-            <p class="mb-3 text-sm text-muted">Anything marked <span class="font-medium text-warn">asks</span> waits for you before it runs.</p>
+            <p class="mb-3 text-sm text-muted">Anything marked <span class="font-semibold text-fg">asks</span> waits for you before it runs.</p>
             <div class="flex flex-wrap gap-2">
               {#each builtinTools as tool (tool.id)}
                 <Chip selected={isOn(tool.id)} onclick={() => (overrides[tool.id] = !isOn(tool.id))}>
-                  <span class="mono">{tool.id}</span>{#if tool.requires_approval}<span class="ml-1.5 font-medium text-warn">asks</span>{/if}
+                  <span class="mono">{tool.id}</span>{#if tool.requires_approval}<span class="ml-1.5 font-semibold text-muted">asks</span>{/if}
                 </Chip>
               {/each}
             </div>

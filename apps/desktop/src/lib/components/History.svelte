@@ -59,9 +59,9 @@
         </div>
       </Card>
     {:else}
-      <Card><EmptyState icon="history" title="Nothing found" text="No past work matches. Try other words." /></Card>
+      <EmptyState icon="history" title="Nothing found" text="No past work matches. Try other words." />
     {/each}
   {:else}
-    <Card><EmptyState icon="history" title="Search what was done before" text="Type a few words from a past request." /></Card>
+    <EmptyState icon="history" title="Search what was done before" text="Type a few words from a past request." />
   {/if}
 </div>

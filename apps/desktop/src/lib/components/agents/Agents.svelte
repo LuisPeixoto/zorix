@@ -66,12 +66,10 @@
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{#each [0, 1, 2] as i (i)}<Skeleton class="h-40 rounded-2xl" />{/each}</div>
       {:else}
         {#if agents.cards.length === 0}
-          <Card padding="none">
-            <EmptyState icon="bot" title="No agents yet" text="Start from a ready-made agent below, or import a file. Each one comes with a skill and a few checks you can run." />
-          </Card>
+          <EmptyState icon="bot" title="No agents yet" text="Start from a ready-made agent below, or import a file. Each one comes with a skill and a few checks you can run." />
         {:else}
           {#if agents.teams.length}
-            <div class="mb-4">
+            <div class="mb-4 flex">
               <Segmented
                 label="Show"
                 bind:value={show}

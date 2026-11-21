@@ -49,7 +49,7 @@
                   </span>
                 </span>
               {/if}
-              <Button size="sm" onclick={() => review(item)}>Review</Button>
+              <Button size="sm" aria-label={item.kind === "approval" ? `Review ${item.tool}${item.target ? ` ${item.target}` : ""}` : `Review ${item.server}`} onclick={() => review(item)}>Review</Button>
             </li>
           {/each}
         </ul>

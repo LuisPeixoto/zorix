@@ -98,7 +98,7 @@
         <p class="flex-1 text-sm text-muted">The agent sees only each skill's name and description, and loads the rest when the task fits. Attaching one saves a new version.</p>
       </div>
       {#if pinned.length === 0}
-        <Card padding="none"><EmptyState icon="file-text" title="No skills attached" text="A skill is a folder of instructions and scripts. Attach one from the library below, or import a folder." /></Card>
+        <EmptyState icon="file-text" title="No skills attached" text="A skill is a folder of instructions and scripts. Attach one from the library below, or import a folder." />
       {:else}
         <div class="space-y-3">
           {#each pinned as s (s.name)}

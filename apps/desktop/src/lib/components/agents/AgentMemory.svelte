@@ -76,7 +76,7 @@
     <section aria-labelledby="own-title">
       <h2 id="own-title" class="mb-3 text-lg font-semibold">What it remembers <span class="text-sm font-normal text-faint">{own.length}</span></h2>
       {#if own.length === 0}
-        <Card padding="none"><EmptyState icon="book" title="Nothing yet" text="Facts that only this agent should know will appear here." /></Card>
+        <EmptyState icon="book" title="Nothing yet" text="Facts that only this agent should know will appear here." />
       {:else}
         <ul class="space-y-2">
           {#each own as m (m.id)}
