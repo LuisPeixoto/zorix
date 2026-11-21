@@ -132,6 +132,11 @@ stops it between files and exits with code 4; what was done stays indexed. See [
 
 `show`, `models`, `set <PROVIDER/MODEL> [--dims N] [--cloud]`, `off`, `test` and `reembed`. A cloud provider needs `--cloud`: your text is sent to it.
 
+### `zorix workflow …`, `zorix serve`
+
+Workflows: list, show, create, edit, import, export, versions, diff, publish, rollback, enable, disable, remove, run, runs, run-show, cancel, waits, answer, webhook, templates and add.
+`serve` runs schedules, events and (with `--webhooks` or `--bind`) webhooks until Ctrl-C. See [workflows](workflows.md#the-command-line).
+
 ### `zorix mcp …`
 
 Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.

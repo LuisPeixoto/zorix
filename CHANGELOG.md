@@ -5,6 +5,24 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-21
+
+**Workflows**: triggers, steps and people joined into a graph that runs by itself and stops where a person must decide ([guide](docs/workflows.md)).
+
+### Added
+- Workflows are versioned graphs (a draft and published versions, a hash, rollback as a new version, and a readable diff) that create ordinary runs through the hub
+  ([ADR-0033](docs/adr/0033-workflows-are-versioned-graphs-that-create-executions.md)). Steps: agent, team, condition, loop, wait, approval, question, message (Slack, Discord) and HTTP request.
+  Values pass with `{{…}}` templates that fail loudly, and conditions use a small safe expression language. Database schema 6.
+- Triggers: schedules (every N minutes, at times on chosen days, or cron, in a time zone), webhooks (a secret address, an optional signature, 1 MB cap, off by default), agent and team runs that
+  ended, and another workflow ending, with a chain cut at 4. They run in the app while it is open or under the new **`zorix serve`**; a schedule missed while nothing ran is recorded, not
+  replayed ([ADR-0034](docs/adr/0034-the-workflow-host-and-triggers.md)).
+- People: approvals and questions are waits bound to a fingerprint of what was shown, with time-outs and an optional Slack reminder. Actions ask first; a step that runs without asking is confirmed
+  when publishing and the version records it. An action interrupted by a stop asks instead of repeating ([ADR-0035](docs/adr/0035-people-steps-and-unattended-actions.md)).
+- `zorix workflow` (list, show, create, edit, import, export, versions, diff, publish, rollback, enable, run, runs, answer, webhook, templates…), `.workflow.json` files, and three starters.
+- The Workflows screens (list, editor with a canvas, run view), kit `TriggerChip`, `WorkflowNode` and `WorkflowCanvas`, workflow waits in the Inbox, *Run as › Workflow* and *Save as workflow* in New run,
+  and Settings › General for webhooks. The design system gained the *Workflow run* screen (logged in `design/local-additions.md`).
+- `tools/live-tests.sh workflows`: 17 checks through the real command line, including a signed webhook against `zorix serve`.
+
 ## [0.6.1] - 2026-11-21
 
 **Design system v3**: the app follows the design system strictly, and every later phase will.

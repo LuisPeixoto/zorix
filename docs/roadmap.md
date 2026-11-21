@@ -83,9 +83,10 @@ specifications, and the shell, Runs, Run, New run, Providers, Memory, Documents,
 
 Every later phase below lists its screens and the design system components they are built from (from `design/surfaces.md`). A screen the design system lacks is added there first.
 
-## Phase 7 — Workflow Engine
+## ✅ Phase 7 — Workflow Engine · v0.7.0
 
-Visual workflows with conditions, parallel branches, human approvals, schedules, webhooks and events as triggers. Versioned and reusable.
+Visual workflows with conditions, parallel branches, human approvals, schedules, webhooks and events as triggers. Versioned and reusable. Guide: [workflows](workflows.md). Shipped:
+the model and store (schema 6), the engine and host (`zorix-workflows`, `zorix serve`), `zorix workflow`, and the Workflows screens in the app.
 Screens: Workflows, Workflow editor, workflow run view. Built from WorkflowCanvas, WorkflowNode, TriggerChip, Drawer, VersionTimeline and ApprovalCard.
 
 - **Triggers:** a schedule ("Weekdays at 08:00"), a webhook (for example a GitHub issue labelled `incident`), and an event (another workflow finishing, a new ticket).

@@ -47,10 +47,17 @@ everything. It is not tied to one model or provider, and the core does not know 
 - **Agents that work together.** An agent can ask other agents, several at once and several levels deep, through one tool, `agents.delegate`.
   [Teams](docs/teams.md) say who leads and who may be asked. A parent waits without holding a worker, what it spends and may do only
   **shrinks** down the tree, an approval asked anywhere below reaches you at the top, and the app draws the whole [tree](docs/orchestration.md).
+- **Work that runs by itself and stops for you.** [Workflows](docs/workflows.md) join triggers (a schedule, a webhook, an event), agents, conditions and approvals into a graph you draw. They are
+  versioned, a test run asks before every action, a step that sends without asking is confirmed when you publish, and an approval is bound to exactly what you were shown.
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
 ## Screenshots
+
+| | |
+|---|---|
+| ![The workflow editor](docs/screenshots-0.7.0/workflows-editor-light.png) | ![A workflow run waiting for an approval](docs/screenshots-0.7.0/workflows-run-dark.png) |
+| A workflow on its canvas: triggers, an agent, a condition, an approval and actions. | A run stopped for a person: the card shows exactly what is being approved. |
 
 | | |
 |---|---|
@@ -94,6 +101,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 | Code sandbox | JavaScript (QuickJS) and Python in WebAssembly: no network, hard limits | [Sandbox](docs/sandbox.md) |
 | Agents | Versioned agents, skills, memory of their own, model allow-list, evaluations, starter agents | [Agents](docs/agents.md) |
 | Orchestration | Parallel and nested delegation, structured handoff, budgets and permissions that only shrink, approvals up the tree, teams | [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) |
+| Workflows | Versioned graphs with schedules, webhooks and events, conditions, approvals and actions; `zorix serve` | [Workflows](docs/workflows.md) |
 
 ## Install
 
@@ -153,6 +161,7 @@ cargo run -p zorix-runtime --example embed
 | [The code sandbox](docs/sandbox.md) | JavaScript and Python, limits and files |
 | [Agents](docs/agents.md), [Skills](docs/skills.md), [Evaluations](docs/evals.md) | Reusable agents you can version and test |
 | [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) | Agents asking agents: delegation, trees, budgets, approvals |
+| [Workflows](docs/workflows.md) | Triggers, steps, people, versions, the host and webhooks |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |
