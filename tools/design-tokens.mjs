@@ -18,7 +18,10 @@ const tokensPath = resolve(root, "design/tokens.json");
 const cssPath = resolve(root, "apps/desktop/src/app.css");
 
 const tokens = JSON.parse(readFileSync(tokensPath, "utf8"));
-const css = readFileSync(cssPath, "utf8");
+// Git may check files out with CRLF line endings (Windows). The blocks are matched and written with LF, and --check compares like with like.
+const original = readFileSync(cssPath, "utf8");
+const crlf = original.includes("\r\n");
+const css = original.replace(/\r\n/g, "\n");
 
 /** `{accent}` becomes `var(--accent)`; any other value is used as written. */
 const resolveValue = (value) => value.replace(/^\{([a-z0-9-]+)\}$/, "var(--$1)");
@@ -67,7 +70,7 @@ if (process.argv.includes("--check")) {
   }
   console.log("design tokens ok (app.css matches design/tokens.json)");
 } else if (next !== css) {
-  writeFileSync(cssPath, next);
+  writeFileSync(cssPath, crlf ? next.replace(/\n/g, "\r\n") : next);
   console.log("app.css updated from design/tokens.json");
 } else {
   console.log("app.css already matches design/tokens.json");
