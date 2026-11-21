@@ -41,6 +41,7 @@ import {
 } from "../api.ts";
 import { isFinished } from "../format.ts";
 import { type AgentTab, agents } from "./agents.svelte.ts";
+import { inbox } from "./inbox.svelte.ts";
 import { toast } from "./toast.svelte.ts";
 
 class RunsStore {
@@ -57,7 +58,7 @@ class RunsStore {
   error = $state<string | null>(null);
   busy = $state(false);
   /** Which screen is showing. `runs` is the list of runs, or one run when `selectedId` is set; `new` is the form that starts one. */
-  view = $state<"runs" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
+  view = $state<"inbox" | "runs" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -180,6 +181,12 @@ class RunsStore {
     this.view = "design";
   }
 
+  /** Everything waiting for a person. */
+  showInbox(): void {
+    this.view = "inbox";
+    this.#leaveRun();
+  }
+
   /** The list of runs. */
   showRuns(): void {
     this.view = "runs";
@@ -222,11 +229,13 @@ class RunsStore {
       const parents = this.runs.filter((r) => ["waiting_for_children", "completed", "failed"].includes(r.state) && r.agent).map((r) => r.id);
       if (parents.length) {
         this.subRuns = await subRunCounts(parents.slice(0, 60));
-        const waiting = this.runs.filter((r) => r.state === "waiting_for_children");
-        const flags: Record<string, boolean> = {};
-        for (const run of waiting) flags[run.id] = (await treeApprovals(run.id)).length > 0;
-        this.needsYou = flags;
       }
+      // Every run that waits, or waits for a sub-run that waits, may hold approvals for the Inbox and the "needs you" marks.
+      const holding = this.runs.filter((r) => r.state === "waiting_for_approval" || r.state === "waiting_for_children");
+      const found = await Promise.all(holding.map(async (run) => [run.id, await treeApprovals(run.id)] as const));
+      const byRoot = Object.fromEntries(found);
+      this.needsYou = Object.fromEntries(holding.filter((r) => r.state === "waiting_for_children").map((r) => [r.id, (byRoot[r.id]?.length ?? 0) > 0]));
+      inbox.setApprovals(this.runs, byRoot);
     } catch (e) {
       this.error = errorText(e);
     }
