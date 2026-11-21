@@ -4,7 +4,7 @@
   import { integrations } from "../../stores/integrations.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
   import {
-    Badge, BrandLogo, Button, Callout, Card, Chip, EmptyState, Icon, IconButton, Input, List, ListRow, PageHeader, Tabs,
+    Badge, BrandLogo, Button, Callout, Card, Chip, EmptyState, Icon, IconButton, Input, List, ListRow, PageHeader, Segmented, Tabs,
   } from "../../ui/index.ts";
   import AddServerModal from "./AddServerModal.svelte";
   import ConnectModal from "./ConnectModal.svelte";
@@ -22,6 +22,11 @@
   });
 
   let query = $state("");
+  let show = $state("all");
+  const wants = (s: (typeof integrations.servers)[number]) => s.enabled && (s.tools_to_review > 0 || s.state === "needs_login" || s.state === "failed");
+  const attention = $derived(integrations.servers.filter(wants));
+  const failed = $derived(integrations.servers.filter((s) => s.enabled && s.state === "failed"));
+  const listed = $derived(show === "attention" ? attention : integrations.servers);
   let category = $state("All");
   let addOpen = $state(false);
   let addEntry = $state<CatalogEntry | null>(null);
@@ -82,11 +87,31 @@
           </EmptyState>
         </Card>
       {:else}
-        <div class="grid gap-4 md:grid-cols-2">
-          {#each integrations.servers as server (server.name)}
-            <ServerCard {server} onopen={() => integrations.open(server.name)} />
-          {/each}
+        {#each failed as server (server.name)}
+          <Callout tone="err" title="{server.name} failed" class="mb-4">
+            {#snippet actions()}<Button size="sm" onclick={() => integrations.open(server.name)}>Open {server.name}</Button>{/snippet}
+            <span class="selectable">{server.reason ?? "The server stopped answering."}</span> Fix it, or switch the server off so runs do not wait for it.
+          </Callout>
+        {/each}
+        <div class="mb-4">
+          <Segmented
+            label="Show"
+            bind:value={show}
+            options={[
+              { value: "all", label: `All ${integrations.servers.length}` },
+              { value: "attention", label: `Needs attention ${attention.length}` },
+            ]}
+          />
         </div>
+        {#if listed.length === 0}
+          <p class="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-8 text-center text-base text-muted">Nothing needs attention.</p>
+        {:else}
+          <div class="grid gap-4 md:grid-cols-2">
+            {#each listed as server (server.name)}
+              <ServerCard {server} onopen={() => integrations.open(server.name)} />
+            {/each}
+          </div>
+        {/if}
       {/if}
     {:else if tab === "catalogue"}
       <div class="mb-4 flex flex-wrap items-center gap-3">
@@ -97,7 +122,7 @@
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         {#each shown as entry (entry.id)}
-          <div class="raised flex flex-col gap-3 rounded-2xl border border-line bg-panel p-4">
+          <div class="shadow-card flex flex-col gap-3 rounded-2xl border border-line bg-panel p-4">
             <div class="flex items-start gap-3">
               <BrandLogo name={entry.logo} size={40} />
               <div class="min-w-0 flex-1">
@@ -128,7 +153,7 @@
           <button
             type="button"
             onclick={() => connect(kind)}
-            class="raised group flex items-center gap-3 rounded-2xl border border-line bg-panel p-3 text-left transition duration-150 hover:-translate-y-px hover:border-line-strong hover:shadow-3"
+            class="shadow-card group flex items-center gap-3 rounded-2xl border border-line bg-panel p-3 text-left transition duration-150 hover:-translate-y-px hover:border-line-strong hover:shadow-3"
           >
             <BrandLogo name={KINDS[kind].logo} size={36} />
             <span class="min-w-0 flex-1"><span class="block text-md font-medium">{KINDS[kind].title}</span><span class="block truncate text-xs text-muted">{KINDS[kind].summary}</span></span>

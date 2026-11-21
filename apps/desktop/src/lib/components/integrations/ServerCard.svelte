@@ -12,7 +12,7 @@
   type="button"
   onclick={onopen}
   class={cn(
-    "raised group flex w-full flex-col gap-3 rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3",
+    "shadow-card group flex w-full flex-col gap-3 rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3",
     !server.enabled && "opacity-80",
   )}
 >

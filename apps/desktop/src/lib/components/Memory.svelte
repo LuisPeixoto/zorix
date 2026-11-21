@@ -2,10 +2,12 @@
   import { onMount } from "svelte";
 
   import History from "./History.svelte";
+  import MemoryProposals from "./MemoryProposals.svelte";
 
   import { type MemoryRow, errorText, memoryUsage } from "../api.ts";
   import { ago } from "../format.ts";
   import { agents } from "../stores/agents.svelte.ts";
+  import { inbox } from "../stores/inbox.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Field, Input, Modal, PageHeader, Segmented, Select, Tabs, Textarea } from "../ui/index.ts";
 
@@ -22,6 +24,7 @@
         (!query.trim() || `${m.content} ${m.subject ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())),
     ),
   );
+  const proposals = $derived(inbox.approvals.filter((i) => i.kind === "approval" && i.tool === "memory.remember").length);
   const activeCount = $derived(store.memory.filter((m) => m.status === "active").length);
 
   onMount(() => void store.refreshMemory(true));
@@ -137,6 +140,7 @@
 
   <Tabs
     tabs={[
+      { value: "approve", label: "To approve", count: proposals },
       { value: "facts", label: "Facts and preferences", count: activeCount },
       { value: "history", label: "Past work" },
     ]}
@@ -146,7 +150,9 @@
 
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
-  {#if tab === "history"}
+  {#if tab === "approve"}
+    <MemoryProposals />
+  {:else if tab === "history"}
     <History />
   {:else}
     <div class="flex flex-wrap items-center gap-3">

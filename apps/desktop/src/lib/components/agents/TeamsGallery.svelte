@@ -31,7 +31,7 @@
     <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Your teams">
       {#each agents.teams as t (t.team.slug)}
         <li>
-          <button type="button" onclick={() => agents.openTeams(t.team.slug)} class="group raised flex h-full w-full flex-col rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3">
+          <button type="button" onclick={() => agents.openTeams(t.team.slug)} class="group shadow-card flex h-full w-full flex-col rounded-2xl border border-line bg-panel p-4 text-left transition duration-150 ease-out hover:-translate-y-px hover:border-line-strong hover:shadow-3">
             <span class="flex items-start gap-3">
               <Avatar emoji={t.team.avatar.emoji} color={t.team.avatar.color} size="lg" />
               <span class="min-w-0 flex-1">
