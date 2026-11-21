@@ -1,0 +1,78 @@
+// What is waiting for a person, in one list: tool approvals anywhere in a tree of runs, and tools or sign-ins MCP servers want a person to review.
+// Pure functions, tested in inbox.test.ts.
+import type { Approval, Execution, ServerRow, TreeApproval } from "./api.ts";
+import { shorten } from "./format.ts";
+
+export type InboxItem =
+  | {
+      kind: "approval";
+      id: string;
+      /** The run the person started: the answer is given there, even when a sub-run asked. */
+      root: string;
+      rootPrompt: string;
+      /** The run that waits (the root, or a sub-run). */
+      execution: string;
+      agent: string | null;
+      depth: number;
+      tool: string;
+      /** What the call is about, in a few words: a path, an address, a channel. */
+      target: string;
+      reason: string;
+      at: number;
+      approval: Approval;
+    }
+  | { kind: "server"; id: string; server: string; why: "tools" | "login"; tools: number; at: number };
+
+const TARGET_KEYS = ["target", "path", "url", "channel", "repo", "query", "sql", "to", "name", "subject"];
+
+/** What a tool call is about, taken from its arguments: the first of a few well-known keys, else the arguments in brief. */
+export function targetOf(args: unknown): string {
+  if (args && typeof args === "object") {
+    const record = args as Record<string, unknown>;
+    for (const key of TARGET_KEYS) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return shorten(value, 70);
+    }
+    const text = JSON.stringify(record);
+    return text === "{}" ? "" : shorten(text, 70);
+  }
+  return typeof args === "string" ? shorten(args, 70) : "";
+}
+
+/** One item per pending approval found under the runs that wait. */
+export function approvalItems(runs: readonly Pick<Execution, "id" | "request">[], byRoot: Readonly<Record<string, TreeApproval[]>>): InboxItem[] {
+  return runs.flatMap((run) =>
+    (byRoot[run.id] ?? [])
+      .filter((t) => t.approval.status === "pending")
+      .map((t): InboxItem => ({
+        kind: "approval",
+        id: t.approval.id,
+        root: run.id,
+        rootPrompt: run.request.prompt,
+        execution: t.execution,
+        agent: t.agent,
+        depth: t.depth,
+        tool: t.approval.tool,
+        target: targetOf(t.approval.arguments),
+        reason: t.approval.reason,
+        at: t.approval.requested_at,
+        approval: t.approval,
+      })),
+  );
+}
+
+/** One item per enabled server that wants a person: tools to review, or a sign-in. */
+export function serverItems(servers: readonly ServerRow[]): InboxItem[] {
+  return servers
+    .filter((s) => s.enabled && (s.tools_to_review > 0 || s.state === "needs_login"))
+    .map((s): InboxItem => ({ kind: "server", id: `server:${s.name}`, server: s.name, why: s.state === "needs_login" ? "login" : "tools", tools: s.tools_to_review, at: 0 }));
+}
+
+/** Oldest ask first, as the design system says, with servers (which have no time) after the approvals, by name. */
+export function oldestFirst(items: readonly InboxItem[]): InboxItem[] {
+  return [...items].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "approval" ? -1 : 1;
+    if (a.kind === "approval" && b.kind === "approval") return a.at - b.at || a.id.localeCompare(b.id);
+    return a.id.localeCompare(b.id);
+  });
+}

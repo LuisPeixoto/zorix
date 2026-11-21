@@ -4,6 +4,7 @@
   import { store } from "./lib/stores/runs.svelte.ts";
   import { theme } from "./lib/stores/theme.svelte.ts";
   import NewRun from "./lib/components/NewRun.svelte";
+  import Inbox from "./lib/components/Inbox.svelte";
   import Documents from "./lib/components/Documents.svelte";
   import Memory from "./lib/components/Memory.svelte";
   import RunsPage from "./lib/components/RunsPage.svelte";
@@ -53,6 +54,7 @@
           });
         } else store.showTeams(slug || null);
       }
+      if (start === "inbox") store.showInbox();
       if (start === "runs") store.showRuns();
       if (start === "new") store.showForm();
       if (start === "documents") store.showDocuments();
@@ -69,6 +71,7 @@
   // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.
   const commands = $derived<Command[]>([
     { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showForm(); } },
+    { id: "inbox", label: "Inbox", group: "Go to", icon: "bell", keywords: "approvals waiting review decide", run: () => store.showInbox() },
     { id: "runs", label: "Runs", group: "Go to", icon: "history", keywords: "history list all", run: () => store.showRuns() },
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
     { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
@@ -162,6 +165,8 @@
         <Integrations />
       {:else if store.view === "providers"}
         <Providers />
+      {:else if store.view === "inbox"}
+        <Inbox />
       {:else if store.view === "new"}
         <NewRun />
       {:else if store.selectedId}

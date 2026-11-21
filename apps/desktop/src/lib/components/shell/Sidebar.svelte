@@ -1,5 +1,6 @@
 <script lang="ts">
   import { agents } from "../../stores/agents.svelte.ts";
+  import { inbox } from "../../stores/inbox.svelte.ts";
   import { integrations } from "../../stores/integrations.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
   import { runningCount, spendToday, usd } from "../../shell.ts";
@@ -24,7 +25,8 @@
   <nav class="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-3" aria-label="Main">
     <div>
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Work</p>
-      <NavItem icon="history" active={store.view === "runs"} count={waiting} attention onclick={() => store.showRuns()}>Runs</NavItem>
+      <NavItem icon="bell" active={store.view === "inbox"} count={inbox.count} attention onclick={() => store.showInbox()}>Inbox</NavItem>
+      <NavItem icon="history" active={store.view === "runs"} onclick={() => store.showRuns()}>Runs</NavItem>
     </div>
     <div>
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Organisation</p>
