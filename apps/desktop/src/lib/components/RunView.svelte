@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { duration, isFinished, isLive, shortId, tokens } from "../format.ts";
+  import { ago, duration, isFinished, isLive, shortId, tokens } from "../format.ts";
+  import { providerCount, runSteps } from "../steps.ts";
+  import { usd } from "../shell.ts";
   import { store } from "../stores/runs.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
-  import { Badge, Button, Callout, Card, Icon, IconButton, List, ListRow, Markdown, Stat, TreeView } from "../ui/index.ts";
+  import { Badge, Button, Callout, Card, Icon, IconButton, KeyValue, List, ListRow, Markdown, Sparkbar, Stat, Tabs, ToolCallCard, TreeView } from "../ui/index.ts";
   import { type Execution, type TreeApproval, runTree, treeApprovals } from "../api.ts";
   import { agents } from "../stores/agents.svelte.ts";
   import { buildTree, totals } from "../tree.ts";
@@ -72,169 +74,195 @@
     }
   }
 
-  const statusLabel = (status: string) => status.replace("_", " ");
-  const callTone = (status: string) =>
-    status === "succeeded" ? "ok" : status === "failed" ? "err" : status === "denied" ? "warn" : "muted";
+  const steps = $derived(detail ? runSteps(detail.summary.steps, detail.tool_calls) : []);
+  const approvedByYou = $derived(detail?.approvals.filter((a) => a.status === "approved").length ?? 0);
+  const team = $derived(run?.agent?.team ?? null);
+  const helpers = $derived(Math.max(0, family.length - 1));
+
+  // The tab shown. A run with sub-runs opens on its Work tree, any other on its Steps.
+  let chosen = $state<string | null>(null);
+  const tab = $derived(chosen ?? (tree ? "tree" : "steps"));
+  $effect(() => {
+    void runId;
+    chosen = null;
+  });
+  const tabs = $derived([
+    ...(tree ? [{ value: "tree", label: "Work tree", count: sums?.runs }] : []),
+    { value: "steps", label: "Steps", count: steps.length },
+    { value: "events", label: "Events", count: store.events.length },
+    { value: "context", label: "Context" },
+    { value: "cost", label: "Cost" },
+  ]);
+  const resultText = (value: unknown) => (value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
 </script>
 
 {#if run && detail}
-  <div class="flex h-full flex-col overflow-y-auto">
-    <header class="relative shrink-0 overflow-hidden border-b border-line bg-panel px-6 py-5">
-      <span class="glow -top-24 -right-16 size-60" aria-hidden="true"></span>
-      <div class="relative flex items-start justify-between gap-4">
-        <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <StatusBadge state={run.state} />
-            {#if run.parent}
-              <button type="button" class="inline-flex h-6 items-center gap-1.5 rounded-full bg-hover px-2.5 text-xs font-medium text-muted transition hover:text-fg" title="Open the run that asked for this one" onclick={() => void store.select(run.root ?? run.parent!)}>
-                <Icon name="branch" size={12} /> sub-run · level {run.depth ?? 1}
-              </button>
-            {/if}
-            {#if run.agent}
-              <button type="button" class="inline-flex h-6 items-center gap-1.5 rounded-full bg-accent-soft px-2.5 text-xs font-medium text-accent transition hover:bg-select" title="Open {run.agent.slug} and this conversation" onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null)}>
-                <Icon name="bot" size={12} /> {run.agent.slug} · v{run.agent.version}
-              </button>
+  <div class="h-full overflow-y-auto">
+    <div class="mx-auto w-full max-w-[1200px] p-6">
+      <header class="relative mb-5">
+        <span class="glow -top-20 -left-16 size-56" aria-hidden="true"></span>
+        <nav aria-label="Where you are" class="relative flex flex-wrap items-center gap-2 text-sm text-muted">
+          <button type="button" class="inline-flex items-center gap-1 transition hover:text-fg" onclick={() => store.showRuns()}><Icon name="history" size={13} />Runs</button>
+          <Icon name="chevron-right" size={12} class="text-faint" />
+          <span class="mono selectable" title={run.id}>{shortId(run.id)}</span>
+          <IconButton label="Copy the run id" icon="copy" size="sm" onclick={() => copyId(run.id)} />
+          <StatusBadge state={run.state} />
+          {#if run.parent}
+            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-hover px-2 text-xs font-medium text-muted transition hover:text-fg" title="Open the run that asked for this one" onclick={() => void store.select(run.root ?? run.parent!)}>
+              <Icon name="branch" size={12} /> sub-run · level {run.depth ?? 1}
+            </button>
+          {/if}
+          {#if run.agent}
+            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-accent-soft px-2 text-xs font-medium text-accent transition hover:bg-select" title="Open {run.agent.slug} and this conversation" onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null, team)}>
+              <Icon name={team ? "users" : "bot"} size={12} /> {team ?? run.agent.slug} · v{run.agent.version}
+            </button>
+          {/if}
+        </nav>
+        <div class="relative mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <h1 class="selectable text-3xl leading-tight font-semibold tracking-tight break-words text-balance">{run.request.prompt}</h1>
+            <p class="mt-1.5 text-base text-muted">
+              Started {ago(run.created_at, store.now)}{#if helpers > 0} · {team ?? run.agent?.slug ?? "this run"} asked {helpers} {helpers === 1 ? "agent" : "agents"}{/if}
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            {#if run.state === "paused"}<Button variant="primary" icon="play" disabled={store.busy} onclick={() => store.resume()}>Resume</Button>{/if}
+            {#if isLive(run.state)}<Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>{/if}
+            {#if !isFinished(run.state)}<Button variant="danger" icon="x" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>{/if}
+            {#if run.conversation}
+              <Button variant="ghost" icon="message" onclick={() => (run.agent ? store.showAgents(run.agent.slug, "chat", run.conversation ?? null, team) : store.continueConversation())}>Continue in chat</Button>
             {/if}
           </div>
-          <h2 class="selectable mt-2 text-2xl leading-tight font-semibold break-words">{run.request.prompt}</h2>
-          <p class="mt-1.5 flex items-center gap-1 text-xs text-faint">
-            <span class="mono selectable">{run.id}</span>
-            <IconButton label="Copy the run id" icon="copy" size="sm" onclick={() => copyId(run.id)} />
-          </p>
         </div>
-        <div class="flex shrink-0 gap-2">
-          {#if run.state === "paused"}
-            <Button variant="primary" icon="play" disabled={store.busy} onclick={() => store.resume()}>Resume</Button>
-          {/if}
-          {#if isLive(run.state)}
-            <Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>
-          {/if}
-          {#if isFinished(run.state) && run.conversation}
-            <Button icon="history" onclick={() => (run.agent ? store.showAgents(run.agent.slug, "chat", run.conversation ?? null) : store.continueConversation())}>Continue</Button>
-          {/if}
-          {#if !isFinished(run.state)}
-            <Button variant="danger" icon="stop" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>
-          {/if}
-        </div>
+      </header>
+
+      <div class="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Stat icon="cpu" label="Model steps" value={detail.summary.model_calls} detail="{providerCount(detail.summary.steps)} {providerCount(detail.summary.steps) === 1 ? 'provider' : 'providers'}" />
+        <Stat icon="wrench" label="Tool calls" value={run.usage.tool_calls} detail="{approvedByYou} approved by you" />
+        <Stat icon="sparkles" label="Tokens" value={tokens(run.usage).toLocaleString("fr-FR")} detail="{run.usage.input_tokens.toLocaleString('fr-FR')} in · {run.usage.output_tokens.toLocaleString('fr-FR')} out" />
+        <Stat icon="clock" label="Work time" value={duration(run.active_ms)} detail="{usd(run.usage.cost_micros)} · waiting for you is not counted" />
       </div>
 
-      <dl class="relative mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat icon="cpu" label="Model steps" value={detail.summary.model_calls} />
-        <Stat icon="wrench" label="Tool calls" value={run.usage.tool_calls} />
-        <Stat icon="sparkles" label="Tokens" value={tokens(run.usage)} />
-        <Stat icon="clock" label="Work time" value={duration(run.active_ms)} detail="Waiting for you is not counted" />
-      </dl>
-    </header>
-
-    <div class="mx-auto w-full max-w-4xl shrink-0 space-y-5 p-6">
-      {#each pending as approval (approval.id)}
-        <ApprovalCard {approval} />
-      {/each}
-      <TreeApprovals items={waitingBelow} onanswered={() => { void loadFamily(); void store.select(run.id); }} />
-
-      {#if tree && sums}
-        <Card title="Work tree" icon="branch">
-          {#snippet actions()}
-            <span class="text-xs text-muted tabular-nums">{sums.runs} runs · {sums.done} done{sums.working ? ` · ${sums.working} working` : ""}{sums.waiting ? ` · ${sums.waiting} waiting for you` : ""}{sums.failed ? ` · ${sums.failed} failed` : ""}</span>
-          {/snippet}
-          <TreeView root={tree} selected={run.id} {look} now={store.now} onselect={(id) => id !== run.id && void store.select(id)} />
-          <p class="mt-3 text-xs text-faint">The cost and tokens above include everything below. Cancelling this run cancels the whole tree.</p>
-        </Card>
-      {/if}
-
-      {#if run.result}
-        <Card title="Result" icon="check-circle">
-          {#if run.agent}
-            <Markdown text={run.result.text} />
-          {:else}
-            <pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>
+      <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div class="min-w-0 space-y-5">
+          {#if run.result}
+            <Card title="Result" icon="check-circle">
+              {#if run.agent}<Markdown text={run.result.text} />{:else}<pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>{/if}
+            </Card>
           {/if}
-        </Card>
-      {/if}
-      {#if run.failure}
-        <Callout tone="err" title="It did not finish"><span class="selectable">{run.failure.message}</span></Callout>
-      {/if}
-      {#if run.state === "cancelled"}
-        <Callout tone="muted" icon="stop" title="Cancelled">{run.cancel_reason ?? ""}</Callout>
-      {/if}
+          {#if run.failure}
+            <Callout tone="err" title="It did not finish"><span class="selectable">{run.failure.message}</span></Callout>
+          {/if}
+          {#if run.state === "cancelled"}
+            <Callout tone="muted" icon="stop" title="Cancelled">{run.cancel_reason ?? ""}</Callout>
+          {/if}
 
-      {#if context?.recall || context?.segments}
-        <Card title="Context" icon="book">
-          {#if context.recall?.degraded}
-            <Callout tone="warn" class="mb-3">Search was weaker than usual: {context.recall.degraded}</Callout>
-          {/if}
-          {#if context.recall?.scrubbed}
-            <p class="mb-3 text-xs text-faint">Something this run used was deleted afterwards, so it is no longer listed here.</p>
-          {/if}
-          {#if used.length}
-            <ul class="space-y-2">
-              {#each used as item (item.id + item.kind)}
-                <li class="rounded-lg border border-line bg-panel p-3">
-                  <div class="flex flex-wrap items-center gap-1.5">
-                    <Badge tone={item.kind === "fact" ? "accent" : item.kind === "chunk" ? "info" : "muted"}>{kindLabel[item.kind]}</Badge>
-                    <span class="selectable mono truncate text-xs text-muted">{item.label}</span>
-                    {#each item.found_by as by}<Badge tone="muted" class="h-5">{by}</Badge>{/each}
-                    <span class="ml-auto text-xs text-faint tabular-nums">{item.tokens} tokens</span>
-                  </div>
-                  <p class="selectable mt-1.5 line-clamp-3 text-sm text-fg/90">{item.text}</p>
-                </li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="text-sm text-muted">Memory added nothing to this run: nothing relevant was found, or it was switched off.</p>
-          {/if}
-          {#if context.segments?.length}
-            <p class="mt-4 mb-1.5 text-xs font-medium text-muted">What the first request held{context.token_factor && context.token_factor !== 1 ? ` (tokens × ${context.token_factor.toFixed(2)}, learned from this model)` : ""}</p>
-            <div class="flex flex-wrap gap-1.5">
-              {#each context.segments as segment, i (i)}
-                <Badge tone={segment.kept ? "muted" : "warn"}>{segment.origin} · {segment.tokens}{segment.kept ? "" : " · left out"}</Badge>
-              {/each}
+          <Tabs {tabs} bind:value={() => tab, (v) => (chosen = v)} label="Run details" />
+
+          {#if tab === "tree" && tree && sums}
+            <div class="space-y-3">
+              <TreeView root={tree} selected={run.id} {look} now={store.now} onselect={(id) => id !== run.id && void store.select(id)} />
+              <p class="text-xs text-muted tabular-nums">{sums.runs} runs · {sums.done} done{sums.working ? ` · ${sums.working} working` : ""}{sums.waiting ? ` · ${sums.waiting} waiting for you` : ""}{sums.failed ? ` · ${sums.failed} failed` : ""}. The cost and tokens above include everything below. Cancelling this run cancels the whole tree.</p>
             </div>
+          {:else if tab === "steps"}
+            <section aria-label="Steps" class="space-y-2.5">
+              <h2 class="flex items-center gap-2 text-base font-semibold"><Icon name="list" size={14} class="text-muted" />Steps of {team ?? run.agent?.slug ?? "this run"}</h2>
+              {#each steps as item, i (i)}
+                {#if item.kind === "tool" && item.call}
+                  <ToolCallCard tool={item.title} status={item.call.status === "delegated" ? "started" : item.call.status} args={item.call.arguments} result={resultText(item.call.result)} error={item.call.error} />
+                {:else}
+                  <div class="flex items-center gap-2.5 rounded-xl border border-line bg-panel-2 px-3 py-2">
+                    <span class="grid size-6 shrink-0 place-items-center rounded-md bg-panel text-muted shadow-1"><Icon name={item.kind === "model" ? "cpu" : "wrench"} size={13} /></span>
+                    <span class="mono min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
+                    <span class="mono text-xs text-muted tabular-nums">{duration(item.ms)}</span>
+                  </div>
+                {/if}
+              {:else}
+                <p class="text-base text-muted">No steps yet.</p>
+              {/each}
+              <p class="flex items-center gap-1.5 pt-1 text-xs {detail.summary.fallbacks > 0 ? 'text-warn' : 'text-muted'}">
+                <Icon name={detail.summary.fallbacks > 0 ? "route" : "check"} size={13} />
+                {detail.summary.fallbacks > 0 ? `Switched model ${detail.summary.fallbacks} time(s) because one was unavailable.` : "No fallback was needed."}
+              </p>
+            </section>
+          {:else if tab === "events"}
+            <Card title="What happened" icon="history"><Timeline events={store.events} /></Card>
+          {:else if tab === "context"}
+            {#if context?.recall || context?.segments}
+              <Card title="Context" icon="book">
+                {#if context.recall?.degraded}<Callout tone="warn" class="mb-3">Search was weaker than usual: {context.recall.degraded}</Callout>{/if}
+                {#if context.recall?.scrubbed}<p class="mb-3 text-xs text-muted">Something this run used was deleted afterwards, so it is no longer listed here.</p>{/if}
+                {#if used.length}
+                  <ul class="space-y-2">
+                    {#each used as item (item.id + item.kind)}
+                      <li class="rounded-lg border border-line bg-panel p-3">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                          <Badge tone={item.kind === "fact" ? "accent" : item.kind === "chunk" ? "info" : "muted"}>{kindLabel[item.kind]}</Badge>
+                          <span class="selectable mono truncate text-xs text-muted">{item.label}</span>
+                          {#each item.found_by as by}<Badge tone="muted">{by}</Badge>{/each}
+                          <span class="ml-auto text-xs text-muted tabular-nums">{item.tokens} tokens</span>
+                        </div>
+                        <p class="selectable mt-1.5 line-clamp-3 text-sm text-fg/90">{item.text}</p>
+                      </li>
+                    {/each}
+                  </ul>
+                {:else}
+                  <p class="text-sm text-muted">Memory added nothing to this run: nothing relevant was found, or it was switched off.</p>
+                {/if}
+                {#if context.segments?.length}
+                  <p class="mt-4 mb-1.5 text-xs font-medium text-muted">What the first request held{context.token_factor && context.token_factor !== 1 ? ` (tokens × ${context.token_factor.toFixed(2)}, learned from this model)` : ""}</p>
+                  <div class="flex flex-wrap gap-1.5">
+                    {#each context.segments as segment, i (i)}<Badge tone={segment.kept ? "muted" : "warn"}>{segment.origin} · {segment.tokens}{segment.kept ? "" : " · left out"}</Badge>{/each}
+                  </div>
+                {/if}
+              </Card>
+            {:else}
+              <p class="text-base text-muted">The context is built when the first model step starts.</p>
+            {/if}
+          {:else}
+            <Card title="Cost" icon="dollar">
+              <KeyValue
+                items={[
+                  { key: "Cost", value: usd(run.usage.cost_micros), mono: true },
+                  { key: "Input tokens", value: run.usage.input_tokens.toLocaleString("fr-FR"), mono: true },
+                  { key: "Output tokens", value: run.usage.output_tokens.toLocaleString("fr-FR"), mono: true },
+                  { key: "Model calls", value: run.usage.model_calls, mono: true },
+                  { key: "Tool calls", value: run.usage.tool_calls, mono: true },
+                ]}
+              />
+              {#if tree && tree.children.length}
+                <p class="mt-4 mb-2 text-2xs font-semibold tracking-wider text-faint uppercase">Where it went</p>
+                <ul class="space-y-2">
+                  {#each family as member (member.id)}
+                    <li class="flex items-center gap-3 text-sm">
+                      <span class="min-w-0 flex-1 truncate">{look(member).name}{member.id === run.id ? "" : ` · ${member.request.prompt.slice(0, 40)}`}</span>
+                      <Sparkbar value={member.usage.cost_micros} max={run.root ? (family.find((f) => f.id === run.root)?.usage.cost_micros ?? 1) : run.usage.cost_micros} label="Share of the cost of {look(member).name}" />
+                      <span class="mono w-16 text-right text-xs text-muted tabular-nums">{usd(member.usage.cost_micros)}</span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </Card>
           {/if}
-        </Card>
-      {/if}
+        </div>
 
-      <Card title="What happened" icon="history">
-        <Timeline events={store.events} />
-      </Card>
-
-      {#if detail.tool_calls.length}
-        <Card title="Tools" icon="wrench" padding="none">
-          <List class="rounded-none border-0 shadow-none" label="Tool calls">
-            {#each detail.tool_calls as call (call.call_id)}
-              <ListRow>
-                <span class="mono shrink-0 text-sm font-medium">{call.tool}</span>
-                {#if call.tool.startsWith("mcp.")}<Badge tone="accent" class="h-5">third party</Badge>{/if}
-                <span class="selectable mono min-w-0 flex-1 truncate text-xs text-muted">{JSON.stringify(call.arguments)}</span>
-                <Badge tone={callTone(call.status)} dot>{statusLabel(call.status)}</Badge>
-              </ListRow>
-            {/each}
-          </List>
-        </Card>
-      {/if}
-
-      {#if modelSteps.length}
-        <Card title="Models used" icon="cpu" padding="none">
-          <List class="rounded-none border-0 shadow-none" label="Models used">
-            {#each modelSteps as step, i (i)}
-              <ListRow>
-                <span class="text-xs text-faint">step {i + 1}</span>
-                <span class="mono min-w-0 flex-1 truncate text-sm">{step.provider ? `${step.provider}/${step.name}` : step.name}</span>
-                <span class="mono text-xs text-muted tabular-nums">{duration(step.duration_ms)}</span>
-              </ListRow>
-            {/each}
-          </List>
-          {#snippet footer()}
-            <span class="flex items-center gap-1.5 text-xs {detail.summary.fallbacks > 0 ? 'text-warn' : 'text-muted'}">
-              <Icon name={detail.summary.fallbacks > 0 ? "route" : "check"} size={13} />
-              {detail.summary.fallbacks > 0
-                ? `Switched model ${detail.summary.fallbacks} time(s) because one was unavailable.`
-                : "No fallback was needed."}
-            </span>
-          {/snippet}
-        </Card>
-      {/if}
-      <p class="text-xs text-faint">Run {shortId(run.id)} · asked for <span class="mono">{run.request.model}</span></p>
+        <aside class="min-w-0 space-y-5" aria-label="This run">
+          {#each pending as approval (approval.id)}<ApprovalCard {approval} />{/each}
+          <TreeApprovals items={waitingBelow} onanswered={() => { void loadFamily(); void store.select(run.id); }} />
+          <Card title="This run" icon="shield">
+            <KeyValue
+              items={[
+                { key: "Started by", value: run.agent ? `${team ?? run.agent.slug} v${run.agent.version}` : "you" },
+                { key: "Model", value: run.request.model, mono: true },
+                { key: "Steps", value: `${run.iteration} of the loop`, mono: false },
+                { key: "Tools asked for", value: run.tool_calls_requested, mono: true },
+                { key: "Cost", value: usd(run.usage.cost_micros), mono: true },
+              ]}
+            />
+            {#if tree}<p class="mt-3 text-xs text-muted">Budgets and permissions only shrink down the tree. What sub-runs spend counts here.</p>{/if}
+          </Card>
+        </aside>
+      </div>
     </div>
   </div>
 {:else}
