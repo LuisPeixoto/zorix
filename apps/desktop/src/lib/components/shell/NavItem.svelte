@@ -3,6 +3,7 @@
 
   import { Icon, cn } from "../../ui/index.ts";
 
+  /** One entry of the sidebar. Active is a tint with accent text, never a bar. A count in warn means something needs a person. */
   let {
     icon,
     active = false,
@@ -18,13 +19,17 @@
   {onclick}
   aria-current={active ? "page" : undefined}
   class={cn(
-    "group relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-md transition duration-150",
-    active ? "bg-accent-soft font-medium text-fg" : "text-fg/80 hover:bg-hover hover:text-fg",
+    "group relative flex h-7.5 w-full items-center gap-2.5 rounded-lg px-2.5 text-base font-medium transition duration-150",
+    active ? "bg-accent-soft text-accent" : "text-muted hover:bg-hover hover:text-fg",
   )}
 >
-  {#if active}<span class="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-full bg-accent" aria-hidden="true"></span>{/if}
   <Icon name={icon} size={15} class={active ? "text-accent" : "text-faint group-hover:text-muted"} />
   <span class="min-w-0 flex-1 truncate text-left">{@render children()}</span>
-  {#if attention}<span class="size-1.5 rounded-full bg-warn" role="img" aria-label="Needs attention"></span>{/if}
-  {#if count !== undefined && count > 0}<span class="tnum rounded-full bg-hover px-1.5 text-2xs text-muted">{count}</span>{/if}
+  {#if count !== undefined && count > 0}
+    <span class={cn("tnum rounded-full px-1.5 text-2xs font-semibold", attention ? "bg-warn/15 text-warn" : "bg-hover text-muted")}>
+      {count}<span class="sr-only">{attention ? " need attention" : ""}</span>
+    </span>
+  {:else if attention}
+    <span class="size-1.5 rounded-full bg-warn" role="img" aria-label="Needs attention"></span>
+  {/if}
 </button>
