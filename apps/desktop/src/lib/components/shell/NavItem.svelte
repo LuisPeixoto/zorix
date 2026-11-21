@@ -26,7 +26,7 @@
   <Icon name={icon} size={15} class={active ? "text-accent" : "text-faint group-hover:text-muted"} />
   <span class="min-w-0 flex-1 truncate text-left">{@render children()}</span>
   {#if count !== undefined && count > 0}
-    <span class={cn("tnum rounded-full px-1.5 text-2xs font-semibold", attention ? "bg-warn/15 text-warn" : "bg-hover text-muted")}>
+    <span class={cn("tnum rounded-full px-1.5 text-2xs font-semibold", attention ? "bg-warn text-bg" : "bg-hover text-muted")}>
       {count}<span class="sr-only">{attention ? " need attention" : ""}</span>
     </span>
   {:else if attention}
