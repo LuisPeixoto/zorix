@@ -1,6 +1,6 @@
 // What is waiting for a person, in one list: tool approvals anywhere in a tree of runs, and tools or sign-ins MCP servers want a person to review.
 // Pure functions, tested in inbox.test.ts.
-import type { Approval, Execution, ServerRow, TreeApproval } from "./api.ts";
+import type { Approval, Execution, ServerRow, TreeApproval, WfWait } from "./api.ts";
 import { shorten } from "./format.ts";
 
 export type InboxItem =
@@ -21,7 +21,19 @@ export type InboxItem =
       at: number;
       approval: Approval;
     }
-  | { kind: "server"; id: string; server: string; why: "tools" | "login"; tools: number; at: number };
+  | { kind: "server"; id: string; server: string; why: "tools" | "login"; tools: number; at: number }
+  | {
+      /** A workflow stopped for a person: an approval, a question, or an action that asks first. */
+      kind: "workflow";
+      id: string;
+      run: string;
+      workflow: string;
+      step: string;
+      title: string;
+      message: string;
+      what: "approval" | "question" | "action";
+      at: number;
+    };
 
 const TARGET_KEYS = ["target", "path", "url", "channel", "repo", "query", "sql", "to", "name", "subject", "title", "content", "text", "message"];
 
@@ -68,11 +80,29 @@ export function serverItems(servers: readonly ServerRow[]): InboxItem[] {
     .map((s): InboxItem => ({ kind: "server", id: `server:${s.name}`, server: s.name, why: s.state === "needs_login" ? "login" : "tools", tools: s.tools_to_review, at: 0 }));
 }
 
-/** Oldest ask first, as the design system says, with servers (which have no time) after the approvals, by name. */
+/** One item per wait of a workflow that a person must answer (timers are not asked of anyone). */
+export function workflowItems(waits: readonly WfWait[], names: Readonly<Record<string, string>> = {}): InboxItem[] {
+  return waits
+    .filter((w) => w.status === "pending" && w.kind !== "timer")
+    .map((w): InboxItem => ({
+      kind: "workflow",
+      id: w.id,
+      run: w.run,
+      workflow: names[w.workflow] ?? "",
+      step: w.step,
+      title: w.title,
+      message: w.message,
+      what: w.kind as "approval" | "question" | "action",
+      at: w.created_at,
+    }));
+}
+
+/** Oldest ask first, as the design system says: what has a time (approvals, workflow waits) by time, then servers (which have none) by name. */
 export function oldestFirst(items: readonly InboxItem[]): InboxItem[] {
+  const timed = (i: InboxItem) => i.kind !== "server";
   return [...items].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "approval" ? -1 : 1;
-    if (a.kind === "approval" && b.kind === "approval") return a.at - b.at || a.id.localeCompare(b.id);
+    if (timed(a) !== timed(b)) return timed(a) ? -1 : 1;
+    if (timed(a)) return a.at - b.at || a.id.localeCompare(b.id);
     return a.id.localeCompare(b.id);
   });
 }

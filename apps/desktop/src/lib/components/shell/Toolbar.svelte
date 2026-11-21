@@ -28,7 +28,7 @@
       class="flex h-8 w-full max-w-md items-center gap-2 rounded-lg border border-line bg-panel-2/70 px-3 text-base text-faint transition duration-150 hover:border-line-strong hover:bg-panel hover:text-muted"
     >
       <Icon name="search" size={14} />
-      <span class="flex-1 text-left">Search runs, agents, teams and actions</span>
+      <span class="flex-1 text-left">Search runs, workflows, agents and teams</span>
       <Kbd>{shortcut}</Kbd>
     </button>
   </div>

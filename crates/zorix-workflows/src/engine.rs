@@ -463,6 +463,7 @@ impl WorkflowEngine {
     fn fail(&self, run: &mut WorkflowRun, id: &str, error: String, now: Timestamp) {
         let step = run.steps.get_mut(id).expect("step exists");
         step.state = StepState::Failed;
+        step.note = None;
         step.error = Some(error);
         step.finished_at = Some(now);
     }
@@ -506,7 +507,13 @@ impl WorkflowEngine {
                 run.steps.get_mut(id).expect("step exists").cost_micros = cost_micros;
                 let output =
                     redact(json!({"text": clip(&text), "structured": structured, "execution": execution.to_string()}));
-                self.done(run, id, output, Some(format!("{steps} steps · {}", dollars(cost_micros))), now);
+                self.done(
+                    run,
+                    id,
+                    output,
+                    Some(format!("{steps} step{} · {}", if steps == 1 { "" } else { "s" }, dollars(cost_micros))),
+                    now,
+                );
             }
             Outcome::Failed { reason, cost_micros } => {
                 run.steps.get_mut(id).expect("step exists").cost_micros = cost_micros;

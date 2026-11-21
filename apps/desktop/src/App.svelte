@@ -10,6 +10,8 @@
   import RunsPage from "./lib/components/RunsPage.svelte";
   import Settings from "./lib/components/Settings.svelte";
   import Agents from "./lib/components/agents/Agents.svelte";
+  import Workflows from "./lib/components/workflows/Workflows.svelte";
+  import { workflows } from "./lib/stores/workflows.svelte.ts";
   import { AGENT_TABS, type AgentTab, agents } from "./lib/stores/agents.svelte.ts";
   import Integrations from "./lib/components/integrations/Integrations.svelte";
   import { integrations } from "./lib/stores/integrations.svelte.ts";
@@ -20,6 +22,7 @@
   import Toolbar from "./lib/components/shell/Toolbar.svelte";
   import { type Command, CommandPalette, Toasts } from "./lib/ui/index.ts";
   import { shorten } from "./lib/format.ts";
+  import { workflowRuns } from "./lib/api.ts";
 
   onMount(() => {
     theme.init();
@@ -54,6 +57,19 @@
           });
         } else store.showTeams(slug || null);
       }
+      if (start === "workflows") {
+        // `workflows` is the list; `workflows:SLUG` the editor; `workflows:SLUG/versions` its versions; `workflows:SLUG/run` its newest run.
+        const [slug, how] = tab ? tab.split("/") : [];
+        void workflows.refresh().then(async () => {
+          const card = workflows.overview?.cards.find((c) => c.workflow.slug === slug);
+          if (!card) return store.showWorkflows();
+          if (how === "run") {
+            const runs = await workflowRuns(card.workflow.id, 1).catch(() => []);
+            if (runs[0]) return store.showWorkflows("run", card.workflow.id, runs[0].id);
+          }
+          store.showWorkflows("editor", card.workflow.id, null, how === "versions" || how === "runs" ? how : null);
+        });
+      }
       if (start === "inbox") store.showInbox();
       if (start === "runs") store.showRuns();
       if (start === "new") store.showForm();
@@ -73,6 +89,16 @@
     { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showForm(); } },
     { id: "inbox", label: "Inbox", group: "Go to", icon: "bell", keywords: "approvals waiting review decide", run: () => store.showInbox() },
     { id: "runs", label: "Runs", group: "Go to", icon: "history", keywords: "history list all", run: () => store.showRuns() },
+    { id: "workflows", label: "Workflows", group: "Go to", icon: "workflow", keywords: "automation schedule trigger webhook approve steps", run: () => store.showWorkflows() },
+    ...(workflows.overview?.cards ?? []).map((card) => ({
+      id: `workflow-${card.workflow.slug}`,
+      label: `Workflow: ${card.workflow.draft.name}`,
+      group: "Workflows",
+      icon: "workflow",
+      hint: card.workflow.enabled ? "on" : "off",
+      keywords: card.workflow.slug,
+      run: () => store.showWorkflows("editor", card.workflow.id),
+    })),
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
     { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
     ...agents.teams.map((t) => ({
@@ -155,6 +181,8 @@
         <DesignSystem />
       {:else if store.view === "agents"}
         <Agents />
+      {:else if store.view === "workflows"}
+        <Workflows />
       {:else if store.view === "memory"}
         <Memory />
       {:else if store.view === "documents"}

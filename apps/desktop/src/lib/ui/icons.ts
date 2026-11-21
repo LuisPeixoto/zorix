@@ -1,6 +1,7 @@
 // Icons: Lucide-style paths on a 24px grid, drawn with a round 1.8px stroke. No icon library: add a path here.
 // Every value is static markup written in this file, never user input.
 export const ICONS: Record<string, string> = {
+  "zoom-out": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M8 11h6"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
   pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
   stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>',

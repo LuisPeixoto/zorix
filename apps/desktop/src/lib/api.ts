@@ -26,7 +26,7 @@ export interface Usage {
 export interface Execution {
   id: string;
   tenant: string;
-  request: { prompt: string; instructions: string | null; model: string };
+  request: { prompt: string; instructions: string | null; model: string; metadata?: Record<string, string> };
   state: ExecutionState;
   version: number;
   iteration: number;
@@ -814,3 +814,225 @@ export const teamSave = (team: SaveTeam) => invoke<TeamView>("team_save", { team
 export const teamRemove = (slug: string) => invoke<void>("team_remove", { slug });
 export const teamTemplates = () => invoke<TeamTemplate[]>("team_templates");
 export const teamAddTemplate = (id: string) => invoke<string>("team_add_template", { id });
+
+// ---- Workflows ------------------------------------------------------------------------------------------------------------
+
+export type Day = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export type When = { type: "every"; minutes: number } | { type: "daily"; times: string[]; days: Day[] } | { type: "cron"; expr: string };
+export type EventOn = "finished" | "failed" | "any";
+export type Then = "refuse" | "continue";
+export type Ask = "always" | "never";
+export interface Remind {
+  after_ms: number;
+  connection: string;
+  channel: string;
+}
+export type StepKind =
+  | { type: "manual" }
+  | { type: "schedule"; when: When; timezone?: string | null }
+  | { type: "webhook"; source: string; label?: string | null; filter?: string | null; signed?: boolean }
+  | { type: "event"; on: EventOn; agent?: string | null }
+  | { type: "after_workflow"; workflow: string; on: EventOn }
+  | { type: "agent"; agent: string; prompt: string; version?: number | null; model?: string | null; max_cost_micros?: number | null }
+  | { type: "team"; team: string; prompt: string; model?: string | null; max_cost_micros?: number | null }
+  | { type: "condition"; expr: string }
+  | { type: "loop"; over: string; agent: string; prompt: string }
+  | { type: "wait"; for_ms?: number | null; until?: string | null }
+  | { type: "approval"; message: string; show?: string[]; timeout_ms?: number | null; then?: Then; remind?: Remind | null }
+  | { type: "question"; question: string; default?: string | null; timeout_ms?: number | null; then?: Then }
+  | { type: "send"; service: "slack" | "discord"; connection?: string | null; channel: string; text: string; ask?: Ask }
+  | { type: "http"; method: string; url: string; body?: string | null; ask?: Ask };
+export type StepKindName = StepKind["type"];
+export interface WfStep {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  kind: StepKind;
+}
+export interface WfEdge {
+  from: string;
+  to: string;
+  label?: string | null;
+}
+export interface WorkflowSpec {
+  name: string;
+  description?: string;
+  group?: string;
+  steps: WfStep[];
+  edges: WfEdge[];
+  budget_micros?: number | null;
+  saves_minutes?: number | null;
+}
+export interface Workflow {
+  id: string;
+  tenant: string;
+  slug: string;
+  draft: WorkflowSpec;
+  live_version: number | null;
+  enabled: boolean;
+  created_at: number;
+  updated_at: number;
+}
+export type RunStateName = "running" | "waiting" | "completed" | "failed" | "cancelled";
+export type StepStateName = "pending" | "running" | "waiting" | "done" | "failed" | "skipped";
+export interface WfStepRun {
+  state: StepStateName;
+  started_at?: number | null;
+  finished_at?: number | null;
+  output?: unknown;
+  error?: string | null;
+  note?: string | null;
+  execution?: string | null;
+  executions?: string[];
+  wait?: string | null;
+  cost_micros: number;
+}
+export interface WfRun {
+  id: string;
+  slug: string;
+  workflow: string;
+  version: number | null;
+  test: boolean;
+  spec: WorkflowSpec;
+  fired: { step: string; label: string; payload: unknown; at: number };
+  state: RunStateName;
+  steps: Record<string, WfStepRun>;
+  cost_micros: number;
+  error?: string | null;
+  chain: number;
+  from_run?: string | null;
+  started_at: number;
+  finished_at?: number | null;
+  revision: number;
+}
+export type WaitKindName = "approval" | "question" | "action" | "timer";
+export interface WfWait {
+  id: string;
+  run: string;
+  workflow: string;
+  step: string;
+  kind: WaitKindName;
+  title: string;
+  message: string;
+  shown: Record<string, unknown>;
+  fingerprint: string;
+  status: "pending" | "approved" | "refused" | "answered" | "elapsed" | "timed_out" | "cancelled";
+  due_at?: number | null;
+  then: Then;
+  default_answer?: string | null;
+  created_at: number;
+  decided_at?: number | null;
+  decided_by?: string | null;
+  answer?: string | null;
+  note?: string | null;
+}
+export type Health = { kind: "paused" } | { kind: "waiting"; count: number } | { kind: "failed"; count: number } | { kind: "healthy" };
+export interface WfBar {
+  run: string;
+  state: RunStateName;
+  waited: boolean;
+  /** How long the run took, in milliseconds: the height of its bar. */
+  ms: number;
+}
+export interface WfCard {
+  workflow: Workflow;
+  triggers: { step: string; kind: string; label: string }[];
+  bars: WfBar[];
+  health: Health;
+  unpublished_changes: boolean;
+  missed: number;
+}
+export interface WfFigures {
+  active: number;
+  paused: number;
+  runs_week: number;
+  finished_percent: number | null;
+  waiting: number;
+  oldest_wait_ms: number | null;
+  saved_minutes: number | null;
+}
+export interface HostInfo {
+  running: boolean;
+  webhooks: boolean;
+  listening: string | null;
+  address: string;
+}
+export interface WfOverview {
+  cards: WfCard[];
+  figures: WfFigures;
+  host: HostInfo;
+}
+export interface WfVersionRow {
+  version: number;
+  hash: string;
+  note: string | null;
+  created_at: number;
+  confirmed: number;
+}
+export interface WfMissing {
+  step: string;
+  kind: "agent" | "team" | "connection";
+  name: string;
+}
+export interface WfDetail {
+  workflow: Workflow;
+  versions: WfVersionRow[];
+  missing: WfMissing[];
+  to_confirm: string[];
+  unpublished_changes: boolean;
+}
+export interface WfTemplate {
+  id: string;
+  name: string;
+  description: string;
+  group: string;
+  triggers: string[];
+  steps: number;
+}
+export interface WfDiffLine {
+  kind: "same" | "added" | "removed";
+  text: string;
+}
+export interface WfRunDetail {
+  run: WfRun;
+  waits: WfWait[];
+}
+export interface WfStepHistory {
+  outcomes: StepStateName[];
+  median_wait_ms: number | null;
+}
+export interface WfWebhook {
+  url: string;
+  signing_secret: string | null;
+  listening: boolean;
+}
+
+export const workflowHost = () => invoke<HostInfo>("workflow_host");
+export const workflowSettingsSet = (webhooks: boolean, address: string) => invoke<HostInfo>("workflow_settings_set", { webhooks, address });
+export const workflowsOverview = () => invoke<WfOverview>("workflows_overview");
+export const workflowDetail = (id: string) => invoke<WfDetail>("workflow_detail", { id });
+export const workflowCreate = (slug: string, name: string) => invoke<Workflow>("workflow_create", { slug, name });
+export const workflowSave = (id: string, spec: WorkflowSpec) => invoke<Workflow>("workflow_save", { id, spec });
+export const workflowPublish = (id: string, note: string | null, confirm: boolean) =>
+  invoke<{ version: number; written: boolean }>("workflow_publish", { id, note, confirm });
+export const workflowRollback = (id: string, to: number, confirm: boolean) =>
+  invoke<{ version: number; written: boolean }>("workflow_rollback", { id, to, confirm });
+export const workflowSetEnabled = (id: string, enabled: boolean) => invoke<void>("workflow_set_enabled", { id, enabled });
+export const workflowRemove = (id: string) => invoke<boolean>("workflow_remove", { id });
+export const workflowExport = (id: string, version?: number) => invoke<string>("workflow_export", { id, version: version ?? null });
+export const workflowImport = (contents: string) => invoke<{ workflow: Workflow; created: boolean; changed: boolean }>("workflow_import", { contents });
+export const workflowTemplates = () => invoke<WfTemplate[]>("workflow_templates");
+export const workflowAddTemplate = (template: string) => invoke<{ workflow: Workflow; missing: WfMissing[] }>("workflow_add_template", { template });
+export const workflowDiff = (id: string, from: string, to: string) => invoke<WfDiffLine[]>("workflow_diff", { id, from, to });
+export const workflowOutline = (id: string, which: string) => invoke<string>("workflow_outline", { id, which });
+export const workflowStart = (id: string, test: boolean, payload?: unknown, trigger?: string) =>
+  invoke<WfRun>("workflow_start", { request: { id, test, payload: payload ?? {}, trigger: trigger ?? null } });
+export const workflowRuns = (id?: string, limit?: number) => invoke<WfRun[]>("workflow_runs", { id: id ?? null, limit: limit ?? null });
+export const workflowRun = (run: string) => invoke<WfRunDetail>("workflow_run", { run });
+export const workflowCancel = (run: string) => invoke<WfRun>("workflow_cancel", { run });
+export const workflowWaits = () => invoke<WfWait[]>("workflow_waits");
+export const workflowDecide = (wait: string, fingerprint: string, verdict: "approve" | "refuse" | "answer", text?: string, note?: string) =>
+  invoke<WfWait>("workflow_decide", { request: { wait, fingerprint, verdict, text: text ?? null, note: note ?? null } });
+export const workflowStepHistory = (id: string, step: string) => invoke<WfStepHistory>("workflow_step_history", { id, step });
+export const workflowWebhook = (id: string, reset = false) => invoke<WfWebhook>("workflow_webhook", { id, reset });

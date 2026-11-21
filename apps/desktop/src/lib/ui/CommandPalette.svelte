@@ -96,7 +96,7 @@
           aria-controls="{uid}-list"
           aria-activedescendant={matches.length ? `${uid}-opt-${active}` : undefined}
           aria-label="Type a command"
-          placeholder="Search runs, servers and actions…"
+          placeholder="Search runs, workflows, servers and actions…"
           autocomplete="off"
           spellcheck="false"
           class="h-12 min-w-0 flex-1 bg-transparent text-lg outline-none placeholder:text-faint"

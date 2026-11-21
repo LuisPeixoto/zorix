@@ -27,6 +27,7 @@
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Work</p>
       <NavItem icon="bell" active={store.view === "inbox"} count={inbox.count} attention onclick={() => store.showInbox()}>Inbox</NavItem>
       <NavItem icon="history" active={store.view === "runs"} onclick={() => store.showRuns()}>Runs</NavItem>
+      <NavItem icon="workflow" active={store.view === "workflows"} onclick={() => store.showWorkflows()}>Workflows</NavItem>
     </div>
     <div>
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Organisation</p>

@@ -38,10 +38,12 @@ import {
   testProvider,
   treeApprovals,
   watchRun,
+  workflowWaits,
 } from "../api.ts";
 import { isFinished } from "../format.ts";
 import { type AgentTab, agents } from "./agents.svelte.ts";
 import { inbox } from "./inbox.svelte.ts";
+import { type WorkflowSection, workflows } from "./workflows.svelte.ts";
 import { toast } from "./toast.svelte.ts";
 
 class RunsStore {
@@ -58,7 +60,7 @@ class RunsStore {
   error = $state<string | null>(null);
   busy = $state(false);
   /** Which screen is showing. `runs` is the list of runs, or one run when `selectedId` is set; `new` is the form that starts one. */
-  view = $state<"inbox" | "runs" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
+  view = $state<"inbox" | "runs" | "workflows" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -187,6 +189,15 @@ class RunsStore {
     this.#leaveRun();
   }
 
+  /** The Workflows screen: the list, one workflow in the editor, or one run of a workflow. */
+  showWorkflows(section: WorkflowSection = "list", id: string | null = null, runId: string | null = null, panel: string | null = null): void {
+    this.view = "workflows";
+    this.#leaveRun();
+    if (section === "editor" && id) workflows.openEditor(id, panel);
+    else if (section === "run" && runId) workflows.openRun(runId, id);
+    else workflows.openList();
+  }
+
   /** The list of runs. */
   showRuns(): void {
     this.view = "runs";
@@ -236,6 +247,7 @@ class RunsStore {
       const byRoot = Object.fromEntries(found);
       this.needsYou = Object.fromEntries(holding.filter((r) => r.state === "waiting_for_children").map((r) => [r.id, (byRoot[r.id]?.length ?? 0) > 0]));
       inbox.setApprovals(this.runs, byRoot);
+      inbox.setWaits(await workflowWaits().catch(() => []));
     } catch (e) {
       this.error = errorText(e);
     }
