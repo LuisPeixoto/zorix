@@ -25,7 +25,7 @@
 {#snippet inline(nodes: Inline[])}
   {#each nodes as node, k (k)}
     {#if node.t === "text"}{node.text}
-    {:else if node.t === "code"}<code class="mono rounded-md bg-hover px-1 py-0.5 text-[0.92em]">{node.text}</code>
+    {:else if node.t === "code"}<code class="mono rounded-md bg-hover px-1 py-0.5 text-sm">{node.text}</code>
     {:else if node.t === "strong"}<strong class="font-semibold">{@render inline(node.children)}</strong>
     {:else if node.t === "em"}<em>{@render inline(node.children)}</em>
     {:else if node.t === "del"}<del class="text-muted">{@render inline(node.children)}</del>

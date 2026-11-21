@@ -52,7 +52,7 @@
     aria-modal="true"
     aria-labelledby="{uid}-title"
     use:trapFocus
-    transition:fly={{ x: 40, duration: 220, opacity: 0.4 }}
+    transition:fly={{ x: 40, duration: 200, opacity: 0.4 }}
     class={cn("fixed inset-y-0 right-0 z-50 flex max-w-full flex-col border-l border-line bg-elevated shadow-3", widths[width])}
   >
     <header class="flex items-start gap-3 border-b border-line px-5 py-4">

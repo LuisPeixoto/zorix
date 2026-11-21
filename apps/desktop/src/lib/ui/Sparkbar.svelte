@@ -15,5 +15,5 @@
 </script>
 
 <span class={cn("inline-block h-1.5 w-16 overflow-hidden rounded-full bg-hover", klass)} role="img" aria-label="{label}: {Math.round(share * 100)}%" title="{label}: {Math.round(share * 100)}%">
-  <span class={cn("block h-full rounded-full transition-[width] duration-300 ease-out", toneClass(tone, "dot"))} style:width="{Math.max(share > 0 ? 6 : 0, share * 100)}%"></span>
+  <span class={cn("block h-full rounded-full transition-[width] duration-200 ease-out", toneClass(tone, "dot"))} style:width="{Math.max(share > 0 ? 6 : 0, share * 100)}%"></span>
 </span>

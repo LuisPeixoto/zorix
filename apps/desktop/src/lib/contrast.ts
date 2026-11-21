@@ -24,7 +24,7 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** The solid (hex) tokens of a block of CSS such as `:root { --bg: #fff; … }`. Tints made with color-mix are left out. */
+/** The solid (hex) tokens of a block of CSS such as `:root { --bg: …; }`. Tints made with color-mix are left out. */
 export function readTokens(block: string): Record<string, string> {
   const tokens: Record<string, string> = {};
   for (const m of block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{3,6})\s*;/g)) tokens[m[1]] = m[2];

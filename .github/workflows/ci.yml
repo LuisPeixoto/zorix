@@ -107,6 +107,10 @@ jobs:
       - name: Test the interface helpers
         working-directory: apps/desktop
         run: npm test
+      - name: Check the design tokens against the design system
+        run: node tools/design-tokens.mjs --check
+      - name: Check the interface against the design system
+        run: node tools/check-design.mjs
       - name: Build the interface
         working-directory: apps/desktop
         run: npm run build
