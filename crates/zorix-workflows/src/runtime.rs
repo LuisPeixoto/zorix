@@ -14,6 +14,7 @@ use zorix_store::{SqliteWorkflowStore, database_path};
 use crate::engine::WorkflowEngine;
 use crate::host::{EngineFeed, HostConfig, WorkflowHost};
 use crate::launcher::HubLauncher;
+use crate::service::WorkflowService;
 
 /// The default place webhooks arrive when they are switched on: this computer only.
 pub const DEFAULT_WEBHOOK_ADDRESS: &str = "127.0.0.1:7788";
@@ -25,6 +26,8 @@ pub struct Workflows {
     pub store: Arc<SqliteWorkflowStore>,
     /// Runs them.
     pub engine: Arc<WorkflowEngine>,
+    /// What the screens and commands ask that needs no running engine.
+    pub service: WorkflowService,
     executions: Arc<dyn ExecutionEngine>,
 }
 
@@ -39,9 +42,10 @@ impl Workflows {
     ) -> Result<Self> {
         let store = Arc::new(SqliteWorkflowStore::open(&database_path(home))?);
         let executions: Arc<dyn ExecutionEngine> = Arc::new(executions);
-        let launcher = Arc::new(HubLauncher::new(hub, executions.clone(), resolver, tenant.clone()));
-        let engine = Arc::new(WorkflowEngine::new(store.clone(), launcher, Arc::new(SystemClock), tenant));
-        Ok(Self { store, engine, executions })
+        let launcher = Arc::new(HubLauncher::new(hub.clone(), executions.clone(), resolver, tenant.clone()));
+        let engine = Arc::new(WorkflowEngine::new(store.clone(), launcher, Arc::new(SystemClock), tenant.clone()));
+        let service = WorkflowService::new(store.clone(), tenant, hub, Arc::new(SystemClock));
+        Ok(Self { store, engine, service, executions })
     }
 
     /// Start the host: schedules, events, and webhooks when an address is given.

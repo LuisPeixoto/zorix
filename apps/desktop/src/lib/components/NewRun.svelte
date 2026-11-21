@@ -1,6 +1,9 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
-  import { type AgentDetail, agentGet } from "../api.ts";
+  import { type AgentDetail, agentGet, workflowCreate, workflowSave, workflowStart } from "../api.ts";
+  import { workflows } from "../stores/workflows.svelte.ts";
+  import { toast } from "../stores/toast.svelte.ts";
+  import { slugify } from "../workflow.ts";
   import { agents } from "../stores/agents.svelte.ts";
 
   import { errorText } from "../api.ts";
@@ -8,7 +11,7 @@
   import { store } from "../stores/runs.svelte.ts";
   import { ago, shorten } from "../format.ts";
   import { destination, grantSummary, providerName } from "../newRun.ts";
-  import { Avatar, Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, KeyValue, Kbd, PageHeader, Segmented, Select, Switch, Textarea } from "../ui/index.ts";
+  import { Avatar, Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, KeyValue, Kbd, Modal, PageHeader, Segmented, Select, Switch, Textarea } from "../ui/index.ts";
   import StatusBadge from "./StatusBadge.svelte";
 
   const examples = [
@@ -28,7 +31,16 @@
   // One choice: nothing, an agent, or a team (`team:slug`), which runs its lead with the members to ask.
   let choice = $state("");
   const team = $derived(choice.startsWith("team:") ? agents.team(choice.slice(5)) : undefined);
-  const agentSlug = $derived(team ? team.team.lead : choice.startsWith("team:") ? "" : choice);
+  const agentSlug = $derived(team ? team.team.lead : choice.startsWith("team:") || choice.startsWith("workflow:") ? "" : choice);
+  // Workflows with a manual start can be run from here: what you write is what the workflow receives as `trigger.payload.prompt`.
+  const workflowChoices = $derived((workflows.overview?.cards ?? []).filter((c) => c.workflow.live_version && c.triggers.some((t) => t.kind === "manual")));
+  const picked = $derived(choice.startsWith("workflow:") ? workflowChoices.find((c) => c.workflow.id === choice.slice(9)) : undefined);
+  $effect(() => {
+    void workflows.refresh();
+  });
+  let savingAs = $state(false);
+  let workflowName = $state("");
+  let savingBusy = $state(false);
   let agentDetail = $state<AgentDetail | null>(null);
   $effect(() => {
     const slug = agentSlug;
@@ -89,10 +101,11 @@
   }
 
   // Run as: a plain run, an agent, or a team. `choice` keeps the three apart (empty, a slug, `team:slug`).
-  const mode = $derived(choice.startsWith("team:") ? "team" : choice ? "agent" : "plain");
+  const mode = $derived(choice.startsWith("team:") ? "team" : choice.startsWith("workflow:") ? "workflow" : choice ? "agent" : "plain");
   function setMode(next: string) {
     if (next === "plain") choice = "";
     else if (next === "agent") choice = agents.cards[0]?.slug ?? "";
+    else if (next === "workflow") choice = workflowChoices[0] ? `workflow:${workflowChoices[0].workflow.id}` : "";
     else choice = agents.teams[0] ? `team:${agents.teams[0].team.slug}` : "";
   }
   const where = $derived(
@@ -116,8 +129,44 @@
 
   const lines = (text: string) => text.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
 
+  async function saveAsWorkflow() {
+    const slug = slugify(workflowName);
+    if (!slug) return;
+    savingBusy = true;
+    try {
+      const made = await workflowCreate(slug, workflowName.trim());
+      const spec = structuredClone($state.snapshot(made.draft));
+      const kind = team
+        ? { type: "team" as const, team: team.team.slug, prompt: prompt.trim() }
+        : { type: "agent" as const, agent: agentSlug, prompt: prompt.trim(), ...(model ? { model } : {}) };
+      spec.steps.push({ id: team ? "team" : "agent", title: team ? `Ask ${team.team.name}` : `Ask ${agentDetail?.version.spec.name ?? agentSlug}`, x: 96, y: 176, kind });
+      spec.edges.push({ from: spec.steps[0].id, to: spec.steps[1].id });
+      await workflowSave(made.id, spec);
+      savingAs = false;
+      workflowName = "";
+      toast.ok("Saved as a workflow draft. Open it to add steps, then publish.");
+      store.showWorkflows("editor", made.id);
+    } catch (e) {
+      toast.err(errorText(e));
+    } finally {
+      savingBusy = false;
+    }
+  }
+
   function submit(event: Event) {
     event.preventDefault();
+    if (picked) {
+      void (async () => {
+        try {
+          const manual = picked.triggers.find((t) => t.kind === "manual");
+          const run = await workflowStart(picked.workflow.id, false, { prompt: prompt.trim() }, manual?.step);
+          store.showWorkflows("run", picked.workflow.id, run.id);
+        } catch (e) {
+          toast.err(errorText(e));
+        }
+      })();
+      return;
+    }
     if (agentSlug) {
       void store.startAgent({
         slug: agentSlug,
@@ -159,7 +208,7 @@
 
     <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div class="min-w-0 space-y-5">
-        {#if agents.cards.length}
+        {#if agents.cards.length || workflowChoices.length}
           <section aria-label="Run as" class="space-y-3">
             <div class="flex flex-wrap items-center gap-3">
               <span class="text-sm font-medium">Run as</span>
@@ -168,8 +217,9 @@
                 bind:value={() => mode, setMode}
                 options={[
                   { value: "plain", label: "Plain run", icon: "terminal" },
-                  { value: "agent", label: "Agent", icon: "bot" },
+                  ...(agents.cards.length ? [{ value: "agent", label: "Agent", icon: "bot" }] : []),
                   ...(agents.teams.length ? [{ value: "team", label: "Team", icon: "users" }] : []),
+                  ...(workflowChoices.length ? [{ value: "workflow", label: "Workflow", icon: "workflow" }] : []),
                 ]}
               />
             </div>
@@ -186,6 +236,20 @@
                   </li>
                 {/each}
               </ul>
+            {:else if mode === "workflow"}
+              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label="Workflows">
+                {#each workflowChoices as c (c.workflow.id)}
+                  {@const on = choice === `workflow:${c.workflow.id}`}
+                  <li>
+                    <button type="button" aria-pressed={on} onclick={() => (choice = `workflow:${c.workflow.id}`)} class="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition duration-150 {on ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel hover:border-line-strong'}">
+                      <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-node-trigger/14 text-node-trigger"><Icon name="workflow" size={16} /></span>
+                      <span class="min-w-0 flex-1"><span class="block truncate text-md font-semibold">{c.workflow.draft.name}</span><span class="block truncate text-xs text-muted">v{c.workflow.live_version} · {c.workflow.draft.steps.length} steps</span></span>
+                      {#if on}<Icon name="check" size={15} class="text-accent" />{/if}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+              <p class="text-sm text-muted">What you write below reaches the workflow as <span class="mono">trigger.payload.prompt</span>. Its own steps decide what runs, and anything that changes something still asks first.</p>
             {:else if mode === "agent"}
               <ul class="grid gap-2.5 sm:grid-cols-2" aria-label="Agents">
                 {#each agents.cards as c (c.slug)}
@@ -354,7 +418,8 @@
 
         <div class="sticky bottom-0 z-20 -mx-6 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-6 py-3 backdrop-blur">
           <span class="flex items-center gap-1.5 text-xs text-muted"><Kbd>{shortcut}</Kbd> to start</span>
-          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim()}>Start run</Button>
+          {#if agentSlug && prompt.trim()}<Button type="button" variant="ghost" size="lg" icon="workflow" onclick={() => { workflowName = shorten(prompt.trim(), 40); savingAs = true; }}>Save as workflow</Button>{/if}
+          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim() || (mode === "workflow" && !picked)}>{mode === "workflow" ? "Run workflow" : "Start run"}</Button>
         </div>
       </div>
 
@@ -389,3 +454,22 @@
     </div>
   </div>
 </form>
+
+<Modal bind:open={savingAs} title="Save as workflow" icon="workflow" size="sm">
+  <p class="text-base text-muted">This makes a draft that starts by hand and asks {team ? "the team" : "the agent"} what you wrote. You can add steps, a schedule or an approval, then publish it.</p>
+  <form
+    class="mt-4"
+    onsubmit={(e) => {
+      e.preventDefault();
+      void saveAsWorkflow();
+    }}
+  >
+    <Field label="Name" hint={slugify(workflowName) ? `Short name: ${slugify(workflowName)}` : "Use some letters or digits."}>
+      {#snippet children(f)}<Input id={f.id} bind:value={workflowName} maxlength={80} />{/snippet}
+    </Field>
+    <div class="mt-4 flex justify-end gap-2">
+      <Button type="button" onclick={() => (savingAs = false)}>Cancel</Button>
+      <Button type="submit" variant="primary" disabled={savingBusy || !slugify(workflowName)}>Save</Button>
+    </div>
+  </form>
+</Modal>

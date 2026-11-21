@@ -75,6 +75,8 @@ pub struct Bar {
     pub state: RunState,
     /// Whether it waited for a person at some point.
     pub waited: bool,
+    /// How long it took, or has taken so far, in milliseconds. The bar's height.
+    pub ms: u64,
 }
 
 /// A run id as text, so the interface does not need the id type.
@@ -247,6 +249,7 @@ impl WorkflowService {
     /// Every workflow as a row of the list.
     pub async fn cards(&self) -> Result<Vec<Card>> {
         let workflows = self.store.workflows(&self.tenant).await?;
+        let now = self.clock.now();
         let triggers = self.store.trigger_states(&self.tenant).await?;
         let all_runs = self.store.runs(&self.tenant, None, 1000).await?;
         let waiting = self.waiting_by_workflow(&all_runs);
@@ -270,6 +273,7 @@ impl WorkflowService {
                         run: r.id.to_string(),
                         state: r.state,
                         waited: r.steps.values().any(|s| s.wait.is_some()),
+                        ms: r.finished_at.unwrap_or(now).since(r.started_at),
                     })
                     .collect(),
                 health: health(workflow.enabled, waiting.get(&workflow.id).copied().unwrap_or(0), &states),

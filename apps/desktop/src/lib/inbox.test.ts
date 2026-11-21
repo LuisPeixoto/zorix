@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Approval, ServerRow, TreeApproval } from "./api.ts";
-import { approvalItems, oldestFirst, serverItems, targetOf } from "./inbox.ts";
+import type { WfWait } from "./api.ts";
+import { approvalItems, oldestFirst, serverItems, targetOf, workflowItems } from "./inbox.ts";
 
 const approval = (id: string, at: number, status: Approval["status"] = "pending", args: unknown = { path: "notes/a.md" }): Approval => ({
   id,
@@ -60,4 +61,26 @@ test("the target is the first well-known argument, or the arguments in brief", (
   assert.equal(targetOf({ n: 3 }), '{"n":3}');
   assert.equal(targetOf({}), "");
   assert.equal(targetOf(null), "");
+});
+
+const wait = (id: string, at: number, extra: Partial<WfWait> = {}): WfWait =>
+  ({ id, run: `run-${id}`, workflow: "w1", step: "ok", kind: "approval", title: "On-call approves", message: "Go ahead?", shown: {}, fingerprint: "f", status: "pending", then: "refuse", created_at: at, ...extra }) as WfWait;
+
+test("a workflow that stopped for a person is an item, a timer is not, and an answered wait is gone", () => {
+  const items = workflowItems([wait("a", 10), wait("b", 20, { kind: "timer" }), wait("c", 30, { status: "approved" }), wait("d", 40, { kind: "question" })], { w1: "incident-triage" });
+  assert.deepEqual(items.map((i) => i.id), ["a", "d"]);
+  const first = items[0];
+  assert.ok(first.kind === "workflow");
+  assert.equal(first.workflow, "incident-triage");
+  assert.equal(first.what, "approval");
+  assert.equal(first.run, "run-a");
+});
+
+test("approvals and workflow waits are ordered together by how long they have waited, servers last", () => {
+  const items = oldestFirst([
+    ...serverItems([server("linear", { tools_to_review: 1 })]),
+    ...workflowItems([wait("wf-late", 60), wait("wf-early", 1)]),
+    ...approvalItems([run("r1")], { r1: [tree(approval("mid", 30))] }),
+  ]);
+  assert.deepEqual(items.map((i) => i.id), ["wf-early", "mid", "wf-late", "server:linear"]);
 });

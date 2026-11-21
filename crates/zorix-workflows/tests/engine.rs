@@ -518,6 +518,7 @@ async fn a_refusal_fails_the_step_and_says_who() {
     let run = rig.run(run.id).await;
     assert_eq!(run.state, RunState::Failed);
     assert!(run.error.as_deref().unwrap().contains("Refused by luis (too risky)"), "{:?}", run.error);
+    assert_eq!(run.steps["ok"].note, None, "a failed step does not keep saying it is waiting");
 }
 
 #[tokio::test]

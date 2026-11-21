@@ -146,7 +146,7 @@ async fn list(service: &WorkflowService, printer: Printer) -> Result<Exit, CliEr
         let changes = if card.unpublished_changes && card.workflow.live_version.is_some() { " *" } else { "" };
         println!(
             "{:<22} {:<28} {:<14} {:<5}{changes:<2} {}",
-            card.workflow.slug,
+            card.workflow.slug.to_string(),
             shorten(&triggers.join(", "), 28),
             bars,
             version,
