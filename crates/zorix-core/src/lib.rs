@@ -19,6 +19,7 @@ pub mod model;
 pub mod permission;
 pub mod policy;
 pub mod ports;
+pub mod project;
 pub mod redact;
 pub mod repository;
 pub mod secret;
@@ -48,7 +49,7 @@ pub use execution::{
 };
 pub use ids::{
     AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,
-    McpServerId, MemoryId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
+    McpServerId, MemoryId, ProjectId, TaskId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
@@ -73,6 +74,11 @@ pub use permission::{
 };
 pub use policy::{PolicyDecision, PolicyEngine, PolicyRequest};
 pub use ports::{EventPublisher, ExecutionScheduler, ResultValidator, Validation};
+pub use project::{
+    Date, Deliverable, DeliverableKind, MAX_DELIVERABLES, MAX_DEPENDENCIES, MAX_LINKS, MAX_PROJECT_TASKS, MAX_PROJECTS,
+    MAX_TASK_RUNS, NeedsYou, Project, ProjectEvent, ProjectEventDraft, ProjectEventKind, ProjectKey, ProjectStore,
+    RunOutcome, Task, TaskCount, TaskKey, TaskLink, TaskPriority, TaskRun, TaskState, Who, check_dependencies,
+};
 pub use redact::{redact, redact_text};
 pub use repository::{
     Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, ListFilter, LoopState, ToolCallRecord,

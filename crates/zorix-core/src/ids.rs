@@ -188,6 +188,15 @@ uuid_id!(
     WaitId
 );
 
+uuid_id!(
+    /// Identifies one project: a set of tasks for you and your agents.
+    ProjectId
+);
+uuid_id!(
+    /// Identifies one task of a project.
+    TaskId
+);
+
 slug_id!(
     /// The organisation (or the local user) that owns an execution. Data never crosses tenants.
     TenantId
