@@ -529,3 +529,33 @@ async fn projects_are_listed_with_their_figures_and_archiving_hides_them() {
         rig.service.add_task(&ops, NewTask { title: "x".into(), ..NewTask::default() }, None).await.unwrap_err();
     assert!(error.to_string().contains("archived"));
 }
+
+#[tokio::test]
+async fn what_needs_a_person_and_the_index_of_tasks_span_the_active_projects() {
+    let rig = rig();
+    let ops = project(&rig, "OPS").await;
+    let web = project(&rig, "WEB").await;
+    let a = task(&rig, &ops, "Triage", Some(scout())).await;
+    let _b = task(&rig, &ops, "Backlog item", None).await;
+    let c = task(&rig, &web, "Landing page", Some(Who::You)).await;
+    rig.service.move_task(&a, to(TaskState::InProgress), None).await.unwrap();
+    rig.fake.finish(0, "Done");
+    rig.service.reconcile().await.unwrap();
+    rig.service.move_task(&c, to(TaskState::Review), None).await.unwrap();
+    let needs = rig.service.needing_you().await.unwrap();
+    let keys: Vec<String> = needs.iter().map(|n| n.key.to_string()).collect();
+    assert_eq!(keys.len(), 2);
+    assert!(keys.contains(&"OPS-1".to_string()) && keys.contains(&"WEB-1".to_string()));
+    assert!(needs.iter().all(|n| n.needs == NeedsYou::Review));
+    assert_eq!(
+        needs.iter().find(|n| n.project.as_str() == "WEB").map(|n| n.project_name.as_str()),
+        Some("Project WEB")
+    );
+    assert_eq!(rig.service.index().await.unwrap().len(), 3);
+    // An archived project leaves both.
+    let mut fields = zorix_projects::ProjectFields::of(&rig.service.project(&web).await.unwrap());
+    fields.archived = true;
+    rig.service.update_project(&web, fields, None).await.unwrap();
+    assert_eq!(rig.service.needing_you().await.unwrap().len(), 1);
+    assert_eq!(rig.service.index().await.unwrap().len(), 2);
+}

@@ -282,21 +282,6 @@ pub struct TaskDetail {
     pub events: Vec<ProjectEvent>,
 }
 
-/// One deliverable of the project, with its task.
-#[derive(Clone, Debug, Serialize)]
-pub struct DeliverableRow {
-    /// The task.
-    pub task: TaskKey,
-    /// The task's title.
-    pub title: String,
-    /// The task's lane.
-    pub state: TaskState,
-    /// Who has the task.
-    pub assignee: Option<Who>,
-    /// The deliverable.
-    pub deliverable: Deliverable,
-}
-
 /// A link with what ZORIX could read about it.
 #[derive(Clone, Debug, Serialize)]
 pub struct LinkState {
@@ -304,6 +289,38 @@ pub struct LinkState {
     pub url: String,
     /// The state of the pull request it points at, when a connection could read it.
     pub pull: Option<PullState>,
+}
+
+/// A task that needs a person, with where it is.
+#[derive(Clone, Debug, Serialize)]
+pub struct TaskNeed {
+    /// The task's key.
+    pub key: TaskKey,
+    /// Its title.
+    pub title: String,
+    /// Its project.
+    pub project: ProjectKey,
+    /// The project's name.
+    pub project_name: String,
+    /// What is needed.
+    pub needs: NeedsYou,
+    /// Who has it.
+    pub assignee: Option<Who>,
+    /// When it last changed.
+    pub at: Timestamp,
+}
+
+/// One task in the index that search reads.
+#[derive(Clone, Debug, Serialize)]
+pub struct TaskIndexRow {
+    /// The task's key.
+    pub key: TaskKey,
+    /// Its title.
+    pub title: String,
+    /// Its project.
+    pub project: ProjectKey,
+    /// Its lane.
+    pub state: TaskState,
 }
 
 /// Projects and tasks.
@@ -410,6 +427,45 @@ impl ProjectService {
             cards.push(ProjectCard { project, counts, needs_you, assignees });
         }
         Ok(cards)
+    }
+
+    /// Every task that needs a person, oldest first, across the active projects.
+    pub async fn needing_you(&self) -> Result<Vec<TaskNeed>> {
+        let mut out = Vec::new();
+        for project in self.store.projects(&self.tenant).await?.into_iter().filter(|p| !p.archived) {
+            for task in self.store.tasks(&self.tenant, project.id).await? {
+                if let Some(needs) = task.needs_you() {
+                    out.push(TaskNeed {
+                        key: task.key.clone(),
+                        title: task.title.clone(),
+                        project: project.key.clone(),
+                        project_name: project.name.clone(),
+                        needs,
+                        assignee: task.assignee.clone(),
+                        at: task.updated_at,
+                    });
+                }
+            }
+        }
+        out.sort_by_key(|n| n.at);
+        Ok(out)
+    }
+
+    /// A short row for every task of the active projects, for search.
+    pub async fn index(&self) -> Result<Vec<TaskIndexRow>> {
+        let mut out = Vec::new();
+        for project in self.store.projects(&self.tenant).await?.into_iter().filter(|p| !p.archived) {
+            for task in self.store.tasks(&self.tenant, project.id).await? {
+                out.push(TaskIndexRow {
+                    key: task.key,
+                    title: task.title,
+                    project: project.key.clone(),
+                    state: task.state,
+                });
+            }
+        }
+        out.truncate(2_000);
+        Ok(out)
     }
 
     /// Make a project.
@@ -898,25 +954,6 @@ impl ProjectService {
             Ok(Some(vec![self.draft(Some(key), &by, ProjectEventKind::Progress { percent })]))
         })
         .await
-    }
-
-    /// Every deliverable of a project, newest first.
-    pub async fn deliverables(&self, key: &ProjectKey) -> Result<Vec<DeliverableRow>> {
-        let project = self.project_of(key).await?;
-        let mut rows = Vec::new();
-        for task in self.store.tasks(&self.tenant, project.id).await? {
-            for deliverable in &task.deliverables {
-                rows.push(DeliverableRow {
-                    task: task.key.clone(),
-                    title: task.title.clone(),
-                    state: task.state,
-                    assignee: task.assignee.clone(),
-                    deliverable: deliverable.clone(),
-                });
-            }
-        }
-        rows.sort_by_key(|row| std::cmp::Reverse(row.deliverable.at));
-        Ok(rows)
     }
 
     /// A project's history, newest first, of one task or of all.

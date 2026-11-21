@@ -4,7 +4,8 @@ use serde::Serialize;
 use tauri::State;
 use zorix_core::{DeliverableKind, ExecutionId, Project, ProjectEvent, ProjectKey, Task, TaskKey};
 use zorix_projects::{
-    Board, DeliverableRow, LinkState, Move, NewProject, NewTask, ProjectCard, ProjectFields, TaskDetail, TaskFields,
+    Board, LinkState, Move, NewProject, NewTask, ProjectCard, ProjectFields, TaskDetail, TaskFields, TaskIndexRow,
+    TaskNeed,
 };
 
 use crate::state::AppState;
@@ -55,11 +56,6 @@ pub async fn project_ask(
     prompt: Option<String>,
 ) -> Result<ExecutionId, String> {
     state.services()?.projects.ask_manager(&project_key(&key)?, prompt.as_deref()).await.map_err(text)
-}
-
-#[tauri::command]
-pub async fn project_deliverables(state: State<'_, AppState>, key: String) -> Result<Vec<DeliverableRow>, String> {
-    state.services()?.projects.deliverables(&project_key(&key)?).await.map_err(text)
 }
 
 #[tauri::command]
@@ -144,4 +140,16 @@ pub async fn task_deliver(
         .add_deliverable(&task_key(&key)?, kind, &title, &body, Some(zorix_core::Who::You), None)
         .await
         .map_err(text)
+}
+
+/// The tasks that need you, for the Inbox and the bell.
+#[tauri::command]
+pub async fn tasks_needing_you(state: State<'_, AppState>) -> Result<Vec<TaskNeed>, String> {
+    state.services()?.projects.needing_you().await.map_err(text)
+}
+
+/// A short row for every task, for search.
+#[tauri::command]
+pub async fn tasks_index(state: State<'_, AppState>) -> Result<Vec<TaskIndexRow>, String> {
+    state.services()?.projects.index().await.map_err(text)
 }
