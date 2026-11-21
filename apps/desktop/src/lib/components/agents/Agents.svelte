@@ -71,7 +71,7 @@
           </Card>
         {:else}
           {#if agents.teams.length}
-            <div class="mb-4">
+            <div class="mb-4 flex">
               <Segmented
                 label="Show"
                 bind:value={show}

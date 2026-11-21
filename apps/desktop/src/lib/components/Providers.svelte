@@ -115,7 +115,7 @@
                   <tbody class="divide-y divide-line-soft">
                     {#each models as m (m.reference)}
                       <tr>
-                        <td class="mono px-4 py-2.5 text-sm font-medium">{m.name}</td>
+                        <td class="mono px-4 py-2.5 text-sm font-medium">{m.reference.slice(m.reference.indexOf("/") + 1)}</td>
                         <td class="mono tnum px-3 py-2.5 text-sm text-muted">{contextText(m.context_window)}</td>
                         <td class="px-3 py-2.5 text-sm text-muted">{[m.tools && "tools", m.vision && "images"].filter(Boolean).join(", ") || "text"}</td>
                         <td class="px-3 py-2.5 text-sm text-muted">{m.local ? "free" : m.price_known ? "priced" : "unknown"}</td>

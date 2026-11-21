@@ -122,7 +122,7 @@
           <div class="min-w-0 flex-1">
             <h1 class="selectable text-3xl leading-tight font-semibold tracking-tight break-words text-balance">{run.request.prompt}</h1>
             <p class="mt-1.5 text-base text-muted">
-              Started {ago(run.created_at, store.now)}{#if helpers > 0} · {team ?? run.agent?.slug ?? "this run"} asked {helpers} {helpers === 1 ? "agent" : "agents"}{/if}
+              Started {ago(run.created_at, store.now)}{#if helpers > 0}{" · "}{team ?? run.agent?.slug ?? "this run"} asked {helpers} {helpers === 1 ? "agent" : "agents"}{/if}
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">

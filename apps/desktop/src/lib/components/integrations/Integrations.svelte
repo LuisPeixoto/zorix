@@ -93,7 +93,7 @@
             <span class="selectable">{server.reason ?? "The server stopped answering."}</span> Fix it, or switch the server off so runs do not wait for it.
           </Callout>
         {/each}
-        <div class="mb-4">
+        <div class="mb-4 flex">
           <Segmented
             label="Show"
             bind:value={show}
