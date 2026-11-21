@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { inbox } from "../../stores/inbox.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
   import { theme } from "../../stores/theme.svelte.ts";
   import { MODE_LABEL } from "../../theme.ts";
@@ -31,6 +32,15 @@
       <Kbd>{shortcut}</Kbd>
     </button>
   </div>
+  <button
+    type="button"
+    onclick={() => store.showInbox()}
+    class="relative grid size-8 place-items-center rounded-lg text-muted transition duration-150 hover:bg-hover hover:text-fg"
+    aria-label={inbox.count > 0 ? `Inbox: ${inbox.count} waiting for you` : "Inbox: nothing is waiting for you"}
+  >
+    <Icon name="bell" size={16} />
+    {#if inbox.count > 0}<span class="tnum absolute top-0.5 right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-warn px-1 text-2xs font-bold text-bg">{inbox.count}</span>{/if}
+  </button>
   <IconButton
     icon={modeIcon}
     label="Theme: {MODE_LABEL[theme.mode]}. Click to change."
