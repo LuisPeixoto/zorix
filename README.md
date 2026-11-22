@@ -51,6 +51,8 @@ everything. It is not tied to one model or provider, and the core does not know 
   versioned, a test run asks before every action, a step that sends without asking is confirmed when you publish, and an approval is bound to exactly what you were shown.
 - **Tasks that your agents pick up.** [Projects](docs/projects.md) hold tasks for you and your agents on a board, a list and a timeline. Moving an agent's task to *In progress* starts its run, a finished
   run lands in *Review* with its answer, and a project's manager plans through tools that always ask you first.
+- **A workforce with a leash you set.** [Workers](docs/workforce.md) are your agents with a role, a department and someone to answer to. Five levels of autonomy, a weekly budget and a time for each task decide
+  what a worker does without asking; tools that always ask still ask. A virtual manager plans the week and writes the Friday report, on a schedule that is off until you turn it on.
 - **One code base, three systems.** Rust core, Tauri shell, tested on macOS, Windows and Linux.
 - **Bounded.** Iterations, tool calls, tokens, cost, time, output size: every limit is explicit and fails with a clear reason.
 
@@ -60,6 +62,8 @@ everything. It is not tied to one model or provider, and the core does not know 
 |---|---|
 | ![The workflow editor](docs/screenshots-0.7.0/workflows-editor-light.png) | ![A workflow run waiting for an approval](docs/screenshots-0.7.0/workflows-run-dark.png) |
 | A workflow on its canvas: triggers, an agent, a condition, an approval and actions. | A run stopped for a person: the card shows exactly what is being approved. |
+| ![The org chart](docs/screenshots-0.9.0/workforce-chart-light.png) | ![A worker](docs/screenshots-0.9.0/worker-page-dark.png) |
+| The workforce: you at the top, who answers to you below, and each worker's figures. | A worker: autonomy, limits, schedule, tasks and what it did this week. |
 | ![A project board](docs/screenshots-0.8.0/projects-board-light.png) | ![A project timeline](docs/screenshots-0.8.0/projects-timeline-dark.png) |
 | The board: tasks for you and your agents, with what needs you. | The timeline: bars by progress, today, and arrows between tasks. |
 
@@ -107,6 +111,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 | Orchestration | Parallel and nested delegation, structured handoff, budgets and permissions that only shrink, approvals up the tree, teams | [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) |
 | Workflows | Versioned graphs with schedules, webhooks and events, conditions, approvals and actions; `zorix serve` | [Workflows](docs/workflows.md) |
 | Projects | Tasks for you and your agents: board, list, timeline, deliverables, history, dependencies, and a manager that plans through tools that ask | [Projects](docs/projects.md) |
+| Workforce | Workers in departments, five levels of autonomy, weekly budgets, a manager that plans and reports | [Workforce](docs/workforce.md) |
 
 ## Install
 
@@ -168,6 +173,7 @@ cargo run -p zorix-runtime --example embed
 | [Orchestration](docs/orchestration.md), [Teams](docs/teams.md) | Agents asking agents: delegation, trees, budgets, approvals |
 | [Workflows](docs/workflows.md) | Triggers, steps, people, versions, the host and webhooks |
 | [Projects](docs/projects.md) | Tasks that agents pick up, the board, the timeline and the manager |
+| [Workforce](docs/workforce.md) | Workers, departments, autonomy, budgets and the manager's week |
 | [Command line](docs/cli.md) | Every command, option and exit code |
 | [Desktop app](docs/desktop.md) | The Tauri app |
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |

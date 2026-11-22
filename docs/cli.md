@@ -142,6 +142,11 @@ Workflows: list, show, create, edit, import, export, versions, diff, publish, ro
 Projects: list, create, show, edit, archive, restore, remove and ask. Tasks: list, add, show, edit, move, restart, comment, link, deliver, remove and history. `task move` to *In progress*,
 `task restart` and `project ask` start a run and follow it (exit 3 when it waits for a person); the rest needs no engine. See [projects](projects.md#the-command-line).
 
+### `zorix org …`, `zorix worker …`
+
+The workforce: `org show`, `settings`, `dept add|edit|remove`, `activity` and `notices`; `worker list`, `hire`, `show`, `edit`, `level`, `fire`, `schedule`, `plan` and `report`. `worker plan` and `report` start a
+run and follow it (exit 3 when it waits for a person); the rest needs no engine. See [workforce](workforce.md#the-command-line).
+
 ### `zorix mcp …`
 
 Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.

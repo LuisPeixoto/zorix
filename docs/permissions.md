@@ -128,6 +128,12 @@ The arguments of a call are stored as they are in the tool call record, because 
 A manager gets `project:KEY[:write]` and reads and plans only that project. Every write asks, and `tasks.move` asks a person who is looking (no automatic approval can give it), so a move to Done
 under a manager is an ordinary approval. A run a task started gets `task:KEY` and can only report progress, add a deliverable and leave a note on that task. See [projects](projects.md#the-manager).
 
+## Workforce
+
+A worker's **level** changes what asks, only for runs the workforce starts ([workforce](workforce.md#autonomy)). Suggest turns a call that changes something into a recorded proposal; Ask asks for every
+such call; Notify, Budgeted and Full let a call that only the default policy would hold run without asking, and record it. An explicit approval rule, a tool only a person may approve and a pattern on
+the worker's *still asks* list always ask, at every level. A manager reads who reports to it with `org:team`, and plans with `project:KEY:write`.
+
 ## Workflows
 
 A workflow's actions ask first by default, bound to the exact call. A step set to run without asking is confirmed by a person when publishing, and the version records who and when. It is

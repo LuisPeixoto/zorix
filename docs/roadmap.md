@@ -124,7 +124,7 @@ logged in `design/local-additions.md`. Until accounts exist (Phase 10) the only 
 
 Later: **people and sharing** (Phase 10), custom lanes, recurring tasks, a workflow step and trigger for tasks, import and export of a project, and the day a task finished.
 
-## Phase 9 — AI Workforce Management
+## ✅ Phase 9 — AI Workforce Management · v0.9.0
 
 Virtual employees, departments, hierarchies and virtual managers that plan, assign, monitor and report within configurable autonomy.
 Screens: Organisation (org chart, list, activity), worker profile, autonomy. Built from OrgChart, WorkerCard, AutonomyDial, MetricTile and LogStream.
@@ -132,6 +132,8 @@ Screens: Organisation (org chart, list, activity), worker profile, autonomy. Bui
 - **Workers** (agents and people) in departments, with who they report to; a virtual manager plans the week, assigns tasks and reports on Fridays.
 - **Autonomy** in five levels: Suggest, Ask, Notify, Budgeted and Full, with a weekly budget and a time limit per task; writes still ask.
 - A worker's tasks, on-time rate, eval score, weekly spend and activity; *Hire a worker* and *Org settings*; a weekly spend against a budget.
+
+Guide: [workforce](workforce.md). Shipped: the model and store (schema 8), `zorix-workforce`, the autonomy levels in the policy, `zorix org` and `zorix worker`, and the Workforce screens in the app.
 
 Decisions: [ADR-0038](adr/0038-workers-are-records-over-agents.md) (workers are records over agents; chains end at you; trees shrink; figures are derived)
 and [ADR-0039](adr/0039-autonomy-is-decided-by-the-policy.md) (autonomy is decided by the policy; what still asks; budgets are narrowings).

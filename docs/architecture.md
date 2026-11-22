@@ -167,6 +167,14 @@ ordinary execution through the hub, reads the run to send the task to Review or 
 read and on the workflow host's beat (a `Ticker`), so the command line works with no host and the app or `zorix serve` keeps tasks moving. The `tasks.*` and `task.*` tools are registered with
 the native tools. See [projects](projects.md) and ADR-0036 and ADR-0037.
 
+## Workforce (zorix-workforce)
+
+Workers, departments, settings, weekly plans and reports and the organisation's history are records in `zorix-core` (`org.rs`) and `zorix-store` (schema 8). `zorix-workforce` holds the rules in
+`WorkforceService`: it computes the figures from projects, executions and evaluations, shapes the runs a worker starts (it implements `zorix_projects::RunShaper`, which `ProjectService` asks before
+starting a task's or a manager's run) and starts a manager's plan and report. The level itself is applied by the policy engine: `AgentBinding.autonomy` is frozen into the run, and
+`DefaultPolicy` answers `Allow`, `AllowUnattended` or `Suggest` besides `Deny` and `RequireApproval`. A `WorkforceTicker` on the host's beat reads finished plans and reports, runs due schedules and
+records budget notices. See [workforce](workforce.md) and ADR-0038 and ADR-0039.
+
 ## What comes next
 
 | Phase | Plugs into |
