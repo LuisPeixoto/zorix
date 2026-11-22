@@ -126,8 +126,8 @@ export function budgetShare(figures: Pick<Figures, "week_micros">, budget: numbe
 // The chart
 
 export const CARD_W = 196;
-export const CARD_H = 112;
-export const CHIP_W = 112;
+export const CARD_H = 120;
+export const CHIP_W = 128;
 export const CHIP_H = 30;
 export const GAP_X = 14;
 export const GAP_Y = 40;
@@ -279,7 +279,8 @@ export interface OrgNode {
 export const YOU = "you";
 
 /** You at the top, then each worker under who it reports to (under you when it reports to nobody). */
-export function orgNodes(overview: Pick<Overview, "workers" | "you">): OrgNode[] {
+export function orgNodes(overview: Pick<Overview, "workers" | "you"> & { settings?: Pick<Overview["settings"], "departments"> }): OrgNode[] {
+  const department = (slug: string) => overview.settings?.departments.find((d) => d.slug === slug)?.name ?? slug;
   const you = overview.you;
   const nodes: OrgNode[] = [
     {
@@ -305,13 +306,13 @@ export function orgNodes(overview: Pick<Overview, "workers" | "you">): OrgNode[]
       id: v.worker.agent,
       parent: v.worker.reports_to ?? YOU,
       name: v.name,
-      role: `${v.worker.manager ? "Virtual manager" : v.worker.role}${v.worker.manager ? ` · ${v.worker.department}` : ""}`,
+      role: v.worker.manager ? `Virtual manager · ${department(v.worker.department)}` : v.worker.role,
       emoji: v.avatar.emoji,
       color: v.avatar.color,
       status: v.status,
       human: false,
       figures,
-      label: `${v.name}, ${v.worker.role}, ${levelLabel(v.worker.autonomy)}. ${figures.map(([value, caption]) => `${value} ${caption}`).join(", ")}`,
+      label: `${v.name}, ${v.worker.role}, ${levelLabel(v.worker.autonomy)}${v.status ? `, ${STATUS_TEXT[v.status].toLowerCase()}` : ""}. ${figures.map(([value, caption]) => `${value} ${caption}`).join(", ")}`,
     });
   }
   return nodes;
