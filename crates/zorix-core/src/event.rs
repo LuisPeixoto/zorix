@@ -50,6 +50,8 @@ event_kinds! {
     ModelFallback => "execution.model.fallback",
     ToolRequested => "execution.tool.requested",
     ToolDenied => "execution.tool.denied",
+    ToolUnattended => "execution.tool.unattended",
+    ToolSuggested => "execution.tool.suggested",
     ToolStarted => "execution.tool.started",
     ToolCompleted => "execution.tool.completed",
     ToolFailed => "execution.tool.failed",

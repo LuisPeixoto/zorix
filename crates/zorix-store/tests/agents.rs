@@ -240,6 +240,11 @@ async fn a_run_remembers_its_agent_and_the_agent_has_a_list_of_conversations() {
     assert_eq!(by_agent.len(), 3);
     assert!(by_agent.iter().all(|e| e.agent.as_ref().map(|a| a.version) == Some(1)), "the version is recorded");
     assert_eq!(repository.list(&who, &ListFilter::default()).await.unwrap().len(), 4);
+    let since = repository
+        .list(&who, &ListFilter { agent: Some(agent.id), since: Some(Timestamp(20)), ..ListFilter::default() })
+        .await
+        .unwrap();
+    assert_eq!(since.len(), 2, "only runs created at or after the time: 20 and 30");
 
     let conversations = agents.conversations(&who, agent.id, 10).await.unwrap();
     assert_eq!(conversations.len(), 2, "chat-c is not this agent's");

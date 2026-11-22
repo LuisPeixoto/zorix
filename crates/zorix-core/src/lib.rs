@@ -5,6 +5,7 @@
 pub mod access;
 pub mod agent;
 pub mod approval;
+pub mod autonomy;
 pub mod context;
 pub mod delegation;
 pub mod engine;
@@ -36,6 +37,7 @@ pub use agent::{
     validate_model_pattern,
 };
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
+pub use autonomy::{Autonomy, AutonomyLevel};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
 pub use delegation::{
     ChildResult, DelegateRequest, DelegateTask, DelegateTool, DelegationPlanner, MAX_DEPTH, MAX_DESCENDANTS, MAX_TASKS,

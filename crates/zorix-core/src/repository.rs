@@ -159,6 +159,8 @@ pub struct ListFilter {
     pub parent: Option<crate::ids::ExecutionId>,
     /// Only executions nobody started (the tops of trees).
     pub roots_only: bool,
+    /// Only executions created at or after this time.
+    pub since: Option<Timestamp>,
     /// At most this many (newest first). Zero means the default of 100.
     pub limit: usize,
 }

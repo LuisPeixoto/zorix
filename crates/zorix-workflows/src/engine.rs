@@ -850,6 +850,8 @@ impl WorkflowEngine {
             key: format!("wf-{}-{id}", run.id),
             metadata: self.metadata(run, id),
             access: Vec::new(),
+            max_active_ms: None,
+            autonomy: None,
         };
         match self.launcher.start(start).await {
             Ok(execution) => {
@@ -910,6 +912,8 @@ impl WorkflowEngine {
                 key: format!("wf-{}-{id}-{index}", run.id),
                 metadata: self.metadata(run, id),
                 access: Vec::new(),
+                max_active_ms: None,
+                autonomy: None,
             };
             match self.launcher.start(start).await {
                 Ok(execution) => started.push(execution),

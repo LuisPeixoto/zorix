@@ -400,6 +400,7 @@ fn binding(slug: &str) -> AgentBinding {
         allowed_models: vec!["*".into()],
         agent_memory: false,
         team: None,
+        autonomy: None,
     }
 }
 

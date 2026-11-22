@@ -560,6 +560,8 @@ impl ProjectService {
                 ("project_manager".to_string(), "1".to_string()),
             ]),
             access: vec![format!("project:{}:write", project.key)],
+            max_active_ms: None,
+            autonomy: None,
         };
         let execution = self.launcher.start(start).await.map_err(invalid)?;
         let by = Some(Who::You);
@@ -1015,6 +1017,8 @@ impl ProjectService {
                 ("task".to_string(), task.key.to_string()),
             ]),
             access: vec![format!("task:{}", task.key)],
+            max_active_ms: None,
+            autonomy: None,
         };
         let assignee = task.assignee.clone();
         match self.launcher.start(start).await {

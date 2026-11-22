@@ -440,6 +440,9 @@ pub struct AgentBinding {
     /// The team the run was made for, when one was asked (ADR-0031).
     #[serde(default)]
     pub team: Option<String>,
+    /// How much the run may do without asking, when the workforce started it (ADR-0039).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autonomy: Option<crate::autonomy::Autonomy>,
 }
 
 impl AgentBinding {
@@ -458,6 +461,7 @@ impl AgentBinding {
             allowed_models: allowed,
             agent_memory: version.spec.agent_memory,
             team: None,
+            autonomy: None,
         }
     }
 

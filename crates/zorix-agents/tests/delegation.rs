@@ -318,6 +318,31 @@ async fn an_expected_output_and_the_handoff_reach_the_child() {
 }
 
 #[tokio::test]
+async fn a_child_runs_at_the_level_of_the_run_that_asked_it() {
+    use zorix_core::{Autonomy, AutonomyLevel, DelegateRequest, DelegationPlanner, PlanContext};
+    let w = world().await;
+    make(&w.store, "lead", &["agent:researcher"], |_| {}).await;
+    make(&w.store, "researcher", &[], |_| {}).await;
+    let own = AgentAsk {
+        prompt: "ASK researcher: warm up".into(),
+        autonomy: Some(Autonomy { level: AutonomyLevel::Ask, still_ask: vec!["db:ops:write".into()] }),
+        ..AgentAsk::default()
+    };
+    let lead = w.ask("lead", own).await;
+    assert_eq!(lead.agent.as_ref().unwrap().autonomy.as_ref().unwrap().level, AutonomyLevel::Ask);
+    let created = w.engine.create(lead).await.unwrap();
+    let planner = AgentPlanner::new(w.store.clone(), Arc::new(Anything));
+    let request = DelegateRequest::parse(&json!({"tasks": [{"agent": "researcher", "task": "list three"}]})).unwrap();
+    let planned = planner
+        .plan(PlanContext { parent: &created, call_id: "call_1_0", ancestors: vec![], descendants: 0 }, &request)
+        .await
+        .unwrap();
+    let child = planned[0].new.agent.as_ref().unwrap().autonomy.clone().expect("the child has a level");
+    assert_eq!(child.level, AutonomyLevel::Ask, "never freer than the run that asked");
+    assert_eq!(child.still_ask, vec!["db:ops:write".to_string()]);
+}
+
+#[tokio::test]
 async fn an_evaluation_refuses_approvals_all_the_way_down_and_can_check_who_was_asked() {
     use zorix_agents::evals::{EvalOptions, Evaluator};
     let w = world().await;

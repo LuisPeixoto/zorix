@@ -59,6 +59,10 @@ pub fn event_line(event: &ExecutionEvent) -> String {
         EventKind::ToolDenied => {
             format!("{}: {} (by {})", text(p, "tool"), shorten(&text(p, "reason"), 120), text(p, "by"))
         }
+        EventKind::ToolUnattended => {
+            format!("{} ran without asking ({})", text(p, "tool"), text(p, "level"))
+        }
+        EventKind::ToolSuggested => format!("{} proposed, not run", text(p, "tool")),
         EventKind::WaitingApproval => format!("{}: {}", text(p, "tool"), text(p, "reason")),
         EventKind::ApprovalGranted | EventKind::ApprovalDenied => {
             let note = text(p, "note");

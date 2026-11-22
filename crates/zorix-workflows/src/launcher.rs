@@ -52,6 +52,10 @@ pub struct RunStart {
     pub metadata: BTreeMap<String, String>,
     /// Access the run gets besides the agent's own, in the syntax of an agent's access list (`task:OPS-38`).
     pub access: Vec<String>,
+    /// The most active time it may take, in milliseconds (a worker's time for a task).
+    pub max_active_ms: Option<u64>,
+    /// How much it may do without asking, when the workforce starts it (ADR-0039).
+    pub autonomy: Option<zorix_core::Autonomy>,
 }
 
 /// How an execution a step started is going.
@@ -205,10 +209,14 @@ impl StepLauncher for HubLauncher {
             prompt: start.prompt,
             input: start.input,
             model: start.model,
-            limits: Some(cost_only(start.max_cost_micros)),
+            limits: Some(Limits {
+                max_active_ms: start.max_active_ms.unwrap_or(u64::MAX),
+                ..cost_only(start.max_cost_micros)
+            }),
             idempotency_key: Some(start.key),
             metadata: start.metadata,
             extra_access: start.access,
+            autonomy: start.autonomy,
             ..AgentAsk::default()
         };
         let new = match &start.target {

@@ -272,6 +272,10 @@ impl ExecutionRepository for SqliteRepository {
             if filter.roots_only {
                 sql.push_str(" AND parent IS NULL");
             }
+            if let Some(since) = filter.since {
+                sql.push_str(" AND created_at >= CAST(? AS INTEGER)");
+                args.push(since.millis().to_string());
+            }
             sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?");
             let limit = if filter.limit == 0 { 100 } else { filter.limit };
             let mut statement = conn.prepare(&sql).map_err(storage)?;

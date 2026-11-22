@@ -4,7 +4,9 @@
 //! approval requirements. Anything not allowed explicitly is denied.
 
 use serde::{Deserialize, Serialize};
-use zorix_core::{Execution, Failure, LimitKind, Permission, PolicyDecision, PolicyEngine, PolicyRequest};
+use zorix_core::{
+    AutonomyLevel, Execution, Failure, LimitKind, Permission, PolicyDecision, PolicyEngine, PolicyRequest,
+};
 
 /// What a rule does to the calls it matches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,20 +100,76 @@ impl PolicyEngine for DefaultPolicy {
             let list: Vec<String> = missing.iter().map(|p| p.to_string()).collect();
             return deny(format!("This execution has no permission for: {}.", list.join(", ")));
         }
-        if let Some(rule) =
-            self.policy.rules.iter().find(|r| r.effect == Effect::RequireApproval && r.matches(&tool.id))
-        {
+        let rule_asks = self.policy.rules.iter().find(|r| r.effect == Effect::RequireApproval && r.matches(&tool.id));
+        // What the default policy would hold for a person, apart from an explicit rule.
+        let held = tool.requires_approval
+            || (self.policy.approve_destructive && tool.annotations.destructive && !tool.annotations.read_only);
+        let held_reason = if tool.requires_approval {
+            format!("{} asks for approval on every call.", tool.id)
+        } else {
+            format!("{} can change or remove data.", tool.id)
+        };
+
+        let Some(autonomy) = request.execution.agent.as_ref().and_then(|a| a.autonomy.as_ref()) else {
+            // Not a run of the workforce: the default policy alone decides.
+            if let Some(rule) = rule_asks {
+                return PolicyDecision::RequireApproval {
+                    reason: rule
+                        .reason
+                        .clone()
+                        .unwrap_or_else(|| format!("Policy requires approval to use {}.", tool.id)),
+                };
+            }
+            if held {
+                return PolicyDecision::RequireApproval { reason: held_reason };
+            }
+            return PolicyDecision::Allow;
+        };
+
+        // A call that changes something outside ZORIX's own records, or that the default holds, is what a level governs.
+        // Asking another worker (`agents.delegate`) only hands work over, so it is left to the run's own limits.
+        let changes = !tool.annotations.read_only && (tool.annotations.destructive || tool.annotations.open_world);
+        let governed = (changes || held) && tool.id != zorix_core::delegation::TOOL;
+
+        if autonomy.level == AutonomyLevel::Suggest && governed {
+            return PolicyDecision::Suggest {
+                reason: format!("{} was proposed, not run: this worker only suggests, and a person acts.", tool.id),
+            };
+        }
+        // What never loosens, at any level: an explicit rule, a tool a person must approve, and the worker's own list.
+        if let Some(rule) = rule_asks {
             return PolicyDecision::RequireApproval {
                 reason: rule.reason.clone().unwrap_or_else(|| format!("Policy requires approval to use {}.", tool.id)),
             };
         }
-        if tool.requires_approval {
-            return PolicyDecision::RequireApproval { reason: format!("{} asks for approval on every call.", tool.id) };
+        if tool.requires_approval && tool.approval_by_person_only {
+            return PolicyDecision::RequireApproval { reason: held_reason };
         }
-        if self.policy.approve_destructive && tool.annotations.destructive && !tool.annotations.read_only {
-            return PolicyDecision::RequireApproval { reason: format!("{} can change or remove data.", tool.id) };
+        if !autonomy.still_ask.is_empty()
+            && let Ok(listed) = zorix_core::access::compile_access(&autonomy.still_ask)
+            && required.iter().any(|p| p.action != zorix_core::Action::UseTool && listed.allows(p))
+        {
+            return PolicyDecision::RequireApproval {
+                reason: format!("{} touches something this worker always asks about.", tool.id),
+            };
         }
-        PolicyDecision::Allow
+        match autonomy.level {
+            AutonomyLevel::Suggest => PolicyDecision::Allow,
+            AutonomyLevel::Ask if governed => PolicyDecision::RequireApproval {
+                reason: if held {
+                    held_reason
+                } else {
+                    format!("{} changes something, and this worker asks first.", tool.id)
+                },
+            },
+            AutonomyLevel::Ask => PolicyDecision::Allow,
+            AutonomyLevel::Notify | AutonomyLevel::Budgeted | AutonomyLevel::Full if held => {
+                PolicyDecision::AllowUnattended {
+                    reason: format!("{} ran without asking: this worker is at {}.", tool.id, autonomy.level),
+                }
+            }
+            _ => PolicyDecision::Allow,
+        }
     }
 
     fn check_limits(&self, execution: &Execution) -> Option<Failure> {
@@ -233,6 +291,182 @@ mod tests {
             decide(&DefaultPolicy::default(), &execution(full_grants()), &spec),
             PolicyDecision::RequireApproval { .. }
         ));
+    }
+
+    // ---- Autonomy (ADR-0039) -----------------------------------------------------------------------------------------
+
+    use zorix_core::{AgentBinding, Autonomy, AutonomyLevel};
+
+    fn with_level(level: AutonomyLevel, still_ask: &[&str]) -> Execution {
+        let mut exec = execution(
+            Grants::none()
+                .with(Permission::new(Action::UseTool, "*"))
+                .with(Permission::new(Action::Read, "*"))
+                .with(Permission::new(Action::Write, "*")),
+        );
+        let slug = zorix_core::AgentSlug::new("forge").unwrap();
+        let spec = zorix_core::AgentSpec::new(slug.clone(), "Forge", "demo");
+        let agent = zorix_core::Agent {
+            id: zorix_core::AgentId::new(),
+            tenant: exec.tenant.clone(),
+            slug,
+            current_version: 1,
+            archived: false,
+            created_at: Timestamp(0),
+            updated_at: Timestamp(0),
+        };
+        let version = zorix_core::AgentVersion {
+            agent: agent.id,
+            version: 1,
+            hash: spec.hash(),
+            spec,
+            note: None,
+            created_at: Timestamp(0),
+        };
+        let mut binding = AgentBinding::of(&agent, &version);
+        binding.autonomy = Some(Autonomy { level, still_ask: still_ask.iter().map(|s| s.to_string()).collect() });
+        exec.agent = Some(binding);
+        exec
+    }
+
+    /// A tool that changes things outside, and that the default holds for a person.
+    fn default_held() -> ToolSpec {
+        writer()
+    }
+
+    /// A tool that asks on every call but changes only ZORIX's own records.
+    fn asks_by_itself() -> ToolSpec {
+        let mut spec = ToolSpec::new("tasks.create", "Create", "creates", json!({"type": "object"}));
+        spec.annotations =
+            ToolAnnotations { read_only: false, destructive: false, idempotent: false, open_world: false };
+        spec.requires_approval = true;
+        spec
+    }
+
+    /// A tool that only a person who is looking may approve.
+    fn person_only() -> ToolSpec {
+        let mut spec = asks_by_itself();
+        spec.id = "tasks.move".into();
+        spec.approval_by_person_only = true;
+        spec
+    }
+
+    /// An own-record tool that does not ask by default.
+    fn bookkeeping() -> ToolSpec {
+        let mut spec = ToolSpec::new("task.report_progress", "Report", "reports", json!({"type": "object"}));
+        spec.annotations =
+            ToolAnnotations { read_only: false, destructive: false, idempotent: true, open_world: false };
+        spec
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum Kind {
+        Allow,
+        Unattended,
+        Ask,
+        Suggest,
+    }
+
+    fn kind(decision: PolicyDecision) -> Kind {
+        match decision {
+            PolicyDecision::Allow => Kind::Allow,
+            PolicyDecision::AllowUnattended { .. } => Kind::Unattended,
+            PolicyDecision::RequireApproval { .. } => Kind::Ask,
+            PolicyDecision::Suggest { .. } => Kind::Suggest,
+            PolicyDecision::Deny { reason } => panic!("denied: {reason}"),
+        }
+    }
+
+    #[test]
+    fn each_level_decides_each_kind_of_call_as_the_decision_says() {
+        use AutonomyLevel::*;
+        let policy = DefaultPolicy::default();
+        // (tool, then the answer at Suggest, Ask, Notify, Budgeted, Full)
+        let table: Vec<(&str, ToolSpec, [Kind; 5])> = vec![
+            ("a read", reader(), [Kind::Allow, Kind::Allow, Kind::Allow, Kind::Allow, Kind::Allow]),
+            (
+                "a call the default holds",
+                default_held(),
+                [Kind::Suggest, Kind::Ask, Kind::Unattended, Kind::Unattended, Kind::Unattended],
+            ),
+            (
+                "a tool that asks by itself",
+                asks_by_itself(),
+                [Kind::Suggest, Kind::Ask, Kind::Unattended, Kind::Unattended, Kind::Unattended],
+            ),
+            (
+                "a tool only a person may approve",
+                person_only(),
+                [Kind::Suggest, Kind::Ask, Kind::Ask, Kind::Ask, Kind::Ask],
+            ),
+            (
+                "bookkeeping on the worker's own records",
+                bookkeeping(),
+                [Kind::Allow, Kind::Allow, Kind::Allow, Kind::Allow, Kind::Allow],
+            ),
+        ];
+        for (name, tool, expected) in table {
+            for (level, want) in [Suggest, Ask, Notify, Budgeted, Full].into_iter().zip(expected) {
+                let got = kind(decide(&policy, &with_level(level, &[]), &tool));
+                assert_eq!(got, want, "{name} at {level}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_run_with_no_level_is_decided_as_before() {
+        let policy = DefaultPolicy::default();
+        let exec = execution(full_grants());
+        assert_eq!(kind(decide(&policy, &exec, &default_held())), Kind::Ask);
+        assert_eq!(kind(decide(&policy, &exec, &reader())), Kind::Allow);
+    }
+
+    #[test]
+    fn an_explicit_rule_still_asks_at_every_level_but_suggest_which_proposes() {
+        let policy = DefaultPolicy::new(Policy {
+            rules: vec![Rule {
+                tool: "files.*".into(),
+                effect: Effect::RequireApproval,
+                reason: Some("by rule".into()),
+            }],
+            ..Policy::default()
+        });
+        for level in [AutonomyLevel::Ask, AutonomyLevel::Notify, AutonomyLevel::Budgeted, AutonomyLevel::Full] {
+            assert_eq!(kind(decide(&policy, &with_level(level, &[]), &default_held())), Kind::Ask, "{level}");
+        }
+    }
+
+    #[test]
+    fn the_workers_own_list_asks_about_what_it_names_and_only_that() {
+        let policy = DefaultPolicy::default();
+        let mut write_docs = default_held();
+        write_docs.required_permissions = vec![Permission::new(Action::Write, "workspace:docs/a.txt")];
+        let mut write_other = default_held();
+        write_other.required_permissions = vec![Permission::new(Action::Write, "workspace:src/a.txt")];
+        // `write:docs/*` compiles to a workspace write pattern.
+        let asked = with_level(AutonomyLevel::Full, &["write:docs/*"]);
+        assert_eq!(kind(decide(&policy, &asked, &write_docs)), Kind::Ask);
+        assert_eq!(kind(decide(&policy, &asked, &write_other)), Kind::Unattended);
+    }
+
+    #[test]
+    fn open_world_calls_are_governed_even_when_not_destructive() {
+        let policy = DefaultPolicy::default();
+        let mut post = default_held();
+        post.annotations =
+            ToolAnnotations { read_only: false, destructive: false, idempotent: false, open_world: true };
+        // The default does not hold it, so Notify and up let it run; Suggest and Ask govern it.
+        assert_eq!(kind(decide(&policy, &with_level(AutonomyLevel::Suggest, &[]), &post)), Kind::Suggest);
+        assert_eq!(kind(decide(&policy, &with_level(AutonomyLevel::Ask, &[]), &post)), Kind::Ask);
+        assert_eq!(kind(decide(&policy, &with_level(AutonomyLevel::Notify, &[]), &post)), Kind::Allow);
+    }
+
+    #[test]
+    fn a_missing_grant_is_still_a_denial_whatever_the_level() {
+        let policy = DefaultPolicy::default();
+        let mut exec = with_level(AutonomyLevel::Full, &[]);
+        exec.grants = Grants::none();
+        assert!(matches!(decide(&policy, &exec, &default_held()), PolicyDecision::Deny { .. }));
     }
 
     #[test]
