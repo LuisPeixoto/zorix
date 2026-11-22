@@ -14,6 +14,6 @@ pub use links::{HubPullReader, PullReader, PullState};
 pub use rules::{LinkKind, sentence};
 pub use service::{
     Board, Counts, LinkState, ManagerRun, Move, NewProject, NewTask, ProjectCard, ProjectFields, ProjectService,
-    RUN_GOING, TaskDetail, TaskFields, TaskIndexRow, TaskNeed, TaskView,
+    RUN_GOING, RunShaper, TaskDetail, TaskFields, TaskIndexRow, TaskNeed, TaskView,
 };
 pub use tools::{ProjectTicker, project_tools};

@@ -1,0 +1,29 @@
+[package]
+name = "zorix-workforce"
+description = "The ZORIX workforce: workers over agents, autonomy and budgets that shape their runs, and a manager that plans and reports."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-agents.workspace = true
+zorix-hub.workspace = true
+zorix-projects.workspace = true
+zorix-runtime.workspace = true
+zorix-store.workspace = true
+zorix-workflows.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio-util.workspace = true
+zorix-sim.workspace = true

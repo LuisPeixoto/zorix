@@ -86,6 +86,29 @@ pub fn next_fire(when: &When, timezone: Option<&str>, after: Timestamp) -> Resul
     }
 }
 
+/// The start of the local day (00:00 in the zone) that contains `at`.
+pub fn day_start(at: Timestamp, timezone: Option<&str>) -> Result<Timestamp, String> {
+    let zone = zone(timezone)?;
+    let local = to_utc(at).with_timezone(&zone);
+    let midnight = resolve(zone, local.date_naive(), NaiveTime::MIN).ok_or("That day has no midnight.")?;
+    Ok(stamp(midnight))
+}
+
+/// The start of the local week (Monday 00:00 in the zone) that contains `at`.
+pub fn week_start(at: Timestamp, timezone: Option<&str>) -> Result<Timestamp, String> {
+    let zone = zone(timezone)?;
+    let local = to_utc(at).with_timezone(&zone);
+    let monday = local.date_naive() - Duration::days(i64::from(local.weekday().num_days_from_monday()));
+    let start = resolve(zone, monday, NaiveTime::MIN).ok_or("That week has no Monday midnight.")?;
+    Ok(stamp(start))
+}
+
+/// A local day as `YYYY-MM-DD`.
+pub fn local_date(at: Timestamp, timezone: Option<&str>) -> Result<String, String> {
+    let zone = zone(timezone)?;
+    Ok(to_utc(at).with_timezone(&zone).format("%Y-%m-%d").to_string())
+}
+
 /// The next `HH:MM` after `after`, for a wait that ends at a time of day.
 pub fn next_time_of_day(time: &str, timezone: Option<&str>, after: Timestamp) -> Result<Timestamp, String> {
     let when = When::Daily { times: vec![time.to_string()], days: vec![] };
@@ -131,6 +154,23 @@ mod tests {
             times: times.iter().map(|t| t.to_string()).collect(),
             days: vec![Day::Mon, Day::Tue, Day::Wed, Day::Thu, Day::Fri],
         }
+    }
+
+    #[test]
+    fn the_week_starts_on_monday_at_midnight_in_the_zone_and_the_day_at_midnight() {
+        // Wednesday 2026-11-18 15:30 in Lisbon (UTC+0 in November).
+        let wed = at("Europe/Lisbon", 2026, 11, 18, 15, 30);
+        assert_eq!(week_start(wed, Some("Europe/Lisbon")).unwrap(), at("Europe/Lisbon", 2026, 11, 16, 0, 0));
+        assert_eq!(day_start(wed, Some("Europe/Lisbon")).unwrap(), at("Europe/Lisbon", 2026, 11, 18, 0, 0));
+        // Monday 00:00 itself starts its own week; Sunday night belongs to the week before.
+        let monday = at("Europe/Lisbon", 2026, 11, 16, 0, 0);
+        assert_eq!(week_start(monday, Some("Europe/Lisbon")).unwrap(), monday);
+        let sunday = at("Europe/Lisbon", 2026, 11, 15, 23, 59);
+        assert_eq!(week_start(sunday, Some("Europe/Lisbon")).unwrap(), at("Europe/Lisbon", 2026, 11, 9, 0, 0));
+        assert_eq!(local_date(wed, Some("Europe/Lisbon")).unwrap(), "2026-11-18");
+        // The zone decides the day: 23:30 in Lisbon is already the next day in Tokyo.
+        let late = at("Europe/Lisbon", 2026, 11, 18, 23, 30);
+        assert_eq!(local_date(late, Some("Asia/Tokyo")).unwrap(), "2026-11-19");
     }
 
     #[test]
