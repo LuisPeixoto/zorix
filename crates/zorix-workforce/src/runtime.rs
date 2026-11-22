@@ -4,11 +4,11 @@ use std::path::Path;
 use std::sync::Arc;
 
 use zorix_agents::ModelResolver;
-use zorix_core::{AgentStore, ExecutionEngine, Result, SystemClock, TenantId, ToolRegistry};
+use zorix_core::{AgentStore, ExecutionEngine, ExecutionRepository, Result, SystemClock, TenantId, ToolRegistry};
 use zorix_hub::Hub;
 use zorix_projects::ProjectService;
 use zorix_runtime::Engine;
-use zorix_store::{SqliteOrgStore, SqliteProjectStore, database_path};
+use zorix_store::{SqliteOrgStore, SqliteProjectStore, SqliteRepository, database_path};
 use zorix_workflows::launcher::HubLauncher;
 
 use crate::service::WorkforceService;
@@ -28,13 +28,14 @@ pub fn open(
     let org = Arc::new(SqliteOrgStore::open(&path)?);
     let project_store = Arc::new(SqliteProjectStore::open(&path)?);
     let agents: Arc<dyn AgentStore> = hub.agents.clone();
+    let repository: Arc<dyn ExecutionRepository> = Arc::new(SqliteRepository::open(&path)?);
     let executions: Arc<dyn ExecutionEngine> = Arc::new(engine);
-    let launcher = Arc::new(HubLauncher::new(hub.clone(), executions.clone(), resolver, tenant.clone()));
+    let launcher = Arc::new(HubLauncher::new(hub.clone(), executions, resolver, tenant.clone()));
     let service = Arc::new(WorkforceService::new(
         org,
         project_store,
         agents,
-        executions,
+        repository,
         launcher,
         tenant,
         Arc::new(SystemClock),

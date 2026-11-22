@@ -13,6 +13,8 @@
 #                                  webhook); the demo model only
 #   tools/live-tests.sh projects   projects and tasks through the real command line (a task runs when it moves to In progress, a
 #                                  dependency waits, `zorix serve` starts it, the manager is asked); the demo model only
+#   tools/live-tests.sh workforce  the workforce through the real command line (workers in departments, levels and budgets,
+#                                  the manager's plan and report, the schedule); the demo model only
 #   tools/live-tests.sh embeddings embeddings and memory: Ollama (all-minilm, plus qwen3:1.7b for the run that cites a
 #                                  document) and, with a stored key, OpenAI and Gemini embeddings
 #
@@ -45,6 +47,10 @@ fi
 
 if [ "$filter" = projects ]; then
   exec tools/live-projects.sh
+fi
+
+if [ "$filter" = workforce ]; then
+  exec tools/live-workforce.sh
 fi
 
 if [ "$filter" = embeddings ]; then

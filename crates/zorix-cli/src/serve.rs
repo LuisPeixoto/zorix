@@ -23,7 +23,8 @@ pub async fn serve(home: &Path, tenant: TenantId, printer: Printer, args: ServeA
     let config = crate::app::load_config(home)?;
     let workflows = Workflows::open(home, tenant.clone(), app.hub.clone(), app.engine.clone(), app.router.clone())
         .map_err(|e| CliError(e.to_string()))?;
-    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> = vec![zorix_projects::runtime::ticker(&app.projects)];
+    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> =
+        vec![zorix_projects::runtime::ticker(&app.projects), zorix_workforce::runtime::ticker(&app.workforce)];
     let host =
         workflows.start_host_with(secrets(&config), webhook, tickers).await.map_err(|e| CliError(e.to_string()))?;
 

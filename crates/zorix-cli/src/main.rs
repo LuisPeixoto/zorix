@@ -13,6 +13,7 @@ mod providers;
 mod render;
 mod serve;
 mod workflows;
+mod workforce;
 
 use std::process::ExitCode;
 
