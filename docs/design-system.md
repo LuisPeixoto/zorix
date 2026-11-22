@@ -199,7 +199,7 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 
 | Screen | Difference | Reason |
 |---|---|---|
-| Sidebar | Workforce, Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
+| Sidebar | Command Center and Marketplace are not listed | Their phases are not shipped; a link would lead nowhere |
 | Toolbar, sidebar | No account avatar, no daily budget beside "Spend today" | No accounts or budget setting yet ([roadmap](roadmap.md#across-phases), Command Center) |
 | Run | "This run" lists the model, who started it and the cost, not the grants, what asks first and the limits | The run record does not return its grants and limits yet; the roadmap lists them |
 | Run | The work tree is the kit's TreeView (state, steps, time, cost bar), not a four-column table | Same facts; TreeView adds folding and keyboard navigation |
@@ -220,6 +220,12 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 | Board, list | A lane has the kit's 16 px radius, not 14 | One radius for cards and lanes in the kit |
 | Task | The drawer edits the task in place (fields, dependencies, links, deliverables), and its Stepper only shows where the task is | The design system draws a read-out; moves are the footer buttons, the board and the keyboard |
 | Timeline | Tasks with no dates sit in a *Not scheduled* row under the grid; arrows are drawn between a task and what it waits for | Added to the design system for this phase, logged in `design/local-additions.md` |
+| Workforce | You are the card at the top, and who answers to you hangs below; the design system draws you among the manager's reports. Chips start at the fourth level, and a card is 120 px high so a two-line role fits | Every chain ends at you ([ADR-0038](adr/0038-workers-are-records-over-agents.md)), so the chart is drawn from the person who approves |
+| Workforce | A manager's card shows its on-time rate, a worker that waits shows how many, otherwise the eval score or the on-time rate; *Waiting for people* says "N approvals · M reviews", not "N for you" | The only person is you, so "for you" would say nothing; what is shown is what is measured |
+| Workforce, worker | Only *Spend this week* has a sparkline and a change; the other tiles have none. One switch turns on both the Monday plan and the Friday report | ZORIX records spend by day, not tasks or on-time rate; the schedule is one setting for a manager |
+| Workforce, kit | Radii and text sizes are the nearest step of the token scale (cards 12 px, figures 11.5 px), and the dial's tiles are 8 px | The design lint accepts tokens and scale steps only |
+| Sidebar | The foot says "N workers busy" before "waiting for you", and has no daily budget | A daily budget arrives with the Command Center (Phase 10) |
+| Inbox | A second section, *From your workforce*, lists plans and reports, proposals and calls that ran without asking, apart from what waits for a decision | The design system has no Inbox for notices; they are information, not asks, so they do not count in the bell |
 
 ### Contrast in the design system itself
 

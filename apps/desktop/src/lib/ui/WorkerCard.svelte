@@ -51,7 +51,7 @@
     <Avatar {emoji} {color} {human} {initials} {status} class="size-8 rounded-xl {human ? 'rounded-full!' : ''}" />
     <span class="min-w-0">
       <span class="block truncate text-base font-semibold">{name}</span>
-      <span class="block truncate text-xs text-muted">{role}</span>
+      <span class="line-clamp-2 block text-xs leading-snug text-muted">{role}</span>
     </span>
   </span>
   <span class="flex justify-between border-t border-line-soft pt-2 text-2xs text-muted">

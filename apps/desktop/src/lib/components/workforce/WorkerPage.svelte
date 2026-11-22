@@ -6,8 +6,7 @@
   import { workforce } from "../../stores/workforce.svelte.ts";
   import { usdToMicros } from "../../project.ts";
   import { usd } from "../../shell.ts";
-  import { shorten } from "../../format.ts";
-  import { Avatar, AutonomyDial, Badge, Button, Callout, Chip, EmptyState, Icon, Input, LogStream, MetricTile, ToggleRow } from "../../ui/index.ts";
+  import { Avatar, AutonomyDial, Badge, Button, Callout, Chip, EmptyState, Icon, Input, LogStream, Markdown, MetricTile, ToggleRow } from "../../ui/index.ts";
   import { STATUS_TEXT, evalText, levelsUnder, limitsSentence, money, onTimeText, spendDelta } from "../../workforce.ts";
   import AssignTaskModal from "./AssignTaskModal.svelte";
   import HireWorkerModal from "./HireWorkerModal.svelte";
@@ -264,7 +263,7 @@
             <section class="flex flex-col gap-1.5 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Latest report">
               <div class="flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Latest {latest?.kind === "plan" ? "plan" : "report"}</h2>{#if latest}<span class="text-xs text-muted">Week of {dayName(latest.week)}</span>{/if}</div>
               {#if latest}
-                <p class="selectable text-sm leading-relaxed whitespace-pre-wrap">{shorten(latest.body.trim(), 900)}</p>
+                <div class="selectable max-h-72 overflow-y-auto text-sm"><Markdown text={latest.body.trim()} /></div>
               {:else}
                 <EmptyState icon="book" title="No plan or report yet" text="Ask {view.name} to plan the week or write the report, or turn its schedule on." />
               {/if}
