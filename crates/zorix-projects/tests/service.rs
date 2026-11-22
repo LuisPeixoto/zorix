@@ -183,6 +183,19 @@ async fn a_task_that_you_have_starts_no_run() {
 }
 
 #[tokio::test]
+async fn a_task_remembers_the_day_it_went_to_done_and_forgets_it_when_it_leaves() {
+    let rig = rig();
+    let ops = project(&rig, "OPS").await;
+    let key = task(&rig, &ops, "Decide the retention policy", Some(Who::You)).await;
+    assert!(rig.service.task(&key).await.unwrap().task.task.done_at.is_none());
+    rig.service.move_task(&key, to(TaskState::Done), None).await.unwrap();
+    let done = rig.service.task(&key).await.unwrap().task.task;
+    assert!(done.done_at.is_some(), "the move to Done is remembered");
+    rig.service.move_task(&key, to(TaskState::Review), None).await.unwrap();
+    assert!(rig.service.task(&key).await.unwrap().task.task.done_at.is_none(), "and forgotten when it goes back");
+}
+
+#[tokio::test]
 async fn a_failed_run_stays_in_progress_needs_you_and_can_be_run_again() {
     let rig = rig();
     let ops = project(&rig, "OPS").await;

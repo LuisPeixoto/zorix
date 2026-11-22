@@ -17,6 +17,7 @@ pub mod integrations;
 pub mod memory;
 pub mod message;
 pub mod model;
+pub mod org;
 pub mod permission;
 pub mod policy;
 pub mod ports;
@@ -51,7 +52,7 @@ pub use execution::{
 };
 pub use ids::{
     AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,
-    McpServerId, MemoryId, ProjectId, TaskId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
+    McpServerId, MemoryId, OrgReportId, ProjectId, TaskId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
@@ -69,6 +70,10 @@ pub use model::{
     Effort, EmbedPurpose, EmbeddingProfile, EmbeddingRequest, EmbeddingResponse, FinishReason, GenerationParams,
     ModelError, ModelErrorKind, ModelGateway, ModelProfile, ModelRequest, ModelResponse, NoSink, RouteAttempt,
     RouteTrace, SegmentReport, StepPhase, TextSink,
+};
+pub use org::{
+    DEFAULT_TASK_TIME_MS, Department, MAX_DEPARTMENTS, MAX_WORKERS, OrgEvent, OrgEventDraft, OrgEventKind, OrgReport,
+    OrgSettings, OrgStore, ReportKind, ReportStatus, Worker, WorkerSchedule, validate_org,
 };
 pub use permission::{
     Action, Grants, Permission, network_grant, tool_grant, validate_host_pattern, validate_tool_pattern,

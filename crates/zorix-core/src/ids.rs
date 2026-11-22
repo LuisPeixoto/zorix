@@ -196,6 +196,10 @@ uuid_id!(
     /// Identifies one task of a project.
     TaskId
 );
+uuid_id!(
+    /// Identifies one weekly plan or report a virtual manager wrote.
+    OrgReportId
+);
 
 slug_id!(
     /// The organisation (or the local user) that owns an execution. Data never crosses tenants.

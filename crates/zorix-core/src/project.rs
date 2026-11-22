@@ -501,6 +501,9 @@ pub struct Task {
     pub created_at: Timestamp,
     /// When it last changed.
     pub updated_at: Timestamp,
+    /// When it went to Done, if it is there. Older tasks have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub done_at: Option<Timestamp>,
 }
 
 impl Task {
@@ -528,6 +531,7 @@ impl Task {
             revision: 0,
             created_at: now,
             updated_at: now,
+            done_at: None,
         }
     }
 

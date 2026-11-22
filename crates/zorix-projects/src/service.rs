@@ -654,6 +654,7 @@ impl ProjectService {
         task.rank = siblings.iter().filter(|t| t.state == task.state).map(|t| t.rank).max().unwrap_or(0) + RANK_STEP;
         if task.state == TaskState::Done {
             task.progress = 100;
+            task.done_at = Some(now);
         }
         if task.state == TaskState::InProgress && task.assignee.as_ref().is_some_and(Who::runs) {
             task.run_requested = Some(RunRequest::default());
@@ -771,6 +772,11 @@ impl ProjectService {
                 task.rank = rank;
                 if to == TaskState::Done {
                     task.progress = 100;
+                }
+                if to == TaskState::Done && from != TaskState::Done {
+                    task.done_at = Some(now);
+                } else if from == TaskState::Done && to != TaskState::Done {
+                    task.done_at = None;
                 }
                 if from != to {
                     events.push(self.draft(
