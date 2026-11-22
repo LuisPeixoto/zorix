@@ -9,6 +9,7 @@ mod project_commands;
 mod settings;
 mod state;
 mod workflow_commands;
+mod workforce_commands;
 
 use tauri::{Manager, RunEvent};
 
@@ -52,6 +53,17 @@ pub fn run() {
             project_commands::task_deliver,
             project_commands::tasks_needing_you,
             project_commands::tasks_index,
+            workforce_commands::workforce_overview,
+            workforce_commands::worker_detail,
+            workforce_commands::worker_hire,
+            workforce_commands::worker_edit,
+            workforce_commands::worker_fire,
+            workforce_commands::workforce_settings_save,
+            workforce_commands::workforce_activity,
+            workforce_commands::workforce_notices,
+            workforce_commands::workforce_mark_seen,
+            workforce_commands::worker_plan,
+            workforce_commands::worker_report,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,

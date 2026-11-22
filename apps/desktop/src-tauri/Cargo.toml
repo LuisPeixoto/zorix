@@ -34,6 +34,7 @@ zorix-sandbox.workspace = true
 zorix-integrations.workspace = true
 zorix-workflows.workspace = true
 zorix-projects.workspace = true
+zorix-workforce.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

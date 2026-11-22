@@ -37,6 +37,8 @@ pub struct Services {
     pub workflows: zorix_workflows::Workflows,
     /// Projects and tasks: the rules, and the tools a manager and a task's run use.
     pub projects: Arc<zorix_projects::ProjectService>,
+    /// Workers, their levels and budgets, and the manager's week.
+    pub workforce: Arc<zorix_workforce::WorkforceService>,
     /// What starts workflows by itself while the app is open: schedules, events and (when on) webhooks.
     pub host: tokio::sync::Mutex<Option<Arc<zorix_workflows::WorkflowHost>>>,
     /// Sign-ins that are waiting for the browser, so they can be cancelled.
@@ -204,7 +206,11 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
     });
     let projects = zorix_projects::runtime::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone())
         .map_err(|e| e.to_string())?;
-    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> = vec![zorix_projects::runtime::ticker(&projects)];
+    let workforce =
+        zorix_workforce::runtime::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone(), &projects)
+            .map_err(|e| e.to_string())?;
+    let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> =
+        vec![zorix_projects::runtime::ticker(&projects), zorix_workforce::runtime::ticker(&workforce)];
     let host = match workflows.start_host_with(secrets.clone(), webhook, tickers).await {
         Ok(host) => Some(Arc::new(host)),
         Err(error) => {
@@ -217,6 +223,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
         hub,
         workflows,
         projects,
+        workforce,
         host: tokio::sync::Mutex::new(host),
         logins: Mutex::new(HashMap::new()),
         tenant: TenantId::local(),
