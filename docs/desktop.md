@@ -168,6 +168,13 @@ history, with the task in a drawer. Tasks that need you appear in the Inbox, a r
 open. See [projects](projects.md); screenshots are in `docs/screenshots-0.8.0/`. `ZORIX_START_VIEW=projects` also accepts `projects:KEY`, `projects:KEY/list|timeline|deliverables|history` and
 `projects:KEY/OPS-38`.
 
+## Workforce (version 0.9)
+
+*Workforce* sits in the Organisation group of the sidebar: the org chart (you at the top, who answers to you below), a list and the activity of the workers, with the selected worker's panel (figures, autonomy
+dial, what it did this week, its budget). A worker has a page with its figures, autonomy, schedule, open tasks and week; *Hire a worker* and *Org settings* are modals. The Inbox lists what the workers did
+that is worth a look. See [workforce](workforce.md); screenshots are in `docs/screenshots-0.9.0/`. `ZORIX_START_VIEW=workforce` also accepts `workforce:list`, `workforce:activity`, `workforce:SLUG` and
+`workforce:SLUG/page`.
+
 ## Workflows (version 0.7)
 
 *Workflows* sits in the Work group of the sidebar. It has the list (what starts each workflow, its last 14 runs, version, state and an On switch), the editor (palette, canvas,

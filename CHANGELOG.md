@@ -5,6 +5,23 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-22
+
+**Workforce**: your agents in an organisation, with levels of autonomy and weekly budgets ([guide](docs/workforce.md)).
+
+### Added
+- Workers: an agent with a role, a department, someone to answer to, a level, a weekly budget, a time for each task and what always asks. Every chain ends at you, and a worker cannot be freer or
+  spend more than the one it reports to ([ADR-0038](docs/adr/0038-workers-are-records-over-agents.md)). Database schema 8.
+- Autonomy decided by the policy: Suggest records a proposal instead of running a call, Ask asks for every change, and Notify, Budgeted and Full let a call that only the default would hold run, recorded with
+  its arguments. A tool a person must approve, an explicit rule and the worker's own list always ask. Budgets narrow the run, and a spent week starts it at Ask
+  ([ADR-0039](docs/adr/0039-autonomy-is-decided-by-the-policy.md)).
+- A virtual manager plans the week and writes the report with the new `org.team` tool, on demand or on a schedule that is off until you turn it on. Plans, reports, proposals, unattended calls and budget
+  warnings reach a new section of the Inbox.
+- Figures from real data: open tasks, the share done on time (a task now remembers the day it went to Done), the latest eval, spend this week without counting anything twice, and what waits for a person.
+- `zorix org` and `zorix worker`; the workforce ticker runs in the app and under `zorix serve`; `tools/live-tests.sh workforce`: 28 checks through the real command line.
+- The Workforce screens: the org chart, a list, the activity, the worker panel and page, *Hire a worker* and *Org settings*; kit `OrgChart`, `WorkerCard`, `AutonomyDial`, `MetricTile` and `LogStream`; a
+  status dot on avatars. The design system gained these screens (logged in `design/local-additions.md`).
+
 ## [0.8.0] - 2026-11-21
 
 **Projects**: tasks for you and your agents, on a board, a list and a timeline ([guide](docs/projects.md)).

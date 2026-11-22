@@ -89,6 +89,17 @@ program refuses a schema-5 database instead of guessing.
 **Recovery** also looks at `waiting_for_children`: a parent whose children are all finished is settled and queued; otherwise it is left waiting and each child recovers by itself.
 A call is delegated at most once (the children's idempotency keys), so a restart never doubles the work.
 
+### Workforce (schema 8)
+
+| Table | What it holds |
+|---|---|
+| `org_settings` | One record per tenant: the weekly budget, the level new workers start at, the departments and when notices were last read |
+| `workers` | One row per worker, keyed by its agent, with a `revision` for optimistic writes and the record (role, department, who it reports to, level, budget, time for a task, what always asks, schedule) |
+| `org_reports` | The plans and reports a manager wrote, with their week, run and answer |
+| `org_events` | The history of the organisation, numbered per tenant, with the worker it concerns |
+
+Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuses a schema-8 database. Spend is not stored: it is read from the cost of the runs.
+
 ### Projects (schema 7)
 
 | Table | What it holds |
