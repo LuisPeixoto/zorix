@@ -85,6 +85,12 @@ pub enum Command {
     /// Tasks: add, move, assign and review the tasks of a project. Moving an agent's task to in-progress starts its run.
     #[command(subcommand)]
     Task(TaskCommand),
+    /// The workforce: workers (agents with a role, a place in the organisation and a level of autonomy), departments and settings.
+    #[command(subcommand)]
+    Org(OrgCommand),
+    /// Workers: hire, edit and watch the agents of your organisation, and ask a manager to plan the week or write the report.
+    #[command(subcommand)]
+    Worker(WorkerCommand),
     /// Show an execution and everything it started, as a tree.
     Tree(IdArg),
     /// Skills: folders of instructions and scripts an agent loads when it needs them.
@@ -2172,4 +2178,220 @@ pub struct TaskHistoryArgs {
     /// How many lines.
     #[arg(long, default_value_t = 30)]
     pub limit: usize,
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The workforce
+
+/// What `zorix org` does.
+#[derive(Debug, Subcommand)]
+pub enum OrgCommand {
+    /// Show the organisation: the numbers, the chart and the settings.
+    Show,
+    /// Change the weekly budget for everyone or the level new workers start at.
+    Settings(OrgSettingsArgs),
+    /// Departments: groups of workers.
+    #[command(subcommand)]
+    Dept(DeptCommand),
+    /// What the workers did, newest first.
+    Activity(ActivityArgs),
+    /// What is worth your eye: plans and reports, proposals, calls that ran without asking, budget warnings.
+    Notices(NoticesArgs),
+}
+
+/// Options for `org settings`. Say `none` for no limit.
+#[derive(Debug, Args)]
+pub struct OrgSettingsArgs {
+    /// The most all workers may spend in a week, in dollars.
+    #[arg(long, value_name = "USD")]
+    pub budget: Option<String>,
+    /// The level new workers start at: suggest, ask, notify, budgeted or full.
+    #[arg(long, value_name = "LEVEL")]
+    pub level: Option<String>,
+}
+
+/// What `zorix org dept` does.
+#[derive(Debug, Subcommand)]
+pub enum DeptCommand {
+    /// Add a department.
+    Add(DeptAddArgs),
+    /// Rename a department or change its description or lead. Say `none` to clear the lead.
+    Edit(DeptEditArgs),
+    /// Remove a department. It must have no workers.
+    Remove(DeptNameArg),
+}
+
+/// A department's short name.
+#[derive(Debug, Args)]
+pub struct DeptNameArg {
+    /// Its short name: lower case, digits and hyphens.
+    pub department: String,
+}
+
+/// Options for `org dept add`.
+#[derive(Debug, Args)]
+pub struct DeptAddArgs {
+    /// Its short name (it never changes).
+    pub department: String,
+    /// What people call it.
+    pub name: String,
+    /// What it is for.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// The worker that leads it.
+    #[arg(long, value_name = "WORKER")]
+    pub lead: Option<String>,
+}
+
+/// Options for `org dept edit`.
+#[derive(Debug, Args)]
+pub struct DeptEditArgs {
+    /// Its short name.
+    pub department: String,
+    /// What people call it.
+    #[arg(long)]
+    pub name: Option<String>,
+    /// What it is for.
+    #[arg(long)]
+    pub description: Option<String>,
+    /// The worker that leads it, or `none`.
+    #[arg(long, value_name = "WORKER")]
+    pub lead: Option<String>,
+}
+
+/// Options for `org activity`.
+#[derive(Debug, Args)]
+pub struct ActivityArgs {
+    /// How many lines.
+    #[arg(long, default_value_t = 30)]
+    pub limit: usize,
+}
+
+/// Options for `org notices`.
+#[derive(Debug, Args)]
+pub struct NoticesArgs {
+    /// Mark everything up to now as read.
+    #[arg(long)]
+    pub read: bool,
+}
+
+/// What `zorix worker` does.
+#[derive(Debug, Subcommand)]
+pub enum WorkerCommand {
+    /// List the workers with their level, tasks, on-time rate, eval and spend this week.
+    List,
+    /// Make an agent a worker. It starts at the level the organisation sets for new workers unless you say.
+    Hire(WorkerHireArgs),
+    /// Show a worker: its figures, its autonomy, its open tasks and its week.
+    Show(WorkerNameArg),
+    /// Change a worker. Say `none` to clear a value. A worker cannot be freer or spend more than the one it reports to.
+    Edit(WorkerEditArgs),
+    /// Change how free a worker is: suggest, ask, notify, budgeted or full.
+    Level(WorkerLevelArgs),
+    /// Let a worker go. It must have no reports.
+    Fire(WorkerNameArg),
+    /// Ask a manager to plan the week. It runs like any other run of that worker, and follows its level and budget.
+    Plan(WorkerAskArgs),
+    /// Ask a manager for the weekly report.
+    Report(WorkerAskArgs),
+    /// Turn a manager's Monday plan and Friday report on or off. They run only while the app or `zorix serve` is open.
+    Schedule(WorkerScheduleArgs),
+}
+
+/// A worker's agent.
+#[derive(Debug, Args)]
+pub struct WorkerNameArg {
+    /// The agent's name.
+    pub worker: String,
+}
+
+/// Options for `worker hire`.
+#[derive(Debug, Args)]
+pub struct WorkerHireArgs {
+    /// The agent to hire.
+    pub agent: String,
+    /// What it does there, such as "Engineering lead".
+    #[arg(long)]
+    pub role: String,
+    /// Its department's short name.
+    #[arg(long, value_name = "DEPARTMENT")]
+    pub dept: String,
+    /// Who it answers to: a worker, or `you`.
+    #[arg(long, value_name = "WORKER", default_value = "you")]
+    pub reports_to: String,
+    /// A virtual manager: it plans the week and writes the report.
+    #[arg(long)]
+    pub manager: bool,
+    /// How free it is: suggest, ask, notify, budgeted or full.
+    #[arg(long, value_name = "LEVEL")]
+    pub level: Option<String>,
+    /// The most it may spend in a week, in dollars.
+    #[arg(long, value_name = "USD")]
+    pub budget: Option<f64>,
+    /// The most active time a task may take, in minutes.
+    #[arg(long, value_name = "MINUTES")]
+    pub task_time: Option<u64>,
+    /// An access pattern whose calls always ask, such as `repo:acme/web:write`. Repeat for several.
+    #[arg(long, value_name = "ACCESS")]
+    pub still_ask: Vec<String>,
+}
+
+/// Options for `worker edit`. Only what you give changes.
+#[derive(Debug, Args)]
+pub struct WorkerEditArgs {
+    /// The agent's name.
+    pub worker: String,
+    /// What it does there.
+    #[arg(long)]
+    pub role: Option<String>,
+    /// Its department's short name.
+    #[arg(long, value_name = "DEPARTMENT")]
+    pub dept: Option<String>,
+    /// Who it answers to: a worker, or `you`.
+    #[arg(long, value_name = "WORKER")]
+    pub reports_to: Option<String>,
+    /// Make it a manager (`true`) or not (`false`).
+    #[arg(long, value_name = "BOOL")]
+    pub manager: Option<bool>,
+    /// How free it is.
+    #[arg(long, value_name = "LEVEL")]
+    pub level: Option<String>,
+    /// The most it may spend in a week, in dollars, or `none`.
+    #[arg(long, value_name = "USD")]
+    pub budget: Option<String>,
+    /// The most active time a task may take, in minutes.
+    #[arg(long, value_name = "MINUTES")]
+    pub task_time: Option<u64>,
+    /// Replace the access patterns that always ask. Repeat for several; `none` clears them.
+    #[arg(long, value_name = "ACCESS")]
+    pub still_ask: Vec<String>,
+}
+
+/// Options for `worker level`.
+#[derive(Debug, Args)]
+pub struct WorkerLevelArgs {
+    /// The agent's name.
+    pub worker: String,
+    /// suggest, ask, notify, budgeted or full.
+    pub level: String,
+}
+
+/// Options for `worker plan` and `worker report`.
+#[derive(Debug, Args)]
+pub struct WorkerAskArgs {
+    /// The manager's agent.
+    pub worker: String,
+    /// Something to add to the request.
+    pub prompt: Option<String>,
+    #[command(flatten)]
+    pub model: ModelArgs,
+}
+
+/// Options for `worker schedule`.
+#[derive(Debug, Args)]
+pub struct WorkerScheduleArgs {
+    /// The manager's agent.
+    pub worker: String,
+    /// `on` or `off`.
+    pub state: String,
 }

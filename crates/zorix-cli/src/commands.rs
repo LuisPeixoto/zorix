@@ -38,6 +38,8 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Workflow(command) => crate::workflows::workflow(&home, tenant, printer, command).await,
         Command::Project(command) => crate::projects::project(&home, tenant, printer, command).await,
         Command::Task(command) => crate::projects::task(&home, tenant, printer, command).await,
+        Command::Org(command) => crate::workforce::org(&home, tenant, printer, command).await,
+        Command::Worker(command) => crate::workforce::worker(&home, tenant, printer, command).await,
         Command::Skill(command) => crate::agents::skill(&home, &tenant, printer, command).await,
         Command::Eval(command) => crate::agents::eval(&home, &tenant, printer, command).await,
         Command::Tools => tools(&home, printer),

@@ -8011,6 +8011,7 @@ dependencies = [
  "zorix-store",
  "zorix-tools",
  "zorix-workflows",
+ "zorix-workforce",
 ]
 
 [[package]]

@@ -15,8 +15,7 @@ use zorix_core::{
     TaskRequest, TenantId, Timestamp, ToolCallId, ToolContext, Who, access,
 };
 use zorix_projects::{NewProject, NewTask, ProjectService, RunShaper};
-use zorix_runtime::{Engine, MemoryRepository};
-use zorix_sim::ScriptedModel;
+use zorix_runtime::MemoryRepository;
 use zorix_store::{SqliteAgentStore, SqliteOrgStore, SqliteProjectStore};
 use zorix_workflows::launcher::{Outcome, RunStart, StepLauncher, Target, ToolCall};
 use zorix_workforce::{NewWorker, SettingsFields, WorkerFields, WorkforceService, org_tools};
@@ -101,7 +100,6 @@ async fn rig(names: &[&str]) -> Rig {
         agents.create_agent(&tenant, spec, None, Timestamp(1)).await.unwrap();
     }
     let repo = Arc::new(MemoryRepository::new());
-    let engine = Engine::builder(repo.clone(), Arc::new(ScriptedModel::new([]))).build();
     let fake = Fake::default();
     let clock = Arc::new(ManualClock::new(Timestamp(WEDNESDAY)));
     let service = Arc::new(
@@ -109,7 +107,7 @@ async fn rig(names: &[&str]) -> Rig {
             org.clone(),
             project_store.clone(),
             agents.clone(),
-            Arc::new(engine),
+            repo.clone(),
             Arc::new(fake.clone()),
             tenant.clone(),
             clock.clone(),

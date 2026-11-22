@@ -39,7 +39,7 @@ fn usd(micros: u64) -> String {
 }
 
 /// What stands in for the engine when a command only manages: it can read nothing and start nothing.
-struct NoEngine;
+pub(crate) struct NoEngine;
 
 const NEEDS_ENGINE: &str =
     "This needs the engine, and the data folder with it. Close the desktop app or `zorix serve`, or do it there.";

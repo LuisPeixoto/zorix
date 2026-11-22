@@ -74,6 +74,8 @@ pub struct App {
     pub router: Arc<Router>,
     /// Projects and tasks, with their tools registered for the runs that were granted them.
     pub projects: Arc<zorix_projects::ProjectService>,
+    /// Workers, their levels and budgets, and the manager's week. It shapes the runs that tasks start.
+    pub workforce: Arc<zorix_workforce::WorkforceService>,
     _lock: DataDirLock,
 }
 
@@ -162,11 +164,14 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
         let _ = calibration.backfill();
     });
     let projects = zorix_projects::runtime::open(home, tenant.clone(), hub.clone(), engine.clone(), router.clone())?;
-    // A command's `--model` also decides what the runs that tasks start use.
+    let workforce =
+        zorix_workforce::runtime::open(home, tenant.clone(), hub.clone(), engine.clone(), router.clone(), &projects)?;
+    // A command's `--model` also decides what the runs that tasks and managers start use.
     if args.model.is_some() {
         projects.set_model(Some(model.clone()));
+        workforce.set_model(Some(model.clone()));
     }
-    Ok(App { engine, stack, hub, model, router, projects, _lock: lock })
+    Ok(App { engine, stack, hub, model, router, projects, workforce, _lock: lock })
 }
 
 impl App {

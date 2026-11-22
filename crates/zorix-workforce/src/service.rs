@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use zorix_core::{
     Agent, AgentSlug, AgentStore, AutonomyLevel, Avatar, Clock, Date, EVAL_LABEL, Error, EventKind, Execution,
-    ExecutionEngine, ExecutionId, ExecutionState, ListFilter, OrgEvent, OrgEventDraft, OrgEventKind, OrgReport,
+    ExecutionId, ExecutionRepository, ExecutionState, ListFilter, OrgEvent, OrgEventDraft, OrgEventKind, OrgReport,
     OrgReportId, OrgSettings, OrgStore, Project, ProjectStore, ReportKind, ReportStatus, Result, Task, TaskState,
     TenantId, Timestamp, Worker, validate_org,
 };
@@ -365,7 +365,7 @@ pub struct WorkforceService {
     org: Arc<dyn OrgStore>,
     projects: Arc<dyn ProjectStore>,
     agents: Arc<dyn AgentStore>,
-    engine: Arc<dyn ExecutionEngine>,
+    executions: Arc<dyn ExecutionRepository>,
     launcher: Arc<dyn StepLauncher>,
     tenant: TenantId,
     clock: Arc<dyn Clock>,
@@ -380,7 +380,7 @@ impl WorkforceService {
         org: Arc<dyn OrgStore>,
         projects: Arc<dyn ProjectStore>,
         agents: Arc<dyn AgentStore>,
-        engine: Arc<dyn ExecutionEngine>,
+        executions: Arc<dyn ExecutionRepository>,
         launcher: Arc<dyn StepLauncher>,
         tenant: TenantId,
         clock: Arc<dyn Clock>,
@@ -389,7 +389,7 @@ impl WorkforceService {
             org,
             projects,
             agents,
-            engine,
+            executions,
             launcher,
             tenant,
             clock,
@@ -618,7 +618,7 @@ impl WorkforceService {
         }
         let filter = ListFilter { since: Some(since), limit: EXECUTION_WINDOW, ..ListFilter::default() };
         let executions: Vec<Execution> = self
-            .engine
+            .executions
             .list(&self.tenant, &filter)
             .await?
             .into_iter()
@@ -854,7 +854,7 @@ impl WorkforceService {
         runs.truncate(60);
         for run in runs {
             let slug = run.agent.as_ref().map(|a| a.slug.to_string()).unwrap_or_default();
-            let events = self.engine.events(&self.tenant, run.id, 0).await.unwrap_or_default();
+            let events = self.executions.events(run.id, 0, 500).await.unwrap_or_default();
             for event in events {
                 let p = &event.payload;
                 let what = p["summary"].as_str().map(str::to_string).or_else(|| p["tool"].as_str().map(str::to_string));
