@@ -53,8 +53,9 @@ pub async fn workflow_settings_set(
     if let Some(old) = host.take() {
         old.shutdown().await;
     }
-    let tickers =
-        || -> Vec<Arc<dyn zorix_workflows::host::Ticker>> { vec![zorix_projects::runtime::ticker(&services.projects)] };
+    let tickers = || -> Vec<Arc<dyn zorix_workflows::host::Ticker>> {
+        vec![zorix_projects::runtime::ticker(&services.projects), zorix_workforce::runtime::ticker(&services.workforce)]
+    };
     let started = services.workflows.start_host_with(services.secrets.clone(), listen, tickers()).await;
     match started {
         Ok(new) => {

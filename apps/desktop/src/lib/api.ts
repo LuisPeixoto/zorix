@@ -1295,3 +1295,225 @@ export const taskDeliver = (key: string, kind: "answer" | "link", title: string,
   invoke<Task>("task_deliver", { key, kind, title, body }).then(fillTask);
 export const tasksNeedingYou = () => invoke<TaskNeed[]>("tasks_needing_you");
 export const tasksIndex = () => invoke<TaskIndexRow[]>("tasks_index");
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The workforce
+
+export type AutonomyLevel = "suggest" | "ask" | "notify" | "budgeted" | "full";
+
+export interface WorkerSchedule {
+  enabled: boolean;
+  plan: When;
+  report: When;
+  timezone?: string | null;
+  last_plan?: number | null;
+  last_report?: number | null;
+}
+
+export interface Worker {
+  tenant: string;
+  agent: string;
+  role: string;
+  department: string;
+  /** Who it answers to: another worker, or you (none). */
+  reports_to: string | null;
+  manager: boolean;
+  autonomy: AutonomyLevel;
+  weekly_budget_micros: number | null;
+  task_time_ms: number;
+  still_ask: string[];
+  schedule: WorkerSchedule;
+  revision: number;
+  hired_at: number;
+  updated_at: number;
+}
+
+export interface Department {
+  slug: string;
+  name: string;
+  description: string;
+  lead: string | null;
+}
+
+export interface OrgSettings {
+  weekly_budget_micros: number | null;
+  default_level: AutonomyLevel;
+  departments: Department[];
+  seen_until?: number | null;
+}
+
+export interface Figures {
+  tasks: number;
+  on_time_done: number;
+  on_time_all: number;
+  eval: number | null;
+  week_micros: number;
+  waiting: number;
+}
+
+export type WorkerStatus = "ok" | "warn" | "err";
+
+export interface WorkerView {
+  worker: Worker;
+  name: string;
+  description: string;
+  avatar: { emoji: string; color: string };
+  status: WorkerStatus | null;
+  /** For a worker with reports, everyone below it too. */
+  figures: Figures;
+  own: Figures;
+  reports: string[];
+  budget_left_micros: number | null;
+  archived: boolean;
+}
+
+export interface YouView {
+  to_review: number;
+  approvals: number;
+  reports: string[];
+}
+
+export interface Overview {
+  settings: OrgSettings;
+  workers: WorkerView[];
+  you: YouView;
+  open_tasks: number;
+  due_this_week: number;
+  waiting_approvals: number;
+  waiting_reviews: number;
+  week_micros: number;
+  budget_micros: number | null;
+  running: number;
+  busy: number;
+  week: string;
+}
+
+export type ActivityLevel = "OK" | "INFO" | "WAIT" | "WARN" | "ERR";
+
+export interface ActivityLine {
+  id: string;
+  at: number;
+  level: ActivityLevel;
+  source: string;
+  text: string;
+  kind: "suggestion" | "unattended" | "waiting" | "failed" | "plan" | "report" | "budget" | "org";
+  run: string | null;
+}
+
+export interface Notice {
+  id: string;
+  kind: "suggestion" | "notice" | "report";
+  at: number;
+  worker: string | null;
+  title: string;
+  text: string;
+  run: string | null;
+}
+
+export type ReportKind = "plan" | "report";
+export type ReportStatus = "running" | "done" | "failed";
+
+export interface OrgReport {
+  id: string;
+  worker: string;
+  kind: ReportKind;
+  week: string;
+  run: string;
+  status: ReportStatus;
+  body: string;
+  error?: string | null;
+  by: string;
+  started_at: number;
+  finished_at?: number | null;
+}
+
+export interface OpenTask {
+  key: string;
+  title: string;
+  state: TaskState;
+  due: string | null;
+  late: boolean;
+}
+
+export interface WorkerDetail {
+  view: WorkerView;
+  spend_days: number[];
+  spend_last_week_micros: number;
+  tasks: OpenTask[];
+  activity: ActivityLine[];
+  reports: OrgReport[];
+  busy_with: ReportKind | null;
+}
+
+export interface NewWorkerRequest {
+  agent: string;
+  role: string;
+  department: string;
+  reports_to: string | null;
+  manager: boolean;
+  autonomy: AutonomyLevel | null;
+  weekly_budget_micros: number | null;
+  task_time_ms: number | null;
+  still_ask: string[];
+}
+
+export interface WorkerFields {
+  role: string;
+  department: string;
+  reports_to: string | null;
+  manager: boolean;
+  autonomy: AutonomyLevel;
+  weekly_budget_micros: number | null;
+  task_time_ms: number;
+  still_ask: string[];
+  schedule_enabled: boolean;
+}
+
+export interface SettingsFields {
+  weekly_budget_micros: number | null;
+  default_level: AutonomyLevel;
+  departments: Department[];
+}
+
+const fillDepartment = (d: Department): Department => ({ ...d, description: d.description ?? "", lead: d.lead ?? null });
+const fillSettings = (s: OrgSettings): OrgSettings => ({
+  ...s,
+  weekly_budget_micros: s.weekly_budget_micros ?? null,
+  departments: s.departments.map(fillDepartment),
+});
+const fillWorker = (w: Worker): Worker => ({
+  ...w,
+  reports_to: w.reports_to ?? null,
+  weekly_budget_micros: w.weekly_budget_micros ?? null,
+  still_ask: w.still_ask ?? [],
+});
+const fillFigures = (f: Figures): Figures => ({ ...f, eval: f.eval ?? null });
+const fillWorkerView = (v: WorkerView): WorkerView => ({
+  ...v,
+  worker: fillWorker(v.worker),
+  status: v.status ?? null,
+  figures: fillFigures(v.figures),
+  own: fillFigures(v.own),
+  budget_left_micros: v.budget_left_micros ?? null,
+});
+const fillActivity = (l: ActivityLine): ActivityLine => ({ ...l, run: l.run ?? null });
+
+export const workforceOverview = () =>
+  invoke<Overview>("workforce_overview").then((o) => ({ ...o, settings: fillSettings(o.settings), budget_micros: o.budget_micros ?? null, workers: o.workers.map(fillWorkerView) }));
+export const workerDetail = (agent: string) =>
+  invoke<WorkerDetail>("worker_detail", { agent }).then((d) => ({
+    ...d,
+    view: fillWorkerView(d.view),
+    activity: d.activity.map(fillActivity),
+    busy_with: d.busy_with ?? null,
+    tasks: d.tasks.map((t) => ({ ...t, due: t.due ?? null })),
+  }));
+export const workerHire = (request: NewWorkerRequest) => invoke<Worker>("worker_hire", { new: request }).then(fillWorker);
+export const workerEdit = (agent: string, fields: WorkerFields) => invoke<Worker>("worker_edit", { agent, fields }).then(fillWorker);
+export const workerFire = (agent: string) => invoke<void>("worker_fire", { agent });
+export const workforceSettingsSave = (fields: SettingsFields) => invoke<OrgSettings>("workforce_settings_save", { fields }).then(fillSettings);
+export const workforceActivity = (limit = 100) => invoke<ActivityLine[]>("workforce_activity", { limit }).then((l) => l.map(fillActivity));
+export const workforceNotices = () => invoke<Notice[]>("workforce_notices").then((n) => n.map((x) => ({ ...x, run: x.run ?? null })));
+export const workforceMarkSeen = () => invoke<void>("workforce_mark_seen");
+export const workerPlan = (agent: string, prompt?: string) => invoke<OrgReport>("worker_plan", { agent, prompt: prompt ?? null });
+export const workerReport = (agent: string, prompt?: string) => invoke<OrgReport>("worker_report", { agent, prompt: prompt ?? null });

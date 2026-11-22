@@ -3,9 +3,25 @@
   import { integrations } from "../stores/integrations.svelte.ts";
   import { inbox } from "../stores/inbox.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
+  import { workforce } from "../stores/workforce.svelte.ts";
+  import { NOTICE_ICON } from "../workforce.ts";
   import { Badge, Button, EmptyState, Icon, PageHeader } from "../ui/index.ts";
 
   const items = $derived(inbox.all);
+
+  // What the workers did that is worth a look, kept apart from what waits for a decision.
+  $effect(() => {
+    void workforce.refreshNotices();
+    const timer = setInterval(() => void workforce.refreshNotices(), 6000);
+    return () => clearInterval(timer);
+  });
+  const notices = $derived(workforce.notices);
+
+  function openNotice(n: (typeof notices)[number]) {
+    if (n.run) void store.select(n.run);
+    else if (n.worker) store.showWorkforce("chart", n.worker, true);
+    else store.showWorkforce("activity");
+  }
 
   function review(item: (typeof items)[number]) {
     if (item.kind === "approval") void store.select(item.root);
@@ -22,9 +38,12 @@
   <div class="mx-auto max-w-[1100px] p-6">
     <PageHeader title="Inbox" subtitle="Everything that is waiting for a decision from you. Nothing that changes something happens until you answer." glow />
 
-    {#if items.length === 0}
+    {#if items.length === 0 && notices.length === 0}
       <EmptyState icon="shield-check" title="Nothing is waiting for you" text="When a run wants to change something, a workflow stops for you, a task is ready for review, or a connected server needs a review or a sign-in, it appears here, oldest first." />
     {:else}
+      {#if items.length === 0}
+        <p class="mb-4 text-sm text-muted">Nothing is waiting for a decision from you.</p>
+      {:else}
       <section aria-label="Waiting for you" class="overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
         <header class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-4 py-3">
           <Icon name="shield" size={15} class="text-accent" />
@@ -71,6 +90,31 @@
         </ul>
         <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">Oldest asks first. Answers are bound to the exact call.</footer>
       </section>
+      {/if}
+
+      {#if notices.length > 0}
+        <section aria-label="For your information" class="mt-6 overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
+          <header class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-4 py-3">
+            <Icon name="building" size={15} class="text-accent" />
+            <h2 class="flex-1 text-base font-semibold">From your workforce</h2>
+            <Badge tone="muted">{notices.length}</Badge>
+            <Button size="sm" variant="ghost" icon="check" onclick={() => void workforce.markSeen()}>Mark all read</Button>
+          </header>
+          <ul class="divide-y divide-line-soft">
+            {#each notices as n (n.id)}
+              <li class="flex items-center gap-3 px-4 py-3">
+                <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-hover text-muted"><Icon name={NOTICE_ICON[n.kind]} size={15} /></span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-base font-semibold">{n.title}</span>
+                  <span class="mt-0.5 block truncate text-xs text-muted">{shorten(n.text, 90)} · <span class="tnum">{ago(n.at, store.now)}</span></span>
+                </span>
+                <Button size="sm" aria-label="Open: {n.title}" onclick={() => openNotice(n)}>Open</Button>
+              </li>
+            {/each}
+          </ul>
+          <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">Nothing here waits for an answer. Proposals are things a worker at Suggest left for you to do.</footer>
+        </section>
+      {/if}
     {/if}
   </div>
 </div>

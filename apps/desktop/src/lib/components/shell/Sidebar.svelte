@@ -3,10 +3,17 @@
   import { inbox } from "../../stores/inbox.svelte.ts";
   import { integrations } from "../../stores/integrations.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
+  import { workforce } from "../../stores/workforce.svelte.ts";
   import { runningCount, spendToday, usd } from "../../shell.ts";
   import { Button, Dot, Kbd } from "../../ui/index.ts";
   import NavItem from "./NavItem.svelte";
 
+  // Workers with a run going: the runs that work, by the agent that runs them, among the agents that are workers.
+  const busy = $derived.by(() => {
+    const workers = new Set((workforce.overview?.workers ?? []).map((w) => w.worker.agent));
+    const working = new Set(store.runs.filter((r) => ["queued", "running", "waiting_for_model", "waiting_for_tool", "waiting_for_children"].includes(r.state) && r.agent && workers.has(r.agent.slug)).map((r) => r.agent?.slug));
+    return working.size;
+  });
   const waiting = $derived(store.runs.filter((r) => r.state === "waiting_for_approval" || store.needsYou[r.id]).length);
   const running = $derived(runningCount(store.runs));
   const spend = $derived(spendToday(store.runs, store.now));
@@ -34,6 +41,7 @@
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Organisation</p>
       <NavItem icon="bot" active={agentsOpen} onclick={() => store.showAgents()}>Agents</NavItem>
       <NavItem icon="users" active={teamsOpen} onclick={() => store.showTeams()}>Teams</NavItem>
+      <NavItem icon="building" active={store.view === "workforce"} onclick={() => store.showWorkforce()}>Workforce</NavItem>
     </div>
     <div>
       <p class="px-2.5 pb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Connect</p>
@@ -56,7 +64,7 @@
       <p class="flex items-baseline justify-between text-sm text-muted"><span>Spend today</span><span class="mono tnum text-base font-semibold text-fg">{usd(spend)}</span></p>
       <p class="mt-2 flex items-center gap-1.5 text-xs text-muted">
         <Dot tone={running > 0 ? "ok" : "muted"} live={running > 0} />
-        <span class="tnum">{running} running{waiting > 0 ? ` · ${waiting} waiting for you` : ""}</span>
+        <span class="tnum">{running} running{busy > 0 ? ` · ${busy} ${busy === 1 ? "worker" : "workers"} busy` : ""}{waiting > 0 ? ` · ${waiting} waiting for you` : ""}</span>
       </p>
     </div>
   </footer>

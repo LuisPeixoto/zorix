@@ -11,6 +11,8 @@
   import Settings from "./lib/components/Settings.svelte";
   import Agents from "./lib/components/agents/Agents.svelte";
   import Projects from "./lib/components/projects/Projects.svelte";
+  import Workforce from "./lib/components/workforce/Workforce.svelte";
+  import { WORKFORCE_TABS, type WorkforceTab, workforce } from "./lib/stores/workforce.svelte.ts";
   import { PROJECT_TABS, type ProjectTab, projects } from "./lib/stores/projects.svelte.ts";
   import Workflows from "./lib/components/workflows/Workflows.svelte";
   import { workflows } from "./lib/stores/workflows.svelte.ts";
@@ -33,6 +35,7 @@
       void agents.refresh();
       void projects.loadPeople();
       void projects.refreshIndex();
+      void workforce.refresh();
       // For screenshots and reviews: open straight to a screen.
       const [where, forced] = (store.info?.start_view || import.meta.env.VITE_START_VIEW || "").split("@");
       if (forced === "light" || forced === "dark") theme.preview(forced);
@@ -81,6 +84,13 @@
         else if (/^[A-Z][A-Z0-9]+-\d+$/.test(how ?? "")) store.showProjects(project, "board", how);
         else store.showProjects(project, PROJECT_TABS.includes(how as ProjectTab) ? (how as ProjectTab) : "board");
       }
+      if (start === "workforce") {
+        // `workforce` is the chart; `workforce:list|activity` a tab; `workforce:SLUG` selects a worker; `workforce:SLUG/page` opens its page.
+        const [what, how] = tab ? tab.split("/") : [];
+        if (WORKFORCE_TABS.includes(what as WorkforceTab)) store.showWorkforce(what as WorkforceTab);
+        else if (what) store.showWorkforce("chart", what, how === "page");
+        else store.showWorkforce();
+      }
       if (start === "inbox") store.showInbox();
       if (start === "runs") store.showRuns();
       if (start === "new") store.showForm();
@@ -128,6 +138,16 @@
       hint: task.state.replaceAll("_", " "),
       keywords: task.project,
       run: () => store.showProjects(task.project, "board", task.key),
+    })),
+    { id: "workforce", label: "Workforce", group: "Go to", icon: "building", keywords: "workers organisation org chart departments autonomy budget manager plan report", run: () => store.showWorkforce() },
+    ...(workforce.overview?.workers ?? []).map((v) => ({
+      id: `worker-${v.worker.agent}`,
+      label: `Worker: ${v.name}`,
+      group: "Workforce",
+      icon: "building",
+      hint: v.worker.role,
+      keywords: `${v.worker.agent} ${v.worker.department}`,
+      run: () => store.showWorkforce("chart", v.worker.agent, true),
     })),
     { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
     { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
@@ -215,6 +235,8 @@
         <Workflows />
       {:else if store.view === "projects"}
         <Projects />
+      {:else if store.view === "workforce"}
+        <Workforce />
       {:else if store.view === "memory"}
         <Memory />
       {:else if store.view === "documents"}

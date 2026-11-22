@@ -44,6 +44,7 @@ import { isFinished } from "../format.ts";
 import { type AgentTab, agents } from "./agents.svelte.ts";
 import { inbox } from "./inbox.svelte.ts";
 import { type ProjectTab, projects } from "./projects.svelte.ts";
+import { type WorkforceTab, workforce } from "./workforce.svelte.ts";
 import { type WorkflowSection, workflows } from "./workflows.svelte.ts";
 import { toast } from "./toast.svelte.ts";
 
@@ -61,7 +62,7 @@ class RunsStore {
   error = $state<string | null>(null);
   busy = $state(false);
   /** Which screen is showing. `runs` is the list of runs, or one run when `selectedId` is set; `new` is the form that starts one. */
-  view = $state<"inbox" | "runs" | "workflows" | "projects" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
+  view = $state<"inbox" | "runs" | "workflows" | "projects" | "workforce" | "new" | "providers" | "memory" | "documents" | "settings" | "design" | "integrations" | "agents">("runs");
   /** The Integrations tab to open first. */
   integrationsTab = $state("connected");
   /** The command palette (⌘K) is open. */
@@ -205,6 +206,14 @@ class RunsStore {
     this.#leaveRun();
     if (key) projects.openProject(key, tab, task);
     else projects.openList();
+  }
+
+  /** The Workforce screen: the chart, the list or the activity, or one worker's page. */
+  showWorkforce(tab: WorkforceTab = "chart", worker: string | null = null, page = false): void {
+    this.view = "workforce";
+    this.#leaveRun();
+    if (worker && page) workforce.openWorker(worker);
+    else workforce.openOverview(tab, worker);
   }
 
   /** The list of runs. */
