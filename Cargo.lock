@@ -8331,6 +8331,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorix-workforce"
+version = "0.8.0"
+dependencies = [
+ "async-trait",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "zorix-agents",
+ "zorix-core",
+ "zorix-hub",
+ "zorix-projects",
+ "zorix-runtime",
+ "zorix-sim",
+ "zorix-store",
+ "zorix-workflows",
+]
+
+[[package]]
 name = "zvariant"
 version = "5.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

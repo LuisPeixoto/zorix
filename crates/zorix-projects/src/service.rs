@@ -20,6 +20,14 @@ use zorix_workflows::launcher::{Outcome, RunStart, StepLauncher, Target};
 use crate::links::{PullReader, PullState};
 use crate::rules::{LinkKind, RANK_STEP, answer_title, manager_prompt, rank_at, renumber, task_prompt};
 
+/// Shapes a run before it starts: the workforce gives a worker's runs their level of autonomy and their limits (ADR-0039). The
+/// service knows nothing about workers; it only asks.
+#[async_trait::async_trait]
+pub trait RunShaper: Send + Sync {
+    /// The run to start, changed or not. An error stops the run and is shown as why it could not start.
+    async fn shape(&self, start: RunStart) -> std::result::Result<RunStart, String>;
+}
+
 /// The words an error starts with when a move would stop a run that is going, so a screen can ask first.
 pub const RUN_GOING: &str = "run going:";
 
@@ -333,6 +341,7 @@ pub struct ProjectService {
     gate: Mutex<()>,
     reads_runs: bool,
     model: parking_lot::Mutex<Option<String>>,
+    shaper: parking_lot::Mutex<Option<Arc<dyn RunShaper>>>,
 }
 
 impl ProjectService {
@@ -352,6 +361,20 @@ impl ProjectService {
             gate: Mutex::new(()),
             reads_runs: true,
             model: parking_lot::Mutex::new(None),
+            shaper: parking_lot::Mutex::new(None),
+        }
+    }
+
+    /// Let the workforce shape the runs this service starts.
+    pub fn set_shaper(&self, shaper: Option<Arc<dyn RunShaper>>) {
+        *self.shaper.lock() = shaper;
+    }
+
+    async fn shaped(&self, start: RunStart) -> std::result::Result<RunStart, String> {
+        let shaper = self.shaper.lock().clone();
+        match shaper {
+            Some(shaper) => shaper.shape(start).await,
+            None => Ok(start),
         }
     }
 
@@ -563,6 +586,7 @@ impl ProjectService {
             max_active_ms: None,
             autonomy: None,
         };
+        let start = self.shaped(start).await.map_err(invalid)?;
         let execution = self.launcher.start(start).await.map_err(invalid)?;
         let by = Some(Who::You);
         self.store
@@ -1027,7 +1051,11 @@ impl ProjectService {
             autonomy: None,
         };
         let assignee = task.assignee.clone();
-        match self.launcher.start(start).await {
+        let started = match self.shaped(start).await {
+            Ok(start) => self.launcher.start(start).await,
+            Err(reason) => Err(reason),
+        };
+        match started {
             Ok(execution) => {
                 let note = request.note.clone();
                 self.update(key, |task, _project, _siblings, now| {

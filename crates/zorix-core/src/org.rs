@@ -185,6 +185,9 @@ pub struct OrgSettings {
     /// The departments.
     #[serde(default)]
     pub departments: Vec<Department>,
+    /// Notices (reports, suggestions, unattended calls, budget warnings) from before this time are read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen_until: Option<Timestamp>,
 }
 
 impl Default for OrgSettings {
@@ -204,6 +207,7 @@ impl Default for OrgSettings {
                 dept("research", "Research"),
                 dept("engineering", "Engineering"),
             ],
+            seen_until: None,
         }
     }
 }

@@ -28,6 +28,7 @@ zorix-agents = { path = "crates/zorix-agents" }
 zorix-memory = { path = "crates/zorix-memory" }
 zorix-workflows = { path = "crates/zorix-workflows" }
 zorix-projects = { path = "crates/zorix-projects" }
+zorix-workforce = { path = "crates/zorix-workforce" }
 
 async-trait = "0.1"
 globset = "0.4"

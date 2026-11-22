@@ -148,15 +148,26 @@ pub fn task(key: &str) -> Result<Vec<Permission>, String> {
     Ok(grants)
 }
 
+/// `org:team`: read who reports to the agent, what they have open, what they spent this week and how free they are, with
+/// `org.team`. A virtual manager gets this to plan the week and write the report (ADR-0038).
+pub fn org(what: &str) -> Result<Vec<Permission>, String> {
+    if what != "team" {
+        return Err("org: takes `team`, for example `org:team`".into());
+    }
+    let mut grants = vec![Permission::new(Action::Read, "org:team")];
+    grants.extend(tools(&["org.team"]));
+    Ok(grants)
+}
+
 /// One access entry of an agent, in the syntax of the `--allow-…` flags with a prefix naming the family:
 /// `http:HOST`, `repo:[github:|gitlab:]OWNER/REPO[:write]`, `jira:KEY[:write]`, `chat:slack:#channel[:write]`,
 /// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `agent:SLUG` (ask that agent, or `*`),
-/// `project:KEY[:write]` (a project's tasks), `task:KEY` (one task), `read:PATTERN`
+/// `project:KEY[:write]` (a project's tasks), `task:KEY` (one task), `org:team` (the workers who report to it), `read:PATTERN`
 /// and `write:PATTERN` (workspace paths, relative).
 pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
     let (family, rest) = entry.split_once(':').ok_or_else(|| {
         format!(
-            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, project, task, read or write."
+            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, project, task, org, read or write."
         )
     })?;
     match family {
@@ -175,13 +186,14 @@ pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
         "agent" => agent(rest),
         "project" => project(rest),
         "task" => task(rest),
+        "org" => org(rest),
         "read" | "write" => {
             validate_workspace_pattern(rest)?;
             let action = if family == "read" { Action::Read } else { Action::Write };
             Ok(vec![workspace_grant(action, rest)?])
         }
         other => Err(format!(
-            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, project, task, read, write)."
+            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, project, task, org, read, write)."
         )),
     }
 }
