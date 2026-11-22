@@ -28,6 +28,8 @@ and later modules follow executions through events, with one mechanism ([ADR-000
 | `execution.model.retrying` | A temporary model error | `attempt`, `delay_ms`, `error` |
 | `execution.tool.requested` | The model asked for a tool | `call_id`, `tool`, `arguments` (redacted), `call_hash`, `source` (`builtin`, `memory`, `mcp:<server>`, `integration:<connection>`, `sandbox`) |
 | `execution.tool.denied` | Refused (policy, person, or unknown tool) | `call_id`, `tool`, `reason`, `by` |
+| `execution.tool.unattended` | A call ran without asking because of the worker's level (ADR-0039) | `call_id`, `tool`, `arguments`, `call_hash`, `level`, `reason`, `summary` |
+| `execution.tool.suggested` | A worker at the Suggest level proposed a call instead of making it | `call_id`, `tool`, `arguments`, `reason`, `summary`, `by` |
 | `execution.tool.started` | A tool run begins | `call_id`, `tool`, `attempt` |
 | `execution.tool.completed` | It returned | `call_id`, `tool`, `duration_ms`, `output_bytes` |
 | `execution.tool.failed` | Invalid arguments or the tool failed | `call_id`, `tool`, `error` |

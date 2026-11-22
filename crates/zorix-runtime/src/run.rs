@@ -683,6 +683,9 @@ impl Run {
             (PolicyDecision::Deny { reason }, _) => {
                 self.settle_failed(&call, format!("Denied: {reason}"), EventKind::ToolDenied, "policy").await
             }
+            (PolicyDecision::Suggest { reason }, _) => {
+                self.settle_failed(&call, reason, EventKind::ToolSuggested, "autonomy").await
+            }
             (_, Some(approval)) if approval.status == ApprovalStatus::Denied => {
                 let note = approval.note.map(|n| format!(" ({n})")).unwrap_or_default();
                 self.settle_failed(
@@ -694,6 +697,27 @@ impl Run {
                 .await
             }
             (_, Some(approval)) if approval.status == ApprovalStatus::Pending => self.wait_for(approval, false).await,
+            (PolicyDecision::AllowUnattended { reason }, None) => {
+                let level = self.exec.agent.as_ref().and_then(|a| a.autonomy.as_ref()).map(|a| a.level);
+                let event = self.event(
+                    EventKind::ToolUnattended,
+                    json!({
+                        "call_id": call.id,
+                        "tool": call.tool,
+                        "arguments": call.arguments,
+                        "call_hash": hash,
+                        "level": level,
+                        "reason": reason,
+                        "summary": self.engine.inner.tools.get(&call.tool).and_then(|t| t.describe_call(&call.arguments)),
+                    }),
+                );
+                self.commit(&[], vec![event], Extras::default()).await?;
+                if call.tool == zorix_core::delegation::TOOL {
+                    self.delegate(&call).await
+                } else {
+                    self.run_tool(&call, tool).await
+                }
+            }
             (_, Some(_)) | (PolicyDecision::Allow, None) if call.tool == zorix_core::delegation::TOOL => {
                 self.delegate(&call).await
             }
@@ -758,7 +782,11 @@ impl Run {
     /// The call ends without running: the model gets an error result and the loop goes on.
     async fn settle_failed(&mut self, call: &ToolCallRequest, message: String, kind: EventKind, by: &str) -> Step {
         let now = self.engine.now();
-        let status = if kind == EventKind::ToolDenied { ToolCallStatus::Denied } else { ToolCallStatus::Failed };
+        let status = if matches!(kind, EventKind::ToolDenied | EventKind::ToolSuggested) {
+            ToolCallStatus::Denied
+        } else {
+            ToolCallStatus::Failed
+        };
         let record = self.records.iter().find(|r| r.call_id == call.id).cloned().map(|mut record| {
             record.status = status;
             record.error = Some(message.clone());
@@ -767,7 +795,14 @@ impl Run {
         });
         self.state.transcript.push(Message::tool_result(call.id.clone(), message.clone(), true));
         self.state.pending.retain(|p| p.id != call.id);
-        let event = self.event(kind, json!({ "call_id": call.id, "tool": call.tool, "reason": message, "by": by }));
+        let mut payload = json!({ "call_id": call.id, "tool": call.tool, "reason": message, "by": by });
+        if kind == EventKind::ToolSuggested {
+            // The proposal itself: what the person is asked to do, in the exact arguments.
+            payload["arguments"] = call.arguments.clone();
+            payload["summary"] =
+                json!(self.engine.inner.tools.get(&call.tool).and_then(|t| t.describe_call(&call.arguments)));
+        }
+        let event = self.event(kind, payload);
         let mut extras = Extras::checkpoint();
         if let Some(record) = record {
             self.upsert_record(record.clone());

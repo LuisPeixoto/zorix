@@ -61,6 +61,8 @@ pub struct AgentAsk {
     pub team: Option<String>,
     /// Access the run gets besides the agent's own (a team's members). A request can still only narrow what results.
     pub extra_access: Vec<String>,
+    /// How much the run may do without asking, when the workforce starts it (ADR-0039).
+    pub autonomy: Option<zorix_core::Autonomy>,
 }
 
 /// Why a run could not be made.
@@ -251,6 +253,7 @@ pub async fn prepare(
         }
     }
     binding.team = ask.team.clone();
+    binding.autonomy = ask.autonomy.clone();
     if let Some(narrow) = &ask.narrow {
         grants = grants.intersect(narrow);
     }

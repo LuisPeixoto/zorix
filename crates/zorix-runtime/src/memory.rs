@@ -127,6 +127,7 @@ impl ExecutionRepository for MemoryRepository {
             .filter(|e| filter.agent.is_none() || e.agent.as_ref().map(|a| a.agent) == filter.agent)
             .filter(|e| filter.parent.is_none() || e.parent == filter.parent)
             .filter(|e| !filter.roots_only || e.parent.is_none())
+            .filter(|e| filter.since.is_none_or(|since| e.created_at >= since))
             .cloned()
             .collect();
         found.sort_by_key(|e| std::cmp::Reverse((e.created_at, e.id)));

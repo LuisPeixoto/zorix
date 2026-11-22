@@ -12,7 +12,8 @@ holds for approval waits for a person. The level has to change that answer for t
 
 - **The level is frozen into the run** as `autonomy` (a level and the access patterns that always ask) on the agent binding, set only on
   runs the workforce starts: a task's run, a manager's run and a scheduled one. A run a person starts from *New run* is unchanged.
-  A delegated child gets the lower of its parent's level and its own worker's.
+  A delegated child runs at the level of the run that asked it, with the same list of patterns that always ask, so work handed to another
+  worker is never freer than the work that handed it over.
 - **The policy applies it.** The rules stay in this order: forbidden, deny rules, grants, approval rules, then the level.
   - **Suggest**: a call that is not read-only does not run. The model is told it was proposed for a person to do, the call is recorded as
     a suggestion, and it appears in Activity and the Inbox.

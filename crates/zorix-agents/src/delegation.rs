@@ -178,6 +178,8 @@ impl DelegationPlanner for AgentPlanner {
                 parent: Some(parent.id),
                 root: Some(parent.root.unwrap_or(parent.id)),
                 depth: parent.depth + 1,
+                // A delegated child runs at the level of the run that asked it, never freer (ADR-0039).
+                autonomy: parent.agent.as_ref().and_then(|a| a.autonomy.clone()),
                 ..AgentAsk::default()
             };
             let mut new = prepare(&agent, &version, ask, &*self.store, &*self.resolver).await.map_err(|e| match e {

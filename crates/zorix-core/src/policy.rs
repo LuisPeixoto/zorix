@@ -21,6 +21,17 @@ pub struct PolicyRequest<'a> {
 pub enum PolicyDecision {
     /// Run it.
     Allow,
+    /// Run it without asking, although the default would have held it, because of the worker's level (ADR-0039). The run
+    /// records the call, its arguments and the level.
+    AllowUnattended {
+        /// A sentence about why.
+        reason: String,
+    },
+    /// Do not run it: a worker at the Suggest level proposes, a person acts. The call is recorded as a suggestion.
+    Suggest {
+        /// A sentence about why.
+        reason: String,
+    },
     /// Do not run it. The reason goes back to the model as the tool result.
     Deny {
         /// A sentence about why.
