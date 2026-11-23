@@ -180,6 +180,7 @@ cargo run -p zorix-runtime --example embed
 | [Architecture](docs/architecture.md) | Layers, contracts, decisions; the [ADRs](docs/adr) |
 | [Technology comparison](docs/research/runtime-landscape.md) | LangGraph, OpenAI Agents SDK, ADK, Temporal, MCP and others: what we took, what we built |
 | [Testing](docs/testing.md) | How each required case is proven |
+| [Engineering guidelines](docs/engineering-guidelines.md) | The rules every change follows, and where ZORIX enforces them |
 | [Distribution](docs/distribution.md) | Installers, signing, releases |
 | [Troubleshooting](docs/troubleshooting.md) | Symptom, cause, fix |
 | [Roadmap](docs/roadmap.md) | The eleven phases |
@@ -200,7 +201,8 @@ docs/             guides, architecture, decision records, research
 
 ## Contributing
 
-Bug reports, documentation, tests and code are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the
+Bug reports, documentation, tests and code are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md), the
+[engineering guidelines](docs/engineering-guidelines.md) and the
 [code of conduct](CODE_OF_CONDUCT.md). Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
