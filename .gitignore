@@ -16,3 +16,8 @@ node_modules
 .DS_Store
 .idea
 .vscode
+
+# Coverage runs
+*.profraw
+*.profdata
+lcov.info
