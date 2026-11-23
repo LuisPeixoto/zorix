@@ -10,6 +10,11 @@ pub const DATA_TAGS: [&str; 4] = ["tool_result", "document", "past_work", "data"
 /// Make the text unable to close or open one of ZORIX's tags: a `<` followed (after an optional `/` and spaces, in any case) by one of
 /// [`DATA_TAGS`] gets a backslash, so `</data>` reads `<\/data>` and `<DATA x>` reads `<\DATA x>`.
 pub fn defuse(text: &str) -> String {
+    defuse_with(text, &[])
+}
+
+/// Like [`defuse`], and also the tags of a wrapper of the caller's own (the judge's `answer`, say), which must be lower-case names.
+pub fn defuse_with(text: &str, extra: &[&str]) -> String {
     let mut out = String::with_capacity(text.len() + 8);
     let mut rest = text;
     while let Some(at) = rest.find('<') {
@@ -17,8 +22,8 @@ pub fn defuse(text: &str) -> String {
         let after = &rest[at + 1..];
         let body = after.strip_prefix('/').unwrap_or(after);
         let body = body.trim_start();
-        let lower: String = body.chars().take(12).flat_map(char::to_lowercase).collect();
-        let is_tag = DATA_TAGS.iter().any(|tag| {
+        let lower: String = body.chars().take(16).flat_map(char::to_lowercase).collect();
+        let is_tag = DATA_TAGS.iter().chain(extra.iter()).any(|tag| {
             lower
                 .strip_prefix(tag)
                 .is_some_and(|next| !next.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'))
