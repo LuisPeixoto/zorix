@@ -11,7 +11,7 @@ repository = "https://github.com/LuisPeixoto/zorix"
 homepage = "https://github.com/LuisPeixoto/zorix"
 readme = "README.md"
 authors = ["Luis Peixoto"]
-rust-version = "1.90"
+rust-version = "1.97"
 
 [workspace.dependencies]
 zorix-core = { path = "crates/zorix-core" }

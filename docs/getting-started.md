@@ -5,7 +5,7 @@ Prebuilt installers will be attached to each [release](https://github.com/LuisPe
 
 ## Requirements
 
-- [Rust](https://rustup.rs) stable, 1.90 or newer
+- [Rust](https://rustup.rs) stable, 1.97 or newer
 - [Node.js](https://nodejs.org) 22 or newer (desktop app only)
 - Linux only, for the desktop app: the Tauri system packages
 
