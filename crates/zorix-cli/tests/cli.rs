@@ -771,3 +771,79 @@ fn calibration_starts_empty_and_says_so() {
     assert!(text(&z.env_run(&["calibration"]).stderr).contains("Nothing learned yet"));
     assert_eq!(code(&z.env_run(&["--json", "calibration"])), 0);
 }
+
+/// A real crash: the program is killed with SIGKILL while a run waits for its model. Nothing gets to clean up, so everything the next
+/// program finds is what was on disk.
+#[cfg(unix)]
+#[test]
+fn a_program_killed_in_the_middle_of_a_run_leaves_a_whole_database_and_the_next_one_finishes_the_run() {
+    let z = Zorix::new();
+    // The first model call takes a few seconds, long enough to be killed in. A new program reads the script again, so the second
+    // time it answers after the same pause.
+    let model = z.write_script(r#"[{"delay": {"ms": 3000, "then": {"say": "All done after the crash."}}}]"#);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_zorix"))
+        .arg("--home")
+        .arg(z.home())
+        .args(["run", "Write the report", "--model", &model])
+        .env_remove("ZORIX_HOME")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("start zorix");
+
+    // Wait until the run is in its model call, looking at the file the way another program would.
+    let database = z.home().join("zorix.sqlite");
+    let waiting = |wanted: &str| -> bool {
+        let Ok(conn) = rusqlite::Connection::open_with_flags(&database, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        else {
+            return false;
+        };
+        conn.query_row("SELECT COUNT(*) FROM executions WHERE state = ?1", [wanted], |r| r.get::<_, i64>(0))
+            .map(|n| n == 1)
+            .unwrap_or(false)
+    };
+    let started = std::time::Instant::now();
+    while !waiting("waiting_for_model") {
+        assert!(started.elapsed() < Duration::from_secs(30), "the run never reached its model call");
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    child.kill().expect("SIGKILL");
+    let status = child.wait().unwrap();
+    assert!(!status.success(), "it was killed, not finished");
+
+    // What the crash left: a database that opens, passes its own check, and still says the run was waiting for the model.
+    let conn = rusqlite::Connection::open(&database).unwrap();
+    let check: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0)).unwrap();
+    assert_eq!(check, "ok");
+    assert!(waiting("waiting_for_model"), "the run is where it was");
+    let events: i64 = conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+    assert!(events >= 3, "the events that were saved are still there");
+    drop(conn);
+
+    // The next program takes the run over and finishes it. Nothing was lost, and the run did not run twice to the end.
+    let recovered = z.run(&["recover", "--model", &model]);
+    assert_eq!(code(&recovered), 0, "{}", text(&recovered.stderr));
+    assert!(text(&recovered.stderr).contains("1 continued"), "{}", text(&recovered.stderr));
+    let id = z.newest_id();
+    let started = std::time::Instant::now();
+    loop {
+        let shown: Value = serde_json::from_slice(&z.run(&["--json", "show", &id]).stdout).unwrap();
+        match shown["execution"]["state"].as_str().unwrap() {
+            "completed" => {
+                assert_eq!(shown["execution"]["result"]["text"], "All done after the crash.");
+                break;
+            }
+            "failed" | "cancelled" => panic!("the run ended badly: {shown}"),
+            _ => {}
+        }
+        assert!(started.elapsed() < Duration::from_secs(30), "the run never finished after recovery: {shown}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let conn = rusqlite::Connection::open(&database).unwrap();
+    let completions: i64 =
+        conn.query_row("SELECT COUNT(*) FROM events WHERE kind = 'execution.completed'", [], |r| r.get(0)).unwrap();
+    assert_eq!(completions, 1, "one ending, however it was reached");
+    let leases: i64 = conn.query_row("SELECT COUNT(*) FROM leases", [], |r| r.get(0)).unwrap();
+    assert_eq!(leases, 0, "no lease is left behind");
+}
