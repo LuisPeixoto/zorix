@@ -16,7 +16,8 @@ const walk = (dir: string): string[] =>
 const sources = walk(src).map((path) => readFileSync(path, "utf8")).join("\n");
 
 test("every message is used somewhere, so the catalogue does not collect dead sentences", () => {
-  const unused = Object.keys(en).filter((key) => !sources.includes(`"${key}"`));
+  // `reason.*` messages are reached through a code the backend sends (errors.test.ts checks them against its list).
+  const unused = Object.keys(en).filter((key) => !key.startsWith("reason.") && !sources.includes(`"${key}"`));
   assert.deepEqual(unused, []);
 });
 

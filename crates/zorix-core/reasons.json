@@ -1,0 +1,94 @@
+[
+  [
+    "lifecycle.invalid_step",
+    "An execution that is {from} cannot take the step “{trigger}”."
+  ],
+  [
+    "invalid",
+    "Invalid request: {detail}"
+  ],
+  [
+    "missing",
+    "{detail}"
+  ],
+  [
+    "not_found.execution",
+    "Execution {id} was not found."
+  ],
+  [
+    "conflict.execution",
+    "Execution {id} was changed by something else at the same time. Load it again and retry."
+  ],
+  [
+    "storage",
+    "The storage failed: {detail}"
+  ],
+  [
+    "storage.full",
+    "The disk is full, so ZORIX could not save. Free some space and carry on: nothing that was saved is lost, and work that was interrupted continues from where it stopped."
+  ],
+  [
+    "internal",
+    "Internal error: {detail}"
+  ],
+  [
+    "model.failed",
+    "{detail}"
+  ],
+  [
+    "model.temporary",
+    "{detail}"
+  ],
+  [
+    "model.cancelled",
+    "The model call was cancelled."
+  ],
+  [
+    "model.auth",
+    "{detail}"
+  ],
+  [
+    "model.not_found",
+    "{detail}"
+  ],
+  [
+    "model.context_too_long",
+    "{detail}"
+  ],
+  [
+    "model.rate_limited",
+    "{detail}"
+  ],
+  [
+    "model.unavailable",
+    "{detail}"
+  ],
+  [
+    "model.refused",
+    "{detail}"
+  ],
+  [
+    "model.invalid",
+    "{detail}"
+  ],
+  [
+    "model.unsupported",
+    "{detail}"
+  ],
+  [
+    "tool.failed",
+    "{detail}"
+  ],
+  [
+    "tool.temporary",
+    "{detail}"
+  ],
+  [
+    "id.invalid",
+    "{detail}"
+  ],
+  [
+    "message",
+    "{detail}"
+  ]
+]

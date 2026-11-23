@@ -39,6 +39,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Errors have stable codes: a failed command in the app tells the interface a code and its values, so the sentence can be written in the person's language. The command line prints what it always did.
 - **The interface's text is in one catalogue** ([ADR-0040](docs/adr/0040-interface-text-and-error-reasons.md), [guide](docs/desktop.md#text-and-languages)): about 1,900 sentences moved out of the components, with plural forms,
   a pseudo-locale (`en-XA`) that shows text that does not fit, `Intl` formatters for money, numbers, dates and lists, and a lint (`tools/check-text.mjs`) that fails on a sentence written in a component. The window's language is announced to the browser.
   The English the app shows is the same, except that numbers have the grouping of their language (token counts were written with French spaces, and are `12,345` now) and money has thousands separators.

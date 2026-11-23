@@ -7,6 +7,7 @@ use tauri::State;
 
 use crate::settings::Settings;
 use crate::state::{AppState, Services};
+use crate::ui_error::{IntoUi, UiError};
 
 /// Whether workflows start by themselves, and how webhooks are set.
 #[derive(Serialize)]
@@ -33,7 +34,7 @@ async fn info(services: &Services, home: &std::path::Path) -> HostInfo {
 }
 
 #[tauri::command]
-pub async fn workflow_host(state: State<'_, AppState>) -> Result<HostInfo, String> {
+pub async fn workflow_host(state: State<'_, AppState>) -> Result<HostInfo, UiError> {
     let services = state.services()?;
     Ok(info(services, &state.home).await)
 }
@@ -45,7 +46,7 @@ pub async fn workflow_settings_set(
     state: State<'_, AppState>,
     webhooks: bool,
     address: String,
-) -> Result<HostInfo, String> {
+) -> Result<HostInfo, UiError> {
     let services = state.services_arc()?;
     let wanted = Settings { webhooks, webhook_address: address.trim().to_string() };
     let listen = wanted.listen()?;
@@ -68,7 +69,7 @@ pub async fn workflow_settings_set(
             if let Ok(again) = services.workflows.start_host_with(services.secrets.clone(), previous, tickers()).await {
                 *host = Some(Arc::new(again));
             }
-            return Err(error.to_string());
+            return Err(UiError::message(error.to_string()));
         }
     }
     drop(host);
@@ -87,16 +88,16 @@ use zorix_workflows::{
     Card, Decision, DiffLine, Figures, Imported, Missing, StartRequest, StepHistory, Template, Verdict,
 };
 
-fn text(error: impl std::fmt::Display) -> String {
-    error.to_string()
+fn text(error: impl IntoUi) -> UiError {
+    error.into_ui()
 }
 
-fn id_of(text: &str) -> Result<WorkflowId, String> {
-    text.parse().map_err(|_| format!("“{text}” is not a workflow id."))
+fn id_of(text: &str) -> Result<WorkflowId, UiError> {
+    text.parse().map_err(|_| UiError::message(format!("“{text}” is not a workflow id.")))
 }
 
-fn run_id_of(value: &str) -> Result<WorkflowRunId, String> {
-    value.parse().map_err(|_| format!("“{value}” is not a run id."))
+fn run_id_of(value: &str) -> Result<WorkflowRunId, UiError> {
+    value.parse().map_err(|_| UiError::message(format!("“{value}” is not a run id.")))
 }
 
 fn confirmer(confirm: bool) -> Option<Confirm> {
@@ -115,7 +116,7 @@ pub struct Overview {
 }
 
 #[tauri::command]
-pub async fn workflows_overview(state: State<'_, AppState>) -> Result<Overview, String> {
+pub async fn workflows_overview(state: State<'_, AppState>) -> Result<Overview, UiError> {
     let services = state.services()?;
     let service = &services.workflows.service;
     Ok(Overview {
@@ -156,7 +157,7 @@ pub struct Detail {
 }
 
 #[tauri::command]
-pub async fn workflow_detail(state: State<'_, AppState>, id: String) -> Result<Detail, String> {
+pub async fn workflow_detail(state: State<'_, AppState>, id: String) -> Result<Detail, UiError> {
     let services = state.services()?;
     let service = &services.workflows.service;
     let id = id_of(&id)?;
@@ -183,7 +184,7 @@ pub async fn workflow_detail(state: State<'_, AppState>, id: String) -> Result<D
 }
 
 #[tauri::command]
-pub async fn workflow_create(state: State<'_, AppState>, slug: String, name: String) -> Result<Workflow, String> {
+pub async fn workflow_create(state: State<'_, AppState>, slug: String, name: String) -> Result<Workflow, UiError> {
     let service = &state.services()?.workflows.service;
     let slug = WorkflowSlug::new(slug.trim()).map_err(text)?;
     let name = if name.trim().is_empty() { slug.as_str().replace('-', " ") } else { name.trim().to_string() };
@@ -191,7 +192,7 @@ pub async fn workflow_create(state: State<'_, AppState>, slug: String, name: Str
 }
 
 #[tauri::command]
-pub async fn workflow_save(state: State<'_, AppState>, id: String, spec: WorkflowSpec) -> Result<Workflow, String> {
+pub async fn workflow_save(state: State<'_, AppState>, id: String, spec: WorkflowSpec) -> Result<Workflow, UiError> {
     let services = state.services()?;
     let saved = services.workflows.service.save_draft(id_of(&id)?, spec).await.map_err(text)?;
     Ok(saved)
@@ -220,7 +221,7 @@ pub async fn workflow_publish(
     id: String,
     note: Option<String>,
     confirm: bool,
-) -> Result<Published, String> {
+) -> Result<Published, UiError> {
     let services = state.services()?;
     let (version, written) = services
         .workflows
@@ -238,7 +239,7 @@ pub async fn workflow_rollback(
     id: String,
     to: u32,
     confirm: bool,
-) -> Result<Published, String> {
+) -> Result<Published, UiError> {
     let services = state.services()?;
     let version = services.workflows.service.rollback(id_of(&id)?, to, confirmer(confirm)).await.map_err(text)?;
     refresh(&state).await;
@@ -246,31 +247,31 @@ pub async fn workflow_rollback(
 }
 
 #[tauri::command]
-pub async fn workflow_set_enabled(state: State<'_, AppState>, id: String, enabled: bool) -> Result<(), String> {
+pub async fn workflow_set_enabled(state: State<'_, AppState>, id: String, enabled: bool) -> Result<(), UiError> {
     state.services()?.workflows.service.set_enabled(id_of(&id)?, enabled).await.map_err(text)?;
     refresh(&state).await;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn workflow_remove(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+pub async fn workflow_remove(state: State<'_, AppState>, id: String) -> Result<bool, UiError> {
     let removed = state.services()?.workflows.service.remove(id_of(&id)?).await.map_err(text)?;
     refresh(&state).await;
     Ok(removed)
 }
 
 #[tauri::command]
-pub async fn workflow_export(state: State<'_, AppState>, id: String, version: Option<u32>) -> Result<String, String> {
+pub async fn workflow_export(state: State<'_, AppState>, id: String, version: Option<u32>) -> Result<String, UiError> {
     state.services()?.workflows.service.export(id_of(&id)?, version).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn workflow_import(state: State<'_, AppState>, contents: String) -> Result<Imported, String> {
+pub async fn workflow_import(state: State<'_, AppState>, contents: String) -> Result<Imported, UiError> {
     state.services()?.workflows.service.import(&contents).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn workflow_templates() -> Result<Vec<Template>, String> {
+pub async fn workflow_templates() -> Result<Vec<Template>, UiError> {
     Ok(zorix_workflows::WorkflowService::templates())
 }
 
@@ -284,14 +285,14 @@ pub struct Added {
 }
 
 #[tauri::command]
-pub async fn workflow_add_template(state: State<'_, AppState>, template: String) -> Result<Added, String> {
+pub async fn workflow_add_template(state: State<'_, AppState>, template: String) -> Result<Added, UiError> {
     let service = &state.services()?.workflows.service;
     let workflow = service.add_template(&template).await.map_err(text)?;
     let missing = service.missing(&workflow.draft).await.map_err(text)?;
     Ok(Added { workflow, missing })
 }
 
-async fn spec_of(services: &Services, id: WorkflowId, which: &str) -> Result<WorkflowSpec, String> {
+async fn spec_of(services: &Services, id: WorkflowId, which: &str) -> Result<WorkflowSpec, UiError> {
     let service = &services.workflows.service;
     if which == "draft" {
         return Ok(service
@@ -302,13 +303,13 @@ async fn spec_of(services: &Services, id: WorkflowId, which: &str) -> Result<Wor
             .ok_or("That workflow no longer exists.")?
             .draft);
     }
-    let number: u32 = which.parse().map_err(|_| format!("“{which}” is not a version."))?;
+    let number: u32 = which.parse().map_err(|_| UiError::message(format!("“{which}” is not a version.")))?;
     Ok(service
         .store()
         .version(service.tenant(), id, number)
         .await
         .map_err(text)?
-        .ok_or_else(|| format!("There is no version {number}."))?
+        .ok_or_else(|| UiError::message(format!("There is no version {number}.")))?
         .spec)
 }
 
@@ -319,7 +320,7 @@ pub async fn workflow_diff(
     id: String,
     from: String,
     to: String,
-) -> Result<Vec<DiffLine>, String> {
+) -> Result<Vec<DiffLine>, UiError> {
     let services = state.services()?;
     let id = id_of(&id)?;
     Ok(zorix_workflows::WorkflowService::diff(&spec_of(services, id, &from).await?, &spec_of(services, id, &to).await?))
@@ -327,7 +328,7 @@ pub async fn workflow_diff(
 
 /// A definition as readable lines, for the two sides of a comparison.
 #[tauri::command]
-pub async fn workflow_outline(state: State<'_, AppState>, id: String, which: String) -> Result<String, String> {
+pub async fn workflow_outline(state: State<'_, AppState>, id: String, which: String) -> Result<String, UiError> {
     let services = state.services()?;
     Ok(zorix_workflows::WorkflowService::outline(&spec_of(services, id_of(&id)?, &which).await?))
 }
@@ -346,7 +347,7 @@ pub struct Start {
 }
 
 #[tauri::command]
-pub async fn workflow_start(state: State<'_, AppState>, request: Start) -> Result<WorkflowRun, String> {
+pub async fn workflow_start(state: State<'_, AppState>, request: Start) -> Result<WorkflowRun, UiError> {
     let services = state.services_arc()?;
     let mut start = StartRequest::manual(id_of(&request.id)?, request.payload.unwrap_or_else(|| serde_json::json!({})));
     start.test = request.test;
@@ -359,7 +360,7 @@ pub async fn workflow_runs(
     state: State<'_, AppState>,
     id: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<WorkflowRun>, String> {
+) -> Result<Vec<WorkflowRun>, UiError> {
     let service = &state.services()?.workflows.service;
     let workflow = id.as_deref().map(id_of).transpose()?;
     service.store().runs(service.tenant(), workflow, limit.unwrap_or(50).min(200)).await.map_err(text)
@@ -375,7 +376,7 @@ pub struct RunDetail {
 }
 
 #[tauri::command]
-pub async fn workflow_run(state: State<'_, AppState>, run: String) -> Result<RunDetail, String> {
+pub async fn workflow_run(state: State<'_, AppState>, run: String) -> Result<RunDetail, UiError> {
     let services = state.services_arc()?;
     let id = run_id_of(&run)?;
     // Looking at a run moves it along: a timer that ended or an execution that finished shows up now, not at the next beat.
@@ -394,12 +395,12 @@ pub async fn workflow_run(state: State<'_, AppState>, run: String) -> Result<Run
 }
 
 #[tauri::command]
-pub async fn workflow_cancel(state: State<'_, AppState>, run: String) -> Result<WorkflowRun, String> {
+pub async fn workflow_cancel(state: State<'_, AppState>, run: String) -> Result<WorkflowRun, UiError> {
     state.services()?.workflows.engine.cancel(run_id_of(&run)?, "desktop").await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn workflow_waits(state: State<'_, AppState>) -> Result<Vec<WorkflowWait>, String> {
+pub async fn workflow_waits(state: State<'_, AppState>) -> Result<Vec<WorkflowWait>, UiError> {
     let service = &state.services()?.workflows.service;
     service.store().pending_waits(service.tenant()).await.map_err(text)
 }
@@ -420,14 +421,14 @@ pub struct Decide {
 }
 
 #[tauri::command]
-pub async fn workflow_decide(state: State<'_, AppState>, request: Decide) -> Result<WorkflowWait, String> {
+pub async fn workflow_decide(state: State<'_, AppState>, request: Decide) -> Result<WorkflowWait, UiError> {
     let services = state.services_arc()?;
-    let wait: WaitId = request.wait.parse().map_err(|_| "That is not a wait id.".to_string())?;
+    let wait: WaitId = request.wait.parse().map_err(|_| UiError::message("That is not a wait id."))?;
     let verdict = match request.verdict.as_str() {
         "approve" => Verdict::Approve,
         "refuse" => Verdict::Refuse,
         "answer" => Verdict::Answer(request.text.unwrap_or_default()),
-        other => return Err(format!("“{other}” is not an answer.")),
+        other => return Err(UiError::message(format!("“{other}” is not an answer."))),
     };
     let decision = Decision {
         fingerprint: request.fingerprint,
@@ -443,7 +444,7 @@ pub async fn workflow_step_history(
     state: State<'_, AppState>,
     id: String,
     step: String,
-) -> Result<StepHistory, String> {
+) -> Result<StepHistory, UiError> {
     state.services()?.workflows.service.step_history(id_of(&id)?, &step, 5).await.map_err(text)
 }
 
@@ -459,7 +460,7 @@ pub struct WebhookAddress {
 }
 
 #[tauri::command]
-pub async fn workflow_webhook(state: State<'_, AppState>, id: String, reset: bool) -> Result<WebhookAddress, String> {
+pub async fn workflow_webhook(state: State<'_, AppState>, id: String, reset: bool) -> Result<WebhookAddress, UiError> {
     let services = state.services()?;
     let id = id_of(&id)?;
     let workflow = services

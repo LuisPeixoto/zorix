@@ -1,4 +1,4 @@
-//! The commands the interface can call. They return `Result<T, String>`: the text is shown to the person as it is.
+//! The commands the interface can call. They return `Result<T, UiError>`: the text is shown to the person as it is.
 //! The interface decides nothing about permissions or state; it asks, and the engine answers.
 
 use futures_util::StreamExt;
@@ -13,12 +13,13 @@ use zorix_core::{
 use zorix_runtime::{ExecutionSummary, summarize};
 
 use crate::state::{AppState, Services};
+use crate::ui_error::{UiError, ui};
 
-fn id_of(text: &str) -> Result<ExecutionId, String> {
-    text.parse::<ExecutionId>().map_err(|e| e.to_string())
+fn id_of(text: &str) -> Result<ExecutionId, UiError> {
+    text.parse::<ExecutionId>().map_err(ui)
 }
 
-fn services(state: &AppState) -> Result<&Services, String> {
+fn services(state: &AppState) -> Result<&Services, UiError> {
     state.services()
 }
 
@@ -38,23 +39,23 @@ pub fn app_info(state: State<'_, AppState>) -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         data_dir: state.home.display().to_string(),
-        error: state.services.as_ref().err().cloned(),
+        error: state.services.as_ref().err().map(|error| error.message.clone()),
         start_view: if cfg!(debug_assertions) { std::env::var("ZORIX_START_VIEW").ok() } else { None },
     }
 }
 
 #[tauri::command]
-pub fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolSpec>, String> {
+pub fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolSpec>, UiError> {
     Ok(services(&state)?.engine.tools().list())
 }
 
 #[tauri::command]
-pub async fn list_runs(state: State<'_, AppState>, limit: Option<u32>) -> Result<Vec<Execution>, String> {
+pub async fn list_runs(state: State<'_, AppState>, limit: Option<u32>) -> Result<Vec<Execution>, UiError> {
     let services = services(&state)?;
     // The runs somebody asked for. What agents started for them belongs to them and is shown under them.
     let filter =
         ListFilter { limit: limit.unwrap_or(50).clamp(1, 500) as usize, roots_only: true, ..ListFilter::default() };
-    services.engine.list(&services.tenant, &filter).await.map_err(|e| e.to_string())
+    services.engine.list(&services.tenant, &filter).await.map_err(ui)
 }
 
 /// One execution with everything that belongs to it.
@@ -67,11 +68,11 @@ pub struct RunDetail {
 }
 
 #[tauri::command]
-pub async fn run_detail(state: State<'_, AppState>, id: String) -> Result<RunDetail, String> {
+pub async fn run_detail(state: State<'_, AppState>, id: String) -> Result<RunDetail, UiError> {
     let services = services(&state)?;
     let id = id_of(&id)?;
-    let detail: ExecutionDetail = services.engine.detail(&services.tenant, id).await.map_err(|e| e.to_string())?;
-    let events = services.engine.events(&services.tenant, id, 0).await.map_err(|e| e.to_string())?;
+    let detail: ExecutionDetail = services.engine.detail(&services.tenant, id).await.map_err(ui)?;
+    let events = services.engine.events(&services.tenant, id, 0).await.map_err(ui)?;
     let summary = summarize(&detail, &events);
     Ok(RunDetail { execution: detail.execution, tool_calls: detail.tool_calls, approvals: detail.approvals, summary })
 }
@@ -130,7 +131,7 @@ pub struct IntegrationChoice {
 type Expand = fn(&str) -> Result<Vec<zorix_core::Permission>, String>;
 
 impl IntegrationChoice {
-    fn grants(&self, mut grants: Grants) -> Result<Grants, String> {
+    fn grants(&self, mut grants: Grants) -> Result<Grants, UiError> {
         use zorix_hub::grants;
         for name in &self.mcp {
             grants = grants.with(tool_grant(&format!("mcp.{name}.*"))?);
@@ -164,7 +165,7 @@ pub struct MemoryChoice {
 }
 
 /// The model reference for a new run: what was chosen, else the default when there is one, else the simulated model.
-fn model_for(services: &Services, chosen: Option<&str>) -> Result<String, String> {
+fn model_for(services: &Services, chosen: Option<&str>) -> Result<String, UiError> {
     use zorix_core::StepPhase;
     let chosen = chosen.map(str::trim).filter(|m| !m.is_empty());
     let model = match chosen {
@@ -178,7 +179,7 @@ fn model_for(services: &Services, chosen: Option<&str>) -> Result<String, String
 }
 
 #[tauri::command]
-pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<Execution, String> {
+pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<Execution, UiError> {
     let services = services(&state)?;
     let mut grants = Grants::none();
     for tool in &request.allow_tools {
@@ -192,9 +193,10 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
     }
     grants = request.integrations.grants(grants)?;
     let workspace = match request.workspace.as_deref().map(str::trim).filter(|w| !w.is_empty()) {
-        Some(path) => {
-            Some(std::fs::canonicalize(path).map_err(|e| format!("The workspace {path} cannot be used: {e}"))?)
-        }
+        Some(path) => Some(
+            std::fs::canonicalize(path)
+                .map_err(|e| UiError::message(format!("The workspace {path} cannot be used: {e}")))?,
+        ),
         None => None,
     };
     let mut limits = Limits::default();
@@ -214,9 +216,9 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
         workspace,
         // The desktop always has a conversation, so "Continue" can pick it up.
         conversation: Some(match request.conversation.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
-            Some(id) => zorix_core::ConversationId::new(id).map_err(|e| e.to_string())?,
+            Some(id) => zorix_core::ConversationId::new(id).map_err(ui)?,
             None => zorix_core::ConversationId::new(format!("chat-{}", &ExecutionId::new().to_string()[24..]))
-                .map_err(|e| e.to_string())?,
+                .map_err(ui)?,
         }),
         memory: match request.memory {
             Some(m) => zorix_core::MemoryOptions {
@@ -229,8 +231,8 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
         },
         ..NewExecution::default()
     };
-    let created = services.engine.create(new).await.map_err(|e| e.to_string())?;
-    services.engine.start(&services.tenant, created.id).await.map_err(|e| e.to_string())
+    let created = services.engine.create(new).await.map_err(ui)?;
+    services.engine.start(&services.tenant, created.id).await.map_err(ui)
 }
 
 /// Send the events of an execution to the interface, first the ones already stored (after `after_seq`), then live ones,
@@ -241,10 +243,10 @@ pub async fn watch_run(
     id: String,
     after_seq: u64,
     on_event: Channel<ExecutionEvent>,
-) -> Result<(), String> {
+) -> Result<(), UiError> {
     let services = services(&state)?;
     let id = id_of(&id)?;
-    let mut stream = services.engine.subscribe(&services.tenant, id, after_seq).await.map_err(|e| e.to_string())?;
+    let mut stream = services.engine.subscribe(&services.tenant, id, after_seq).await.map_err(ui)?;
     let stop = state.watch(id);
     loop {
         tokio::select! {
@@ -263,7 +265,7 @@ pub async fn watch_run(
 }
 
 #[tauri::command]
-pub fn stop_watch(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub fn stop_watch(state: State<'_, AppState>, id: String) -> Result<(), UiError> {
     state.unwatch(id_of(&id)?);
     Ok(())
 }
@@ -276,9 +278,9 @@ pub async fn decide_run(
     approve: bool,
     note: Option<String>,
     call_hash: Option<String>,
-) -> Result<Execution, String> {
+) -> Result<Execution, UiError> {
     let services = services(&state)?;
-    let approval = approval_id.parse::<ApprovalId>().map_err(|e| e.to_string())?;
+    let approval = approval_id.parse::<ApprovalId>().map_err(ui)?;
     let decision = ApprovalDecision {
         approve,
         decided_by: "desktop".into(),
@@ -286,25 +288,25 @@ pub async fn decide_run(
         call_hash,
         automatic: false,
     };
-    services.engine.decide(&services.tenant, id_of(&id)?, approval, decision).await.map_err(|e| e.to_string())
+    services.engine.decide(&services.tenant, id_of(&id)?, approval, decision).await.map_err(ui)
 }
 
 #[tauri::command]
-pub async fn cancel_run(state: State<'_, AppState>, id: String, reason: Option<String>) -> Result<Execution, String> {
+pub async fn cancel_run(state: State<'_, AppState>, id: String, reason: Option<String>) -> Result<Execution, UiError> {
     let services = services(&state)?;
-    services.engine.cancel(&services.tenant, id_of(&id)?, reason).await.map_err(|e| e.to_string())
+    services.engine.cancel(&services.tenant, id_of(&id)?, reason).await.map_err(ui)
 }
 
 #[tauri::command]
-pub async fn pause_run(state: State<'_, AppState>, id: String) -> Result<Execution, String> {
+pub async fn pause_run(state: State<'_, AppState>, id: String) -> Result<Execution, UiError> {
     let services = services(&state)?;
-    services.engine.pause(&services.tenant, id_of(&id)?).await.map_err(|e| e.to_string())
+    services.engine.pause(&services.tenant, id_of(&id)?).await.map_err(ui)
 }
 
 #[tauri::command]
-pub async fn resume_run(state: State<'_, AppState>, id: String) -> Result<Execution, String> {
+pub async fn resume_run(state: State<'_, AppState>, id: String) -> Result<Execution, UiError> {
     let services = services(&state)?;
-    services.engine.resume(&services.tenant, id_of(&id)?).await.map_err(|e| e.to_string())
+    services.engine.resume(&services.tenant, id_of(&id)?).await.map_err(ui)
 }
 
 /// One provider as the settings screen shows it. Never carries a key.
@@ -321,7 +323,7 @@ pub struct ProviderRow {
 }
 
 #[tauri::command]
-pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderRow>, String> {
+pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderRow>, UiError> {
     let services = services(&state)?;
     let secrets = services.secrets.clone();
     let config = services.config.clone();
@@ -350,50 +352,48 @@ pub async fn list_providers(state: State<'_, AppState>) -> Result<Vec<ProviderRo
             .collect()
     })
     .await
-    .map_err(|e| e.to_string())
+    .map_err(ui)
 }
 
-fn known_provider(services: &Services, name: &str) -> Result<(), String> {
-    zorix_providers::secrets::validate_name(name).map_err(|e| e.to_string())?;
+fn known_provider(services: &Services, name: &str) -> Result<(), UiError> {
+    zorix_providers::secrets::validate_name(name).map_err(ui)?;
     if services.config.instances().iter().any(|p| p.name == name) {
         Ok(())
     } else {
-        Err(format!("There is no provider called “{name}”."))
+        Err(UiError::message(format!("There is no provider called “{name}”.")))
     }
 }
 
 /// The key goes from the field straight to the keychain. It is not stored in the interface, logged or returned.
 #[tauri::command]
-pub async fn set_provider_key(state: State<'_, AppState>, name: String, key: String) -> Result<(), String> {
+pub async fn set_provider_key(state: State<'_, AppState>, name: String, key: String) -> Result<(), UiError> {
     let services = services(&state)?;
     known_provider(services, &name)?;
     let key = key.trim().to_string();
-    zorix_providers::secrets::validate_value(&key).map_err(|e| e.to_string())?;
+    zorix_providers::secrets::validate_value(&key).map_err(ui)?;
     let secrets = services.secrets.clone();
-    tokio::task::spawn_blocking(move || secrets.set(&name, &zorix_core::Secret::new(key)).map_err(|e| e.to_string()))
+    tokio::task::spawn_blocking(move || secrets.set(&name, &zorix_core::Secret::new(key)).map_err(ui))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(ui)?
 }
 
 #[tauri::command]
-pub async fn remove_provider_key(state: State<'_, AppState>, name: String) -> Result<bool, String> {
+pub async fn remove_provider_key(state: State<'_, AppState>, name: String) -> Result<bool, UiError> {
     let services = services(&state)?;
     known_provider(services, &name)?;
     let secrets = services.secrets.clone();
-    tokio::task::spawn_blocking(move || secrets.remove(&name).map_err(|e| e.to_string()))
-        .await
-        .map_err(|e| e.to_string())?
+    tokio::task::spawn_blocking(move || secrets.remove(&name).map_err(ui)).await.map_err(ui)?
 }
 
 /// What a provider offers. Asks the provider (no conversation is sent) and teaches the router what it finds.
 #[tauri::command]
-pub async fn test_provider(state: State<'_, AppState>, name: String) -> Result<usize, String> {
+pub async fn test_provider(state: State<'_, AppState>, name: String) -> Result<usize, UiError> {
     let services = services(&state)?;
     known_provider(services, &name)?;
     let found = zorix_providers::discover_all(&services.router, &tokio_util::sync::CancellationToken::new()).await;
     match found.into_iter().find(|d| d.provider == name) {
-        Some(d) => d.models.map(|m| m.len()),
-        None => Err(format!("{name} is turned off or cannot list its models.")),
+        Some(d) => d.models.map(|m| m.len()).map_err(UiError::message),
+        None => Err(UiError::message(format!("{name} is turned off or cannot list its models."))),
     }
 }
 
@@ -420,7 +420,7 @@ pub struct ModelChoices {
 }
 
 #[tauri::command]
-pub fn list_models(state: State<'_, AppState>) -> Result<ModelChoices, String> {
+pub fn list_models(state: State<'_, AppState>) -> Result<ModelChoices, UiError> {
     use zorix_core::StepPhase;
     let services = services(&state)?;
     let router = &services.router;

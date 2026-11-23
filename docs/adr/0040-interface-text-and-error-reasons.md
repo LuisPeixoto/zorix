@@ -24,7 +24,7 @@ cheaper than finding stray strings later.
   build interface text. An exception needs a reason in its allowlist (a brand name, a key symbol, a code sample).
 - **A pseudo-locale (`en-XA`)** with accented, about 40 % longer text is part of the tests and can be turned on for
   screenshots, so cut-off text is found before a real translation arrives.
-- **Errors carry a reason.** A reason is a stable `code` (`task.not_found`) and its `args`. The English sentence is built in
+- **Errors carry a reason (what was done, and what is left).** A reason is a stable `code` (`task.not_found`) and its `args`. The English sentence is built in
   Rust from a table next to the code, so the command line prints exactly what it prints today. Desktop commands return
   `{code, args, message}`; the interface builds the sentence from its catalogue and uses `message` only for a code it does
   not know (a newer backend). A generated `reasons.json` and a test keep the Rust table and the catalogue in step.
@@ -36,6 +36,16 @@ cheaper than finding stray strings later.
 - **One screen is exempt: the design-system showcase** (⌘⇧D), a developer screen that documents the kit in English. It is listed in the lint's allowlist with that reason.
 - **Units are messages** (`{value} min`, `{h} h {m} min`), because their words and order belong to a language, and money, numbers, percentages, dates, weekdays and lists use `Intl`. English lists are written without the serial comma, as the interface always did.
 - **Phase 10 adds no language.** The picker and the translations are Phase 15; the locale store holds English only.
+
+### What this version did with errors
+
+Every typed error has a code (`zorix_core::Reason`, from the `Coded` trait: the core's `Error`, `ModelError` by kind, `ToolError`, `IdError`), the desktop commands reject with a `UiError { code, args, message }`, and `errorText` writes the sentence from the
+catalogue (`reason.<code>`), falling back to the English `message` for a code it does not know. `crates/zorix-core/reasons.json` is generated from the code table, and a test compares it with the interface's catalogue word for word. The command line
+prints exactly what it printed.
+
+**What is not done:** about 170 validation sentences are plain `String`s (`Error::InvalidInput(String)` and the validators of the core and the services). They travel as the codes `invalid`, `missing` and `message` with their English sentence as the value, so a
+translated interface shows them in English. Moving each to a code of its own is the work of the audits of Phases 11 to 14, one area at a time, tracked in [#26](https://github.com/LuisPeixoto/zorix/issues/26); doing all of it here would have been a rewrite of every
+service with nothing to show for it in English.
 
 ## Consequences
 

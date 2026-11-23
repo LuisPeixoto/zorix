@@ -1,5 +1,6 @@
 //! The app's own small settings, kept next to the data as `settings.json`. Nothing secret lives here.
 
+use crate::ui_error::{UiError, ui};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -30,17 +31,18 @@ impl Settings {
     }
 
     /// Write the settings.
-    pub fn save(&self, home: &Path) -> Result<(), String> {
-        let text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
-        std::fs::write(home.join("settings.json"), text).map_err(|e| format!("The settings could not be saved: {e}"))
+    pub fn save(&self, home: &Path) -> Result<(), UiError> {
+        let text = serde_json::to_string_pretty(self).map_err(ui)?;
+        std::fs::write(home.join("settings.json"), text)
+            .map_err(|e| UiError::message(format!("The settings could not be saved: {e}")))
     }
 
     /// The address to listen on, when webhooks are on and the address is valid.
-    pub fn listen(&self) -> Result<Option<std::net::SocketAddr>, String> {
+    pub fn listen(&self) -> Result<Option<std::net::SocketAddr>, UiError> {
         if !self.webhooks {
             return Ok(None);
         }
-        zorix_workflows::parse_address(&self.webhook_address).map(Some).map_err(|e| e.to_string())
+        zorix_workflows::parse_address(&self.webhook_address).map(Some).map_err(ui)
     }
 }
 
@@ -71,6 +73,6 @@ mod tests {
     #[test]
     fn a_bad_address_is_explained() {
         let bad = Settings { webhooks: true, webhook_address: "localhost".into() };
-        assert!(bad.listen().unwrap_err().contains("not an address"));
+        assert!(bad.listen().unwrap_err().message.contains("not an address"));
     }
 }

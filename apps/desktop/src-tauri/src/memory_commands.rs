@@ -11,6 +11,7 @@ use zorix_core::{
 use zorix_memory::tools::end_of_day;
 
 use crate::state::AppState;
+use crate::ui_error::{UiError, ui};
 
 const STALE_DAYS: i64 = 180;
 
@@ -19,12 +20,12 @@ fn now() -> Timestamp {
 }
 
 /// `global`, `project:<folder>` or `conversation:<id>`.
-fn parse_scope(text: &str) -> Result<Scope, String> {
+fn parse_scope(text: &str) -> Result<Scope, UiError> {
     match text.split_once(':') {
         None if text == "global" => Ok(Scope::Global),
         Some(("project", path)) if !path.is_empty() => Ok(Scope::Project(path.to_string())),
-        Some(("conversation", id)) => ConversationId::new(id).map(Scope::Conversation).map_err(|e| e.to_string()),
-        Some(("agent", id)) => id.parse().map(Scope::Agent).map_err(|e: zorix_core::IdError| e.to_string()),
+        Some(("conversation", id)) => ConversationId::new(id).map(Scope::Conversation).map_err(ui),
+        Some(("agent", id)) => id.parse().map(Scope::Agent).map_err(ui),
         _ => Err("The scope is global, project:<folder>, conversation:<id> or agent:<id>.".into()),
     }
 }
@@ -38,14 +39,15 @@ fn scope_text(scope: &Scope) -> String {
     }
 }
 
-fn parse_id(text: &str) -> Result<MemoryId, String> {
-    text.trim().trim_start_matches("m:").parse().map_err(|_| format!("“{text}” is not a memory id."))
+fn parse_id(text: &str) -> Result<MemoryId, UiError> {
+    text.trim().trim_start_matches("m:").parse().map_err(|_| UiError::message(format!("“{text}” is not a memory id.")))
 }
 
-fn day(text: &str) -> Result<Timestamp, String> {
-    let at = end_of_day(text).ok_or_else(|| format!("“{text}” is not a date: write it as YYYY-MM-DD."))?;
+fn day(text: &str) -> Result<Timestamp, UiError> {
+    let at =
+        end_of_day(text).ok_or_else(|| UiError::message(format!("“{text}” is not a date: write it as YYYY-MM-DD.")))?;
     if at.millis() <= now().millis() {
-        return Err(format!("{text} is already in the past."));
+        return Err(UiError::message(format!("{text} is already in the past.")));
     }
     Ok(at)
 }
@@ -106,13 +108,13 @@ fn row(item: &MemoryItem) -> MemoryRow {
 }
 
 #[tauri::command]
-pub async fn list_memory(state: State<'_, AppState>, include_inactive: bool) -> Result<Vec<MemoryRow>, String> {
+pub async fn list_memory(state: State<'_, AppState>, include_inactive: bool) -> Result<Vec<MemoryRow>, UiError> {
     let services = state.services()?;
     let items = services
         .memory_store
         .all_memory(&services.tenant, &MemoryFilter { include_inactive, ..MemoryFilter::default() }, now())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(ui)?;
     Ok(items.iter().map(row).collect())
 }
 
@@ -128,7 +130,7 @@ pub struct NewFact {
 }
 
 #[tauri::command]
-pub async fn add_memory(state: State<'_, AppState>, fact: NewFact) -> Result<String, String> {
+pub async fn add_memory(state: State<'_, AppState>, fact: NewFact) -> Result<String, UiError> {
     let services = state.services()?;
     let content = fact.content.trim().to_string();
     if redact_text(&content) != content {
@@ -145,7 +147,7 @@ pub async fn add_memory(state: State<'_, AppState>, fact: NewFact) -> Result<Str
         origin: MemoryOrigin::User { name: "desktop".into() },
         replaces: vec![],
     };
-    let outcome = services.memory_store.remember(&services.tenant, new, now()).await.map_err(|e| e.to_string())?;
+    let outcome = services.memory_store.remember(&services.tenant, new, now()).await.map_err(ui)?;
     let _ = services.memory.embed_missing(&services.tenant, &tokio_util::sync::CancellationToken::new()).await;
     Ok(match outcome {
         Remembered::Added(_) => "Remembered.".into(),
@@ -174,7 +176,7 @@ pub struct MemoryChange {
 }
 
 #[tauri::command]
-pub async fn update_memory(state: State<'_, AppState>, change: MemoryChange) -> Result<MemoryRow, String> {
+pub async fn update_memory(state: State<'_, AppState>, change: MemoryChange) -> Result<MemoryRow, UiError> {
     let services = state.services()?;
     if change.content.as_ref().is_some_and(|c| redact_text(c) != *c) {
         return Err("That looks like a credential or a key, so it was not saved. Memory is not for secrets.".into());
@@ -190,44 +192,36 @@ pub async fn update_memory(state: State<'_, AppState>, change: MemoryChange) -> 
         scope: change.scope.as_deref().map(parse_scope).transpose()?,
         confirm: change.confirm,
     };
-    let item = services
-        .memory_store
-        .update_memory(&services.tenant, parse_id(&change.id)?, patch, now())
-        .await
-        .map_err(|e| e.to_string())?;
+    let item =
+        services.memory_store.update_memory(&services.tenant, parse_id(&change.id)?, patch, now()).await.map_err(ui)?;
     let _ = services.memory.embed_missing(&services.tenant, &tokio_util::sync::CancellationToken::new()).await;
     Ok(row(&item))
 }
 
 /// The runs that used a memory, for the delete confirmation.
 #[tauri::command]
-pub async fn memory_usage(state: State<'_, AppState>, id: String) -> Result<Vec<String>, String> {
+pub async fn memory_usage(state: State<'_, AppState>, id: String) -> Result<Vec<String>, UiError> {
     let services = state.services()?;
-    let used = services
-        .memory_store
-        .snapshots_using(&services.tenant, &memory_key(parse_id(&id)?))
-        .await
-        .map_err(|e| e.to_string())?;
+    let used =
+        services.memory_store.snapshots_using(&services.tenant, &memory_key(parse_id(&id)?)).await.map_err(ui)?;
     Ok(used.iter().map(ExecutionId::to_string).collect())
 }
 
 #[tauri::command]
-pub async fn forget_memory(state: State<'_, AppState>, id: String) -> Result<bool, String> {
+pub async fn forget_memory(state: State<'_, AppState>, id: String) -> Result<bool, UiError> {
     let services = state.services()?;
-    let removed = services.memory_store.forget(&services.tenant, parse_id(&id)?).await.map_err(|e| e.to_string())?;
+    let removed = services.memory_store.forget(&services.tenant, parse_id(&id)?).await.map_err(ui)?;
     services.memory.recall().invalidate_all();
     Ok(removed)
 }
 
 /// What memory put into a run's context: the frozen recall and what each part cost.
 #[tauri::command]
-pub async fn run_context(state: State<'_, AppState>, id: String) -> Result<Value, String> {
+pub async fn run_context(state: State<'_, AppState>, id: String) -> Result<Value, UiError> {
     let services = state.services()?;
     let id: ExecutionId = id.parse().map_err(|e: zorix_core::IdError| e.to_string())?;
-    let events = zorix_core::ExecutionEngine::events(&services.engine, &services.tenant, id, 0)
-        .await
-        .map_err(|e| e.to_string())?;
-    let snapshot = services.memory_store.snapshot(id).await.map_err(|e| e.to_string())?;
+    let events = zorix_core::ExecutionEngine::events(&services.engine, &services.tenant, id, 0).await.map_err(ui)?;
+    let snapshot = services.memory_store.snapshot(id).await.map_err(ui)?;
     let requested = events.iter().find(|e| e.kind.name() == "execution.model.requested");
     Ok(json!({
         "recall": snapshot.map(|s| s.doc),

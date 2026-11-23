@@ -8,6 +8,7 @@ mod memory_commands;
 mod project_commands;
 mod settings;
 mod state;
+mod ui_error;
 mod workflow_commands;
 mod workforce_commands;
 

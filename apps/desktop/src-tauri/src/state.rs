@@ -1,5 +1,6 @@
 //! What the app holds for as long as it runs: the engine, and the lock on the data folder.
 
+use crate::ui_error::{UiError, ui};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -57,7 +58,7 @@ pub struct AppState {
     /// The data folder.
     pub home: PathBuf,
     /// The engine, or why it could not start (for example another ZORIX program holds the data folder).
-    pub services: Result<Arc<Services>, String>,
+    pub services: Result<Arc<Services>, UiError>,
     watchers: Mutex<HashMap<ExecutionId, CancellationToken>>,
     live: Mutex<HashMap<ExecutionId, CancellationToken>>,
 }
@@ -74,12 +75,12 @@ impl AppState {
     }
 
     /// The engine, or the reason there is none.
-    pub fn services(&self) -> Result<&Services, String> {
+    pub fn services(&self) -> Result<&Services, UiError> {
         self.services.as_deref().map_err(Clone::clone)
     }
 
     /// The same, for work that goes on after the command returns.
-    pub fn services_arc(&self) -> Result<Arc<Services>, String> {
+    pub fn services_arc(&self) -> Result<Arc<Services>, UiError> {
         self.services.clone()
     }
 
@@ -143,26 +144,25 @@ impl AppState {
     }
 }
 
-async fn open(home: &Path) -> Result<Arc<Services>, String> {
+async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     use zorix_core::ExecutionEngine;
-    let lock = DataDirLock::acquire(home).map_err(|e| e.to_string())?;
-    let repository = Arc::new(SqliteRepository::open(&database_path(home)).map_err(|e| e.to_string())?);
+    let lock = DataDirLock::acquire(home).map_err(ui)?;
+    let repository = Arc::new(SqliteRepository::open(&database_path(home)).map_err(ui)?);
     let registry = Arc::new(InMemoryToolRegistry::new());
-    register_builtin(&*registry, &BuiltinConfig { notes_file: home.join("notes.json") }).map_err(|e| e.to_string())?;
+    register_builtin(&*registry, &BuiltinConfig { notes_file: home.join("notes.json") }).map_err(ui)?;
     let config = EngineConfig { sole_owner: true, ..EngineConfig::default() };
     let providers = ProvidersConfig::load(&config_path(home))?;
     let keychain = std::env::var("ZORIX_SECRETS").map(|v| v != "env").unwrap_or(true);
     let secrets = secrets_with(&providers, keychain);
     let router = Arc::new(build_router(&providers, secrets.clone(), Some(Arc::new(DemoModel::new())), false)?);
     let database = database_path(home);
-    let memory_store = Arc::new(SqliteMemoryStore::open(&database).map_err(|e| e.to_string())?);
+    let memory_store = Arc::new(SqliteMemoryStore::open(&database).map_err(ui)?);
     let gateway: Arc<dyn zorix_core::ModelGateway> = router.clone();
     let memory = Arc::new(MemoryStack::new(memory_store.clone(), repository.clone(), Some(gateway.clone())));
-    memory.register_tools(&*registry).map_err(|e| e.to_string())?;
-    let hub =
-        Arc::new(Hub::open(home, TenantId::local(), secrets.clone(), registry.clone()).map_err(|e| e.to_string())?);
-    hub.register_native_tools().map_err(|e| e.to_string())?;
-    let calibration = Arc::new(SqliteCalibration::open(&database).map_err(|e| e.to_string())?);
+    memory.register_tools(&*registry).map_err(ui)?;
+    let hub = Arc::new(Hub::open(home, TenantId::local(), secrets.clone(), registry.clone()).map_err(ui)?);
+    hub.register_native_tools().map_err(ui)?;
+    let calibration = Arc::new(SqliteCalibration::open(&database).map_err(ui)?);
     let engine = memory
         .install(
             Engine::builder(repository, gateway)
@@ -198,17 +198,17 @@ async fn open(home: &Path) -> Result<Arc<Services>, String> {
     }
     let workflows =
         zorix_workflows::Workflows::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone())
-            .map_err(|e| e.to_string())?;
+            .map_err(ui)?;
     let settings = crate::settings::Settings::load(home);
     let webhook = settings.listen().unwrap_or_else(|error| {
         tracing::warn!(%error, "webhooks stay off");
         None
     });
     let projects = zorix_projects::runtime::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone())
-        .map_err(|e| e.to_string())?;
+        .map_err(ui)?;
     let workforce =
         zorix_workforce::runtime::open(home, TenantId::local(), hub.clone(), engine.clone(), router.clone(), &projects)
-            .map_err(|e| e.to_string())?;
+            .map_err(ui)?;
     let tickers: Vec<Arc<dyn zorix_workflows::host::Ticker>> =
         vec![zorix_projects::runtime::ticker(&projects), zorix_workforce::runtime::ticker(&workforce)];
     let host = match workflows.start_host_with(secrets.clone(), webhook, tickers).await {
