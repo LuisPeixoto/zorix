@@ -56,6 +56,24 @@ jobs:
         with:
           command: check
 
+  bench:
+    # A tenth of the full data set, with limits that are many times what a healthy run takes: only a large regression fails. The numbers
+    # that matter are in docs/testing.md, from full-size runs on a known machine.
+    name: Benchmarks (a tenth of the scale)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the data folder and time it
+        run: cargo run --release -p zorix-bench -- --scale 0.1 --json bench.json --check crates/zorix-bench/limits.json
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: bench.json
+
   postgres:
     # The Postgres tools need a real server, and a service container only exists on Linux runners.
     name: Postgres tools
