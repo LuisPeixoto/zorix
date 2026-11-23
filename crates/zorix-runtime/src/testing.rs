@@ -315,3 +315,170 @@ macro_rules! repository_contract_tests {
         }
     };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Faults
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use parking_lot::Mutex;
+use zorix_core::{Committed, ExecutionEvent, Result};
+
+/// What a [`FaultyRepository`] is told to break.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Method {
+    /// `create`.
+    Create,
+    /// `commit`.
+    Commit,
+    /// `load`.
+    Load,
+    /// `events`.
+    Events,
+    /// `checkpoint`.
+    Checkpoint,
+    /// `acquire_lease`.
+    AcquireLease,
+}
+
+/// How a call breaks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Fault {
+    /// The call fails and nothing was written.
+    Before(Error),
+    /// The write happens, and then the call reports a failure: the caller does not know whether it worked (a connection that dropped
+    /// after the commit, a process that died right after it). Only `create` and `commit` write; for the rest it is like `Before`.
+    AfterWrite(Error),
+}
+
+struct Plan {
+    method: Method,
+    /// The call that breaks, counting from 1 among the calls of that method.
+    at: u32,
+    fault: Fault,
+    seen: u32,
+    fired: bool,
+}
+
+/// A repository that breaks one call on purpose and is otherwise the one it wraps. Used to show that a failure at any point leaves a
+/// state a restart can continue from.
+pub struct FaultyRepository {
+    inner: Arc<dyn ExecutionRepository>,
+    plan: Mutex<Option<Plan>>,
+}
+
+impl FaultyRepository {
+    /// Wrap a repository. Nothing breaks until [`fail`](Self::fail) is called.
+    pub fn new(inner: Arc<dyn ExecutionRepository>) -> Self {
+        Self { inner, plan: Mutex::new(None) }
+    }
+
+    /// Break the `at`-th call (from 1) of `method`, once.
+    pub fn fail(&self, method: Method, at: u32, fault: Fault) {
+        *self.plan.lock() = Some(Plan { method, at, fault, seen: 0, fired: false });
+    }
+
+    /// Whether the planned fault has happened.
+    pub fn fired(&self) -> bool {
+        self.plan.lock().as_ref().is_some_and(|p| p.fired)
+    }
+
+    fn hit(&self, method: Method) -> Option<Fault> {
+        let mut plan = self.plan.lock();
+        let plan = plan.as_mut()?;
+        if plan.method != method || plan.fired {
+            return None;
+        }
+        plan.seen += 1;
+        (plan.seen == plan.at).then(|| {
+            plan.fired = true;
+            plan.fault.clone()
+        })
+    }
+}
+
+#[async_trait]
+impl ExecutionRepository for FaultyRepository {
+    async fn create(&self, execution: Execution, events: Vec<NewEvent>) -> Result<CreateOutcome> {
+        match self.hit(Method::Create) {
+            Some(Fault::Before(error)) => Err(error),
+            Some(Fault::AfterWrite(error)) => {
+                self.inner.create(execution, events).await?;
+                Err(error)
+            }
+            None => self.inner.create(execution, events).await,
+        }
+    }
+
+    async fn commit(&self, commit: Commit) -> Result<Committed> {
+        match self.hit(Method::Commit) {
+            Some(Fault::Before(error)) => Err(error),
+            Some(Fault::AfterWrite(error)) => {
+                self.inner.commit(commit).await?;
+                Err(error)
+            }
+            None => self.inner.commit(commit).await,
+        }
+    }
+
+    async fn load(&self, id: ExecutionId) -> Result<Option<Execution>> {
+        match self.hit(Method::Load) {
+            Some(Fault::Before(error) | Fault::AfterWrite(error)) => Err(error),
+            None => self.inner.load(id).await,
+        }
+    }
+
+    async fn get(&self, tenant: &TenantId, id: ExecutionId) -> Result<Option<Execution>> {
+        self.inner.get(tenant, id).await
+    }
+
+    async fn list(&self, tenant: &TenantId, filter: &ListFilter) -> Result<Vec<Execution>> {
+        self.inner.list(tenant, filter).await
+    }
+
+    async fn in_states(&self, states: &[ExecutionState]) -> Result<Vec<Execution>> {
+        self.inner.in_states(states).await
+    }
+
+    async fn events(&self, id: ExecutionId, after_seq: u64, limit: usize) -> Result<Vec<ExecutionEvent>> {
+        match self.hit(Method::Events) {
+            Some(Fault::Before(error) | Fault::AfterWrite(error)) => Err(error),
+            None => self.inner.events(id, after_seq, limit).await,
+        }
+    }
+
+    async fn checkpoint(&self, id: ExecutionId) -> Result<Option<Checkpoint>> {
+        match self.hit(Method::Checkpoint) {
+            Some(Fault::Before(error) | Fault::AfterWrite(error)) => Err(error),
+            None => self.inner.checkpoint(id).await,
+        }
+    }
+
+    async fn tool_calls(&self, id: ExecutionId) -> Result<Vec<ToolCallRecord>> {
+        self.inner.tool_calls(id).await
+    }
+
+    async fn approvals(&self, id: ExecutionId) -> Result<Vec<Approval>> {
+        self.inner.approvals(id).await
+    }
+
+    async fn approval(&self, id: ApprovalId) -> Result<Option<Approval>> {
+        self.inner.approval(id).await
+    }
+
+    async fn acquire_lease(&self, id: ExecutionId, owner: &str, now: Timestamp, ttl_ms: u64) -> Result<bool> {
+        match self.hit(Method::AcquireLease) {
+            Some(Fault::Before(error) | Fault::AfterWrite(error)) => Err(error),
+            None => self.inner.acquire_lease(id, owner, now, ttl_ms).await,
+        }
+    }
+
+    async fn release_lease(&self, id: ExecutionId, owner: &str) -> Result<()> {
+        self.inner.release_lease(id, owner).await
+    }
+
+    async fn release_all_leases(&self) -> Result<u64> {
+        self.inner.release_all_leases().await
+    }
+}
