@@ -27,6 +27,12 @@ release notes unless you prefer to stay anonymous.
 - Data from one tenant or execution becoming visible to another
 - Memory safety or parsing flaws in the persistence layer
 
+## Dependencies and releases
+
+CI audits the dependencies on every change (`cargo deny check` with the policy in `deny.toml`, `npm audit` for the
+interface) and runs CodeQL weekly. A release is not tagged while an advisory that affects ZORIX is open; an advisory that
+does not affect it is accepted in `deny.toml` with the reason.
+
 ## Design notes
 
 These notes grow with each feature that handles data, files, network or permissions. The long form is in

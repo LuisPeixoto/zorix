@@ -12,6 +12,8 @@ homepage = "https://github.com/LuisPeixoto/zorix"
 readme = "README.md"
 authors = ["Luis Peixoto"]
 rust-version = "1.97"
+# Nothing here is published to crates.io; ZORIX ships as installers and CLI archives.
+publish = false
 
 [workspace.dependencies]
 zorix-core = { path = "crates/zorix-core" }
