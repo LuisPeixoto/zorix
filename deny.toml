@@ -1,0 +1,54 @@
+# Dependency policy, checked in CI by `cargo deny check` (see docs/engineering-guidelines.md, section 14).
+
+[graph]
+all-features = true
+
+[advisories]
+# Known vulnerabilities and unmaintained crates fail the check. An ignore needs an id and the reason it is safe.
+# Each entry is an advisory that was read and judged not to affect ZORIX, with the reason.
+ignore = [
+  # chrono is the date library of the workflow scheduler and of the schedule rules; the advisory is "unmaintained",
+  # not a vulnerability, and no safe upgrade exists. Replacing it (for example with jiff) is a planned change.
+  { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, no vulnerability; replacement is tracked in an issue" },
+  { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained, no vulnerability; replacement is tracked in an issue" },
+  # Pulled in by Tauri's GTK and D-Bus layers (Linux only), which the project does not control.
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained, build-time only, comes from Tauri's GTK bindings" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained, comes from the keyring's D-Bus layer" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained, comes from the keyring's D-Bus layer" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained, comes from the keyring's D-Bus layer" },
+  # ttf-parser reads fonts embedded in PDFs being indexed; parsing is bounded by the document size limits.
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained, used by pdf-extract; no vulnerability" },
+]
+
+[licenses]
+# Permissive licences, plus MPL-2.0 (file-level copyleft, used unmodified by the browser-engine crates the app pulls in).
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Several versions of one crate are normal in a Tauri tree; a new duplicate is worth a look, not a failure.
+multiple-versions = "warn"
+wildcards = "deny"
+# The workspace crates depend on each other by path.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
