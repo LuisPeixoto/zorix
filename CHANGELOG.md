@@ -12,6 +12,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- A full disk is now said in words ("The disk is full, so ZORIX could not save…") with what to do, in every store. The run that was interrupted continues with `zorix recover` once there is room.
 - A model that **declines** to answer, or whose answer **ran out of room**, no longer ends the execution as a success: a refusal fails it with the model's own words, and a cut-off answer
   is sent back once and then fails. Text that a cut stream had already written is forgotten before the retry, so a reader never sees it twice.
 - **Security:** a webhook delivery that carries the sender's delivery id (`X-GitHub-Delivery` and the like) starts a workflow once: a retry or a replayed request answers `200` and

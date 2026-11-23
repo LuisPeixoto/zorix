@@ -155,6 +155,14 @@ pending. To continue, the loop only needs to ask: *is a call pending? run it. Ot
 
 A tool that finished before the crash is **not** run again: its result is in the checkpoint.
 
+## When storage fails
+
+A failure of the storage (a full disk, a dropped connection, a process that dies at the wrong moment) leaves a state a restart continues from: every change is one atomic commit, so
+a run is either at the step before the change or after it. This is tested by breaking each commit of a run in turn, before and after it is written, and recovering with a new engine over
+what is stored: the run always completes, and a tool that cannot be repeated safely (not read-only, not idempotent) runs a second time only after a person is asked and says yes. A full
+disk is made with SQLite's own size limit; the error says what to do ("The disk is full, so ZORIX could not save…") and the data is intact when there is room again. A real `kill -9` of the
+command line during a model call is tested too. Several connections writing at once (the engine and the other stores share the file) lose no update and number every event once.
+
 ## Leases, duplicates and idempotency
 
 - **Leases.** A worker takes a lease (with a time limit and a heartbeat) before working on an execution. Another worker

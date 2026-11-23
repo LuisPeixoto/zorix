@@ -11,6 +11,12 @@ released by the operating system; just try again.
 The program that was running it stopped (a crash, a closed terminal, a second Ctrl-C). Run `zorix recover`, or start the
 desktop app, which recovers on start-up. It continues from the last checkpoint.
 
+## "The disk is full, so ZORIX could not save"
+
+The drive that holds the data folder has no room, so a write was refused. Nothing that was saved is lost or damaged (the database is checked for this in the
+tests), and a run that was interrupted is not marked as failed: free some space and run `zorix recover` (the desktop app recovers when it starts). The run
+continues from where it stopped. If the disk is not full, the file may have reached a size limit set by the system or by a quota.
+
 ## `zorix recover` says an execution is waiting for a decision
 
 A tool that cannot safely be repeated was running when the program stopped. ZORIX does not know whether it finished, so a
