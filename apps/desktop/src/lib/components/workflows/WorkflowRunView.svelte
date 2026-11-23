@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmt, t } from "../../i18n/index.ts";
   import { type WfRunDetail, errorText, workflowCancel, workflowRun } from "../../api.ts";
   import { ago, json, shortId } from "../../format.ts";
   import { store } from "../../stores/runs.svelte.ts";
@@ -40,7 +41,7 @@
   const run = $derived(detail?.run);
   const finished = $derived(run ? ["completed", "failed", "cancelled"].includes(run.state) : false);
   const TONE = { running: "info", waiting: "warn", completed: "ok", failed: "err", cancelled: "muted" } as const;
-  const usd = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
+  const usd = (micros: number) => fmt.usd2(micros);
 
   function firstToLookAt(): string | null {
     if (!detail) return null;
@@ -61,14 +62,21 @@
   const outputText = $derived(output && typeof output.text === "string" ? output.text : "");
   const triggerChip = $derived(run ? run.spec.steps.find((s) => s.id === run.fired.step) : undefined);
 
-  const STATE_WORD = { pending: "Not reached", running: "Running", waiting: "Waiting", done: "Done", failed: "Failed", skipped: "Skipped" } as const;
+  const STATE_WORD = {
+    pending: t("workflows.workflowRunView.stateNotReached"),
+    running: t("workflows.workflowRunView.stateRunning"),
+    waiting: t("workflows.workflowRunView.stateWaiting"),
+    done: t("workflows.workflowRunView.stateDone"),
+    failed: t("workflows.workflowRunView.stateFailed"),
+    skipped: t("workflows.workflowRunView.stateSkipped"),
+  } as const;
   const STATE_TONE = { pending: "muted", running: "info", waiting: "warn", done: "ok", failed: "err", skipped: "muted" } as const;
 
   async function cancel() {
     busy = true;
     try {
       await workflowCancel(runId);
-      toast.ok("Run cancelled.");
+      toast.ok(t("workflows.workflowRunView.runCancelled"));
       await load();
     } catch (e) {
       toast.err(errorText(e));
@@ -77,36 +85,36 @@
     }
   }
 
-  const duration = (start?: number | null, end?: number | null) => (start && end ? ms(Math.max(end - start, 1000)).replace(/^0 min$/, "<1 min") : "");
+  const duration = (start?: number | null, end?: number | null) => (start && end ? ms(Math.max(end - start, 1000)).replace(/^0 min$/, t("workflows.workflowRunView.1Min")) : "");
 </script>
 
 {#if error && !detail}
-  <div class="p-6"><Callout tone="err" title="This run could not be opened">{error}</Callout></div>
+  <div class="p-6"><Callout tone="err" title={t("workflows.workflowRunView.thisRunCouldNot")}>{error}</Callout></div>
 {:else if run}
   <div class="grid h-full grid-rows-[auto_minmax(0,1fr)]">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-panel px-5 py-3">
       <div class="min-w-0">
-        <nav aria-label="Breadcrumb" class="mb-0.5 flex items-center gap-1.5 text-xs text-muted">
-          <button type="button" class="inline-flex items-center gap-1.5 rounded outline-none hover:text-fg focus-visible:underline" onclick={() => store.showWorkflows()}><Icon name="workflow" size={13} />Workflows</button>
+        <nav aria-label={t("common.breadcrumb")} class="mb-0.5 flex items-center gap-1.5 text-xs text-muted">
+          <button type="button" class="inline-flex items-center gap-1.5 rounded outline-none hover:text-fg focus-visible:underline" onclick={() => store.showWorkflows()}><Icon name="workflow" size={13} />{t("common.workflows")}</button>
           <Icon name="chevron-right" size={12} />
           <button type="button" class="rounded outline-none hover:text-fg focus-visible:underline" onclick={() => store.showWorkflows("editor", run.workflow, null, "runs")}>{run.spec.name}</button>
           <Icon name="chevron-right" size={12} />
-          <span>Runs</span>
+          <span>{t("common.runs")}</span>
         </nav>
         <div class="flex flex-wrap items-center gap-2">
-          <h1 class="text-xl font-semibold">Run <span class="mono">#{shortId(run.id)}</span></h1>
+          <h1 class="text-xl font-semibold">{t("common.run")} <span class="mono">#{shortId(run.id)}</span></h1>
           <Badge tone={TONE[run.state]} dot={run.state === "running" || run.state === "waiting"} live={run.state === "running" || run.state === "waiting"}>{RUN_STATE_LABEL[run.state]}</Badge>
           <Badge tone="muted" variant="outline">{run.version ? `v${run.version}` : "draft"}</Badge>
-          {#if run.test}<Badge tone="accent">Test run</Badge>{/if}
+          {#if run.test}<Badge tone="accent">{t("workflows.workflowRunView.testRun")}</Badge>{/if}
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-3">
         {#if triggerChip}<TriggerChip kind={chipKind(triggerChip.kind.type)} label={run.fired.label} />{/if}
-        <span class="text-xs text-muted">Started {ago(run.started_at, store.now)} · <span class="mono tnum">{usd(run.cost_micros)}</span></span>
+        <span class="text-xs text-muted">{t("workflows.workflowRunView.started", { value: ago(run.started_at, store.now) })} <span class="mono tnum">{usd(run.cost_micros)}</span></span>
       </div>
       <div class="ml-auto flex items-center gap-2">
-        <Button variant="ghost" icon="edit" onclick={() => store.showWorkflows("editor", run.workflow)}>Open in editor</Button>
-        {#if !finished}<Button icon="stop" disabled={busy} onclick={() => void cancel()}>Cancel run</Button>{/if}
+        <Button variant="ghost" icon="edit" onclick={() => store.showWorkflows("editor", run.workflow)}>{t("workflows.workflowRunView.openInEditor")}</Button>
+        {#if !finished}<Button icon="stop" disabled={busy} onclick={() => void cancel()}>{t("workflows.workflowRunView.cancelRun")}</Button>{/if}
       </div>
     </header>
 
@@ -119,9 +127,9 @@
         class="rounded-none border-0"
       />
 
-      <aside class="min-h-0 space-y-4 overflow-y-auto border-l border-line bg-panel p-4" aria-label="Selected step">
+      <aside class="min-h-0 space-y-4 overflow-y-auto border-l border-line bg-panel p-4" aria-label={t("workflows.workflowRunView.selectedStep")}>
         {#if run.error}
-          <Callout tone="err" title="This run failed">{run.error}</Callout>
+          <Callout tone="err" title={t("workflows.workflowRunView.thisRunFailed")}>{run.error}</Callout>
         {/if}
         {#if step && record}
           {@const info = kindInfo(step.kind.type)}
@@ -137,22 +145,22 @@
           {#if wait}
             <WorkflowWaitCard {wait} spec={run.spec} onanswered={() => void load()} />
           {:else}
-            {#if record.error && !run.error?.includes(record.error)}<Callout tone="err" title="Why it failed">{record.error}</Callout>{/if}
+            {#if record.error && !run.error?.includes(record.error)}<Callout tone="err" title={t("workflows.workflowRunView.whyItFailed")}>{record.error}</Callout>{/if}
             {#if record.note && record.state !== "failed"}<p class="text-sm text-muted">{record.note}</p>{/if}
             {#if record.execution}
-              <Button icon="bot" onclick={() => void store.select(record.execution as string)}>Open the run</Button>
+              <Button icon="bot" onclick={() => void store.select(record.execution as string)}>{t("common.openTheRun")}</Button>
             {/if}
             {#if outputText}
-              <Card title="What it said" icon="message" padding="sm"><Markdown text={outputText} /></Card>
+              <Card title={t("workflows.workflowRunView.whatItSaid")} icon="message" padding="sm"><Markdown text={outputText} /></Card>
             {:else if output && Object.keys(output).length > 0 && record.state === "done"}
-              <CodeBlock code={json(output)} language="json" maxHeight={220} label="What it produced" />
+              <CodeBlock code={json(output)} language="json" maxHeight={220} label={t("workflows.workflowRunView.whatItProduced")} />
             {/if}
           {/if}
         {:else}
-          <p class="text-sm text-muted">Select a step to see what it did.</p>
+          <p class="text-sm text-muted">{t("workflows.workflowRunView.selectAStepTo")}</p>
         {/if}
 
-        <Card title="Steps of this run" icon="list" padding="none">
+        <Card title={t("workflows.workflowRunView.stepsOfThisRun")} icon="list" padding="none">
           <ul class="divide-y divide-line-soft">
             {#each run.spec.steps as s (s.id)}
               {@const r = run.steps[s.id]}
@@ -168,7 +176,7 @@
                     <Badge tone={STATE_TONE[nodeState(r.state) === "idle" ? "pending" : r.state]} dot={r.state === "running" || r.state === "waiting"} live={r.state === "running" || r.state === "waiting"}>{STATE_WORD[r.state]}</Badge>
                     {#if r.state === "done" && r.started_at && r.finished_at}<span class="tnum w-14 text-right text-xs text-faint">{duration(r.started_at, r.finished_at)}</span>{/if}
                   {:else}
-                    <span class="text-xs text-faint">Not reached</span>
+                    <span class="text-xs text-faint">{t("workflows.workflowRunView.notReached")}</span>
                   {/if}
                 </button>
               </li>

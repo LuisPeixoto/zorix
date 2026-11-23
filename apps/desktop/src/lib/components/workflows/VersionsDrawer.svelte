@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { type WfDetail, errorText, workflowOutline, workflowRollback } from "../../api.ts";
   import { ago } from "../../format.ts";
   import { store } from "../../stores/runs.svelte.ts";
@@ -54,7 +55,7 @@
     busy = true;
     try {
       const made = await workflowRollback(id, version, confirm);
-      toast.ok(`Published v${made.version}, a copy of v${version}.`);
+      toast.ok(t("workflows.versionsDrawer.publishedVACopy", { version: made.version, version2: version }));
       asking = null;
       confirmed = false;
       onchanged();
@@ -68,34 +69,34 @@
   }
 </script>
 
-<Drawer bind:open title="Versions" subtitle="Every publish is a new version. Going back publishes the old one again as a new version." icon="history" width="lg">
+<Drawer bind:open title={t("common.versions")} subtitle={t("workflows.versionsDrawer.everyPublishIsA")} icon="history" width="lg">
   {#if detail.unpublished_changes && live !== null}
     <section class="mb-5">
-      <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold">Unpublished changes <Badge tone="muted">draft</Badge></h3>
+      <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold">{t("workflows.versionsDrawer.unpublishedChanges")} <Badge tone="muted">draft</Badge></h3>
       <DiffView before={draftBefore} after={draftAfter} beforeLabel="v{live} live" afterLabel="Draft" />
     </section>
   {/if}
   {#if items.length === 0}
-    <Callout tone="info" title="Nothing is published yet">Publish the draft to make its first version. Only a published version is run by a trigger.</Callout>
+    <Callout tone="info" title={t("workflows.versionsDrawer.nothingIsPublishedYet")}>{t("workflows.versionsDrawer.publishTheDraftTo")}</Callout>
   {:else}
     <VersionTimeline {items} selected={picked} onselect={(v) => (picked = v)}>
       {#snippet actions(item)}
-        {#if !item.current}<Button size="sm" disabled={busy} onclick={() => void rollBack(item.version, false)}>Roll back to v{item.version}</Button>{/if}
+        {#if !item.current}<Button size="sm" disabled={busy} onclick={() => void rollBack(item.version, false)}>{t("workflows.versionsDrawer.rollBackToV", { version: item.version })}</Button>{/if}
       {/snippet}
     </VersionTimeline>
     {#if selected}
       <section class="mt-5">
-        <h3 class="mb-2 text-sm font-semibold">What v{selected.version} changed{selected.confirmed ? ` · ${selected.confirmed} unattended step${selected.confirmed === 1 ? "" : "s"} confirmed` : ""}</h3>
+        <h3 class="mb-2 text-sm font-semibold">{t("workflows.versionsDrawer.whatV")}{selected.version} changed{selected.confirmed ? t("workflows.versionsDrawer.unattendedStepsConfirmed", { count: selected.confirmed }) : ""}</h3>
         <DiffView {before} {after} beforeLabel={detail.versions.some((v) => v.version === selected.version - 1) ? `v${selected.version - 1}` : "Nothing"} afterLabel="v{selected.version}" />
       </section>
     {/if}
   {/if}
   {#if asking !== null}
     <div class="mt-5">
-      <Callout tone="warn" title="This version sends without asking first">
-        Some of its steps send something without a person approving each time. Publishing it again needs your confirmation.
-        <div class="mt-2.5"><Checkbox bind:checked={confirmed}>I confirm those steps may run unattended.</Checkbox></div>
-        {#snippet actions()}<Button variant="primary" size="sm" disabled={!confirmed || busy} onclick={() => asking !== null && void rollBack(asking, true)}>Roll back to v{asking}</Button>{/snippet}
+      <Callout tone="warn" title={t("workflows.versionsDrawer.thisVersionSendsWithout")}>
+        {t("workflows.versionsDrawer.someOfItsSteps")}
+        <div class="mt-2.5"><Checkbox bind:checked={confirmed}>{t("workflows.versionsDrawer.iConfirmThoseSteps")}</Checkbox></div>
+        {#snippet actions()}<Button variant="primary" size="sm" disabled={!confirmed || busy} onclick={() => asking !== null && void rollBack(asking, true)}>{t("workflows.versionsDrawer.rollBackToV2", { asking })}</Button>{/snippet}
       </Callout>
     </div>
   {/if}
