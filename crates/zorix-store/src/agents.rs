@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::errors::storage;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::{Connection as Db, OptionalExtension, params};
@@ -17,10 +18,6 @@ use zorix_core::{
 #[derive(Clone)]
 pub struct SqliteAgentStore {
     conn: Arc<Mutex<Db>>,
-}
-
-fn storage(error: impl std::fmt::Display) -> Error {
-    Error::Storage(error.to_string())
 }
 
 fn invalid(what: impl Into<String>) -> Error {

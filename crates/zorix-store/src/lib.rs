@@ -5,6 +5,7 @@
 
 pub mod agents;
 mod calibration;
+mod errors;
 pub mod integrations;
 pub mod memory;
 pub mod org;

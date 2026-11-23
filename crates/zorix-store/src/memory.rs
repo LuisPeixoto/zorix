@@ -8,6 +8,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::errors::storage;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::types::Value as Sql;
@@ -39,10 +40,6 @@ const DEFAULT_LIMIT: usize = 200;
 #[derive(Clone)]
 pub struct SqliteMemoryStore {
     conn: Arc<Mutex<Connection>>,
-}
-
-fn storage(error: impl std::fmt::Display) -> Error {
-    Error::Storage(error.to_string())
 }
 
 fn invalid(what: &str) -> Error {

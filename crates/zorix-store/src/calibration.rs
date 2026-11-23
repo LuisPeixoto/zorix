@@ -6,6 +6,7 @@
 use std::path::Path;
 use std::sync::mpsc::{Sender, channel};
 
+use crate::errors::storage;
 use rusqlite::{Connection, params};
 use zorix_core::{Calibration, Error, InMemoryCalibration, Result, TokenCalibration, TokenSample};
 
@@ -13,10 +14,6 @@ use zorix_core::{Calibration, Error, InMemoryCalibration, Result, TokenCalibrati
 pub const BACKFILL_WEIGHT: f64 = 0.5;
 /// How many past model calls seed an empty table.
 pub const BACKFILL_CALLS: usize = 1_000;
-
-fn storage(error: impl std::fmt::Display) -> Error {
-    Error::Storage(error.to_string())
-}
 
 /// A calibration kept in memory and written to the database as it changes.
 pub struct SqliteCalibration {
