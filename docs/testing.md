@@ -16,14 +16,17 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Workflows | `zorix-workflows/tests`, `tools/live-workflows.sh` | Expressions, templates and schedules (across daylight saving); the engine with a scripted launcher and a manual clock (joins, skips, budgets, time-outs, restarts); the host and a webhook over a real socket; and the command line end to end |
 | Projects | `zorix-store/tests/projects.rs`, `zorix-projects/tests`, `lib/project.test.ts`, `tools/live-projects.sh` | Keys and numbers that are never reused, writes that race on separate connections, a task's run through a scripted launcher (a move starts it, a finish sends it to Review, a failure, a dependency, a stop that asks first), the manager's tools and what each grant reaches, the board's pure rules, and the command line end to end including `zorix serve` |
 | Workforce | `zorix-runtime/src/policy.rs` and `tests/autonomy.rs`, `zorix-store/tests/org.rs`, `zorix-workforce/tests`, `lib/workforce.test.ts`, `tools/live-workforce.sh` | Every level against every kind of call (read, held by default, asks by itself, person-only, rule, the worker's list), the run recording a call that ran without asking and a proposal, a child never freer than its parent, the organisation's rules (loops, trees that shrink, departments), spend that counts each cost once, budgets as narrowings, a spent week starting at Ask, a manager's plan and report, a schedule that is off, runs once and records what it missed, `org.team` confined to the caller's reports, the chart's layout, and the command line end to end |
+| Model faults | `zorix-sim` tests, `zorix-runtime/tests/model_faults.rs` | A model that fails like a real provider (every kind of error with its pause, a stream cut part-way, an empty, cut-off or refused answer, calls that make no sense, failures that come and go by seed) and how the loop copes: retries, what is shown live, and a tool that never runs twice |
+| Untrusted text | `zorix-core/src/untrusted.rs` (with property tests), `zorix-store/tests/tampering.rs` | Text from outside cannot close or open a wrapper of ours in any spelling, and a call or approval edited on disk never runs on the answer given to the original |
 | Contract | `zorix-runtime/src/testing.rs` | Every `ExecutionRepository` behaves the same. The in-memory and the SQLite repositories run the **same** cases |
 | Integration | `zorix-runtime/tests` | The engine with a scripted model and small tools: lifecycle, tools, approvals, failures, recovery, observability |
 | Durability | `zorix-store/tests/durability.rs` | What only a real file shows: reopening, concurrent writers, crash recovery |
 | Acceptance | `zorix-store/tests/acceptance.rs` | The scenario of the Phase 1 brief, with the real tools and a database file |
 | Program | `zorix-cli/tests/cli.rs` | The `zorix` binary as a real program, with a throwaway data folder, across separate processes |
 
-Models are **simulated** by `zorix-sim`: a scripted model (exact turns, delays, failures, hangs), a failure-injecting
-wrapper, and a rule-based demo model.
+Models are **simulated** by `zorix-sim`: a scripted model (exact turns, delays, hangs, failures of every kind with a `retry_after`, streams that
+write piece by piece and can be cut, and responses with any finish reason), a failure-injecting wrapper (the first calls, a chosen error, or a
+seed that fails the same calls every time) and a rule-based demo model.
 
 ## The required cases, and where each is proven
 

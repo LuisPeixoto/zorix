@@ -87,7 +87,10 @@ A call that crosses a token or cost limit completes; the execution stops right a
 | What went wrong | What happens |
 |---|---|
 | Model: temporary error or timeout | Retried with backoff (doubling, capped, with jitter, honouring `retry_after`), up to `max_model_attempts`; each retry is an event |
-| Model: permanent error | The execution fails with the message |
+| Model: permanent error, or a provider error that cannot succeed (bad credentials, a context that is too long, unknown model, a refusal reported as an error) | The execution fails with the provider's own sentence, without a retry |
+| Model: the stream is cut | The attempt is retried, and readers of the live text are told to forget what it wrote (a `reset`), so the answer is never shown twice |
+| Model: it declines (finish reason `refusal`) | The execution fails with "The model declined to answer", and what it said is not the result |
+| Model: the answer ran out of room (finish reason `length`) | Sent back once with the reason, then the execution fails; a cut-off answer is never the result |
 | Tool: invalid arguments, unknown tool, policy denial, tool error | The model receives an error result and can adapt. The execution does not fail |
 | Tool: temporary error | Retried (up to 3 starts) if the tool says so. A *timeout* is retried only for tools declared idempotent |
 | Final answer rejected by a validator | Sent back once with the reason, then the execution fails |

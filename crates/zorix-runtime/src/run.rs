@@ -12,10 +12,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use zorix_core::{
     Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, DelegateRequest, Error, EventKind, Execution,
-    ExecutionEngine, ExecutionId, ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, LoopState,
-    Message, ModelError, ModelRequest, ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest, Role,
-    StepPhase, Timestamp, TokenSample, Tool, ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus, ToolContext,
-    ToolSpec, Trigger, Validation, call_hash, child_key,
+    ExecutionEngine, ExecutionId, ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, FinishReason,
+    LoopState, Message, ModelError, ModelRequest, ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest,
+    Role, StepPhase, Timestamp, TokenSample, Tool, ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus,
+    ToolContext, ToolSpec, Trigger, Validation, call_hash, child_key,
 };
 use zorix_core::{MAX_DEPTH, MAX_DESCENDANTS, PlanContext};
 
@@ -496,7 +496,7 @@ impl Run {
                 .engine
                 .inner
                 .model
-                .generate_live(request.clone(), self.control.cancel.clone(), sink)
+                .generate_live(request.clone(), self.control.cancel.clone(), sink.clone())
                 .instrument(span);
             let outcome = tokio::time::timeout(Duration::from_millis(limits.model_timeout_ms), call).await;
             let (message, retry_after) = match outcome {
@@ -514,6 +514,8 @@ impl Run {
                 }
                 Err(_) => (format!("The model did not answer within {} ms.", limits.model_timeout_ms), None),
             };
+            // Whatever the failed attempt wrote is not part of the answer: readers of the live text start again.
+            sink.reset();
             if attempt == limits.max_model_attempts {
                 let why = format!("The model failed {attempt} times in a row. Last error: {message}");
                 return Err(self.fail(Failure::new(FailureKind::Model, why)).await);
@@ -535,11 +537,31 @@ impl Run {
         let structured = self.exec.request.expected_output.as_ref().and_then(|_| parse_structured(&text));
         let result = ExecutionResult { text: text.clone(), structured };
 
-        let mut rejection: Option<(String, String)> = None;
-        for validator in &self.engine.inner.validators {
-            if let Validation::Reject { reason } = validator.validate(&self.exec, &result).await {
-                rejection = Some((validator.name().to_string(), reason));
-                break;
+        // A provider that declined has not given an answer, and an answer that ran out of room is not a complete one: neither becomes
+        // the result of the execution just because it is text.
+        if response.finish == FinishReason::Refusal {
+            let shown: String = text.chars().take(300).collect();
+            let message = if shown.is_empty() {
+                "The model declined to answer.".to_string()
+            } else {
+                format!("The model declined to answer: {shown}")
+            };
+            self.commit(&[Trigger::StepFinished], responded, Extras::default()).await?;
+            return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
+        }
+        let mut rejection: Option<(String, String)> = (response.finish == FinishReason::Length).then(|| {
+            (
+                "model".to_string(),
+                "The answer was cut off because the model ran out of room. Answer again, shorter, and finish it."
+                    .to_string(),
+            )
+        });
+        if rejection.is_none() {
+            for validator in &self.engine.inner.validators {
+                if let Validation::Reject { reason } = validator.validate(&self.exec, &result).await {
+                    rejection = Some((validator.name().to_string(), reason));
+                    break;
+                }
             }
         }
 
@@ -571,9 +593,8 @@ impl Run {
                 );
                 if self.exec.validation_retries >= self.exec.limits.max_validation_retries {
                     self.commit(&[Trigger::StepFinished], with(responded, rejected), Extras::default()).await?;
-                    return Err(self
-                        .fail(Failure::new(FailureKind::Validation, format!("The answer was rejected: {reason}")))
-                        .await);
+                    let kind = if validator == "model" { FailureKind::Model } else { FailureKind::Validation };
+                    return Err(self.fail(Failure::new(kind, format!("The answer was rejected: {reason}"))).await);
                 }
                 self.exec.validation_retries += 1;
                 self.state.transcript.push(Message::assistant(text, Vec::new()).with_native(response.native.clone()));
