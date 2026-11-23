@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.ts";
 // Which layout an approval gets. A tool's id says what kind of thing it does; each kind shows what a person needs to decide.
 export type ApprovalVariant = "remember" | "mcp" | "http" | "webhook" | "git" | "jira" | "chat" | "db" | "code" | "generic";
 
@@ -27,12 +28,12 @@ export function splitService(id: string): { service: string; action: string } {
 }
 
 const WORDS: Record<string, string> = {
-  create_issue: "open an issue",
-  update_issue: "change an issue",
-  comment: "add a comment",
-  send_message: "send a message",
-  transition: "move an issue",
-  execute: "change data",
+  create_issue: t("approvalVariant.openAnIssue"),
+  update_issue: t("approvalVariant.changeAnIssue"),
+  comment: t("approvalVariant.addAComment"),
+  send_message: t("approvalVariant.sendAMessage"),
+  transition: t("approvalVariant.moveAnIssue"),
+  execute: t("approvalVariant.changeData"),
 };
 
 export function actionWords(action: string): string {
