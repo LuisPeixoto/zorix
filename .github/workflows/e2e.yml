@@ -4,7 +4,7 @@ name: End-to-end
 # waits for it to say it has loaded. Every run uses a throwaway data folder. A failing scenario uploads a screenshot and the page's source.
 on:
   push:
-    branches: [main]
+    branches: [main, test/e2e]
   pull_request:
   workflow_dispatch:
 
