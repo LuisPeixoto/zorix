@@ -17,7 +17,7 @@ A workflow adds no new way to run a model. An agent or team step creates an **or
 
 | Kind | What it does |
 |---|---|
-| Schedule | Every N minutes (at least 5), at times on chosen days ("Weekdays 08:00"), or a cron expression, in a time zone (the computer's by default) |
+| Schedule | Every N minutes (at least 5), at times on chosen days ("Weekdays 08:00"), or a [cron expression](#cron-expressions), in a time zone (the computer's by default) |
 | Webhook | Starts when a request arrives. A *filter* (a condition over the body) ignores requests; *signed* requires `X-Hub-Signature-256` |
 | Event | An agent or team run ended well, failed, or either, optionally one agent. Runs that workflows started do not start workflows |
 | After workflow | Another workflow finished, failed or ended. A chain is cut at 4, and a workflow never follows itself |
@@ -32,6 +32,16 @@ A workflow adds no new way to run a model. An agent or team step creates an **or
 | HTTP request | `GET`, `POST`, `PUT`, `PATCH` or `DELETE` |
 
 Not yet: a pull request action (no tool creates branches or commits), a "new ticket" event, an on-call rotation as the approver, and workflow budgets per period.
+
+## Cron expressions
+
+Five fields: minute, hour, day of month, month, day of week. Each is a list of items: `*`, a number or a name (`jan`, `mon`, in any case), a range (`1-5`, `mon-fri`) and a step (`*/15`, `10-50/10`). Sunday is 0 or 7, so `mon-sun` is the whole week.
+`0 8 * * 1-5` is 08:00 on weekdays; `*/15 9-17 * * mon-fri` is every quarter of an hour in office hours. When the day of month and the day of week are both given, a day matches if **either** does (`0 0 13 * 5` is every Friday and the 13th); a plain `*`
+leaves it to the other. Nothing else is accepted: no seconds, no `L`, `W`, `#` or `?`, no `@daily`; the editor says which part is not understood.
+
+**When the clocks change** (the schedule runs in its own zone): a schedule of fixed times (`30 2 * * *`) fires, for a time the clocks skip, at the first instant after the skip (03:00), and once in an hour that happens twice (the first time). A schedule that repeats
+(`0 * * * *`, `*/15 * * * *`) keeps its beat: it does not fire for a skipped minute and fires every time through the repeated hour. *At times on chosen days* moves a skipped time forward to the first hour that exists (02:30 becomes 03:30)
+and takes the first of a time that happens twice. A date that never comes (`0 0 30 2 *`, the 30th of February) never fires; the 29th of February is found up to nine years ahead.
 
 ## Values and expressions
 

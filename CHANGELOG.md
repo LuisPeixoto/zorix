@@ -12,6 +12,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- Schedules and the workforce's week no longer use the unmaintained `chrono` and `chrono-tz` crates, nor `croner`: they run on `jiff` with an evaluator of our own for cron (ADR-0041), which gives the same fires as before for every documented form (checked against 2,300 saved answers). **What changed:**
+  a cron expression with `L`, `W`, `#` or `?`, or with an empty item in a list (`0 0 ,1 * *`), was accepted by the old library and is now refused with a message. Nothing in ZORIX used them.
 - The lists of a conversation's runs, an agent's runs and the runs in one state are 20 to 200 times faster on a large history: each has an index that ends in the order the list is shown in. Database schema 10.
 - **Security:** the data wrapper's defusing now sees a closing tag however many slashes and spaces sit between the `<` and its name (`<//data>` was left live). Found by the new fuzz target.
 - **Security:** `.ZORIX` (and any other capital letters) was not recognised as the reserved `.zorix` folder, which is the same folder on macOS and Windows; the file tools now refuse it.
