@@ -3,6 +3,7 @@
 //! The model and its validation live in `zorix-core`; this crate runs them.
 
 pub mod check;
+mod cron;
 pub mod engine;
 pub mod expr;
 pub mod graph;
