@@ -1,0 +1,124 @@
+# Fuzz targets for the code that reads text and bytes from outside (see docs/testing.md). Not part of the workspace: it needs
+# nightly Rust and `cargo install cargo-fuzz`. Run one with `cargo +nightly fuzz run <target>` from this folder.
+
+[package]
+name = "zorix-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+serde_json = "1"
+zorix-core = { path = "../crates/zorix-core" }
+zorix-agents = { path = "../crates/zorix-agents" }
+zorix-mcp = { path = "../crates/zorix-mcp" }
+zorix-memory = { path = "../crates/zorix-memory" }
+zorix-providers = { path = "../crates/zorix-providers" }
+zorix-tools = { path = "../crates/zorix-tools" }
+zorix-workflows = { path = "../crates/zorix-workflows" }
+
+# Its own workspace, so the main one does not build it and cargo-deny does not audit its tooling.
+[workspace]
+
+[[bin]]
+name = "agent_yaml"
+path = "fuzz_targets/agent_yaml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "agent_file"
+path = "fuzz_targets/agent_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "skill_md"
+path = "fuzz_targets/skill_md.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sse"
+path = "fuzz_targets/sse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_wire"
+path = "fuzz_targets/mcp_wire.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_import"
+path = "fuzz_targets/mcp_import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "workflow_file"
+path = "fuzz_targets/workflow_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "expr"
+path = "fuzz_targets/expr.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "template"
+path = "fuzz_targets/template.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "schedule"
+path = "fuzz_targets/schedule.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extract"
+path = "fuzz_targets/extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "access"
+path = "fuzz_targets/access.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "workspace_path"
+path = "fuzz_targets/workspace_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "defuse"
+path = "fuzz_targets/defuse.rs"
+test = false
+doc = false
+bench = false

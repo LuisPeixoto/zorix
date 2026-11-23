@@ -1,0 +1,1 @@
+trigger.payload.severity >= 3 and label.name == "incident"

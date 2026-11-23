@@ -19,6 +19,7 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Model faults | `zorix-sim` tests, `zorix-runtime/tests/model_faults.rs` | A model that fails like a real provider (every kind of error with its pause, a stream cut part-way, an empty, cut-off or refused answer, calls that make no sense, failures that come and go by seed) and how the loop copes: retries, what is shown live, and a tool that never runs twice |
 | Faults in storage | `zorix-runtime/tests/faults.rs` (a `FaultyRepository` that breaks the Nth call of a method, before or after it is written), `zorix-store/tests/disk_full.rs`, `tests/concurrency.rs`, `zorix-cli/tests/cli.rs` (`kill -9`) | A commit that fails anywhere in a run and a restart that finishes it without repeating an unsafe tool; a file that cannot grow, told in words, with the work continuing when there is room; four connections writing at once without a lost update or a repeated event number; a real crash of the command line |
 | Adversarial | `zorix-runtime/tests/adversarial.rs`, `zorix-agents/tests/delegation.rs`, `zorix-tools` and `zorix-agents` path tables, `zorix-mcp` tool tests, `zorix-integrations` address tables | Text that tries to give itself powers (a result that says the person approved, a child's answer that closes and opens wrappers, a delegation that invents fields to get more, a tool description of a million characters) and paths that try to leave a folder (`..`, drive letters, UNC, reserved names, `.ZORIX`, zip entries) |
+| Fuzzing | `fuzz/` (14 targets, a seed corpus each), `.github/workflows/fuzz.yml` | Every reader of text or bytes from outside (the agent file and its YAML, `SKILL.md`, server-sent events cut anywhere, MCP messages and other clients' configs, workflow files, conditions, templates, cron expressions and zones, documents, access patterns, file paths, the data wrappers) takes any input without a panic or a hang, and keeps the property it promises |
 | Untrusted text | `zorix-core/src/untrusted.rs` (with property tests), `zorix-store/tests/tampering.rs` | Text from outside cannot close or open a wrapper of ours in any spelling, and a call or approval edited on disk never runs on the answer given to the original |
 | Contract | `zorix-runtime/src/testing.rs` | Every `ExecutionRepository` behaves the same. The in-memory and the SQLite repositories run the **same** cases |
 | Integration | `zorix-runtime/tests` | The engine with a scripted model and small tools: lifecycle, tools, approvals, failures, recovery, observability |
@@ -84,6 +85,22 @@ seed that fails the same calls every time) and a rule-based demo model.
 | Forged approvals | `approvals::an_approval_applies_to_the_call_it_names_and_cannot_be_forged_or_repeated` |
 | Secrets in logs | `tracing_output::spans_follow_the_genai_names_and_nothing_secret_reaches_the_logs`, `tools::secrets_in_arguments_are_kept_out_of_events…`, the `redact::` tests |
 | Two programs on one folder | `paths::only_one_holder_at_a_time`, CLI `only_one_zorix_program_works_on_a_data_folder_at_a_time` |
+
+## Fuzzing
+
+`fuzz/` is a separate crate (not in the workspace: it needs nightly Rust and `cargo install cargo-fuzz`) with one target for each reader of untrusted text or bytes. A target does more than "no panic": the server-sent-events reader must give the same
+events however its input is cut, a workflow file that parses must write out and read back the same, a cron expression's next fire must be after the moment asked from, an accepted path must never climb or name the
+reserved folder, and the data wrapper must always have one opening, one closing and nothing live inside.
+
+```bash
+cd fuzz
+cargo +nightly fuzz run sse            # until you stop it; add  -- -max_total_time=60  to stop by itself
+cargo +nightly fuzz list
+```
+
+A small seed corpus for each target is committed in `fuzz/corpus/`; what a run finds goes to a folder of your own (`cargo +nightly fuzz run sse /tmp/work fuzz/corpus/sse`), not into the repository. The **Fuzz** workflow runs every target for two minutes
+each week and on demand, and a crash is uploaded as an artifact. A crash is fixed on its own `fix/` branch, and the input that found it becomes a test in the crate that owns the code. A fuzz build with the address sanitizer
+compiles every dependency again and needs several gigabytes: set `CARGO_TARGET_DIR` to a disk with room.
 
 ## Conventions
 

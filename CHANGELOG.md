@@ -12,6 +12,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** the data wrapper's defusing now sees a closing tag however many slashes and spaces sit between the `<` and its name (`<//data>` was left live). Found by the new fuzz target.
 - **Security:** `.ZORIX` (and any other capital letters) was not recognised as the reserved `.zorix` folder, which is the same folder on macOS and Windows; the file tools now refuse it.
   A server's description of an MCP tool is cut at 4,000 characters, and the evaluation judge now defuses its `rubric`, `task` and `answer` wrappers in any case.
 - A full disk is now said in words ("The disk is full, so ZORIX could not save…") with what to do, in every store. The run that was interrupted continues with `zorix recover` once there is room.
@@ -35,6 +36,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Fuzzing: `fuzz/` has 14 targets for every reader of text or bytes from outside, with a seed corpus, and a weekly workflow runs them ([testing](docs/testing.md#fuzzing)).
 - CI audits the dependencies (`cargo deny`, `npm audit`) and runs CodeQL.
 - The [engineering guidelines](docs/engineering-guidelines.md) and `AGENTS.md`: the rules every change follows, with where
   ZORIX enforces each and the gaps that are still open. The pull request template carries their checklist.
