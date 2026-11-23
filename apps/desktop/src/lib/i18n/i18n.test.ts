@@ -56,7 +56,10 @@ test("money, numbers, lists, dates and times are formatted for the locale", () =
   assert.equal(f.list(["a"]), "a");
   assert.equal(f.list(["a", "b"], "disjunction"), "a or b");
   assert.equal(f.bytes(900), "900 B");
-  assert.equal(f.bytes(2048), "2 KB");
+  assert.equal(f.bytes(2048), "2.0 KB");
+  assert.equal(f.bytes(1536), "1.5 KB");
+  assert.equal(f.usd2(9_800_000), "$9.80");
+  assert.equal(f.usd4(4_200), "$0.0042");
   const noon = new Date(2026, 11, 12, 14, 5, 9);
   assert.equal(f.day(noon), "Dec 12");
   assert.equal(f.clock(noon), "14:05");

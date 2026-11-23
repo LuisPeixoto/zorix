@@ -20,6 +20,9 @@ export type Locale = (typeof LOCALES)[number];
 const STORAGE_KEY = "zorix.locale";
 
 function chosen(): Locale {
+  // A build for screenshots can ask for a locale (`VITE_START_LOCALE=en-XA`); a person's choice is remembered in storage.
+  const asked = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_START_LOCALE;
+  if ((LOCALES as readonly string[]).includes(asked ?? "")) return asked as Locale;
   try {
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
     if ((LOCALES as readonly string[]).includes(stored ?? "")) return stored as Locale;
@@ -32,6 +35,16 @@ function chosen(): Locale {
 let current: Locale = chosen();
 let catalogue: Catalogue = current === "en-XA" ? pseudoCatalogue(en) : en;
 let formats: Formats = formatsFor(current);
+announce();
+
+/** The page says which language it is in, for screen readers and the browser's own hyphenation. */
+function announce(): void {
+  try {
+    if (typeof document !== "undefined") document.documentElement.lang = current === "en-XA" ? "en" : current;
+  } catch {
+    // No document (the tests): nothing to say.
+  }
+}
 
 /** The active locale. */
 export const locale = (): Locale => current;
@@ -41,6 +54,7 @@ export function useLocale(next: Locale): void {
   current = next;
   catalogue = next === "en-XA" ? pseudoCatalogue(en) : en;
   formats = formatsFor(next);
+  announce();
 }
 
 /** Remember a locale for the next start. */

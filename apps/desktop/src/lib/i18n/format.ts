@@ -8,6 +8,10 @@ export interface Formats {
   percent(value: number, digits?: number): string;
   /** An amount in US dollars, given in millionths of a dollar. Under a cent it shows four decimals so a small cost is not zero. */
   usd(micros: number): string;
+  /** An amount in US dollars, given in millionths of a dollar, always with cents (`$9.80`). */
+  usd2(micros: number): string;
+  /** An amount in US dollars, given in millionths of a dollar, with four decimals (`$0.0042`): the price of a single call. */
+  usd4(micros: number): string;
   /** An amount in US dollars in whole dollars when it is one (`$25`), else with cents (`$25.50`). */
   dollars(value: number): string;
   /** A calendar day: `Dec 12`. */
@@ -40,6 +44,10 @@ export function formatsFor(locale: string): Formats {
       const digits = Math.abs(dollars) > 0 && Math.abs(dollars) < 0.01 ? 4 : 2;
       return new Intl.NumberFormat(intl, { style: "currency", currency: "USD", minimumFractionDigits: digits, maximumFractionDigits: digits }).format(dollars);
     },
+    usd2: (micros) =>
+      new Intl.NumberFormat(intl, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(micros / 1_000_000),
+    usd4: (micros) =>
+      new Intl.NumberFormat(intl, { style: "currency", currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(micros / 1_000_000),
     dollars: (value) =>
       new Intl.NumberFormat(intl, {
         style: "currency",
@@ -55,8 +63,9 @@ export function formatsFor(locale: string): Formats {
     list: (items, type = "conjunction") => new Intl.ListFormat(listLocale(intl), { style: "long", type }).format(items),
     bytes: (value) => {
       if (value < 1024) return `${new Intl.NumberFormat(intl).format(value)} B`;
-      if (value < 1024 * 1024) return `${new Intl.NumberFormat(intl, { maximumFractionDigits: 1 }).format(value / 1024)} KB`;
-      return `${new Intl.NumberFormat(intl, { maximumFractionDigits: 1 }).format(value / (1024 * 1024))} MB`;
+      const one = new Intl.NumberFormat(intl, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      if (value < 1024 * 1024) return `${one.format(value / 1024)} KB`;
+      return `${one.format(value / (1024 * 1024))} MB`;
     },
   };
 }
