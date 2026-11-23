@@ -77,12 +77,19 @@ export function scanSvelte(source) {
   const push = (kind, start, text) => out.push({ line: lineOf(source, start), kind, text: text.replace(/\s+/g, " ").trim() });
   walk(ast.fragment, (node, parents) => {
     const names = parents.filter((p) => p.type === "RegularElement" || p.type === "SvelteElement").map((p) => p.name);
-    if (node.type === "Text") {
+    const inAttribute = parents.some((p) => p.type === "Attribute" || p.type === "SpreadAttribute" || /Directive$/.test(p.type));
+    if (node.type === "Text" && !inAttribute) {
       if (names.some((n) => ["script", "style", "code", "pre", "kbd", "title"].includes(n))) return;
       if (isProse(node.data)) push("text", node.start, node.data);
     }
-    if (node.type === "ExpressionTag") {
+    if (node.type === "ExpressionTag" && !inAttribute) {
       for (const f of proseInExpression(node.expression)) push("text in an expression", f.start, f.text);
+    }
+    // What an event handler or a directive does with a sentence (a toast, a confirmation) is read by a person too.
+    if (node.type === "Attribute" && /^on[a-z]+$/.test(node.name) && node.value !== true) {
+      for (const part of Array.isArray(node.value) ? node.value : [node.value]) {
+        if (part.type === "ExpressionTag") for (const f of proseInExpression(part.expression)) push(`handler ${node.name}`, f.start, f.text);
+      }
     }
     if (node.type === "Attribute" && READ_ATTRIBUTES.has(node.name)) {
       const parts = node.value === true ? [] : Array.isArray(node.value) ? node.value : [node.value];
