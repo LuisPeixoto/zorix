@@ -3,6 +3,9 @@
 Thank you for helping! Bug reports, documentation, tests and code are all welcome. By participating you agree to follow
 the [Code of Conduct](CODE_OF_CONDUCT.md). For anything bigger than a small fix, please open an issue first.
 
+Every change follows the [engineering guidelines](docs/engineering-guidelines.md), and [AGENTS.md](AGENTS.md) summarises
+them for day-to-day work.
+
 ## Development setup
 
 You need [Rust](https://rustup.rs) (stable, 1.90 or newer), [Node.js](https://nodejs.org) 22 or newer and, on Linux,
@@ -53,3 +56,11 @@ The app follows the design system in [`design/`](design/README.md) strictly ([AD
 - No `unwrap` or `expect` in library code (fine in tests). Errors are small enums with human sentences.
 - The crates must build and test on macOS, Windows and Linux. Keep platform-specific code isolated.
 - Docs and code ship together: update the guide and `CHANGELOG.md` when behaviour changes.
+
+## Definition of done
+
+A change is done when the criteria of [section 17 of the guidelines](docs/engineering-guidelines.md#17-final-approval-criteria)
+that apply are met: it meets the request and the architecture, has tests (including failures and edge cases) that pass,
+builds and lints clean, has been looked at in the real app when it is visual, keeps data and settings compatible,
+handles errors, has its documentation updated, and was reviewed by its author before it was proposed. A change to
+permissions, tools, agents or integrations also carries a security review.
