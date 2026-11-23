@@ -66,6 +66,9 @@ export function rememberLocale(next: Locale): void {
   }
 }
 
+/** True when this is a key of the catalogue: for a code that a newer backend may send and this interface does not know yet. */
+export const knows = (key: string): key is Key => key in en;
+
 /** The message of a key, filled in. A key with plural forms needs a `count`. */
 export function t(key: Key, args?: Args): string {
   const message: Message | undefined = catalogue[key] ?? en[key];

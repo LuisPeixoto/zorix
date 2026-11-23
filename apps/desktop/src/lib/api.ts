@@ -381,10 +381,7 @@ export function watchRun(id: string, afterSeq: number, onEvent: (event: ExecEven
   return invoke<void>("watch_run", { id, afterSeq, onEvent: channel });
 }
 
-/** Turn whatever an invoke rejected with into a sentence. */
-export function errorText(error: unknown): string {
-  return typeof error === "string" ? error : error instanceof Error ? error.message : JSON.stringify(error);
-}
+export { type UiError, errorText } from "./errors.ts";
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Integrations: MCP servers, connections and the sandbox
