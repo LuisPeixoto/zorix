@@ -22,6 +22,7 @@ pub mod permission;
 pub mod policy;
 pub mod ports;
 pub mod project;
+pub mod reason;
 pub mod redact;
 pub mod repository;
 pub mod secret;
@@ -88,6 +89,7 @@ pub use project::{
     RunOutcome, RunRequest, Task, TaskCount, TaskKey, TaskLink, TaskPriority, TaskRun, TaskState, Who,
     check_dependencies,
 };
+pub use reason::{CODES, Coded, Reason};
 pub use redact::{redact, redact_text};
 pub use repository::{
     Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, ListFilter, LoopState, ToolCallRecord,
