@@ -340,11 +340,18 @@ impl Reply {
 
 /// A plain HTTP/1.1 POST over a socket: the listener is tested, not an HTTP client.
 async fn post(url: &str, body: &str, signature: Option<&str>) -> Reply {
+    post_with(url, body, signature, &[]).await
+}
+
+async fn post_with(url: &str, body: &str, signature: Option<&str>, extra: &[(&str, &str)]) -> Reply {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let rest = url.strip_prefix("http://").unwrap();
     let (host, path) = rest.split_once('/').unwrap();
     let mut stream = tokio::net::TcpStream::connect(host).await.unwrap();
-    let signature = signature.map(|s| format!("X-Hub-Signature-256: {s}\r\n")).unwrap_or_default();
+    let mut signature = signature.map(|s| format!("X-Hub-Signature-256: {s}\r\n")).unwrap_or_default();
+    for (name, value) in extra {
+        signature.push_str(&format!("{name}: {value}\r\n"));
+    }
     let head = format!(
         "POST /{path} HTTP/1.1\r\nHost: {host}\r\nContent-Length: {}\r\nConnection: close\r\n{signature}\r\n",
         body.len()
@@ -441,6 +448,48 @@ async fn a_signed_webhook_needs_a_valid_signature() {
     );
     assert!(rig.runs_of(id).await.is_empty());
     assert_eq!(post(&url, body, Some(&sign(&secret, body))).await.status(), 202);
+    assert_eq!(rig.runs_of(id).await.len(), 1);
+    rig.host.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_delivery_that_arrives_twice_starts_one_run_and_a_new_id_starts_another() {
+    let rig = rig(true).await;
+    let id = rig.publish("incident", hook_spec(None, false), true).await;
+    let token = rig.host.webhook_token(id).await.unwrap();
+    let url = format!("http://{}/hooks/incident/{token}", rig.host.webhook_addr().unwrap());
+    let first = [("X-GitHub-Delivery", "72d3162e-cc78-11e3-81ab-4c9367dc0958")];
+    assert_eq!(post_with(&url, "{\"n\":1}", None, &first).await.status(), 202);
+    let again = post_with(&url, "{\"n\":1}", None, &first).await;
+    assert_eq!((again.status(), again.json()["duplicate"].clone()), (200, serde_json::json!(true)));
+    // A retry may even change its body; it is the same delivery, so it still starts nothing.
+    assert_eq!(post_with(&url, "{\"n\":2}", None, &first).await.json()["duplicate"], true);
+    assert_eq!(rig.runs_of(id).await.len(), 1, "one delivery, one run");
+    assert_eq!(post_with(&url, "{\"n\":1}", None, &[("X-GitHub-Delivery", "another")]).await.status(), 202);
+    assert_eq!(rig.runs_of(id).await.len(), 2);
+    // A sender with no delivery id may send the same body again and again; each one is wanted.
+    assert_eq!(post(&url, "{}", None).await.status(), 202);
+    assert_eq!(post(&url, "{}", None).await.status(), 202);
+    assert_eq!(rig.runs_of(id).await.len(), 4);
+    rig.host.shutdown().await;
+}
+
+#[tokio::test]
+async fn an_unsigned_request_cannot_use_up_a_delivery_id() {
+    let rig = rig(true).await;
+    let id = rig.publish("incident", hook_spec(None, true), true).await;
+    let token = rig.host.webhook_token(id).await.unwrap();
+    let url = format!("http://{}/hooks/incident/{token}", rig.host.webhook_addr().unwrap());
+    let body = "{\"action\":\"opened\"}";
+    let delivery = [("X-GitHub-Delivery", "d-1")];
+    assert_eq!(post_with(&url, body, None, &delivery).await.status(), 401);
+    let secret = rig.host.signing_secret(id).await.unwrap();
+    assert_eq!(
+        post_with(&url, body, Some(&sign(&secret, body)), &delivery).await.status(),
+        202,
+        "the real one still goes through"
+    );
+    assert_eq!(post_with(&url, body, Some(&sign(&secret, body)), &delivery).await.json()["duplicate"], true);
     assert_eq!(rig.runs_of(id).await.len(), 1);
     rig.host.shutdown().await;
 }
