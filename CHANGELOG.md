@@ -36,6 +36,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- `zorix-bench`: a data folder of realistic size (10,000 runs, a million events, 50,000 pieces of documents) built through the real stores and timed, with a tenth of it checked in CI against limits ([testing](docs/testing.md#benchmarks)).
 - Fuzzing: `fuzz/` has 14 targets for every reader of text or bytes from outside, with a seed corpus, and a weekly workflow runs them ([testing](docs/testing.md#fuzzing)).
 - CI audits the dependencies (`cargo deny`, `npm audit`) and runs CodeQL.
 - The [engineering guidelines](docs/engineering-guidelines.md) and `AGENTS.md`: the rules every change follows, with where
