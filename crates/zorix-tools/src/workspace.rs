@@ -69,7 +69,8 @@ impl RelativePath {
             }
         }
         // Whatever the platform, never touch the folder that holds ZORIX's own state.
-        if parts.first().is_some_and(|first| first == ".zorix") {
+        // In any case: on macOS and Windows `.ZORIX` is the same folder as `.zorix`.
+        if parts.first().is_some_and(|first| first.eq_ignore_ascii_case(".zorix")) {
             return Err(failed("The .zorix folder is reserved."));
         }
         Ok(Self { parts })
@@ -374,12 +375,41 @@ mod tests {
             "trailing.",
             "name ",
             ".zorix/state",
+            ".ZORIX/state",
+            ".Zorix",
+            "./.zOrIx/x",
             "a\0b",
             "line\nbreak",
+            // Ways of writing "up" or "root" that other systems read as one.
+            "a/./../../x",
+            "..//x",
+            "a/b/../../..",
+            "x:stream",
+            "COM1.txt",
+            "Prn",
+            "aux.tar.gz",
+            "\\\\server\\share\\f",
+            "/",
+            "\u{7f}",
+            "tab\there",
+            "...",
         ] {
             assert!(RelativePath::parse(bad).is_err(), "{bad:?} should be refused");
         }
-        for good in ["", ".", "a.txt", "./a/./b.txt", "docs/ünïcode.md", "a//b", ".hidden", "data.v1/x"] {
+        for good in [
+            "",
+            ".",
+            "a.txt",
+            "./a/./b.txt",
+            "docs/ünïcode.md",
+            "a//b",
+            ".hidden",
+            "data.v1/x",
+            "a/.zorix",
+            "%2e%2e/x",
+            "console.txt",
+            "a..b/c",
+        ] {
             assert!(RelativePath::parse(good).is_ok(), "{good:?} should be accepted");
         }
     }
