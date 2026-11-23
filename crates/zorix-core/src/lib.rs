@@ -29,6 +29,7 @@ pub mod state;
 pub mod time;
 pub mod tokens;
 pub mod tool;
+pub mod untrusted;
 pub mod workflow;
 
 pub use agent::{
