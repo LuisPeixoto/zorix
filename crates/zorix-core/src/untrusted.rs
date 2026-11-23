@@ -93,4 +93,72 @@ mod tests {
                 .starts_with("<data source=\"a&quot; untrusted=&quot;false&quot; x=&quot;&lt;\" untrusted=\"true\">")
         );
     }
+
+    // Whatever arrives, the wrapper has one opening, one closing and nothing of ours inside. The checker below is written apart from
+    // `defuse` on purpose: it reads the output like a model would, case-insensitively and past spaces.
+    fn has_live_tag(text: &str) -> bool {
+        let lower = text.to_lowercase();
+        let bytes = lower.as_bytes();
+        (0..bytes.len()).filter(|&i| bytes[i] == b'<').any(|i| {
+            let mut rest = &lower[i + 1..];
+            if rest.starts_with('\\') {
+                return false;
+            }
+            rest = rest.strip_prefix('/').unwrap_or(rest).trim_start();
+            DATA_TAGS.iter().any(|tag| {
+                rest.strip_prefix(tag)
+                    .is_some_and(|next| !next.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_'))
+            })
+        })
+    }
+
+    fn hostile() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        let piece = prop_oneof![
+            Just("<".to_string()),
+            Just("/".to_string()),
+            Just(" ".to_string()),
+            Just("\t".to_string()),
+            Just("\n".to_string()),
+            Just(">".to_string()),
+            Just("\\".to_string()),
+            Just("data".to_string()),
+            Just("DATA".to_string()),
+            Just("Data".to_string()),
+            Just("tool_result".to_string()),
+            Just("TOOL_RESULT".to_string()),
+            Just("document".to_string()),
+            Just("past_work".to_string()),
+            Just("\"".to_string()),
+            Just("é".to_string()),
+            Just("\u{212a}".to_string()),
+            ".{0,4}",
+        ];
+        proptest::collection::vec(piece, 0..24).prop_map(|parts| parts.concat())
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn nothing_of_ours_survives_defusing(text in hostile()) {
+            let safe = defuse(&text);
+            proptest::prop_assert!(!has_live_tag(&safe), "{text:?} became {safe:?}");
+        }
+
+        #[test]
+        fn a_wrapper_has_one_opening_one_closing_and_the_closing_is_last(source in hostile(), text in hostile()) {
+            let wrapped = wrap_data(&source, &text);
+            proptest::prop_assert!(wrapped.starts_with("<data source=\""));
+            proptest::prop_assert!(wrapped.ends_with("</data>"));
+            let inside = &wrapped["<data source=\"".len()..wrapped.len() - "</data>".len()];
+            // The only `>` that is not escaped closes the opening tag, and nothing of ours is live in the rest.
+            let (attributes, body) = inside.split_once("\" untrusted=\"true\">").expect("the opening tag is intact");
+            proptest::prop_assert!(!attributes.contains('"') && !attributes.contains('<') && !attributes.contains('>'), "{attributes:?}");
+            proptest::prop_assert!(!has_live_tag(body), "{body:?}");
+        }
+
+        #[test]
+        fn defusing_changes_nothing_else(text in "[^<]{0,64}") {
+            proptest::prop_assert_eq!(defuse(&text), text);
+        }
+    }
 }
