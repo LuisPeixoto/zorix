@@ -95,6 +95,14 @@ The crates other than the desktop shell have no platform code and run in CI on L
 work on a thread with a 16 MB stack (the default 1 MB main thread is small on Windows). Unix-only tests (symbolic links)
 are marked `#[cfg(unix)]`. The desktop job type-checks and builds the interface and lints the shell on all three systems.
 
+## Dependency and code audits
+
+CI runs `cargo deny check` (known vulnerabilities, licences, banned and unknown sources; the policy and every accepted
+advisory with its reason are in `deny.toml`), `npm audit --omit=dev --audit-level=high` for the interface, and CodeQL for
+Rust and TypeScript on every push, pull request and weekly. The advisory databases are fetched fresh, so a new advisory can
+turn an unchanged tree red; fix it on its own `fix/…` branch with the smallest update that clears it. Run
+`cargo deny check` locally before a release.
+
 ## Live tests
 
 The adapters are tested against local mock servers, so the normal suite needs no network and no keys. Tests that talk to
