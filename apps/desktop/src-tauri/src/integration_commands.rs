@@ -17,22 +17,23 @@ use zorix_mcp::catalog::{CatalogTransport, SecretNeeded};
 use zorix_mcp::{McpManager, ServerState, SystemBrowser, Vault, import, secret_base, token_secret_name};
 
 use crate::state::{AppState, Services};
+use crate::ui_error::{IntoUi, UiError};
 
-fn services(state: &AppState) -> Result<&Services, String> {
+fn services(state: &AppState) -> Result<&Services, UiError> {
     state.services()
 }
 
-fn text(error: impl std::fmt::Display) -> String {
-    error.to_string()
+fn text(error: impl IntoUi) -> UiError {
+    error.into_ui()
 }
 
-fn clean(value: &str, what: &str) -> Result<Secret, String> {
+fn clean(value: &str, what: &str) -> Result<Secret, UiError> {
     let value = value.trim();
     if value.is_empty() {
-        return Err(format!("The {what} is empty."));
+        return Err(UiError::message(format!("The {what} is empty.")));
     }
     if value.chars().any(char::is_whitespace) || value.len() > 4000 {
-        return Err(format!("The {what} has spaces or is too long to be kept."));
+        return Err(UiError::message(format!("The {what} has spaces or is too long to be kept.")));
     }
     Ok(Secret::new(value))
 }
@@ -115,7 +116,7 @@ async fn signed_in(services: &Services, server: &McpServer) -> bool {
     }
 }
 
-async fn row(services: &Services, server: &McpServer) -> Result<ServerRow, String> {
+async fn row(services: &Services, server: &McpServer) -> Result<ServerRow, UiError> {
     let status = services.hub.manager.status(server.id).await.map_err(text)?;
     let (state, reason) = match &status {
         Some(status) => state_parts(server.enabled, &status.state),
@@ -153,7 +154,7 @@ async fn row(services: &Services, server: &McpServer) -> Result<ServerRow, Strin
 }
 
 #[tauri::command]
-pub async fn mcp_list(state: State<'_, AppState>) -> Result<Vec<ServerRow>, String> {
+pub async fn mcp_list(state: State<'_, AppState>) -> Result<Vec<ServerRow>, UiError> {
     let services = services(&state)?;
     let mut rows = Vec::new();
     for server in services.hub.servers().await.map_err(text)? {
@@ -248,7 +249,7 @@ fn tool_row(pin: &zorix_core::McpToolPin) -> ToolRow {
 }
 
 #[tauri::command]
-pub async fn mcp_server(state: State<'_, AppState>, name: String) -> Result<ServerDetail, String> {
+pub async fn mcp_server(state: State<'_, AppState>, name: String) -> Result<ServerDetail, UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     let pins = services.hub.store.tool_pins(services.hub.tenant(), server.id).await.map_err(text)?;
@@ -326,14 +327,14 @@ pub struct EnvIn {
     secret: bool,
 }
 
-fn canonical_folder(path: &str) -> Result<String, String> {
+fn canonical_folder(path: &str) -> Result<String, UiError> {
     std::fs::canonicalize(path)
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| format!("The folder {path} cannot be used: {e}"))
+        .map_err(|e| UiError::message(format!("The folder {path} cannot be used: {e}")))
 }
 
 #[tauri::command]
-pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<ServerRow, String> {
+pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<ServerRow, UiError> {
     let services = services(&state)?;
     let mut secrets: Vec<(Option<String>, Secret)> = Vec::new();
     let new = if let Some(id) = &request.catalog {
@@ -341,7 +342,7 @@ pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<S
             .entries
             .iter()
             .find(|e| &e.id == id)
-            .ok_or_else(|| format!("The catalogue has no entry called {id}."))?;
+            .ok_or_else(|| UiError::message(format!("The catalogue has no entry called {id}.")))?;
         let mut inputs = request.inputs.clone();
         if let CatalogTransport::Stdio { inputs: wanted, .. } = &entry.transport {
             for input in wanted.iter().filter(|i| i.kind == "folder") {
@@ -354,7 +355,8 @@ pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<S
         for need in needed {
             match need {
                 SecretNeeded::Env { name, .. } => {
-                    let value = request.secrets.get(&name).ok_or_else(|| format!("{name} is needed."))?;
+                    let value =
+                        request.secrets.get(&name).ok_or_else(|| UiError::message(format!("{name} is needed.")))?;
                     secrets.push((Some(name.clone()), clean(value, &name)?));
                 }
                 SecretNeeded::Token => {
@@ -403,7 +405,7 @@ pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<S
                 client_id: request.client_id.clone().filter(|c| !c.trim().is_empty()),
                 scopes: request.scopes.clone(),
             },
-            other => return Err(format!("The sign-in kind “{other}” is not supported.")),
+            other => return Err(UiError::message(format!("The sign-in kind “{other}” is not supported."))),
         };
         NewMcpServer { name, transport: McpTransport::Http { url: url.trim().to_string(), auth } }
     } else {
@@ -414,7 +416,7 @@ pub async fn mcp_add(state: State<'_, AppState>, request: AddServer) -> Result<S
 }
 
 #[tauri::command]
-pub async fn mcp_set_enabled(state: State<'_, AppState>, name: String, enabled: bool) -> Result<ServerRow, String> {
+pub async fn mcp_set_enabled(state: State<'_, AppState>, name: String, enabled: bool) -> Result<ServerRow, UiError> {
     let services = services(&state)?;
     let server = services.hub.set_enabled(&name, enabled).await.map_err(text)?;
     if enabled {
@@ -424,12 +426,12 @@ pub async fn mcp_set_enabled(state: State<'_, AppState>, name: String, enabled: 
 }
 
 #[tauri::command]
-pub async fn mcp_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub async fn mcp_remove(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     services(&state)?.hub.remove_server(&name).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn mcp_restart(state: State<'_, AppState>, name: String) -> Result<ServerRow, String> {
+pub async fn mcp_restart(state: State<'_, AppState>, name: String) -> Result<ServerRow, UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     services.hub.manager.stop(server.id).await;
@@ -441,7 +443,7 @@ pub async fn mcp_restart(state: State<'_, AppState>, name: String) -> Result<Ser
 
 /// Ask a running server for its tools again.
 #[tauri::command]
-pub async fn mcp_refresh(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub async fn mcp_refresh(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     services.hub.manager.refresh(server.id).await.map_err(text)
@@ -449,19 +451,19 @@ pub async fn mcp_refresh(state: State<'_, AppState>, name: String) -> Result<(),
 
 /// Approve what a server lists for one tool, or turn it off.
 #[tauri::command]
-pub async fn mcp_review(state: State<'_, AppState>, name: String, tool: String, action: String) -> Result<(), String> {
+pub async fn mcp_review(state: State<'_, AppState>, name: String, tool: String, action: String) -> Result<(), UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     let action = match action.as_str() {
         "approve" => PinAction::Approve,
         "disable" => PinAction::Disable,
-        other => return Err(format!("“{other}” is not an action.")),
+        other => return Err(UiError::message(format!("“{other}” is not an action."))),
     };
     services.hub.manager.review(server.id, &tool, action, "desktop").await.map(|_| ()).map_err(text)
 }
 
 #[tauri::command]
-pub async fn mcp_approve_all(state: State<'_, AppState>, name: String) -> Result<usize, String> {
+pub async fn mcp_approve_all(state: State<'_, AppState>, name: String) -> Result<usize, UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     services.hub.manager.approve_all(server.id, "desktop").await.map_err(text)
@@ -473,7 +475,7 @@ pub async fn mcp_trust(
     name: String,
     tool: String,
     skip_asking: bool,
-) -> Result<(), String> {
+) -> Result<(), UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     let level = if skip_asking { ToolTrust::ReadOnlyNoAsk } else { ToolTrust::Ask };
@@ -482,7 +484,7 @@ pub async fn mcp_trust(
 
 /// Sign in to a remote server in the system browser. Resolves when the person is done, or `mcp_login_cancel` is called.
 #[tauri::command]
-pub async fn mcp_login(state: State<'_, AppState>, name: String) -> Result<String, String> {
+pub async fn mcp_login(state: State<'_, AppState>, name: String) -> Result<String, UiError> {
     let services = services(&state)?;
     let cancel = CancellationToken::new();
     services.logins.lock().insert(name.clone(), cancel.clone());
@@ -499,7 +501,7 @@ pub async fn mcp_login(state: State<'_, AppState>, name: String) -> Result<Strin
 }
 
 #[tauri::command]
-pub fn mcp_login_cancel(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub fn mcp_login_cancel(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     if let Some(token) = services(&state)?.logins.lock().remove(&name) {
         token.cancel();
     }
@@ -507,7 +509,7 @@ pub fn mcp_login_cancel(state: State<'_, AppState>, name: String) -> Result<(), 
 }
 
 #[tauri::command]
-pub async fn mcp_logout(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub async fn mcp_logout(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     services(&state)?.hub.logout(&name).await.map_err(text)
 }
 
@@ -529,13 +531,13 @@ pub struct ImportPreview {
     rows: Vec<ImportRow>,
 }
 
-fn source_of(text: &str) -> Result<import::Source, String> {
-    import::Source::parse(text).ok_or_else(|| format!("“{text}” is not claude, vscode or cursor."))
+fn source_of(text: &str) -> Result<import::Source, UiError> {
+    import::Source::parse(text).ok_or_else(|| UiError::message(format!("“{text}” is not claude, vscode or cursor.")))
 }
 
 /// What would be imported from the usual places, or from one file.
 #[tauri::command]
-pub fn mcp_import_preview(source: String, path: Option<String>) -> Result<Vec<ImportPreview>, String> {
+pub fn mcp_import_preview(source: String, path: Option<String>) -> Result<Vec<ImportPreview>, UiError> {
     let source = source_of(&source)?;
     let paths = match path.as_deref().map(str::trim).filter(|p| !p.is_empty()) {
         Some(path) => vec![std::path::PathBuf::from(path)],
@@ -571,7 +573,7 @@ pub async fn mcp_import_apply(
     source: String,
     path: String,
     names: Vec<String>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, UiError> {
     let services = services(&state)?;
     let preview = import::read(source_of(&source)?, std::path::Path::new(&path))?;
     let store: std::sync::Arc<dyn IntegrationStore> = services.hub.store.clone();
@@ -590,7 +592,7 @@ pub async fn mcp_import_apply(
 // Connections
 
 #[tauri::command]
-pub async fn connections_list(state: State<'_, AppState>) -> Result<Vec<zorix_core::Connection>, String> {
+pub async fn connections_list(state: State<'_, AppState>) -> Result<Vec<zorix_core::Connection>, UiError> {
     services(&state)?.hub.connections().await.map_err(text)
 }
 
@@ -608,10 +610,10 @@ pub struct AddConnection {
 pub async fn connection_add(
     state: State<'_, AppState>,
     request: AddConnection,
-) -> Result<zorix_core::Connection, String> {
+) -> Result<zorix_core::Connection, UiError> {
     let services = services(&state)?;
     let kind = ConnectionKind::parse(&request.kind)
-        .ok_or_else(|| format!("“{}” is not a kind of connection.", request.kind))?;
+        .ok_or_else(|| UiError::message(format!("“{}” is not a kind of connection.", request.kind)))?;
     let secret = match request.secret.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(value) => Some(clean(value, "secret")?),
         None => None,
@@ -627,13 +629,13 @@ pub struct TestResult {
 }
 
 #[tauri::command]
-pub async fn connection_test(state: State<'_, AppState>, name: String) -> Result<TestResult, String> {
+pub async fn connection_test(state: State<'_, AppState>, name: String) -> Result<TestResult, UiError> {
     let test = services(&state)?.hub.test_connection(&name).await.map_err(text)?;
     Ok(TestResult { ok: test.ok, note: test.note })
 }
 
 #[tauri::command]
-pub async fn connection_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub async fn connection_remove(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     services(&state)?.hub.remove_connection(&name).await.map_err(text)
 }
 
@@ -648,7 +650,7 @@ pub struct SandboxStatus {
 }
 
 #[tauri::command]
-pub fn sandbox_status(state: State<'_, AppState>) -> Result<SandboxStatus, String> {
+pub fn sandbox_status(state: State<'_, AppState>) -> Result<SandboxStatus, UiError> {
     let services = services(&state)?;
     Ok(SandboxStatus {
         javascript: true,
@@ -659,7 +661,7 @@ pub fn sandbox_status(state: State<'_, AppState>) -> Result<SandboxStatus, Strin
 
 /// Download Python for the sandbox, reporting `[received, total]` bytes on the channel.
 #[tauri::command]
-pub async fn sandbox_install_python(state: State<'_, AppState>, progress: Channel<(u64, u64)>) -> Result<(), String> {
+pub async fn sandbox_install_python(state: State<'_, AppState>, progress: Channel<(u64, u64)>) -> Result<(), UiError> {
     let services = services(&state)?;
     services
         .hub

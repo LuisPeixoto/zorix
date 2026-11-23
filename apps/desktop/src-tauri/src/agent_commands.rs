@@ -18,20 +18,24 @@ use zorix_core::{
 };
 
 use crate::state::{AppState, Services};
+use crate::ui_error::{IntoUi, UiError};
 
-fn services(state: &AppState) -> Result<&Services, String> {
+fn services(state: &AppState) -> Result<&Services, UiError> {
     state.services()
 }
 
-fn text(error: impl std::fmt::Display) -> String {
-    error.to_string()
+fn text(error: impl IntoUi) -> UiError {
+    error.into_ui()
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Agents
 
 #[tauri::command]
-pub async fn agents_list(state: State<'_, AppState>, include_archived: Option<bool>) -> Result<Vec<AgentCard>, String> {
+pub async fn agents_list(
+    state: State<'_, AppState>,
+    include_archived: Option<bool>,
+) -> Result<Vec<AgentCard>, UiError> {
     services(&state)?.hub.agent_cards(include_archived.unwrap_or(false)).await.map_err(text)
 }
 
@@ -45,7 +49,7 @@ pub struct AgentDetail {
 }
 
 #[tauri::command]
-pub async fn agent_get(state: State<'_, AppState>, slug: String, version: Option<u32>) -> Result<AgentDetail, String> {
+pub async fn agent_get(state: State<'_, AppState>, slug: String, version: Option<u32>) -> Result<AgentDetail, UiError> {
     let services = services(&state)?;
     let (agent, found) = services.hub.agent_version(&slug, version).await.map_err(text)?;
     let mut skills = Vec::new();
@@ -76,14 +80,14 @@ impl From<zorix_hub::agents::Imported> for Saved {
 }
 
 #[tauri::command]
-pub async fn agent_save(state: State<'_, AppState>, spec: AgentSpec, note: Option<String>) -> Result<Saved, String> {
+pub async fn agent_save(state: State<'_, AppState>, spec: AgentSpec, note: Option<String>) -> Result<Saved, UiError> {
     let services = services(&state)?;
     spec.validate().map_err(text)?;
     services.hub.save_spec(spec, note.filter(|n| !n.trim().is_empty())).await.map(Into::into).map_err(text)
 }
 
 #[tauri::command]
-pub async fn agent_import(state: State<'_, AppState>, file: String, rename: Option<String>) -> Result<Saved, String> {
+pub async fn agent_import(state: State<'_, AppState>, file: String, rename: Option<String>) -> Result<Saved, UiError> {
     let rename = rename.filter(|r| !r.trim().is_empty());
     services(&state)?
         .hub
@@ -94,12 +98,12 @@ pub async fn agent_import(state: State<'_, AppState>, file: String, rename: Opti
 }
 
 #[tauri::command]
-pub async fn agent_export(state: State<'_, AppState>, slug: String, version: Option<u32>) -> Result<String, String> {
+pub async fn agent_export(state: State<'_, AppState>, slug: String, version: Option<u32>) -> Result<String, UiError> {
     services(&state)?.hub.export_agent(&slug, version).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn agent_versions(state: State<'_, AppState>, slug: String) -> Result<Vec<AgentVersion>, String> {
+pub async fn agent_versions(state: State<'_, AppState>, slug: String) -> Result<Vec<AgentVersion>, UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     // Newest first, as the store keeps them.
@@ -114,7 +118,7 @@ pub struct DiffRow {
 }
 
 #[tauri::command]
-pub async fn agent_diff(state: State<'_, AppState>, slug: String, from: u32, to: u32) -> Result<Vec<DiffRow>, String> {
+pub async fn agent_diff(state: State<'_, AppState>, slug: String, from: u32, to: u32) -> Result<Vec<DiffRow>, UiError> {
     let lines = services(&state)?.hub.diff_agent(&slug, from, to).await.map_err(text)?;
     Ok(lines
         .into_iter()
@@ -130,17 +134,17 @@ pub async fn agent_diff(state: State<'_, AppState>, slug: String, from: u32, to:
 }
 
 #[tauri::command]
-pub async fn agent_rollback(state: State<'_, AppState>, slug: String, to: u32) -> Result<AgentVersion, String> {
+pub async fn agent_rollback(state: State<'_, AppState>, slug: String, to: u32) -> Result<AgentVersion, UiError> {
     services(&state)?.hub.rollback_agent(&slug, to).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn agent_archive(state: State<'_, AppState>, slug: String, archived: bool) -> Result<(), String> {
+pub async fn agent_archive(state: State<'_, AppState>, slug: String, archived: bool) -> Result<(), UiError> {
     services(&state)?.hub.archive_agent(&slug, archived).await.map(|_| ()).map_err(text)
 }
 
 #[tauri::command]
-pub async fn agent_remove(state: State<'_, AppState>, slug: String) -> Result<(), String> {
+pub async fn agent_remove(state: State<'_, AppState>, slug: String) -> Result<(), UiError> {
     services(&state)?.hub.remove_agent(&slug).await.map_err(text)
 }
 
@@ -158,7 +162,7 @@ pub struct Template {
 }
 
 #[tauri::command]
-pub async fn agent_templates(state: State<'_, AppState>) -> Result<Vec<Template>, String> {
+pub async fn agent_templates(state: State<'_, AppState>) -> Result<Vec<Template>, UiError> {
     let all = services(&state)?.hub.templates().await.map_err(text)?;
     Ok(all
         .into_iter()
@@ -180,7 +184,7 @@ pub async fn agent_add_template(
     state: State<'_, AppState>,
     id: String,
     rename: Option<String>,
-) -> Result<Saved, String> {
+) -> Result<Saved, UiError> {
     let rename = rename.filter(|r| !r.trim().is_empty());
     services(&state)?.hub.add_template(&id, rename.as_deref()).await.map(|d| d.imported.into()).map_err(text)
 }
@@ -189,27 +193,27 @@ pub async fn agent_add_template(
 // Skills
 
 #[tauri::command]
-pub async fn skills_list(state: State<'_, AppState>) -> Result<Vec<SkillRecord>, String> {
+pub async fn skills_list(state: State<'_, AppState>) -> Result<Vec<SkillRecord>, UiError> {
     services(&state)?.hub.skills_list().await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn skill_import(state: State<'_, AppState>, path: String) -> Result<SkillRecord, String> {
+pub async fn skill_import(state: State<'_, AppState>, path: String) -> Result<SkillRecord, UiError> {
     services(&state)?.hub.import_skill(std::path::Path::new(&path)).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn skill_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
+pub async fn skill_remove(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
     services(&state)?.hub.remove_skill(&name).await.map_err(text)
 }
 
 /// Read one text file of a skill (what the screen shows when a file is opened).
 #[tauri::command]
-pub async fn skill_file(state: State<'_, AppState>, hash: String, path: String) -> Result<String, String> {
+pub async fn skill_file(state: State<'_, AppState>, hash: String, path: String) -> Result<String, UiError> {
     let library = services(&state)?.hub.skills.clone();
     tokio::task::spawn_blocking(move || {
         let bytes = library.read(&hash, &path, 256 * 1024).map_err(text)?;
-        String::from_utf8(bytes).map_err(|_| "That file is not text.".to_string())
+        String::from_utf8(bytes).map_err(|_| UiError::message("That file is not text."))
     })
     .await
     .map_err(text)?
@@ -219,14 +223,14 @@ pub async fn skill_file(state: State<'_, AppState>, hash: String, path: String) 
 // Evaluations
 
 #[tauri::command]
-pub async fn eval_cases(state: State<'_, AppState>, slug: String) -> Result<Vec<StoredCase>, String> {
+pub async fn eval_cases(state: State<'_, AppState>, slug: String) -> Result<Vec<StoredCase>, UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     services.hub.agents.eval_cases(&services.tenant, agent.id).await.map_err(text)
 }
 
 #[tauri::command]
-pub async fn eval_put_case(state: State<'_, AppState>, slug: String, case: EvalCase) -> Result<StoredCase, String> {
+pub async fn eval_put_case(state: State<'_, AppState>, slug: String, case: EvalCase) -> Result<StoredCase, UiError> {
     let services = services(&state)?;
     case.validate().map_err(text)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
@@ -235,25 +239,25 @@ pub async fn eval_put_case(state: State<'_, AppState>, slug: String, case: EvalC
 }
 
 #[tauri::command]
-pub async fn eval_remove_case(state: State<'_, AppState>, slug: String, name: String) -> Result<(), String> {
+pub async fn eval_remove_case(state: State<'_, AppState>, slug: String, name: String) -> Result<(), UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     if services.hub.agents.remove_eval_case(&services.tenant, agent.id, &name).await.map_err(text)? {
         Ok(())
     } else {
-        Err(format!("There is no case called {name}."))
+        Err(UiError::message(format!("There is no case called {name}.")))
     }
 }
 
 #[tauri::command]
-pub async fn eval_runs(state: State<'_, AppState>, slug: String) -> Result<Vec<EvalRun>, String> {
+pub async fn eval_runs(state: State<'_, AppState>, slug: String) -> Result<Vec<EvalRun>, UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     services.hub.agents.eval_runs(&services.tenant, agent.id, 30).await.map_err(text)
 }
 
 #[tauri::command]
-pub fn eval_running(state: State<'_, AppState>, slug: String) -> Result<bool, String> {
+pub fn eval_running(state: State<'_, AppState>, slug: String) -> Result<bool, UiError> {
     Ok(services(&state)?.evals.lock().contains_key(&slug))
 }
 
@@ -274,18 +278,18 @@ pub struct StartEval {
 
 /// Start an evaluation in the background; the screen reads the runs again while it goes.
 #[tauri::command]
-pub async fn eval_start(state: State<'_, AppState>, request: StartEval) -> Result<(), String> {
+pub async fn eval_start(state: State<'_, AppState>, request: StartEval) -> Result<(), UiError> {
     let services = state.services_arc()?;
     let (agent, version) = services.hub.agent_version(&request.slug, request.version).await.map_err(text)?;
     let cases = services.hub.agents.eval_cases(&services.tenant, agent.id).await.map_err(text)?;
     if cases.is_empty() {
-        return Err(format!("{} has no evaluation cases yet.", agent.slug));
+        return Err(UiError::message(format!("{} has no evaluation cases yet.", agent.slug)));
     }
     let cancel = CancellationToken::new();
     {
         let mut running = services.evals.lock();
         if running.contains_key(&request.slug) {
-            return Err(format!("An evaluation of {} is already running.", request.slug));
+            return Err(UiError::message(format!("An evaluation of {} is already running.", request.slug)));
         }
         running.insert(request.slug.clone(), cancel.clone());
     }
@@ -318,7 +322,7 @@ pub async fn eval_start(state: State<'_, AppState>, request: StartEval) -> Resul
 }
 
 #[tauri::command]
-pub fn eval_cancel(state: State<'_, AppState>, slug: String) -> Result<(), String> {
+pub fn eval_cancel(state: State<'_, AppState>, slug: String) -> Result<(), UiError> {
     if let Some(token) = services(&state)?.evals.lock().get(&slug) {
         token.cancel();
     }
@@ -340,19 +344,20 @@ pub async fn eval_compare(
     state: State<'_, AppState>,
     before: String,
     after: String,
-) -> Result<Vec<CompareRow>, String> {
+) -> Result<Vec<CompareRow>, UiError> {
     let services = services(&state)?;
     let find = |id: String| {
         let services = &*services;
         async move {
-            let id: EvalRunId = id.parse().map_err(|_| format!("“{id}” is not an evaluation run."))?;
+            let id: EvalRunId =
+                id.parse().map_err(|_| UiError::message(format!("“{id}” is not an evaluation run.")))?;
             services
                 .hub
                 .agents
                 .eval_run(&services.tenant, id)
                 .await
                 .map_err(text)?
-                .ok_or_else(|| "That evaluation run no longer exists.".to_string())
+                .ok_or_else(|| UiError::message("That evaluation run no longer exists."))
         }
     };
     let (a, b) = (find(before).await?, find(after).await?);
@@ -403,7 +408,7 @@ pub struct AskMemory {
 }
 
 #[tauri::command]
-pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<Execution, String> {
+pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<Execution, UiError> {
     let services = services(&state)?;
     let conversation = match request.conversation.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
         Some(id) => zorix_core::ConversationId::new(id).map_err(text)?,
@@ -434,7 +439,7 @@ pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<
 }
 
 #[tauri::command]
-pub async fn agent_threads(state: State<'_, AppState>, slug: String) -> Result<Vec<AgentConversation>, String> {
+pub async fn agent_threads(state: State<'_, AppState>, slug: String) -> Result<Vec<AgentConversation>, UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     services.hub.agents.conversations(&services.tenant, agent.id, 50).await.map_err(text)
@@ -453,7 +458,7 @@ pub async fn thread_runs(
     state: State<'_, AppState>,
     slug: String,
     conversation: String,
-) -> Result<Vec<ThreadRun>, String> {
+) -> Result<Vec<ThreadRun>, UiError> {
     let services = services(&state)?;
     let (agent, _) = services.hub.agent(&slug).await.map_err(text)?;
     let filter = ListFilter {
@@ -483,7 +488,7 @@ pub struct LiveBatch {
 }
 
 #[tauri::command]
-pub async fn watch_live(state: State<'_, AppState>, id: String, on_text: Channel<LiveBatch>) -> Result<(), String> {
+pub async fn watch_live(state: State<'_, AppState>, id: String, on_text: Channel<LiveBatch>) -> Result<(), UiError> {
     let services = services(&state)?;
     let id: ExecutionId = id.parse().map_err(text)?;
     let mut stream = services.engine.live(&services.tenant, id).await.map_err(text)?;
@@ -518,7 +523,7 @@ pub async fn watch_live(state: State<'_, AppState>, id: String, on_text: Channel
 }
 
 #[tauri::command]
-pub fn stop_live(state: State<'_, AppState>, id: String) -> Result<(), String> {
+pub fn stop_live(state: State<'_, AppState>, id: String) -> Result<(), UiError> {
     state.unwatch_live(id.parse().map_err(text)?);
     Ok(())
 }
@@ -528,14 +533,14 @@ pub fn stop_live(state: State<'_, AppState>, id: String) -> Result<(), String> {
 
 /// An execution and everything it started, nearest first (the execution itself comes first).
 #[tauri::command]
-pub async fn run_tree(state: State<'_, AppState>, id: String) -> Result<Vec<Execution>, String> {
+pub async fn run_tree(state: State<'_, AppState>, id: String) -> Result<Vec<Execution>, UiError> {
     let services = services(&state)?;
     services.engine.tree(&services.tenant, id.parse::<ExecutionId>().map_err(text)?).await.map_err(text)
 }
 
 /// The approvals that wait for a person anywhere below an execution, with the execution that asked.
 #[tauri::command]
-pub async fn tree_approvals(state: State<'_, AppState>, id: String) -> Result<Vec<zorix_core::TreeApproval>, String> {
+pub async fn tree_approvals(state: State<'_, AppState>, id: String) -> Result<Vec<zorix_core::TreeApproval>, UiError> {
     let services = services(&state)?;
     services.engine.pending_in_tree(&services.tenant, id.parse::<ExecutionId>().map_err(text)?).await.map_err(text)
 }
@@ -545,7 +550,7 @@ pub async fn tree_approvals(state: State<'_, AppState>, id: String) -> Result<Ve
 pub async fn sub_run_counts(
     state: State<'_, AppState>,
     ids: Vec<String>,
-) -> Result<std::collections::HashMap<String, usize>, String> {
+) -> Result<std::collections::HashMap<String, usize>, UiError> {
     let services = services(&state)?;
     let mut out = std::collections::HashMap::new();
     for id in ids.iter().take(200) {
@@ -575,7 +580,7 @@ impl From<zorix_hub::teams::TeamCard> for TeamView {
 }
 
 #[tauri::command]
-pub async fn teams_list(state: State<'_, AppState>) -> Result<Vec<TeamView>, String> {
+pub async fn teams_list(state: State<'_, AppState>) -> Result<Vec<TeamView>, UiError> {
     Ok(services(&state)?.hub.teams().await.map_err(text)?.into_iter().map(Into::into).collect())
 }
 
@@ -596,7 +601,7 @@ pub struct SaveTeam {
 }
 
 #[tauri::command]
-pub async fn team_save(state: State<'_, AppState>, team: SaveTeam) -> Result<TeamView, String> {
+pub async fn team_save(state: State<'_, AppState>, team: SaveTeam) -> Result<TeamView, UiError> {
     let services = services(&state)?;
     let slug = |s: &str| zorix_core::AgentSlug::new(s).map_err(text);
     let mut avatar = zorix_core::Avatar::default();
@@ -620,7 +625,7 @@ pub async fn team_save(state: State<'_, AppState>, team: SaveTeam) -> Result<Tea
 }
 
 #[tauri::command]
-pub async fn team_remove(state: State<'_, AppState>, slug: String) -> Result<(), String> {
+pub async fn team_remove(state: State<'_, AppState>, slug: String) -> Result<(), UiError> {
     services(&state)?.hub.remove_team(&slug).await.map_err(text)
 }
 
@@ -638,7 +643,7 @@ pub struct TeamTemplateView {
 }
 
 #[tauri::command]
-pub async fn team_templates(state: State<'_, AppState>) -> Result<Vec<TeamTemplateView>, String> {
+pub async fn team_templates(state: State<'_, AppState>) -> Result<Vec<TeamTemplateView>, UiError> {
     Ok(services(&state)?
         .hub
         .team_templates()
@@ -659,7 +664,7 @@ pub async fn team_templates(state: State<'_, AppState>) -> Result<Vec<TeamTempla
 }
 
 #[tauri::command]
-pub async fn team_add_template(state: State<'_, AppState>, id: String) -> Result<String, String> {
+pub async fn team_add_template(state: State<'_, AppState>, id: String) -> Result<String, UiError> {
     services(&state)?.hub.add_team_template(&id).await.map(|done| done.team.slug.to_string()).map_err(text)
 }
 
@@ -668,7 +673,7 @@ pub async fn team_add_template(state: State<'_, AppState>, id: String) -> Result
 
 /// Open an address in the person's browser. Only web and mail addresses.
 #[tauri::command]
-pub fn open_external(url: String) -> Result<(), String> {
+pub fn open_external(url: String) -> Result<(), UiError> {
     let lower = url.to_ascii_lowercase();
     let ok = (lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("mailto:"))
         && !url.chars().any(|c| c.is_control() || c.is_whitespace());
@@ -688,5 +693,5 @@ pub fn open_external(url: String) -> Result<(), String> {
         c.arg(&url);
         c
     };
-    command.spawn().map(|_| ()).map_err(|e| format!("The browser could not be opened: {e}"))
+    command.spawn().map(|_| ()).map_err(|e| UiError::message(format!("The browser could not be opened: {e}")))
 }
