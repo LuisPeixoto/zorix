@@ -27,4 +27,4 @@ asks a person first.
 
 - A manager cannot change a project without a person seeing it, and cannot touch another project.
 - A task that an agent works on can report progress without being able to change anything else.
-- Planning the week, autonomy levels and reports are Phase 9; people and sharing are Phase 10.
+- Planning the week, autonomy levels and reports are Phase 9; people and sharing are Phase 16.

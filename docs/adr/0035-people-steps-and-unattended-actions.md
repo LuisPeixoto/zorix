@@ -32,5 +32,5 @@ policy would stop at the first write.
 ## Consequences
 
 - Publishing is the moment a person accepts unattended actions, in one place, with a record.
-- "On-call rotation" as the decider needs people and accounts; it is deferred to Phase 10 and listed as a known difference.
+- "On-call rotation" as the decider needs people and accounts; it is deferred to Phase 16 and listed as a known difference.
 - The Inbox gains a third kind of item next to tool approvals and server reviews.
