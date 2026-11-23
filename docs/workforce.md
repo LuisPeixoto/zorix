@@ -70,4 +70,4 @@ Everything but `plan` and `report` needs no engine, so it works while the app is
 
 ## Not here yet
 
-People other than you and hiring them, a daily budget (Phase 10, with the Command Center), moving workers between departments by dragging, teams as workers and importing an org chart.
+People other than you and hiring them, a daily budget (Phase 16, with the Command Center), moving workers between departments by dragging, teams as workers and importing an org chart.

@@ -14,7 +14,7 @@ ask, [ADR-0031](0031-teams-and-the-handoff-format.md)). A team is a delegation g
   worker), `manager` (a virtual manager), `autonomy`, a weekly budget, a time limit per task, access patterns that always ask, and a
   schedule. The agent and its versions do not change, so hiring never alters a hash or a definition.
 - **Departments** are a name, a description and an optional lead. They group workers for people to read. Teams stay what they were.
-- **Every chain ends at you.** `reports_to` has no cycles. The only person is you until accounts exist (Phase 10), so you are the root of
+- **Every chain ends at you.** `reports_to` has no cycles. The only person is you until accounts exist (Phase 16), so you are the root of
   the chart and the one who approves.
 - **Trees shrink.** A worker's autonomy is at most its manager's, and its weekly budget is at most its manager's. This is the rule a run
   tree already follows ([ADR-0030](0030-budgets-permissions-and-approvals-down-the-tree.md)), applied to the organisation.

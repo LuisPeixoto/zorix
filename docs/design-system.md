@@ -207,13 +207,13 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 | Providers | No price per million tokens, p95 latency or spend; routes show their names only | Prices and timings are not stored per model; routes live in `providers.toml` |
 | Integrations | Cards without a 24-hour history strip; filters are All and Needs attention, and Native sits on its own tab | No health history is recorded yet; `HealthGrid` is in the kit for when it is |
 | Workflows | The palette also lists *After workflow* and *Manual* under Triggers; it has no *Pull request* action and no *Add a task* action | Both trigger kinds exist in the model and the TriggerChip; no tool opens pull requests yet, and a workflow step that makes a task is left for later |
-| Workflows | *Time saved* shows a dash until a workflow says how many minutes a run saves; *Waiting for people* names the oldest wait, not an on-call rotation | Nothing is estimated or invented; people and rotations arrive with Phase 10 |
+| Workflows | *Time saved* shows a dash until a workflow says how many minutes a run saves; *Waiting for people* names the oldest wait, not an on-call rotation | Nothing is estimated or invented; people and rotations arrive with Phase 16 |
 | Workflow editor | *Who decides* is not a field: an approval is answered by the person using ZORIX. The On switch sits in the settings of the workflow, and a *Runs* button sits beside *Versions* | There are no accounts or rotations yet; the run view opens from the Runs drawer, as the design system says |
 | Workflows list | Bars are as tall as the run was long (square root, at least 40%) | The design system draws bars of different heights without saying why; duration is the one real figure |
 | Memory | A *To approve* tab replaces the proposals list; no *Scopes* tab | Proposals are approvals of `memory.remember`, answered here or in the run |
 | Agents | No evaluation score on a card, no Mine, Templates or Archived filters | The card does not carry the latest score, where an agent came from, or archived agents |
 | Agent chat | The rail shows the team or the agent and the cost so far, not *Sources cited* or *Memory used* | Citations and the memory a chat used are not exposed per conversation yet |
-| Project board, timeline | No *Share* button; *Ask the manager* (when the project has one) and a settings button stand in its place | There are no accounts or other people until Phase 10 |
+| Project board, timeline | No *Share* button; *Ask the manager* (when the project has one) and a settings button stand in its place | There are no accounts or other people until Phase 16 |
 | Projects | A person is a round avatar with a person icon, not initials; the *People* filter shows the tasks you have | ZORIX does not know a name to take initials from, and the only person is you |
 | Projects | An agent's face is the emoji and colour of its record, not an icon | The kit's Avatar draws agents that way everywhere |
 | Board | A card drops its due date for a deliverables count once it is Done, and its parts wrap in a narrow lane | The design system shows the Done count and no completion date; a task does not record when it finished |
@@ -224,7 +224,7 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 | Workforce | A manager's card shows its on-time rate, a worker that waits shows how many, otherwise the eval score or the on-time rate; *Waiting for people* says "N approvals · M reviews", not "N for you" | The only person is you, so "for you" would say nothing; what is shown is what is measured |
 | Workforce, worker | Only *Spend this week* has a sparkline and a change; the other tiles have none. One switch turns on both the Monday plan and the Friday report | ZORIX records spend by day, not tasks or on-time rate; the schedule is one setting for a manager |
 | Workforce, kit | Radii and text sizes are the nearest step of the token scale (cards 12 px, figures 11.5 px), and the dial's tiles are 8 px | The design lint accepts tokens and scale steps only |
-| Sidebar | The foot says "N workers busy" before "waiting for you", and has no daily budget | A daily budget arrives with the Command Center (Phase 10) |
+| Sidebar | The foot says "N workers busy" before "waiting for you", and has no daily budget | A daily budget arrives with the Command Center (Phase 16) |
 | Inbox | A second section, *From your workforce*, lists plans and reports, proposals and calls that ran without asking, apart from what waits for a decision | The design system has no Inbox for notices; they are information, not asks, so they do not count in the bell |
 
 ### Contrast in the design system itself

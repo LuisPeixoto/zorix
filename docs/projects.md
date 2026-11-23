@@ -15,7 +15,7 @@ A task adds no new way to run a model. Its run is an **ordinary run**, with its 
   links, deliverables, its runs and its history.
 - **Lanes** are fixed: *Backlog*, *In progress*, *Review*, *Done*. The rules below depend on what each one means.
 - **Priority** is urgent, high, normal or low, shown as a flag, a word and a tone.
-- **Who has it** is *you*, an agent, a team (through its lead), or nobody. There are no accounts until Phase 10, so *you* is the only person and there is no *Share*.
+- **Who has it** is *you*, an agent, a team (through its lead), or nobody. There are no accounts until Phase 16, so *you* is the only person and there is no *Share*.
 - **Dates** are days with no time zone. A late due date turns red and says *Today* or *2 days late*.
 
 ## What moves a task
@@ -90,5 +90,4 @@ Schema 7: `projects` (with the counter that numbers tasks), `tasks` (with a revi
 
 ## Limits
 
-No custom lanes, recurring tasks or import and export of a project; no workflow step or trigger for tasks; no *Share* or other people (Phase 10); no weekly planning or autonomy levels (Phase 9); a
-task does not record when it finished.
+No custom lanes, recurring tasks or import and export of a project, and no workflow step or trigger for tasks (Phase 14); no *Share* or other people (Phase 16). Weekly planning and the autonomy levels are in the [workforce](workforce.md) guide.

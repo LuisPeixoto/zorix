@@ -7,7 +7,7 @@ Status: accepted (Phase 8)
 Phase 8 adds projects and tasks: a key (`OPS-38`), a priority, an assignee that is a person or an agent, progress, dates, dependencies,
 links, deliverables and a history. A task given to an agent should make that agent work. ZORIX already has one way to run a model, the
 execution, and workflows ([ADR-0033](0033-workflows-are-versioned-graphs-that-create-executions.md)) set the pattern: a record that
-creates ordinary executions and follows them. There are no accounts yet (Phase 10), so the only person is the one using ZORIX.
+creates ordinary executions and follows them. There are no accounts yet (Phase 16), so the only person is the one using ZORIX.
 
 ## Decision
 
@@ -17,7 +17,7 @@ creates ordinary executions and follows them. There are no accounts yet (Phase 1
   dependencies, links, deliverables, its current and past runs, and its place in the lane. Both live in SQLite (schema 7) as a JSON `doc`
   with the same revision rule as workflow runs. Every change also writes one `project_events` row, which is the history.
 - **Fixed lanes.** Backlog, In progress, Review and Done. Custom lanes are left out: the rules below depend on the meaning of each lane.
-- **People.** An assignee is *you*, an agent, a team, or nobody. The history says "you". Accounts and sharing wait for Phase 10.
+- **People.** An assignee is *you*, an agent, a team, or nobody. The history says "you". Accounts and sharing wait for Phase 16.
 - **A task makes a run.** Moving a task with an agent or team to **In progress** starts an ordinary execution with the metadata
   `project` and `task`, an idempotency key, and limits that are the smaller of the agent's and the project's, as in ADR-0030. The run is
   the work; the task is the record around it.

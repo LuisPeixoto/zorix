@@ -5,6 +5,11 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed
+
+- The [roadmap](docs/roadmap.md) now puts quality and completion phases (10 to 15) before the Command Center (16) and the
+  Marketplace (17). Documentation that described shipped features as missing was corrected.
+
 ### Fixed
 
 - Dependencies with known vulnerabilities were updated: `wasmtime-wasi` (a WASI filesystem sandbox escape on Windows),

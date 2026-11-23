@@ -13,9 +13,10 @@ checkpoints and a complete record, whichever model does the thinking.</p>
 
 ![ZORIX waiting for your approval before a tool changes anything](docs/images/ui-approval.png)
 
-> **Status: early development.** Phases 1 to 5 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, and now
-> **agents**. ZORIX runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local Ollama models. Orchestration and workflows come in
-> later phases (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
+> **Status: early development.** Phases 1 to 9 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, **agents**,
+> **orchestration**, **workflows**, **projects** and the **workforce**. ZORIX runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local
+> Ollama models. The next phases audit all of it against the [engineering guidelines](docs/engineering-guidelines.md) and finish what was deferred, before
+> the Command Center and the Marketplace (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
 > `--local-only` to keep everything on your computer.
 
 A model can be powerful, but the real strength is in **integration, orchestration and control**. ZORIX is the
@@ -87,7 +88,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 | ![Integrations](docs/screenshots-0.4.0/integrations-connected-light.png) | ![A database change waiting for approval](docs/screenshots-0.4.0/approval-db-light.png) |
 | Servers and services, live. Tools wait for your review. | What a change would do, with the SQL highlighted. |
 
-## What is in Phases 1 to 6
+## What is in Phases 1 to 9
 
 | Area | What it does | Guide |
 |---|---|---|
@@ -183,7 +184,7 @@ cargo run -p zorix-runtime --example embed
 | [Engineering guidelines](docs/engineering-guidelines.md) | The rules every change follows, and where ZORIX enforces them |
 | [Distribution](docs/distribution.md) | Installers, signing, releases |
 | [Troubleshooting](docs/troubleshooting.md) | Symptom, cause, fix |
-| [Roadmap](docs/roadmap.md) | The eleven phases |
+| [Roadmap](docs/roadmap.md) | What is done, and the seventeen phases |
 
 ## Project layout
 

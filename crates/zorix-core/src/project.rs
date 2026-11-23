@@ -217,7 +217,7 @@ impl From<Date> for String {
 // ---------------------------------------------------------------------------------------------------------------------
 // Who, states, priorities
 
-/// Who has a task, or who did something: you (the person using ZORIX), an agent or a team. Other people wait for Phase 10.
+/// Who has a task, or who did something: you (the person using ZORIX), an agent or a team. Other people wait for Phase 16.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Who {

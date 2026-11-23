@@ -38,4 +38,4 @@ job finished. They also stop for a person at known points. The runtime already g
 - Teams stay unversioned; a workflow records the version of each agent it started, through the executions it creates.
 - A fixed graph is less flexible than a model deciding the plan; that is the point, and `agents.delegate` stays for the open case.
 - Left out for now: a pull request action (no tool creates branches or commits), polling events such as "new ticket", and people and
-  rotations as approvers (Phase 10).
+  rotations as approvers (Phase 16).
