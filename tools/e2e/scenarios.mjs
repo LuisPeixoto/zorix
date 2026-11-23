@@ -5,6 +5,8 @@ import { containingText, withText } from "./webdriver.mjs";
 const nav = (label) => `//nav//button[contains(normalize-space(.), ${JSON.stringify(label)})]`;
 const title = (text) => `//h1[normalize-space(.)=${JSON.stringify(text)}]`;
 const button = (text) => withText("button", text);
+// The sidebar's "New run" button also shows its shortcut, so its text is more than the label.
+const newRun = containingText("button", "New run");
 
 export const scenarios = [
   {
@@ -36,7 +38,7 @@ export const scenarios = [
   {
     name: "a run with the demo model finishes and is listed",
     async run(s) {
-      await s.clickOn(button("New run"));
+      await s.clickOn(newRun);
       await s.waitFor(title("New run"));
       await s.clickOn(button("What time is it?"));
       await s.clickOn(button("Start run"));
@@ -49,7 +51,7 @@ export const scenarios = [
     name: "a change waits for a person, and an answer lets the run go on",
     async run(s) {
       for (const answer of ["Approve", "Refuse"]) {
-        await s.clickOn(button("New run"));
+        await s.clickOn(newRun);
         await s.clickOn(button("What is 17*23 and save it as result"));
         await s.clickOn(button("Start run"));
         // `notes.put` asks first: the run stops at an approval card until a person answers.
@@ -74,11 +76,12 @@ export const scenarios = [
     },
   },
   {
-    name: "the workforce shows you at the top of an empty organisation",
+    name: "the workforce of an empty organisation invites you to hire the first worker",
     async run(s) {
       await s.clickOn(nav("Workforce"));
       await s.waitFor(title("Workforce"));
-      await s.waitFor(containingText("*", "You"), { label: "the card for you" });
+      await s.waitFor(containingText("*", "No workers yet"), { label: "the empty state" });
+      await s.waitFor(button("Hire a worker"), { label: "the hire button" });
     },
   },
 ];
