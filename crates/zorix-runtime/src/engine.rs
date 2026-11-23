@@ -638,8 +638,20 @@ impl ExecutionEngine for Engine {
         if pending.status != ApprovalStatus::Pending {
             return Err(Error::InvalidInput("This approval was already answered.".into()));
         }
-        if decision.call_hash.as_ref().is_some_and(|hash| *hash != pending.call_hash) {
-            return Err(Error::InvalidInput("The answer was given for a different call than the one waiting.".into()));
+        // An answer names the exact call it is for. Without the hash, "yes" could be applied to a call the person never saw.
+        match decision.call_hash.as_ref() {
+            None => {
+                return Err(Error::InvalidInput(
+                    "An answer must name the call it is for (its call hash), so it cannot be applied to another one."
+                        .into(),
+                ));
+            }
+            Some(hash) if *hash != pending.call_hash => {
+                return Err(Error::InvalidInput(
+                    "The answer was given for a different call than the one waiting.".into(),
+                ));
+            }
+            Some(_) => {}
         }
         if decision.approve
             && decision.automatic
