@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { diffLines, diffWords, summarize } from "./diff.ts";
   import { cn } from "./cn.ts";
 
@@ -6,8 +7,8 @@
   let {
     before,
     after,
-    beforeLabel = "Approved",
-    afterLabel = "Now",
+    beforeLabel = t("ui.diffView.approved"),
+    afterLabel = t("ui.diffView.now"),
     class: klass = "",
   }: { before: string; after: string; beforeLabel?: string; afterLabel?: string; class?: string } = $props();
 
@@ -28,7 +29,7 @@
     </p>
   {:else}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrollable region must be reachable by keyboard) -->
-    <div class="mono selectable overflow-auto py-1 text-sm" role="region" aria-label="Changes" tabindex="0">
+    <div class="mono selectable overflow-auto py-1 text-sm" role="region" aria-label={t("ui.diffView.changes")} tabindex="0">
       {#each parts as part, i (i)}
         {#each part.text.split("\n") as line, j (j)}
           <div

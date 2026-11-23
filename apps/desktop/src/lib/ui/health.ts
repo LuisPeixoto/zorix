@@ -1,6 +1,7 @@
 // The pure parts of HealthGrid: what order cells appear in and how a day of history reads aloud.
 
 import type { PillState } from "./StatusPill.svelte";
+import { t } from "../i18n/index.ts";
 
 /** One bar of the 24-hour strip, one per hour: fine, degraded, failing, or no data. */
 export type HealthBar = "ok" | "warn" | "err" | "none";
@@ -41,6 +42,6 @@ export function describeDay(history: readonly HealthBar[]): string {
   const parts = [`${count("ok")} fine`];
   if (count("warn")) parts.push(`${count("warn")} degraded`);
   if (count("err")) parts.push(`${count("err")} failing`);
-  if (count("none")) parts.push(`${count("none")} without data`);
-  return `Last 24 hours: ${parts.join(", ")}.`;
+  if (count("none")) parts.push(t("ui.health.withoutData", { value: count("none") }));
+  return t("ui.health.last24Hours", { value: parts.join(", ") });
 }

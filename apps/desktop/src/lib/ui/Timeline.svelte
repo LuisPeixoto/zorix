@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import type { TaskView } from "../api.ts";
@@ -24,12 +25,12 @@
   const ROW = 44;
   // Written out in full so Tailwind can see them.
   const BAR: Record<UiTone, { box: string; fill: string }> = {
-    ok: { box: "border-ok/45 bg-ok/16", fill: "bg-ok/22" },
-    warn: { box: "border-warn/45 bg-warn/16", fill: "bg-warn/22" },
-    err: { box: "border-err/45 bg-err/16", fill: "bg-err/22" },
-    info: { box: "border-info/45 bg-info/16", fill: "bg-info/22" },
-    muted: { box: "border-muted/45 bg-muted/16", fill: "bg-muted/22" },
-    accent: { box: "border-accent/45 bg-accent/16", fill: "bg-accent/22" },
+    ok: { box: t("ui.timeline.borderOk45Bg"), fill: "bg-ok/22" },
+    warn: { box: t("ui.timeline.borderWarn45Bg"), fill: "bg-warn/22" },
+    err: { box: t("ui.timeline.borderErr45Bg"), fill: "bg-err/22" },
+    info: { box: t("ui.timeline.borderInfo45Bg"), fill: "bg-info/22" },
+    muted: { box: t("ui.timeline.borderMuted45Bg"), fill: "bg-muted/22" },
+    accent: { box: t("ui.timeline.borderAccent45Bg"), fill: "bg-accent/22" },
   };
 
   let laneWidth = $state(0);
@@ -39,7 +40,7 @@
 
 <div class="relative overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
   <div class="grid grid-cols-[260px_minmax(0,1fr)] border-b border-line-soft bg-panel-2">
-    <span class="px-3.5 py-2.5 text-2xs font-semibold tracking-wider text-faint uppercase">Task</span>
+    <span class="px-3.5 py-2.5 text-2xs font-semibold tracking-wider text-faint uppercase">{t("common.task")}</span>
     <div class="grid" style:grid-template-columns={columns}>
       {#each timeline.columns as column (column.start)}
         <span class="border-l border-line-soft px-2.5 py-2.5 text-2xs font-semibold tracking-wider text-faint uppercase" title={dayLabel(dayText(column.start))}>{column.label}</span>
@@ -55,7 +56,7 @@
     <div class="pointer-events-none absolute inset-y-0 right-0 left-65 z-10" bind:clientWidth={laneWidth} aria-hidden="true">
       {#if timeline.today !== null}
         <span class="absolute inset-y-0 w-0.5 bg-accent" style:left="{timeline.today * 100}%">
-          <span class="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-accent px-2 py-0.5 text-2xs font-semibold whitespace-nowrap text-accent-fg shadow-1">Today</span>
+          <span class="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-accent px-2 py-0.5 text-2xs font-semibold whitespace-nowrap text-accent-fg shadow-1">{t("ui.timeline.today")}</span>
         </span>
       {/if}
       {#if laneWidth > 0 && arrows.length > 0}
@@ -79,7 +80,7 @@
           <button
             type="button"
             onclick={() => onopen(task.key)}
-            aria-label="{task.key}, {task.title}, {task.progress}% done, from {dayLabel(dayText(bar.start))} to {dayLabel(dayText(bar.end))}"
+            aria-label={t("ui.timeline.doneFromTo", { key: task.key, title: task.title, progress: task.progress, value: dayLabel(dayText(bar.start)), value2: dayLabel(dayText(bar.end)) })}
             class={cn("absolute top-2 z-0 flex h-6.5 items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-xs font-medium whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-accent/60", BAR[bar.tone].box)}
             style:left="{bar.left * 100}%"
             style:width="max({bar.width * 100}%, 4.5rem)"
@@ -92,7 +93,7 @@
       </div>
     {/each}
     {#if timeline.bars.length === 0}
-      <p class="px-4 py-8 text-center text-base text-muted">No task has a date yet. Give a task a start and a due date to place it here.</p>
+      <p class="px-4 py-8 text-center text-base text-muted">{t("ui.timeline.noTaskHasA")}</p>
     {/if}
   </div>
 </div>

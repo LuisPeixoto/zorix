@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Badge from "./Badge.svelte";
@@ -63,7 +64,7 @@
   <span class="leading-snug font-medium">{title}</span>
   {#if progress !== null && progress > 0 && progress < 100}
     <span class="flex items-center gap-2">
-      <Sparkbar value={progress} max={100} label="Progress" class="w-full flex-1" />
+      <Sparkbar value={progress} max={100} label={t("common.progress")} class="w-full flex-1" />
       <span class="tnum text-xs text-muted">{progress}%</span>
     </span>
   {/if}

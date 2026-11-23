@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Badge from "./Badge.svelte";
@@ -22,12 +23,12 @@
   }: { tool: string; status: ToolStatus; args?: unknown; result?: string; error?: string | null; open?: boolean; children?: Snippet } = $props();
 
   const LOOK: Record<ToolStatus, { tone: UiTone; text: string; icon: string }> = {
-    requested: { tone: "muted", text: "Queued", icon: "clock" },
-    awaiting_approval: { tone: "warn", text: "Needs you", icon: "shield" },
-    started: { tone: "info", text: "Running", icon: "wrench" },
-    succeeded: { tone: "ok", text: "Done", icon: "check" },
-    failed: { tone: "err", text: "Failed", icon: "x" },
-    denied: { tone: "muted", text: "Refused", icon: "lock" },
+    requested: { tone: "muted", text: t("ui.toolCallCard.queued"), icon: "clock" },
+    awaiting_approval: { tone: "warn", text: t("common.needsYou"), icon: "shield" },
+    started: { tone: "info", text: t("common.running"), icon: "wrench" },
+    succeeded: { tone: "ok", text: t("common.done"), icon: "check" },
+    failed: { tone: "err", text: t("common.failed"), icon: "x" },
+    denied: { tone: "muted", text: t("ui.toolCallCard.refused"), icon: "lock" },
   };
   const look = $derived(LOOK[status]);
   const argText = $derived(args === undefined || args === null ? "" : JSON.stringify(args, null, 2));
@@ -49,16 +50,16 @@
     <div id={panel} class="space-y-2 border-t border-line-soft p-3">
       {#if argText}
         <div>
-          <p class="mb-1 text-2xs font-semibold tracking-wider text-faint uppercase">Asked with</p>
-          <CodeBlock code={argText} language="json" maxHeight={180} label="Arguments" />
+          <p class="mb-1 text-2xs font-semibold tracking-wider text-faint uppercase">{t("ui.toolCallCard.askedWith")}</p>
+          <CodeBlock code={argText} language="json" maxHeight={180} label={t("common.arguments")} />
         </div>
       {/if}
       {#if error}
         <p class="rounded-lg border border-err/35 bg-err/8 px-3 py-2 text-sm text-err" role="alert">{error}</p>
       {:else if result}
         <div>
-          <p class="mb-1 text-2xs font-semibold tracking-wider text-faint uppercase">Result</p>
-          <CodeBlock code={result} language="text" maxHeight={220} label="Result" wrap />
+          <p class="mb-1 text-2xs font-semibold tracking-wider text-faint uppercase">{t("ui.toolCallCard.result")}</p>
+          <CodeBlock code={result} language="text" maxHeight={220} label={t("ui.toolCallCard.result")} wrap />
         </div>
       {/if}
     </div>

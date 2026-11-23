@@ -1,13 +1,14 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { cn } from "./cn.ts";
 
   export type Level = "suggest" | "ask" | "notify" | "budgeted" | "full";
   const LEVELS: { id: Level; label: string; blurb: string }[] = [
-    { id: "suggest", label: "Suggest", blurb: "Proposes; a person acts" },
-    { id: "ask", label: "Ask", blurb: "Acts after each approval" },
-    { id: "notify", label: "Notify", blurb: "Acts, then reports" },
-    { id: "budgeted", label: "Budgeted", blurb: "Acts within limits" },
-    { id: "full", label: "Full", blurb: "Acts, reports weekly" },
+    { id: "suggest", label: t("ui.autonomyDial.suggest"), blurb: t("ui.autonomyDial.proposesAPersonActs") },
+    { id: "ask", label: t("ui.autonomyDial.ask"), blurb: t("ui.autonomyDial.actsAfterEachApproval") },
+    { id: "notify", label: t("ui.autonomyDial.notify"), blurb: t("ui.autonomyDial.actsThenReports") },
+    { id: "budgeted", label: t("ui.autonomyDial.budgeted"), blurb: t("ui.autonomyDial.actsWithinLimits") },
+    { id: "full", label: t("ui.autonomyDial.full"), blurb: t("ui.autonomyDial.actsReportsWeekly") },
   ];
 
   /**
@@ -19,7 +20,7 @@
     level = $bindable("ask"),
     max = "full",
     disabled = false,
-    label = "Autonomy",
+    label = t("common.autonomy"),
     onchange,
     class: klass = "",
   }: { level?: Level; max?: Level; disabled?: boolean; label?: string; onchange?: (level: Level) => void; class?: string } = $props();
@@ -52,7 +53,7 @@
       aria-checked={i === index}
       tabindex={i === index ? 0 : -1}
       disabled={disabled || locked}
-      title={locked ? "Above the one it reports to" : l.blurb}
+      title={locked ? t("ui.autonomyDial.aboveTheOneIt") : l.blurb}
       onclick={() => pick(i)}
       class={cn(
         "flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/60",

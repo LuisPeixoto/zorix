@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import { cn } from "./cn.ts";
@@ -14,7 +15,7 @@
   }: { role: "user" | "assistant"; name?: string; time?: string; streaming?: boolean; avatar?: Snippet; children: Snippet } = $props();
 </script>
 
-<article class={cn("flex gap-3", role === "user" ? "flex-row-reverse" : "flex-row")} aria-label={role === "user" ? "You" : (name ?? "Agent")}>
+<article class={cn("flex gap-3", role === "user" ? "flex-row-reverse" : "flex-row")} aria-label={role === "user" ? t("common.you") : (name ?? t("common.agent"))}>
   {#if role === "assistant"}<div class="mt-0.5 shrink-0">{@render avatar?.()}</div>{/if}
   <div class={cn("flex min-w-0 max-w-[min(46rem,88%)] flex-col gap-1", role === "user" ? "items-end" : "items-start")}>
     {#if name || time}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import BrandLogo from "./BrandLogo.svelte";
   import Icon from "./Icon.svelte";
   import StatusPill from "./StatusPill.svelte";
@@ -12,7 +13,7 @@
   let { items, onopen, class: klass = "" }: { items: HealthItem[]; onopen?: (item: HealthItem) => void; class?: string } = $props();
 
   const cells = $derived(sortFailingFirst(items));
-  const cell = "flex w-full min-w-0 flex-col gap-2 rounded-xl border border-line bg-panel px-3 py-2.5 text-left";
+  const cell = t("ui.healthGrid.flexWFullMin");
   const bar = { ok: "bg-ok/70", warn: "bg-warn", err: "bg-err", none: "bg-hover" };
 </script>
 
@@ -28,7 +29,7 @@
   <span class="truncate text-xs text-muted">{item.note}</span>
 {/snippet}
 
-<ul class={cn("grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2", klass)} aria-label="Health">
+<ul class={cn("grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2", klass)} aria-label={t("ui.healthGrid.health")}>
   {#each cells as item (item.id)}
     <li class="min-w-0">
       {#if onopen}

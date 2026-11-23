@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
   import { fade, fly } from "svelte/transition";
 
@@ -45,7 +46,7 @@
 
 {#if open}
   <div class="fixed inset-0 z-40" transition:fade={{ duration: 140 }}>
-    <button type="button" class="absolute inset-0 cursor-default bg-black/35" aria-label="Close" tabindex="-1" onclick={close}></button>
+    <button type="button" class="absolute inset-0 cursor-default bg-black/35" aria-label={t("common.close")} tabindex="-1" onclick={close}></button>
   </div>
   <div
     role="dialog"
@@ -62,7 +63,7 @@
         {#if subtitle}<p class="mt-0.5 truncate text-sm text-muted">{subtitle}</p>{/if}
       </div>
       {@render actions?.()}
-      <IconButton label="Close" icon="x" size="sm" onclick={close} />
+      <IconButton label={t("common.close")} icon="x" size="sm" onclick={close} />
     </header>
     <div class="min-h-0 flex-1 overflow-y-auto">{@render children?.()}</div>
     {#if footer}<footer class="flex items-center justify-end gap-2 border-t border-line bg-panel-2 px-5 py-3">{@render footer()}</footer>{/if}
