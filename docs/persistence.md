@@ -100,6 +100,11 @@ A call is delegated at most once (the children's idempotency keys), so a restart
 
 Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuses a schema-8 database. Spend is not stored: it is read from the cost of the runs.
 
+### List indexes (schema 10)
+
+The run list is shown newest first, and each filter now has an index that ends in that order: the agent's, the conversation's and the state's, each with the tie-break, so a filter reads only the rows it shows instead of reading and sorting every match. Opening a
+schema-9 database builds them in one transaction (the larger the history, the longer: a database of 10,000 runs takes well under a second); a 0.9 program refuses a schema-10 database.
+
 ### Webhook deliveries (schema 9)
 
 `workflow_deliveries` holds the id each sender gave a delivery, per tenant and workflow, with the time it arrived. An id is remembered for 24 hours and at most the newest 10,000 of

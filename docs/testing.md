@@ -101,19 +101,21 @@ The full size is 10,000 runs with 1,000,000 events, 200 agents (the most a tenan
 
 Full-size numbers, in milliseconds (the median of 15 runs, release build, an Intel 3.4 GHz Mac with an SSD; the data folder is 345 MB):
 
-| What a person waits for | Median |
-|---|---|
-| The newest page of runs (100) | 0.3 |
-| Runs of one agent | 9 |
-| Runs waiting for approval | 18 |
-| Runs of one conversation | 17 |
-| Runs since a week ago | 5 |
-| Replaying all 10,000 events of a run (in pages of 1,000) | 10 |
-| The Inbox: runs waiting for a person, and the approvals of fifty of them | 0.3 and 1 |
-| Keyword search over 5,000 facts | 2 |
-| Keyword search over 50,000 pieces of documents | 67 |
-| Search by meaning over 50,000 pieces (every vector is read) | 190 |
-| Opening the store again | 0.5 |
+| What a person waits for | Before the list indexes | Now |
+|---|---|---|
+| The newest page of runs (100) | 0.3 | 0.3 |
+| Runs of one agent | 9 | 0.4 |
+| Runs waiting for approval | 18 | 0.4 |
+| Runs of one conversation | 17 | 0.1 |
+| Runs since a week ago | 5 | 5 |
+| Replaying all 10,000 events of a run (in pages of 1,000) | 10 | 9 |
+| The Inbox: runs waiting for a person, and the approvals of fifty of them | 0.3 and 1 | 0.4 and 1 |
+| Keyword search over 5,000 facts | 2 | 2 |
+| Keyword search over 50,000 pieces of documents | 67 | 66 |
+| Search by meaning over 50,000 pieces (every vector is read) | 190 | 188 |
+| Opening the store again | 0.5 | 0.5 |
+
+The first full-size run showed three lists that read and sorted every match (an agent's runs, the runs in one state, a conversation's); schema 10 gives each an index that ends in the order of the list, and a test checks the planner uses it.
 
 Search by meaning grows with the number of vectors, since each is compared with the query; at the product's limit of 200,000 pieces it would be about four times as long. An on-disk index for large collections is planned
 ([roadmap](roadmap.md), Phase 11).
