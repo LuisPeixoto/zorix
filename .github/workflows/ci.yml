@@ -56,6 +56,36 @@ jobs:
         with:
           command: check
 
+  coverage:
+    # What the tests cover, per crate. A report, not a gate: there is no target to chase, and the numbers show where an audit should look first.
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Fetch the Python module the sandbox tests use
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/python.wasm" "https://github.com/vmware-labs/webassembly-language-runtimes/releases/download/python%2F3.12.0%2B20231211-040d5a6/python-3.12.0.wasm"
+          echo "e5dc5a398b07b54ea8fdb503bf68fb583d533f10ec3f930963e02b9505f7a763  $RUNNER_TEMP/python.wasm" | sha256sum -c -
+          echo "ZORIX_PYTHON_WASM=$RUNNER_TEMP/python.wasm" >> "$GITHUB_ENV"
+      - name: Run the tests with coverage
+        run: |
+          cargo llvm-cov --workspace --exclude zorix-desktop --exclude zorix-bench --lcov --output-path lcov.info
+          cargo llvm-cov report --json --summary-only --output-path coverage.json
+      - name: Say it per crate
+        run: node tools/coverage-summary.mjs coverage.json --markdown >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            lcov.info
+            coverage.json
+
   bench:
     # A tenth of the full data set, with limits that are many times what a healthy run takes: only a large regression fails. The numbers
     # that matter are in docs/testing.md, from full-size runs on a known machine.
