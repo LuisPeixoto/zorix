@@ -393,3 +393,4 @@ These guidelines ask for things ZORIX does not have yet. Each one is tracked, an
 | No end-to-end tests drive the built desktop app | 2 | [#2](https://github.com/LuisPeixoto/zorix/issues/2) |
 | The installers have not been verified on clean machines | 2 | [#3](https://github.com/LuisPeixoto/zorix/issues/3) |
 | GitHub Sponsors have not been evaluated | 1 | [#4](https://github.com/LuisPeixoto/zorix/issues/4) |
+| About 170 validation errors are English sentences, not codes, so a translated interface shows them in English | 11 | [#26](https://github.com/LuisPeixoto/zorix/issues/26) |

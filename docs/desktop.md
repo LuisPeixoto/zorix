@@ -181,6 +181,7 @@ forms only needs its own). Money, numbers, percentages, dates, times, weekdays, 
   and reload, or build with `VITE_START_LOCALE=en-XA`.
 - **The language is read once, when the app starts,** and a change reloads the window; nothing is reactive, so any module may call `t` while it is being set up. This version has English and the pseudo-locale; the translations and the language picker are
   [Phase 15](roadmap.md#phase-15--interface-and-languages--v0150).
+- **Errors have codes.** A failed command rejects with `{ code, args, message }`; `errorText` writes the sentence from `reason.<code>` and shows the English `message` for a code it does not know. The list of codes is generated from the backend (`crates/zorix-core/reasons.json`) and a test compares it with the catalogue. Validation sentences are still plain text under the codes `invalid`, `missing` and `message` ([#26](https://github.com/LuisPeixoto/zorix/issues/26)).
 - **The text was moved by a program** ([ADR-0040](adr/0040-interface-text-and-error-reasons.md)), so its keys and some placeholder names (`value`, `value2`) are mechanical. Phase 15 reads every message with its context before it is translated.
 
 ## Projects (version 0.8)
