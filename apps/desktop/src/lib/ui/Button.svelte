@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
   import type { HTMLButtonAttributes } from "svelte/elements";
 
@@ -19,13 +20,13 @@
 
   const variants = {
     primary:
-      "surface-primary hover:brightness-105",
-    secondary: "border border-line bg-panel text-fg shadow-1 raised hover:border-line-strong hover:bg-hover",
-    ghost: "text-muted hover:bg-hover hover:text-fg",
-    danger: "border border-err/40 bg-err/8 text-err hover:bg-err/15",
-    subtle: "bg-accent-soft text-accent hover:bg-select",
+      t("ui.button.surfacePrimaryHoverBrightness"),
+    secondary: t("ui.button.borderBorderLineBg"),
+    ghost: t("ui.button.textMutedHoverBg"),
+    danger: t("ui.button.borderBorderErr40"),
+    subtle: t("ui.button.bgAccentSoftText"),
   };
-  const sizes = { sm: "h-7 px-2.5 text-sm", md: "h-8 px-3.5 text-base", lg: "h-10 px-5 text-md" };
+  const sizes = { sm: t("ui.button.h7Px2"), md: t("ui.button.h8Px3"), lg: t("ui.button.h10Px5") };
   const iconSize = { sm: 14, md: 15, lg: 17 };
 </script>
 

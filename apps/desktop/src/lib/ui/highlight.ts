@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n/index.ts";
 // A tiny syntax highlighter for the code ZORIX shows people: SQL, JSON, JavaScript and Python. It turns text into tokens;
 // the component decides how to paint them. No network, no dependency, and never HTML: the text is always rendered as text.
 
@@ -6,13 +7,13 @@ export type Token = { kind: TokenKind; text: string };
 export type Language = "sql" | "json" | "js" | "py" | "text";
 
 const SQL_KEYWORDS = new Set(
-  "select from where and or not null insert into values update set delete create drop alter table index view as join left right inner outer full cross on group by order having limit offset distinct union all with returning case when then else end in is like ilike between exists primary key foreign references default unique check begin commit rollback explain analyze show describe true false asc desc count sum avg min max cast over partition".split(" "),
+  tr("ui.highlight.selectFromWhereAnd").split(" "),
 );
 const JS_KEYWORDS = new Set(
-  "const let var function return if else for while do break continue new class extends import export from default async await try catch finally throw typeof instanceof in of switch case null undefined true false this".split(" "),
+  tr("ui.highlight.constLetVarFunction").split(" "),
 );
 const PY_KEYWORDS = new Set(
-  "def return if elif else for while break continue class import from as with try except finally raise lambda pass yield None True False and or not in is async await global nonlocal assert del print".split(" "),
+  tr("ui.highlight.defReturnIfElif").split(" "),
 );
 
 type Rule = { kind: TokenKind; re: RegExp };

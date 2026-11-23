@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Approval } from "../api.ts";
   import { json } from "../format.ts";
   import { integrations } from "../stores/integrations.svelte.ts";
@@ -41,40 +42,40 @@
 
 {#snippet answer(yes: string)}
   <div class="mt-3">
-    <Field label="Note (optional; the model reads it if you refuse)">
+    <Field label={t("approvalCard.noteOptionalTheModel")}>
       {#snippet children(f)}<Input id={f.id} bind:value={note} maxlength={300} />{/snippet}
     </Field>
   </div>
-  <p class="mt-2 text-xs text-muted">Your answer applies to exactly this call (fingerprint <span class="mono">{approval.call_hash.slice(0, 12)}…</span>).</p>
+  <p class="mt-2 text-xs text-muted">{t("approvalCard.yourAnswerAppliesTo")} <span class="mono">{approval.call_hash.slice(0, 12)}…</span>).</p>
 {/snippet}
 
 {#snippet buttons(yes: string)}
   <Button variant="primary" icon="check" disabled={store.busy} onclick={() => decide(true)}>{yes}</Button>
-  <Button icon="x" disabled={store.busy} onclick={() => decide(false)}>Refuse</Button>
+  <Button icon="x" disabled={store.busy} onclick={() => decide(false)}>{t("common.refuse")}</Button>
 {/snippet}
 
 {#if variant === "remember"}
-  <Callout tone="warn" icon="book" title="A run wants to remember something">
-    <p>If you approve, this is saved and shown to future runs. Nothing is saved until you do.</p>
+  <Callout tone="warn" icon="book" title={t("approvalCard.aRunWantsTo")}>
+    <p>{t("approvalCard.ifYouApproveThis")}</p>
     <blockquote class="selectable mt-3 rounded-lg border border-line bg-panel p-3 text-md leading-relaxed text-fg">{String(args.content ?? "")}</blockquote>
     <div class="mt-2.5 flex flex-wrap gap-1.5">
       <Badge tone="muted">{String(args.kind ?? "fact")}</Badge>
-      <Badge tone="accent">{scopeText === "global" ? "Everywhere" : scopeText}</Badge>
+      <Badge tone="accent">{scopeText === "global" ? t("approvalCard.everywhere") : scopeText}</Badge>
       {#if subject}<Badge tone="muted">about: {subject}</Badge>{/if}
       {#if args.valid_until}<Badge tone="muted">until {String(args.valid_until)}</Badge>{/if}
     </div>
     {#if affected.length}
       <div class="mt-3 rounded-lg border border-warn/40 bg-warn/8 p-3">
-        <p class="text-sm font-medium">This would replace:</p>
+        <p class="text-sm font-medium">{t("approvalCard.thisWouldReplace")}</p>
         {#each affected as old (old.id)}<p class="selectable mt-1 text-sm">{old.content}</p>{/each}
       </div>
     {/if}
-    <p class="mt-3 text-xs text-muted">You cannot edit a proposal before approving it. Refuse it with a note, or approve it and edit it under Memory.</p>
-    {@render answer("Remember it")}
-    {#snippet actions()}{@render buttons("Remember it")}{/snippet}
+    <p class="mt-3 text-xs text-muted">{t("approvalCard.youCannotEditA")}</p>
+    {@render answer(t("approvalCard.rememberIt"))}
+    {#snippet actions()}{@render buttons(t("approvalCard.rememberIt"))}{/snippet}
   </Callout>
 {:else}
-  <Callout tone="warn" icon="shield" title={variant === "mcp" ? "A server's tool wants to run" : variant === "db" ? "A run wants to change a database" : variant === "chat" ? "A run wants to send a message" : variant === "code" ? "A run wants to run code with files" : "Approval needed"}>
+  <Callout tone="warn" icon="shield" title={variant === "mcp" ? t("approvalCard.aServerSTool") : variant === "db" ? t("approvalCard.aRunWantsTo2") : variant === "chat" ? t("approvalCard.aRunWantsTo3") : variant === "code" ? t("approvalCard.aRunWantsTo4") : t("approvalCard.approvalNeeded")}>
     <div class="mt-2.5">
     {#if variant === "mcp" && mcp}
       <div class="flex items-center gap-3 rounded-lg border border-line bg-panel p-3">
@@ -82,31 +83,31 @@
         <div class="min-w-0 flex-1">
           <p class="text-md font-medium">{mcp.server} <span class="text-muted">›</span> <span class="mono">{mcp.tool}</span></p>
           <p class="text-xs text-muted">
-            {server ? (server.kind === "stdio" ? "A program on this computer" : "A remote server") : "An MCP server"}. Its tool and description were approved by you{hash ? ` (definition ${hash.slice(0, 10)})` : ""}.
+            {server ? (server.kind === "stdio" ? t("approvalCard.aProgramOnThis") : t("approvalCard.aRemoteServer")) : t("approvalCard.anMcpServer")}{t("approvalCard.itsToolAndDescription")}{hash ? ` (definition ${hash.slice(0, 10)})` : ""}.
           </p>
         </div>
-        <Badge tone="muted">third party</Badge>
+        <Badge tone="muted">{t("approvalCard.thirdParty")}</Badge>
       </div>
       {#if summary}<p class="mt-3 text-base text-fg">{summary}</p>{/if}
-      <p class="mt-3 mb-1 text-xs font-medium text-muted">Arguments</p>
-      <CodeBlock code={json(approval.arguments)} language="json" maxHeight={220} label="Arguments" />
-      <p class="mt-2 text-xs text-muted">What the server returns is treated as data, never as instructions.</p>
+      <p class="mt-3 mb-1 text-xs font-medium text-muted">{t("common.arguments")}</p>
+      <CodeBlock code={json(approval.arguments)} language="json" maxHeight={220} label={t("common.arguments")} />
+      <p class="mt-2 text-xs text-muted">{t("approvalCard.whatTheServerReturns")}</p>
     {:else if variant === "http" || variant === "webhook"}
-      <p>The run wants to {variant === "webhook" ? "send a signed webhook" : "send a web request"}.</p>
+      <p>{t("approvalCard.theRunWantsTo")} {variant === "webhook" ? t("approvalCard.sendASignedWebhook") : t("approvalCard.sendAWebRequest")}.</p>
       <div class="mt-3 flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2">
         {#if variant === "http"}<Badge tone={text("method") === "GET" ? "ok" : "warn"}>{text("method") || "GET"}</Badge>{:else}<Badge tone="accent">POST</Badge>{/if}
         <span class="mono selectable min-w-0 flex-1 truncate text-sm" title={text("url") || text("connection")}>{variant === "http" ? text("url") : `${text("connection")} · ${text("event")}`}</span>
       </div>
       {#if summary}<p class="mt-2 text-sm text-muted">{summary}</p>{/if}
       {#if variant === "http" && httpBody}
-        <p class="mt-3 mb-1 text-xs font-medium text-muted">Body</p>
-        <CodeBlock code={httpBody} language={args.json !== undefined ? "json" : "text"} maxHeight={200} wrap label="Request body" />
+        <p class="mt-3 mb-1 text-xs font-medium text-muted">{t("approvalCard.body")}</p>
+        <CodeBlock code={httpBody} language={args.json !== undefined ? "json" : "text"} maxHeight={200} wrap label={t("approvalCard.requestBody")} />
       {:else if variant === "webhook"}
-        <p class="mt-3 mb-1 text-xs font-medium text-muted">Payload</p>
-        <CodeBlock code={JSON.stringify(args.payload ?? {}, null, 2)} language="json" maxHeight={200} label="Payload" />
+        <p class="mt-3 mb-1 text-xs font-medium text-muted">{t("approvalCard.payload")}</p>
+        <CodeBlock code={JSON.stringify(args.payload ?? {}, null, 2)} language="json" maxHeight={200} label={t("approvalCard.payload")} />
       {/if}
     {:else if variant === "git" || variant === "jira"}
-      <p>The run wants to <strong class="text-fg">{actionWords(service.action)}</strong> on {service.service === "github" ? "GitHub" : service.service === "gitlab" ? "GitLab" : "Jira"}.</p>
+      <p>{t("approvalCard.theRunWantsTo")} <strong class="text-fg">{actionWords(service.action)}</strong> on {service.service === "github" ? t("common.github") : service.service === "gitlab" ? t("approvalCard.gitlab") : t("approvalCard.jira")}.</p>
       <div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2">
         <Icon name={variant === "git" ? "git-branch" : "list"} size={15} class="text-muted" />
         <span class="mono selectable text-sm">{text("repo") || text("project") || text("key") || ""}{args.number ? ` #${args.number}` : ""}</span>
@@ -115,29 +116,29 @@
       </div>
       {#if text("title") || text("summary")}<p class="selectable mt-3 text-md font-medium">{text("title") || text("summary")}</p>{/if}
       {#if body}<blockquote class="selectable mt-2 max-h-52 overflow-auto rounded-lg border border-line bg-panel p-3 text-base leading-relaxed whitespace-pre-wrap text-fg">{body}</blockquote>{/if}
-      {#if !text("title") && !body && !text("summary")}<CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label="Arguments" class="mt-3" />{/if}
+      {#if !text("title") && !body && !text("summary")}<CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label={t("common.arguments")} class="mt-3" />{/if}
     {:else if variant === "chat"}
-      <p>The run wants to post in <strong class="text-fg">{service.service === "slack" ? "Slack" : "Discord"}</strong> channel <span class="mono text-fg">{text("channel")}</span>.</p>
+      <p>{t("approvalCard.theRunWantsTo2")} <strong class="text-fg">{service.service === "slack" ? t("common.slack") : t("common.discord")}</strong> channel <span class="mono text-fg">{text("channel")}</span>.</p>
       <div class="mt-3 rounded-2xl rounded-tl-sm border border-line bg-panel p-3.5 shadow-1">
         <p class="selectable text-md leading-relaxed whitespace-pre-wrap">{text("text") || text("content")}</p>
       </div>
-      <p class="mt-1.5 text-xs text-muted">Mentions of everyone are refused automatically. Nothing is sent until you approve.</p>
+      <p class="mt-1.5 text-xs text-muted">{t("approvalCard.mentionsOfEveryoneAre")}</p>
     {:else if variant === "db"}
-      <p>The run wants to run this statement on <strong class="mono text-fg">{text("connection")}</strong>. Queries cannot change data; this one can.</p>
-      <CodeBlock code={text("sql")} language="sql" maxHeight={240} wrap label="SQL statement" class="mt-3" />
-      <Callout tone="err" icon="alert" class="mt-3">It runs in one transaction and is rolled back if it fails, but a successful change is real.</Callout>
+      <p>{t("approvalCard.theRunWantsTo3")} <strong class="mono text-fg">{text("connection")}</strong>{t("approvalCard.queriesCannotChangeData")}</p>
+      <CodeBlock code={text("sql")} language="sql" maxHeight={240} wrap label={t("approvalCard.sqlStatement")} class="mt-3" />
+      <Callout tone="err" icon="alert" class="mt-3">{t("approvalCard.itRunsInOne")}</Callout>
     {:else if variant === "code"}
-      <p>The run wants to run <strong class="text-fg">{text("language") === "python" ? "Python" : "JavaScript"}</strong> in the sandbox with access to your workspace files (read-only). There is no network.</p>
-      <CodeBlock code={text("code")} language={text("language") === "python" ? "py" : "js"} maxHeight={260} label="Program" class="mt-3" />
+      <p>{t("approvalCard.theRunWantsTo4")} <strong class="text-fg">{text("language") === "python" ? t("approvalCard.python") : t("approvalCard.javascript")}</strong> {t("approvalCard.inTheSandboxWith")}</p>
+      <CodeBlock code={text("code")} language={text("language") === "python" ? "py" : "js"} maxHeight={260} label={t("approvalCard.program")} class="mt-3" />
     {:else}
-      <p>The run wants to use <code class="mono text-fg">{approval.tool}</code>. Nothing has happened yet.</p>
+      <p>{t("approvalCard.theRunWantsTo5")} <code class="mono text-fg">{approval.tool}</code>{t("approvalCard.nothingHasHappenedYet")}</p>
       {#if summary}<p class="mt-1 text-fg">{summary}</p>{/if}
-      <p class="mt-1">Why you are asked: {approval.reason}</p>
-      <CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label="Arguments" class="mt-3" />
+      <p class="mt-1">{t("approvalCard.whyYouAreAsked", { reason: approval.reason })}</p>
+      <CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label={t("common.arguments")} class="mt-3" />
     {/if}
-    {#if variant !== "generic" && variant !== "mcp"}<p class="mt-3 text-xs text-muted">Why you are asked: {approval.reason}</p>{/if}
+    {#if variant !== "generic" && variant !== "mcp"}<p class="mt-3 text-xs text-muted">{t("approvalCard.whyYouAreAsked", { reason: approval.reason })}</p>{/if}
     </div>
-    {@render answer("Approve")}
-    {#snippet actions()}{@render buttons("Approve")}{/snippet}
+    {@render answer(t("common.approve"))}
+    {#snippet actions()}{@render buttons(t("common.approve"))}{/snippet}
   </Callout>
 {/if}

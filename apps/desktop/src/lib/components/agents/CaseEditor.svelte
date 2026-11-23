@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import type { EvalCase, EvalCheck } from "../../api.ts";
   import { Button, Field, IconButton, Input, Modal, Select, Switch, Textarea } from "../../ui/index.ts";
 
@@ -7,13 +8,13 @@
   type Kind = "contains" | "not_contains" | "regex" | "tool_used" | "tool_not_used" | "max_steps" | "max_tool_calls";
   type Row = { kind: Kind; value: string };
   const KINDS: { value: Kind; label: string; hint: string }[] = [
-    { value: "contains", label: "Answer contains", hint: "text" },
-    { value: "not_contains", label: "Answer does not contain", hint: "text" },
-    { value: "regex", label: "Answer matches", hint: "regular expression" },
-    { value: "tool_used", label: "Used the tool", hint: "tool id, or a prefix ending in *" },
-    { value: "tool_not_used", label: "Never used the tool", hint: "tool id, or a prefix ending in *" },
-    { value: "max_steps", label: "At most this many steps", hint: "number" },
-    { value: "max_tool_calls", label: "At most this many tool calls", hint: "number" },
+    { value: "contains", label: tr("agents.caseEditor.answerContains"), hint: "text" },
+    { value: "not_contains", label: tr("agents.caseEditor.answerDoesNotContain"), hint: "text" },
+    { value: "regex", label: tr("agents.caseEditor.answerMatches"), hint: tr("agents.caseEditor.regularExpression") },
+    { value: "tool_used", label: tr("agents.caseEditor.usedTheTool"), hint: tr("agents.caseEditor.toolIdOrA") },
+    { value: "tool_not_used", label: tr("agents.caseEditor.neverUsedTheTool"), hint: tr("agents.caseEditor.toolIdOrA") },
+    { value: "max_steps", label: tr("agents.caseEditor.atMostThisMany"), hint: "number" },
+    { value: "max_tool_calls", label: tr("agents.caseEditor.atMostThisMany2"), hint: "number" },
   ];
 
   let name = $state("");
@@ -98,38 +99,38 @@
   }
 </script>
 
-<Modal bind:open title={initial ? "Edit case" : "New case"} icon="flask" size="lg">
+<Modal bind:open title={initial ? tr("agents.caseEditor.editCase") : tr("agents.caseEditor.newCase")} icon="flask" size="lg">
   <div class="space-y-4">
-    <Field label="Name" required error={error?.includes("name") ? error : null}>{#snippet children(f)}<Input id={f.id} bind:value={name} maxlength={80} placeholder="cites-its-sources" disabled={!!initial} />{/snippet}</Field>
-    <Field label="What to ask" required>{#snippet children(f)}<Textarea id={f.id} rows={4} bind:value={prompt} placeholder="What is the boiling point of water? Give a source." />{/snippet}</Field>
-    <Field label="Tags" hint="Comma separated. Run only the cases with a tag, such as smoke.">{#snippet children(f)}<Input id={f.id} bind:value={tags} placeholder="smoke, citations" />{/snippet}</Field>
+    <Field label={tr("common.name")} required error={error?.includes("name") ? error : null}>{#snippet children(f)}<Input id={f.id} bind:value={name} maxlength={80} placeholder="cites-its-sources" disabled={!!initial} />{/snippet}</Field>
+    <Field label={tr("common.whatToAsk")} required>{#snippet children(f)}<Textarea id={f.id} rows={4} bind:value={prompt} placeholder={tr("agents.caseEditor.whatIsTheBoiling")} />{/snippet}</Field>
+    <Field label={tr("agents.caseEditor.tags")} hint={tr("agents.caseEditor.commaSeparatedRunOnly")}>{#snippet children(f)}<Input id={f.id} bind:value={tags} placeholder={tr("agents.caseEditor.smokeCitations")} />{/snippet}</Field>
 
     <fieldset class="space-y-2">
-      <legend class="mb-1 text-sm font-medium">The answer must meet</legend>
+      <legend class="mb-1 text-sm font-medium">{tr("agents.caseEditor.theAnswerMustMeet")}</legend>
       {#each rows as row, i (i)}
         <div class="flex items-center gap-2">
-          <Select bind:value={row.kind} class="w-60 shrink-0" aria-label="Kind of check">{#each KINDS as k (k.value)}<option value={k.value}>{k.label}</option>{/each}</Select>
-          <Input class="min-w-0 flex-1" bind:value={row.value} aria-label="Value" placeholder={KINDS.find((k) => k.value === row.kind)?.hint} mono={row.kind === "regex" || row.kind.startsWith("tool")} />
-          <IconButton icon="x" label="Remove this check" onclick={() => (rows = rows.filter((_, k) => k !== i))} />
+          <Select bind:value={row.kind} class="w-60 shrink-0" aria-label={tr("agents.caseEditor.kindOfCheck")}>{#each KINDS as k (k.value)}<option value={k.value}>{k.label}</option>{/each}</Select>
+          <Input class="min-w-0 flex-1" bind:value={row.value} aria-label={tr("agents.caseEditor.value")} placeholder={KINDS.find((k) => k.value === row.kind)?.hint} mono={row.kind === "regex" || row.kind.startsWith("tool")} />
+          <IconButton icon="x" label={tr("agents.caseEditor.removeThisCheck")} onclick={() => (rows = rows.filter((_, k) => k !== i))} />
         </div>
       {/each}
-      <Button size="sm" icon="plus" onclick={() => (rows = [...rows, { kind: "contains", value: "" }])}>Add a check</Button>
+      <Button size="sm" icon="plus" onclick={() => (rows = [...rows, { kind: "contains", value: "" }])}>{tr("agents.caseEditor.addACheck")}</Button>
     </fieldset>
 
     <div class="space-y-3 rounded-xl border border-line bg-panel-2 p-3">
-      <Switch bind:checked={judging}>Also ask a model to grade the answer</Switch>
+      <Switch bind:checked={judging}>{tr("agents.caseEditor.alsoAskAModel")}</Switch>
       {#if judging}
-        <Field label="What a good answer is like" hint="The grader sees your rubric and the answer, and scores it from 1 to 5.">{#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={rubric} placeholder="The answer is correct, short, and names its source." />{/snippet}</Field>
+        <Field label={tr("agents.caseEditor.whatAGoodAnswer")} hint={tr("agents.caseEditor.theGraderSeesYour")}>{#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={rubric} placeholder={tr("agents.caseEditor.theAnswerIsCorrect")} />{/snippet}</Field>
         <div class="grid gap-3 sm:grid-cols-2">
-          <Field label="Grader model">{#snippet children(f)}<Input id={f.id} bind:value={judgeModel} mono />{/snippet}</Field>
-          <Field label="Passes from">{#snippet children(f)}<Select id={f.id} bind:value={passScore}>{#each [1, 2, 3, 4, 5] as n (n)}<option value={String(n)}>{n} out of 5</option>{/each}</Select>{/snippet}</Field>
+          <Field label={tr("agents.caseEditor.graderModel")}>{#snippet children(f)}<Input id={f.id} bind:value={judgeModel} mono />{/snippet}</Field>
+          <Field label={tr("agents.caseEditor.passesFrom")}>{#snippet children(f)}<Select id={f.id} bind:value={passScore}>{#each [1, 2, 3, 4, 5] as n (n)}<option value={String(n)}>{tr("agents.caseEditor.outOf5", { n })}</option>{/each}</Select>{/snippet}</Field>
         </div>
       {/if}
     </div>
     {#if error}<p class="text-sm text-err" role="alert">{error}</p>{/if}
   </div>
   {#snippet footer()}
-    <Button onclick={() => (open = false)}>Cancel</Button>
-    <Button variant="primary" icon="check" loading={saving} disabled={!name.trim() || !prompt.trim()} onclick={save}>Save case</Button>
+    <Button onclick={() => (open = false)}>{tr("common.cancel")}</Button>
+    <Button variant="primary" icon="check" loading={saving} disabled={!name.trim() || !prompt.trim()} onclick={save}>{tr("agents.caseEditor.saveCase")}</Button>
   {/snippet}
 </Modal>

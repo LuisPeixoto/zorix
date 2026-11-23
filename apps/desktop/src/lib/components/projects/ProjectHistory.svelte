@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { type ProjectEvent, projectHistory } from "../../api.ts";
   import { type EventGroup, clock, eventGroup, eventSentence, groupByDay, todayOf } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
@@ -25,10 +26,10 @@
   });
 
   const FILTERS: { id: EventGroup | "all"; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "moves", label: "Moves" },
-    { id: "runs", label: "Runs" },
-    { id: "approvals", label: "Approvals" },
+    { id: "all", label: t("projects.projectHistory.all") },
+    { id: "moves", label: t("projects.projectHistory.moves") },
+    { id: "runs", label: t("common.runs") },
+    { id: "approvals", label: t("projects.projectHistory.approvals") },
   ];
 
   const shown = $derived(events.filter((e) => filter === "all" || eventGroup(e) === filter));
@@ -36,19 +37,19 @@
 
   function badge(event: ProjectEvent): { text: string; tone: "ok" } | null {
     const k = event.kind;
-    if (k.type === "moved" && k.approved_by) return { text: `Approved by ${k.approved_by}`, tone: "ok" };
+    if (k.type === "moved" && k.approved_by) return { text: t("projects.projectHistory.approvedBy", { approved_by: k.approved_by }), tone: "ok" };
     return null;
   }
 </script>
 
 <div class="mb-4 flex justify-end">
-  <div class="flex items-center gap-2" role="group" aria-label="Kinds of events">
+  <div class="flex items-center gap-2" role="group" aria-label={t("projects.projectHistory.kindsOfEvents")}>
     {#each FILTERS as f (f.id)}<Chip selected={filter === f.id} onclick={() => (filter = f.id)}>{f.label}</Chip>{/each}
   </div>
 </div>
 
 {#if loaded && shown.length === 0}
-  <EmptyState icon="history" title="Nothing here yet" text={filter === "all" ? "Moves, runs, comments and approvals appear here as they happen." : "No event of this kind yet."} />
+  <EmptyState icon="history" title={t("projects.projectHistory.nothingHereYet")} text={filter === "all" ? t("projects.projectHistory.movesRunsCommentsAnd") : t("projects.projectHistory.noEventOfThis")} />
 {:else}
   <div class="flex flex-col gap-4">
     {#each groups as group (group.label)}

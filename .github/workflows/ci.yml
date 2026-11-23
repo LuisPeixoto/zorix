@@ -173,6 +173,8 @@ jobs:
         run: node tools/design-tokens.mjs --check
       - name: Check the interface against the design system
         run: node tools/check-design.mjs
+      - name: Check that every sentence is in the catalogue
+        run: node tools/check-text.mjs
       - name: Build the interface
         working-directory: apps/desktop
         run: npm run build

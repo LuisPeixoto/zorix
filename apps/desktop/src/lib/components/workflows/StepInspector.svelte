@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import { type Day, type HostInfo, type StepKind, type WfStepHistory, type WorkflowSpec, errorText, workflowStepHistory, workflowWebhook } from "../../api.ts";
   import { toast } from "../../stores/toast.svelte.ts";
   import { Button, Callout, Chip, Field, Icon, IconButton, Input, Segmented, Select, Switch, Textarea, ToggleRow } from "../../ui/index.ts";
@@ -83,10 +84,10 @@
     void workflowWebhook(workflowId).then((a) => (address = a)).catch(() => (address = null));
   });
   const masked = (url: string) => url.replace(/\/hooks\/([^/]+)\/.+$/, "/hooks/$1/••••••••••••");
-  async function copy(text: string, what: string) {
+  async function copy(text: string, done: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.ok(`${what} copied.`);
+      toast.ok(done);
     } catch (e) {
       toast.err(errorText(e));
     }
@@ -94,7 +95,7 @@
   async function newAddress() {
     try {
       address = await workflowWebhook(workflowId, true);
-      toast.ok("New address made. The old one no longer works.");
+      toast.ok(tr("workflows.stepInspector.newAddressMadeThe"));
     } catch (e) {
       toast.err(errorText(e));
     }
@@ -174,12 +175,12 @@
 
 {#snippet askRow(ask: "always" | "never" | undefined)}
   <div>
-    <p class="mb-1.5 text-sm font-medium">When it runs</p>
-    <Segmented label="Ask first or not" bind:value={() => ask ?? "always", (v) => set({ ask: v })} options={[{ value: "always", label: "A person approves" }, { value: "never", label: "Runs without asking" }]} />
+    <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.whenItRuns")}</p>
+    <Segmented label={tr("workflows.stepInspector.askFirstOrNot")} bind:value={() => ask ?? "always", (v) => set({ ask: v })} options={[{ value: "always", label: "A person approves" }, { value: "never", label: "Runs without asking" }]} />
     {#if (ask ?? "always") === "never"}
-      <p class="mt-1.5 text-xs text-warn">A person confirms this when publishing. A test run still asks first.</p>
+      <p class="mt-1.5 text-xs text-warn">{tr("workflows.stepInspector.aPersonConfirmsThis")}</p>
     {:else}
-      <p class="mt-1.5 text-xs text-muted">The run stops here and shows what would be sent, until a person approves it.</p>
+      <p class="mt-1.5 text-xs text-muted">{tr("workflows.stepInspector.theRunStopsHere")}</p>
     {/if}
   </div>
 {/snippet}
@@ -191,37 +192,37 @@
       <p class="truncate text-md font-semibold">{step.title}</p>
       <p class="truncate text-xs text-muted">{kindLine(step)}</p>
     </div>
-    <IconButton icon="trash" label="Remove this step" variant="danger" size="sm" onclick={remove} />
+    <IconButton icon="trash" label={tr("workflows.stepInspector.removeThisStep")} variant="danger" size="sm" onclick={remove} />
   </div>
 
   <div class="space-y-4 overflow-y-auto p-4">
-    <Field label="Title" hint="Say what the step does.">
+    <Field label={tr("common.title")} hint={tr("workflows.stepInspector.sayWhatTheStep")}>
       {#snippet children(f)}<Input id={f.id} value={step.title} maxlength={80} oninput={(e) => onchange(patchStep(spec, step.id, { title: e.currentTarget.value }), `${step.id}:title`)} />{/snippet}
     </Field>
 
     {#if kind.type === "schedule"}
       <div>
-        <p class="mb-1.5 text-sm font-medium">Repeats</p>
-        <Segmented label="Kind of schedule" bind:value={() => whenMode, setWhenMode} options={[{ value: "daily", label: "Daily" }, { value: "every", label: "Every" }, { value: "cron", label: "Cron" }]} />
+        <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.repeats")}</p>
+        <Segmented label={tr("workflows.stepInspector.kindOfSchedule")} bind:value={() => whenMode, setWhenMode} options={[{ value: "daily", label: "Daily" }, { value: "every", label: "Every" }, { value: "cron", label: "Cron" }]} />
       </div>
       {#if kind.when.type === "daily"}
-        <Field label="At" hint="24-hour times, separated by commas.">
+        <Field label={tr("workflows.stepInspector.at")} hint={tr("workflows.stepInspector.24HourTimesSeparated")}>
           {#snippet children(f)}<Input id={f.id} value={timesText} placeholder="08:00, 16:00" onchange={(e) => setTimes(e.currentTarget.value)} />{/snippet}
         </Field>
         <div>
-          <p class="mb-1.5 text-sm font-medium">On</p>
-          <div class="flex flex-wrap gap-1.5" role="group" aria-label="Days">
+          <p class="mb-1.5 text-sm font-medium">{tr("common.on")}</p>
+          <div class="flex flex-wrap gap-1.5" role="group" aria-label={tr("workflows.stepInspector.days")}>
             {#each DAYS as day (day)}<Chip selected={kind.when.days.includes(day)} onclick={() => toggleDay(day)}>{day[0].toUpperCase() + day.slice(1)}</Chip>{/each}
           </div>
-          <p class="mt-1.5 text-xs text-muted">{kind.when.days.length === 0 ? "Every day." : ""}</p>
+          <p class="mt-1.5 text-xs text-muted">{kind.when.days.length === 0 ? tr("workflows.stepInspector.everyDay") : ""}</p>
         </div>
       {:else if kind.when.type === "every"}
         {@const minutes = kind.when.minutes}
-        <Field label="Every" hint="At least 5 minutes.">
+        <Field label={tr("workflows.stepInspector.every")} hint={tr("workflows.stepInspector.atLeast5Minutes")}>
           {#snippet children(f)}
             <div class="flex gap-2">
               <Input id={f.id} type="number" min="1" value={String(minutes % 60 === 0 && minutes >= 60 ? minutes / 60 : minutes)} class="min-w-0 flex-1" oninput={(e) => set({ when: { type: "every", minutes: Number(e.currentTarget.value) * (minutes % 60 === 0 && minutes >= 60 ? 60 : 1) } })} />
-              <Select value={minutes % 60 === 0 && minutes >= 60 ? "h" : "min"} class="w-20" aria-label="Unit" onchange={(e) => set({ when: { type: "every", minutes: e.currentTarget.value === "h" ? Math.max(1, Math.round(minutes / 60)) * 60 : Math.max(5, minutes) } })}>
+              <Select value={minutes % 60 === 0 && minutes >= 60 ? "h" : "min"} class="w-20" aria-label={tr("workflows.stepInspector.unit")} onchange={(e) => set({ when: { type: "every", minutes: e.currentTarget.value === "h" ? Math.max(1, Math.round(minutes / 60)) * 60 : Math.max(5, minutes) } })}>
                 <option value="min">min</option>
                 <option value="h">h</option>
               </Select>
@@ -229,62 +230,62 @@
           {/snippet}
         </Field>
       {:else}
-        <Field label="Cron expression" hint="Five fields: minute hour day-of-month month day-of-week.">
+        <Field label={tr("workflows.stepInspector.cronExpression")} hint={tr("workflows.stepInspector.fiveFieldsMinuteHour")}>
           {#snippet children(f)}<Input id={f.id} mono value={kind.when.type === "cron" ? kind.when.expr : ""} oninput={(e) => set({ when: { type: "cron", expr: e.currentTarget.value } })} />{/snippet}
         </Field>
       {/if}
-      <Field label="Time zone" hint="Leave empty to use this computer's.">
-        {#snippet children(f)}<Input id={f.id} value={kind.timezone ?? ""} placeholder="Europe/Lisbon" oninput={(e) => set({ timezone: orNull(e.currentTarget.value) })} />{/snippet}
+      <Field label={tr("workflows.stepInspector.timeZone")} hint={tr("workflows.stepInspector.leaveEmptyToUse")}>
+        {#snippet children(f)}<Input id={f.id} value={kind.timezone ?? ""} placeholder={tr("workflows.stepInspector.europeLisbon")} oninput={(e) => set({ timezone: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
     {:else if kind.type === "webhook"}
-      <Field label="Comes from">
+      <Field label={tr("workflows.stepInspector.comesFrom")}>
         {#snippet children(f)}<Input id={f.id} value={kind.source} maxlength={40} oninput={(e) => set({ source: e.currentTarget.value })} />{/snippet}
       </Field>
-      <Field label="What happens" hint="A few words for the chip, such as “issue labelled”.">
+      <Field label={tr("workflows.stepInspector.whatHappens")} hint={tr("workflows.stepInspector.aFewWordsFor")}>
         {#snippet children(f)}<Input id={f.id} value={kind.label ?? ""} maxlength={60} oninput={(e) => set({ label: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
-      <Field label="Only when" hint="A condition over the request body. Requests it rejects are ignored.">
-        {#snippet children(f)}<Textarea id={f.id} mono rows={2} value={kind.filter ?? ""} placeholder={'action == "labeled" and label.name == "incident"'} oninput={(e) => set({ filter: orNull(e.currentTarget.value) })} />{/snippet}
+      <Field label={tr("workflows.stepInspector.onlyWhen")} hint={tr("workflows.stepInspector.aConditionOverThe")}>
+        {#snippet children(f)}<Textarea id={f.id} mono rows={2} value={kind.filter ?? ""} placeholder={tr("workflows.stepInspector.actionLabeledAndLabel")} oninput={(e) => set({ filter: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
-      <ToggleRow label="Check the signature" description="The sender signs each request (X-Hub-Signature-256). Requests without a valid signature are refused." checked={kind.signed ?? false} onchange={(on) => set({ signed: on })} />
+      <ToggleRow label={tr("workflows.stepInspector.checkTheSignature")} description={tr("workflows.stepInspector.theSenderSignsEach")} checked={kind.signed ?? false} onchange={(on) => set({ signed: on })} />
       <div>
-        <p class="mb-1.5 text-sm font-medium">Address</p>
+        <p class="mb-1.5 text-sm font-medium">{tr("common.address")}</p>
         {#if host && !host.webhooks}
-          <Callout tone="warn" title="Webhooks are off">
-            Nothing listens yet. Turn them on in <button type="button" class="text-accent underline" onclick={() => store.showSettings()}>Settings</button>.
+          <Callout tone="warn" title={tr("workflows.stepInspector.webhooksAreOff")}>
+            {tr("workflows.stepInspector.nothingListensYetTurn")} <button type="button" class="text-accent underline" onclick={() => store.showSettings()}>{tr("common.settings")}</button>.
           </Callout>
         {/if}
         {#if address}
           <div class="mt-2 flex items-center gap-1.5 rounded-lg border border-line bg-panel-2 py-1 pr-1 pl-2.5">
-            <span class="mono selectable min-w-0 flex-1 truncate text-xs" title={reveal ? address.url : "Show the address to read it"}>{reveal ? address.url : masked(address.url)}</span>
-            <IconButton icon={reveal ? "eye" : "lock"} label={reveal ? "Hide the address" : "Show the address"} size="sm" onclick={() => (reveal = !reveal)} />
-            <IconButton icon="copy" label="Copy the address" size="sm" onclick={() => void copy(address?.url ?? "", "Address")} />
+            <span class="mono selectable min-w-0 flex-1 truncate text-xs" title={reveal ? address.url : tr("workflows.stepInspector.showTheAddressTo")}>{reveal ? address.url : masked(address.url)}</span>
+            <IconButton icon={reveal ? "eye" : "lock"} label={reveal ? tr("workflows.stepInspector.hideTheAddress") : tr("workflows.stepInspector.showTheAddress")} size="sm" onclick={() => (reveal = !reveal)} />
+            <IconButton icon="copy" label={tr("workflows.stepInspector.copyTheAddress")} size="sm" onclick={() => void copy(address?.url ?? "", tr("workflows.stepInspector.copiedAddress"))} />
           </div>
-          <p class="mt-1.5 text-xs text-muted">Anyone who has this address can start the workflow. <button type="button" class="text-accent underline" onclick={() => void newAddress()}>Make a new one</button> if it leaks.</p>
+          <p class="mt-1.5 text-xs text-muted">{tr("workflows.stepInspector.anyoneWhoHasThis")} <button type="button" class="text-accent underline" onclick={() => void newAddress()}>{tr("workflows.stepInspector.makeANewOne")}</button> {tr("workflows.stepInspector.ifItLeaks")}</p>
           {#if address.signing_secret}
             <div class="mt-2 flex items-center gap-1.5 rounded-lg border border-line bg-panel-2 py-1 pr-1 pl-2.5">
-              <span class="min-w-0 flex-1 truncate text-xs text-muted">Signing secret</span>
-              <IconButton icon="copy" label="Copy the signing secret" size="sm" onclick={() => void copy(address?.signing_secret ?? "", "Signing secret")} />
+              <span class="min-w-0 flex-1 truncate text-xs text-muted">{tr("workflows.stepInspector.signingSecret")}</span>
+              <IconButton icon="copy" label={tr("workflows.stepInspector.copyTheSigningSecret")} size="sm" onclick={() => void copy(address?.signing_secret ?? "", tr("workflows.stepInspector.copiedSigningSecret"))} />
             </div>
           {/if}
         {/if}
       </div>
     {:else if kind.type === "event" || kind.type === "after_workflow"}
       <div>
-        <p class="mb-1.5 text-sm font-medium">Starts when</p>
-        <Segmented label="What ends" bind:value={() => eventMode, setEventMode} options={[{ value: "agent", label: "A run ends" }, { value: "workflow", label: "A workflow ends" }]} />
+        <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.startsWhen")}</p>
+        <Segmented label={tr("workflows.stepInspector.whatEnds")} bind:value={() => eventMode, setEventMode} options={[{ value: "agent", label: "A run ends" }, { value: "workflow", label: "A workflow ends" }]} />
       </div>
       {#if kind.type === "event"}
-        <Field label="Which run">
+        <Field label={tr("workflows.stepInspector.whichRun")}>
           {#snippet children(f)}
             <Select id={f.id} value={kind.agent ?? ""} onchange={(e) => set({ agent: orNull(e.currentTarget.value) })}>
-              <option value="">Any agent or team</option>
+              <option value="">{tr("workflows.stepInspector.anyAgentOrTeam")}</option>
               {#each optionsOf(known.agents, kind.agent ?? "") as slug (slug)}<option value={slug}>{slug}</option>{/each}
             </Select>
           {/snippet}
         </Field>
       {:else}
-        <Field label="Which workflow">
+        <Field label={tr("workflows.stepInspector.whichWorkflow")}>
           {#snippet children(f)}
             <Select id={f.id} value={kind.workflow} onchange={(e) => set({ workflow: e.currentTarget.value })}>
               {#each optionsOf(known.workflows, kind.workflow) as slug (slug)}<option value={slug}>{slug}</option>{/each}
@@ -292,20 +293,20 @@
           {/snippet}
         </Field>
       {/if}
-      <Field label="Ended">
+      <Field label={tr("workflows.stepInspector.ended")}>
         {#snippet children(f)}
           <Select id={f.id} value={kind.on} onchange={(e) => set({ on: e.currentTarget.value })}>
-            <option value="finished">Well</option>
-            <option value="failed">With a failure</option>
-            <option value="any">Either way</option>
+            <option value="finished">{tr("workflows.stepInspector.well")}</option>
+            <option value="failed">{tr("workflows.stepInspector.withAFailure")}</option>
+            <option value="any">{tr("workflows.stepInspector.eitherWay")}</option>
           </Select>
         {/snippet}
       </Field>
     {:else if kind.type === "manual"}
-      <p class="text-sm text-muted">Starts when you press Test run, or run it by hand from the list or the command line.</p>
+      <p class="text-sm text-muted">{tr("workflows.stepInspector.startsWhenYouPress")}</p>
     {:else if kind.type === "agent" || kind.type === "team"}
       {@const isAgent = kind.type === "agent"}
-      <Field label={isAgent ? "Agent" : "Team"}>
+      <Field label={isAgent ? tr("common.agent") : tr("workflows.stepInspector.team")}>
         {#snippet children(f)}
           <Select id={f.id} value={kind.type === "agent" ? kind.agent : kind.team} onchange={(e) => set(isAgent ? { agent: e.currentTarget.value } : { team: e.currentTarget.value })}>
             {#each optionsOf(isAgent ? known.agents : known.teams, kind.type === "agent" ? kind.agent : kind.team) as slug (slug)}<option value={slug}>{slug}</option>{/each}
@@ -313,187 +314,187 @@
         {/snippet}
       </Field>
       {#if (isAgent ? known.agents : known.teams).length > 0 && !(isAgent ? known.agents : known.teams).includes(kind.type === "agent" ? kind.agent : kind.team)}
-        <p class="-mt-2 text-xs text-warn">There is no {isAgent ? "agent" : "team"} called {kind.type === "agent" ? kind.agent : kind.team} here yet.</p>
+        <p class="-mt-2 text-xs text-warn">{tr("workflows.stepInspector.thereIsNoCalled", { value: isAgent ? "agent" : "team", team: kind.type === "agent" ? kind.agent : kind.team })}</p>
       {/if}
-      <Field label="What to ask" hint="Use {'{{'}trigger.payload.title{'}}'} or {'{{'}steps.<id>.output.text{'}}'} to pass things in.">
+      <Field label={tr("common.whatToAsk")} hint={tr("workflows.stepInspector.useTriggerPayloadTitle", { value: '{{', value2: '}}' })}>
         {#snippet children(f)}<Textarea id={f.id} rows={5} value={kind.prompt} oninput={(e) => set({ prompt: e.currentTarget.value })} />{/snippet}
       </Field>
       <div class="grid grid-cols-2 gap-3">
         {#if kind.type === "agent"}
-          <Field label="Version" hint="Empty: the newest.">
+          <Field label={tr("workflows.stepInspector.version")} hint={tr("workflows.stepInspector.emptyTheNewest")}>
             {#snippet children(f)}<Input id={f.id} type="number" min="1" value={kind.version ? String(kind.version) : ""} oninput={(e) => set({ version: e.currentTarget.value ? Number(e.currentTarget.value) : null })} />{/snippet}
           </Field>
         {/if}
-        <Field label="Cost limit ($)" hint="Empty: the workflow's.">
+        <Field label={tr("workflows.stepInspector.costLimit")} hint={tr("workflows.stepInspector.emptyTheWorkflowS")}>
           {#snippet children(f)}<Input id={f.id} type="number" min="0" step="0.05" value={usd(kind.max_cost_micros)} oninput={(e) => set({ max_cost_micros: micros(e.currentTarget.value) })} />{/snippet}
         </Field>
       </div>
-      <Field label="Model" hint="Empty: the agent's own.">
+      <Field label={tr("common.model")} hint={tr("workflows.stepInspector.emptyTheAgentS")}>
         {#snippet children(f)}<Input id={f.id} mono value={kind.model ?? ""} placeholder="provider/model" oninput={(e) => set({ model: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
     {:else if kind.type === "condition"}
-      <Field label="Is this true?" hint="Yes goes one way, no the other.">
+      <Field label={tr("workflows.stepInspector.isThisTrue")} hint={tr("workflows.stepInspector.yesGoesOneWay")}>
         {#snippet children(f)}<Textarea id={f.id} mono rows={3} value={kind.expr} oninput={(e) => set({ expr: e.currentTarget.value })} />{/snippet}
       </Field>
-      <p class="text-xs text-muted">Compare with <span class="mono">== != &lt; &lt;= &gt; &gt;=</span> and <span class="mono">contains</span>; join with <span class="mono">and</span>, <span class="mono">or</span>, <span class="mono">not</span>. Example: <span class="mono">severity &gt;= 3</span>.</p>
+      <p class="text-xs text-muted">{tr("workflows.stepInspector.compareWith")} <span class="mono">== != &lt; &lt;= &gt; &gt;=</span> and <span class="mono">contains</span>{tr("workflows.stepInspector.joinWith")} <span class="mono">and</span>, <span class="mono">or</span>, <span class="mono">not</span>{tr("workflows.stepInspector.example")} <span class="mono">{tr("workflows.stepInspector.severity3")}</span>.</p>
     {:else if kind.type === "loop"}
-      <Field label="For each item of" hint="A list from an earlier step or the trigger. At most 8 items.">
+      <Field label={tr("workflows.stepInspector.forEachItemOf")} hint={tr("workflows.stepInspector.aListFromAn")}>
         {#snippet children(f)}<Input id={f.id} mono value={kind.over} oninput={(e) => set({ over: e.currentTarget.value })} />{/snippet}
       </Field>
-      <Field label="Agent">
+      <Field label={tr("common.agent")}>
         {#snippet children(f)}
           <Select id={f.id} value={kind.agent} onchange={(e) => set({ agent: e.currentTarget.value })}>
             {#each optionsOf(known.agents, kind.agent) as slug (slug)}<option value={slug}>{slug}</option>{/each}
           </Select>
         {/snippet}
       </Field>
-      <Field label="What to ask for each" hint="{'{{'}item{'}}'} is the item, {'{{'}index{'}}'} its place.">
+      <Field label={tr("workflows.stepInspector.whatToAskFor")} hint={tr("workflows.stepInspector.itemIsTheItem", { value: '{{', value2: '}}' })}>
         {#snippet children(f)}<Textarea id={f.id} rows={4} value={kind.prompt} oninput={(e) => set({ prompt: e.currentTarget.value })} />{/snippet}
       </Field>
     {:else if kind.type === "wait"}
       <div>
-        <p class="mb-1.5 text-sm font-medium">Waits</p>
-        <Segmented label="Wait for or until" bind:value={() => kind.until ? "until" : "for", (v) => set(v === "until" ? { for_ms: null, until: "09:00" } : { for_ms: 10 * 60_000, until: null })} options={[{ value: "for", label: "For a while" }, { value: "until", label: "Until a time" }]} />
+        <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.waits")}</p>
+        <Segmented label={tr("workflows.stepInspector.waitForOrUntil")} bind:value={() => kind.until ? "until" : "for", (v) => set(v === "until" ? { for_ms: null, until: "09:00" } : { for_ms: 10 * 60_000, until: null })} options={[{ value: "for", label: "For a while" }, { value: "until", label: "Until a time" }]} />
       </div>
       {#if kind.until}
-        <Field label="Until" hint="The next time it is this time of day.">
+        <Field label={tr("workflows.stepInspector.until")} hint={tr("workflows.stepInspector.theNextTimeIt")}>
           {#snippet children(f)}<Input id={f.id} type="time" value={kind.until ?? "09:00"} oninput={(e) => set({ until: e.currentTarget.value })} />{/snippet}
         </Field>
       {:else}
-        {@render duration("For", kind.for_ms, (v) => set({ for_ms: v ?? 60_000 }), "10")}
+        {@render duration(tr("workflows.stepInspector.for"), kind.for_ms, (v) => set({ for_ms: v ?? 60_000 }), "10")}
       {/if}
     {:else if kind.type === "approval"}
-      <Field label="What is being asked">
+      <Field label={tr("workflows.stepInspector.whatIsBeingAsked")}>
         {#snippet children(f)}<Textarea id={f.id} rows={3} value={kind.message} oninput={(e) => set({ message: e.currentTarget.value })} />{/snippet}
       </Field>
       <div>
-        <p class="mb-1.5 text-sm font-medium">Show them</p>
-        <div class="flex flex-wrap gap-1.5" role="group" aria-label="What the person sees">
+        <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.showThem")}</p>
+        <div class="flex flex-wrap gap-1.5" role="group" aria-label={tr("workflows.stepInspector.whatThePersonSees")}>
           {#each showOptions(spec, step.id) as option (option.path)}<Chip selected={showing.has(option.path)} onclick={() => toggleShow(option.path)}>{option.label}</Chip>{/each}
         </div>
       </div>
       <div class="grid grid-cols-[1fr_auto] items-end gap-3">
-        {@render duration("Time out after", kind.timeout_ms, (v) => set({ timeout_ms: v }))}
-        <Field label="Then">
+        {@render duration(tr("workflows.stepInspector.timeOutAfter"), kind.timeout_ms, (v) => set({ timeout_ms: v }))}
+        <Field label={tr("workflows.stepInspector.then")}>
           {#snippet children(f)}
             <Select id={f.id} value={kind.then ?? "refuse"} class="w-28" onchange={(e) => set({ then: e.currentTarget.value })}>
-              <option value="refuse">Refuse</option>
-              <option value="continue">Continue</option>
+              <option value="refuse">{tr("common.refuse")}</option>
+              <option value="continue">{tr("common.continue")}</option>
             </Select>
           {/snippet}
         </Field>
       </div>
       <ToggleRow
-        label="Remind in Slack"
-        description={kind.remind ? `After ${ms(kind.remind.after_ms)}, in ${kind.remind.channel}` : "A message to a channel while this waits"}
+        label={tr("workflows.stepInspector.remindInSlack")}
+        description={kind.remind ? tr("workflows.stepInspector.afterIn", { value: ms(kind.remind.after_ms), channel: kind.remind.channel }) : tr("workflows.stepInspector.aMessageToA")}
         checked={Boolean(kind.remind)}
         onchange={(on) => set({ remind: on ? { after_ms: 30 * 60_000, connection: "slack", channel: "#on-call" } : null })}
       />
       {#if kind.remind}
         {@const remind = kind.remind}
         <div class="space-y-3 rounded-xl border border-line bg-panel-2 p-3">
-          <Field label="Connection">
+          <Field label={tr("workflows.stepInspector.connection")}>
             {#snippet children(f)}<Input id={f.id} value={remind.connection} oninput={(e) => set({ remind: { ...remind, connection: e.currentTarget.value } })} />{/snippet}
           </Field>
-          <Field label="Channel">
+          <Field label={tr("workflows.stepInspector.channel")}>
             {#snippet children(f)}<Input id={f.id} value={remind.channel} oninput={(e) => set({ remind: { ...remind, channel: e.currentTarget.value } })} />{/snippet}
           </Field>
-          {@render duration("Remind after", remind.after_ms, (v) => set({ remind: { ...remind, after_ms: v ?? 30 * 60_000 } }), "30")}
-          <p class="text-xs text-warn">A person confirms this reminder when publishing.</p>
+          {@render duration(tr("workflows.stepInspector.remindAfter"), remind.after_ms, (v) => set({ remind: { ...remind, after_ms: v ?? 30 * 60_000 } }), "30")}
+          <p class="text-xs text-warn">{tr("workflows.stepInspector.aPersonConfirmsThis2")}</p>
         </div>
       {/if}
     {:else if kind.type === "question"}
-      <Field label="Question">
+      <Field label={tr("workflows.stepInspector.question")}>
         {#snippet children(f)}<Textarea id={f.id} rows={3} value={kind.question} oninput={(e) => set({ question: e.currentTarget.value })} />{/snippet}
       </Field>
-      <Field label="Default answer" hint="Used when it times out and the step continues.">
+      <Field label={tr("workflows.stepInspector.defaultAnswer")} hint={tr("workflows.stepInspector.usedWhenItTimes")}>
         {#snippet children(f)}<Input id={f.id} value={kind.default ?? ""} oninput={(e) => set({ default: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
       <div class="grid grid-cols-[1fr_auto] items-end gap-3">
-        {@render duration("Time out after", kind.timeout_ms, (v) => set({ timeout_ms: v }))}
-        <Field label="Then">
+        {@render duration(tr("workflows.stepInspector.timeOutAfter"), kind.timeout_ms, (v) => set({ timeout_ms: v }))}
+        <Field label={tr("workflows.stepInspector.then")}>
           {#snippet children(f)}
             <Select id={f.id} value={kind.then ?? "refuse"} class="w-28" onchange={(e) => set({ then: e.currentTarget.value })}>
-              <option value="refuse">Refuse</option>
-              <option value="continue">Continue</option>
+              <option value="refuse">{tr("common.refuse")}</option>
+              <option value="continue">{tr("common.continue")}</option>
             </Select>
           {/snippet}
         </Field>
       </div>
     {:else if kind.type === "send"}
       <div>
-        <p class="mb-1.5 text-sm font-medium">Where</p>
-        <Segmented label="Service" bind:value={() => kind.service, (v) => set({ service: v })} options={[{ value: "slack", label: "Slack" }, { value: "discord", label: "Discord" }]} />
+        <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.where")}</p>
+        <Segmented label={tr("workflows.stepInspector.service")} bind:value={() => kind.service, (v) => set({ service: v })} options={[{ value: "slack", label: "Slack" }, { value: "discord", label: "Discord" }]} />
       </div>
-      <Field label="Connection" hint="Empty: the only one of that service.">
+      <Field label={tr("workflows.stepInspector.connection")} hint={tr("workflows.stepInspector.emptyTheOnlyOne")}>
         {#snippet children(f)}<Input id={f.id} value={kind.connection ?? ""} oninput={(e) => set({ connection: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
-      <Field label="Channel">
+      <Field label={tr("workflows.stepInspector.channel")}>
         {#snippet children(f)}<Input id={f.id} value={kind.channel} oninput={(e) => set({ channel: e.currentTarget.value })} />{/snippet}
       </Field>
-      <Field label="Message" hint="Use {'{{'}steps.<id>.output.text{'}}'} to send what an agent wrote.">
+      <Field label={tr("workflows.stepInspector.message")} hint={tr("workflows.stepInspector.useStepsIdOutput", { value: '{{', value2: '}}' })}>
         {#snippet children(f)}<Textarea id={f.id} rows={4} value={kind.text} oninput={(e) => set({ text: e.currentTarget.value })} />{/snippet}
       </Field>
       {@render askRow(kind.ask)}
     {:else if kind.type === "http"}
       <div class="grid grid-cols-[6rem_1fr] gap-3">
-        <Field label="Method">
+        <Field label={tr("workflows.stepInspector.method")}>
           {#snippet children(f)}
             <Select id={f.id} value={kind.method} onchange={(e) => set({ method: e.currentTarget.value })}>
               {#each ["GET", "POST", "PUT", "PATCH", "DELETE"] as method (method)}<option value={method}>{method}</option>{/each}
             </Select>
           {/snippet}
         </Field>
-        <Field label="Address">
+        <Field label={tr("common.address")}>
           {#snippet children(f)}<Input id={f.id} mono value={kind.url} oninput={(e) => set({ url: e.currentTarget.value })} />{/snippet}
         </Field>
       </div>
-      <Field label="Body" hint="Text, or JSON you write yourself.">
+      <Field label={tr("workflows.stepInspector.body")} hint={tr("workflows.stepInspector.textOrJsonYou")}>
         {#snippet children(f)}<Textarea id={f.id} mono rows={4} value={kind.body ?? ""} oninput={(e) => set({ body: orNull(e.currentTarget.value) })} />{/snippet}
       </Field>
       {@render askRow(kind.ask)}
     {/if}
 
     <div>
-      <p class="mb-1.5 text-sm font-medium">Leads to</p>
+      <p class="mb-1.5 text-sm font-medium">{tr("workflows.stepInspector.leadsTo")}</p>
       {#if outgoing.length === 0}
-        <p class="text-xs text-muted">Nothing yet. Drag from the dot under the step to another step, or choose one here.</p>
+        <p class="text-xs text-muted">{tr("workflows.stepInspector.nothingYetDragFrom")}</p>
       {:else}
         <ul class="space-y-1.5">
           {#each outgoing as edge (edge.to)}
             <li class="flex items-center gap-2 rounded-lg border border-line bg-panel-2 py-1 pr-1 pl-2.5">
               {#if kind.type === "condition" && edge.label}
-                <Segmented label="Branch to {titleOf(edge.to)}" bind:value={() => edge.label ?? "yes", (v) => onchange(relabel(spec, step.id, edge.to, v as "yes" | "no"))} options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]} />
+                <Segmented label={tr("workflows.stepInspector.branchTo", { value: titleOf(edge.to) })} bind:value={() => edge.label ?? "yes", (v) => onchange(relabel(spec, step.id, edge.to, v as "yes" | "no"))} options={[{ value: "yes", label: "yes" }, { value: "no", label: "no" }]} />
               {/if}
               <span class="min-w-0 flex-1 truncate text-sm">{titleOf(edge.to)}</span>
-              <IconButton icon="x" label="Remove the arrow to {titleOf(edge.to)}" size="sm" onclick={() => onchange(disconnect(spec, step.id, edge.to))} />
+              <IconButton icon="x" label={tr("workflows.stepInspector.removeTheArrowTo", { value: titleOf(edge.to) })} size="sm" onclick={() => onchange(disconnect(spec, step.id, edge.to))} />
             </li>
           {/each}
         </ul>
       {/if}
       {#if candidates.length > 0}
         <div class="mt-2 flex gap-2">
-          <Select bind:value={target} aria-label="Add an arrow to" class="min-w-0 flex-1">
-            <option value="">Add an arrow to…</option>
+          <Select bind:value={target} aria-label={tr("workflows.stepInspector.addAnArrowTo")} class="min-w-0 flex-1">
+            <option value="">{tr("workflows.stepInspector.addAnArrowTo2")}</option>
             {#each candidates as candidate (candidate.id)}<option value={candidate.id}>{candidate.title}</option>{/each}
           </Select>
-          <Button size="sm" disabled={!target} onclick={addArrow}>Add</Button>
+          <Button size="sm" disabled={!target} onclick={addArrow}>{tr("common.add")}</Button>
         </div>
       {/if}
     </div>
 
     {#if hasLive}
       <div class="border-t border-line-soft pt-4">
-        <p class="text-2xs font-semibold tracking-wider text-faint uppercase">Last 5 runs of this step</p>
+        <p class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workflows.stepInspector.last5RunsOf")}</p>
         {#if history && history.outcomes.length > 0}
           <div class="mt-2 flex items-center justify-between gap-3">
-            <span class="flex h-5.5 items-end gap-0.5" role="img" aria-label="Last {history.outcomes.length} runs of this step: {history.outcomes.join(', ')}">
+            <span class="flex h-5.5 items-end gap-0.5" role="img" aria-label={tr("workflows.stepInspector.lastRunsOfThis", { length: history.outcomes.length, value: history.outcomes.join(', ') })}>
               {#each history.outcomes as outcome, i (i)}<i class="block h-full w-1.5 rounded-xs {OUTCOME_BAR[outcome] ?? 'bg-faint'}"></i>{/each}
             </span>
-            <span class="text-xs text-muted">{history.median_wait_ms === null ? "no one waited" : `median wait ${ms(Math.max(history.median_wait_ms, 60_000))}`}</span>
+            <span class="text-xs text-muted">{history.median_wait_ms === null ? tr("workflows.stepInspector.noOneWaited") : tr("workflows.stepInspector.medianWait", { value: ms(Math.max(history.median_wait_ms, 60_000)) })}</span>
           </div>
         {:else}
-          <p class="mt-1.5 text-xs text-muted">This step has not run yet.</p>
+          <p class="mt-1.5 text-xs text-muted">{tr("workflows.stepInspector.thisStepHasNot")}</p>
         {/if}
       </div>
     {/if}

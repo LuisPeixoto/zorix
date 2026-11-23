@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { cn } from "./cn.ts";
 
   type Tab = { value: string; label: string; count?: number };
-  let { tabs, value = $bindable(), label = "Sections", class: klass = "" }: { tabs: Tab[]; value: string; label?: string; class?: string } = $props();
+  let { tabs, value = $bindable(), label = t("ui.tabs.sections"), class: klass = "" }: { tabs: Tab[]; value: string; label?: string; class?: string } = $props();
 </script>
 
 <div role="tablist" aria-label={label} class={cn("flex flex-wrap gap-x-4.5 border-b border-line", klass)}>

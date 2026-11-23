@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { lineTime } from "../workforce.ts";
   import Icon from "./Icon.svelte";
   import IconButton from "./IconButton.svelte";
@@ -23,8 +24,8 @@
     lines,
     now,
     live = true,
-    scope = "all sources",
-    empty = "Nothing yet.",
+    scope = t("ui.logStream.allSources"),
+    empty = t("ui.logStream.nothingYet"),
     onopen,
     class: klass = "",
   }: { lines: LogLine[]; now: number; live?: boolean; scope?: string; empty?: string; onopen?: (line: LogLine) => void; class?: string } = $props();
@@ -39,7 +40,7 @@
   const TONE = { OK: "ok", INFO: "info", WAIT: "warn", WARN: "warn", ERR: "err" } as const;
 
   const ROW =
-    "grid w-full grid-cols-[5.75rem_2.5rem_6.5rem_minmax(0,1fr)] gap-2.5 px-3 whitespace-nowrap outline-none hover:bg-hover focus-visible:bg-hover focus-visible:ring-1 focus-visible:ring-accent/60 focus-visible:ring-inset";
+    t("ui.logStream.gridWFullGrid");
 
   function toggle() {
     if (!paused) frozen = lines;
@@ -56,9 +57,9 @@
 
 <div class={cn("overflow-hidden rounded-xl border border-line bg-panel", klass)}>
   <div class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-3 py-2 text-xs font-medium">
-    {#if live && !paused}<span class="size-2 shrink-0 animate-pulse rounded-full bg-ok" aria-hidden="true"></span>Live{:else if paused}<span class="size-2 shrink-0 rounded-full bg-muted" aria-hidden="true"></span>Paused{/if}
+    {#if live && !paused}<span class="size-2 shrink-0 animate-pulse rounded-full bg-ok" aria-hidden="true"></span>{t("ui.logStream.live")}{:else if paused}<span class="size-2 shrink-0 rounded-full bg-muted" aria-hidden="true"></span>{t("common.paused")}{/if}
     <span class="font-normal text-muted tnum">· {scope} · {visible.length} of {shown.length}</span>
-    {#if arrived > 0}<span class="font-normal text-muted tnum" aria-live="polite">· {arrived} new since</span>{/if}
+    {#if arrived > 0}<span class="font-normal text-muted tnum" aria-live="polite">{t("ui.logStream.newSince", { arrived })}</span>{/if}
     <span class="ml-auto flex items-center gap-1.5">
       <button
         type="button"
@@ -66,15 +67,15 @@
         onclick={() => (warnOnly = !warnOnly)}
         class="inline-flex h-6 items-center gap-1 rounded-full border border-line bg-panel px-2.5 text-xs font-medium text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/60 {warnOnly ? 'border-accent! text-fg' : ''}"
       >
-        <Icon name="filter" size={12} />{warnOnly ? "warn and above" : "all levels"}
+        <Icon name="filter" size={12} />{warnOnly ? t("ui.logStream.warnAndAbove") : t("ui.logStream.allLevels")}
       </button>
-      <IconButton icon={paused ? "play" : "pause"} label={paused ? "Resume the stream" : "Pause the stream"} size="sm" onclick={toggle} />
+      <IconButton icon={paused ? "play" : "pause"} label={paused ? t("ui.logStream.resumeTheStream") : t("ui.logStream.pauseTheStream")} size="sm" onclick={toggle} />
     </span>
   </div>
   {#if visible.length === 0}
     <p class="px-4 py-6 text-center text-sm text-muted">{empty}</p>
   {:else}
-    <ul class="mono py-1.5 text-xs leading-[1.75]" aria-label="Events, newest first">
+    <ul class="mono py-1.5 text-xs leading-[1.75]" aria-label={t("ui.logStream.eventsNewestFirst")}>
       {#each visible as line (line.id)}
         <li>
           {#if onopen}

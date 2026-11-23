@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Badge from "./Badge.svelte";
@@ -16,7 +17,7 @@
   }: { items: VersionItem[]; selected?: number | null; onselect?: (version: number) => void; actions?: Snippet<[VersionItem]>; class?: string } = $props();
 </script>
 
-<ol class={cn("relative", klass)} aria-label="Versions">
+<ol class={cn("relative", klass)} aria-label={t("common.versions")}>
   {#each items as item, i (item.version)}
     <li class="relative flex gap-3 pb-1">
       <div class="flex w-5 shrink-0 flex-col items-center" aria-hidden="true">
@@ -32,10 +33,10 @@
         <button type="button" class="min-w-0 flex-1 text-left" aria-pressed={onselect ? selected === item.version : undefined} disabled={!onselect} onclick={() => onselect?.(item.version)}>
           <span class="flex items-center gap-2">
             <span class="text-md font-semibold">v{item.version}</span>
-            {#if item.current}<Badge tone="accent">Current</Badge>{/if}
+            {#if item.current}<Badge tone="accent">{t("ui.versionTimeline.current")}</Badge>{/if}
             <span class="mono text-xs text-faint">{item.hash.slice(0, 8)}</span>
           </span>
-          <span class="mt-0.5 block truncate text-sm text-muted">{item.note || "No note"}</span>
+          <span class="mt-0.5 block truncate text-sm text-muted">{item.note || t("ui.versionTimeline.noNote")}</span>
           <span class="block text-xs text-faint">{item.at}</span>
         </button>
         {#if actions}<div class="flex shrink-0 gap-1.5">{@render actions(item)}</div>{/if}

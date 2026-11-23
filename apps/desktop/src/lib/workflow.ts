@@ -1,6 +1,7 @@
 // What the canvas and the workflow screens compute: geometry, the rules for adding and joining steps, the state of a node in a run,
 // and small readable texts. Pure, tested in workflow.test.ts. It decides nothing the Rust side does not check again on save.
 import type { Day, RunStateName, StepKind, StepKindName, StepStateName, WfBar, WfEdge, WfRun, WfStep, When, WorkflowSpec } from "./api.ts";
+import { t as tr } from "./i18n/index.ts";
 
 export const NODE_W = 188;
 export const NODE_H = 68;
@@ -15,7 +16,7 @@ export const clampZoom = (z: number): number => Math.min(MAX_ZOOM, Math.max(MIN_
 // ---- The five kinds of node, and the palette -----------------------------------------------------------------------------
 
 export type NodeClass = "trigger" | "agent" | "logic" | "approval" | "action";
-export type PaletteGroup = "Triggers" | "Work" | "Logic" | "People" | "Actions";
+export type PaletteGroup = "triggers" | "work" | "logic" | "people" | "actions";
 
 export interface KindInfo {
   kind: StepKindName;
@@ -28,23 +29,33 @@ export interface KindInfo {
 }
 
 export const KINDS: KindInfo[] = [
-  { kind: "schedule", label: "Schedule", icon: "calendar", cls: "trigger", group: "Triggers", word: "Schedule" },
-  { kind: "webhook", label: "Webhook", icon: "webhook", cls: "trigger", group: "Triggers", word: "Webhook" },
-  { kind: "event", label: "Event", icon: "zap", cls: "trigger", group: "Triggers", word: "Event" },
-  { kind: "after_workflow", label: "After workflow", icon: "workflow", cls: "trigger", group: "Triggers", word: "After workflow" },
-  { kind: "manual", label: "Manual", icon: "play", cls: "trigger", group: "Triggers", word: "Manual" },
-  { kind: "agent", label: "Agent", icon: "bot", cls: "agent", group: "Work", word: "Agent" },
-  { kind: "team", label: "Team", icon: "users", cls: "agent", group: "Work", word: "Team" },
-  { kind: "condition", label: "Condition", icon: "split", cls: "logic", group: "Logic", word: "Condition" },
-  { kind: "loop", label: "Loop", icon: "refresh", cls: "logic", group: "Logic", word: "Loop" },
-  { kind: "wait", label: "Wait", icon: "clock", cls: "logic", group: "Logic", word: "Wait" },
-  { kind: "approval", label: "Approval", icon: "shield-check", cls: "approval", group: "People", word: "Approval" },
-  { kind: "question", label: "Ask a question", icon: "message", cls: "approval", group: "People", word: "Question" },
-  { kind: "send", label: "Send message", icon: "send", cls: "action", group: "Actions", word: "Action" },
-  { kind: "http", label: "HTTP request", icon: "globe", cls: "action", group: "Actions", word: "Action" },
+  { kind: "schedule", label: tr("workflow.schedule"), icon: "calendar", cls: "trigger", group: "triggers", word: tr("workflow.schedule") },
+  { kind: "webhook", label: tr("workflow.webhook"), icon: "webhook", cls: "trigger", group: "triggers", word: tr("workflow.webhook") },
+  { kind: "event", label: tr("workflow.event"), icon: "zap", cls: "trigger", group: "triggers", word: tr("workflow.event") },
+  { kind: "after_workflow", label: tr("workflow.afterWorkflow"), icon: "workflow", cls: "trigger", group: "triggers", word: tr("workflow.afterWorkflow") },
+  { kind: "manual", label: tr("workflow.manual"), icon: "play", cls: "trigger", group: "triggers", word: tr("workflow.manual") },
+  { kind: "agent", label: tr("common.agent"), icon: "bot", cls: "agent", group: "work", word: tr("common.agent") },
+  { kind: "team", label: tr("workflow.team"), icon: "users", cls: "agent", group: "work", word: tr("workflow.team") },
+  { kind: "condition", label: tr("workflow.condition"), icon: "split", cls: "logic", group: "logic", word: tr("workflow.condition") },
+  { kind: "loop", label: tr("workflow.loop"), icon: "refresh", cls: "logic", group: "logic", word: tr("workflow.loop") },
+  { kind: "wait", label: tr("workflow.wait"), icon: "clock", cls: "logic", group: "logic", word: tr("workflow.wait") },
+  { kind: "approval", label: tr("workflow.approval"), icon: "shield-check", cls: "approval", group: "people", word: tr("workflow.approval") },
+  { kind: "question", label: tr("workflow.askAQuestion"), icon: "message", cls: "approval", group: "people", word: tr("workflow.question") },
+  { kind: "send", label: tr("workflow.sendMessage"), icon: "send", cls: "action", group: "actions", word: tr("workflow.action") },
+  { kind: "http", label: tr("workflow.httpRequest"), icon: "globe", cls: "action", group: "actions", word: tr("workflow.action") },
 ];
 
-export const PALETTE_GROUPS: PaletteGroup[] = ["Triggers", "Work", "Logic", "People", "Actions"];
+export const PALETTE_GROUPS: PaletteGroup[] = ["triggers", "work", "logic", "people", "actions"];
+
+/** The name of a palette group, in the active language. The group itself is a fixed id. */
+export const groupLabel = (group: PaletteGroup): string => tr(GROUP_KEYS[group]);
+const GROUP_KEYS = {
+  triggers: "workflow.triggers",
+  work: "workflow.work",
+  logic: "workflow.logic",
+  people: "workflow.people",
+  actions: "workflow.actions",
+} as const;
 
 export const kindInfo = (kind: StepKindName): KindInfo => KINDS.find((k) => k.kind === kind) ?? KINDS[0];
 
@@ -74,13 +85,13 @@ export const NODE_TINT: Record<NodeClass, string> = {
 // ---- Texts ---------------------------------------------------------------------------------------------------------------
 
 const DAY_NAMES: Record<Day, [string, string]> = {
-  mon: ["Mon", "Mondays"],
-  tue: ["Tue", "Tuesdays"],
-  wed: ["Wed", "Wednesdays"],
-  thu: ["Thu", "Thursdays"],
-  fri: ["Fri", "Fridays"],
-  sat: ["Sat", "Saturdays"],
-  sun: ["Sun", "Sundays"],
+  mon: [tr("workflow.mon"), tr("workflow.mondays")],
+  tue: [tr("workflow.tue"), tr("workflow.tuesdays")],
+  wed: [tr("workflow.wed"), tr("workflow.wednesdays")],
+  thu: [tr("workflow.thu"), tr("workflow.thursdays")],
+  fri: [tr("workflow.fri"), tr("workflow.fridays")],
+  sat: [tr("workflow.sat"), tr("workflow.saturdays")],
+  sun: [tr("workflow.sun"), tr("workflow.sundays")],
 };
 export const DAYS: Day[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 export const WEEKDAYS: Day[] = ["mon", "tue", "wed", "thu", "fri"];
@@ -88,14 +99,14 @@ export const WEEKDAYS: Day[] = ["mon", "tue", "wed", "thu", "fri"];
 /** "Weekdays 08:00", "Fridays 16:00", "Every 15 minutes": the same words the Rust side writes. */
 export function describeWhen(when: When): string {
   if (when.type === "every") {
-    if (when.minutes >= 60 && when.minutes % 60 === 0) return when.minutes === 60 ? "Every hour" : `Every ${when.minutes / 60} hours`;
-    return `Every ${when.minutes} minutes`;
+    if (when.minutes >= 60 && when.minutes % 60 === 0) return when.minutes === 60 ? tr("workflow.everyHour") : tr("workflow.everyHours", { value: when.minutes / 60 });
+    return tr("workflow.everyMinutes", { minutes: when.minutes });
   }
-  if (when.type === "cron") return `Cron ${when.expr}`;
+  if (when.type === "cron") return tr("workflow.cron", { expr: when.expr });
   const set = new Set(when.days);
   let who: string;
-  if (set.size === 0 || set.size === 7) who = "Daily";
-  else if (set.size === 5 && WEEKDAYS.every((d) => set.has(d))) who = "Weekdays";
+  if (set.size === 0 || set.size === 7) who = tr("workflow.daily");
+  else if (set.size === 5 && WEEKDAYS.every((d) => set.has(d))) who = tr("workflow.weekdays");
   else if (set.size === 1) who = DAY_NAMES[[...set][0]][1];
   else who = DAYS.filter((d) => set.has(d)).map((d) => DAY_NAMES[d][0]).join(", ");
   return `${who} ${when.times.join(", ")}`;
@@ -105,17 +116,17 @@ export function describeWhen(when: When): string {
 export function triggerLabel(kind: StepKind): string | null {
   switch (kind.type) {
     case "manual":
-      return "Manual";
+      return tr("workflow.manual");
     case "schedule":
       return describeWhen(kind.when);
     case "webhook":
       return `${kind.source} · ${kind.label || "webhook"}`;
     case "event": {
       const what = kind.on === "finished" ? "finishes" : kind.on === "failed" ? "fails" : "ends";
-      return kind.agent ? `When ${kind.agent} ${what}` : `When a run ${what}`;
+      return kind.agent ? tr("workflow.when", { agent: kind.agent, what }) : tr("workflow.whenARun", { what });
     }
     case "after_workflow":
-      return `After ${kind.workflow}`;
+      return tr("workflow.after", { workflow: kind.workflow });
     default:
       return null;
   }
@@ -126,9 +137,9 @@ export const chipKind = (kind: StepKindName): TriggerChipKind => (kind === "afte
 
 export function ms(value: number): string {
   const minutes = Math.round(value / 60_000);
-  if (minutes >= 60 * 24 && minutes % (60 * 24) === 0) return `${minutes / (60 * 24)} d`;
-  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} h`;
-  return `${minutes} min`;
+  if (minutes >= 60 * 24 && minutes % (60 * 24) === 0) return tr("format.d", { value: minutes / (60 * 24) });
+  if (minutes >= 60 && minutes % 60 === 0) return tr("format.h", { value: minutes / 60 });
+  return tr("format.min", { value: minutes });
 }
 
 export type Unit = "min" | "h" | "d";
@@ -158,7 +169,7 @@ export function kindLine(step: WfStep): string {
     case "approval":
       return k.timeout_ms ? `${word} · ${ms(k.timeout_ms)} timeout` : word;
     case "send":
-      return `${word} · ${k.service === "slack" ? "Slack" : "Discord"}`;
+      return `${word} · ${k.service === "slack" ? tr("common.slack") : tr("common.discord")}`;
     case "http":
       return `${word} · ${k.method}`;
     default:
@@ -173,9 +184,9 @@ export function detailLine(step: WfStep): string {
     case "schedule":
       return k.timezone ?? "";
     case "webhook":
-      return k.filter ? clip(oneLine(k.filter), 28) : "any request";
+      return k.filter ? clip(oneLine(k.filter), 28) : tr("workflow.anyRequest");
     case "event":
-      return k.agent ?? "any agent or team";
+      return k.agent ?? tr("workflow.anyAgentOrTeam");
     case "after_workflow":
       return k.workflow;
     case "agent":
@@ -310,20 +321,20 @@ export function freeSpot(steps: readonly Pt[], after?: Pt): Pt {
 }
 
 const TITLES: Record<StepKindName, string> = {
-  manual: "Start by hand",
-  schedule: "Every weekday at 08:00",
-  webhook: "A request arrives",
-  event: "A run ends",
-  after_workflow: "Another workflow ends",
-  agent: "Ask the agent",
-  team: "Ask the team",
-  condition: "Is it a yes?",
-  loop: "For each item",
-  wait: "Wait a while",
-  approval: "A person approves",
-  question: "Ask a question",
-  send: "Send a message",
-  http: "Call a web address",
+  manual: tr("workflow.startByHand"),
+  schedule: tr("workflow.everyWeekdayAt08"),
+  webhook: tr("workflow.aRequestArrives"),
+  event: tr("workflow.aRunEnds"),
+  after_workflow: tr("workflow.anotherWorkflowEnds"),
+  agent: tr("workflow.askTheAgent"),
+  team: tr("workflow.askTheTeam"),
+  condition: tr("workflow.isItAYes"),
+  loop: tr("workflow.forEachItem"),
+  wait: tr("workflow.waitAWhile"),
+  approval: tr("workflow.aPersonApproves"),
+  question: tr("workflow.askAQuestion"),
+  send: tr("workflow.sendAMessage"),
+  http: tr("workflow.callAWebAddress"),
 };
 
 /** The settings a new step of a kind starts with: valid, and easy to change. */
@@ -334,27 +345,27 @@ export function defaultKind(kind: StepKindName, known: Known, previous?: string)
     case "schedule":
       return { type: "schedule", when: { type: "daily", times: ["08:00"], days: [...WEEKDAYS] }, timezone: null };
     case "webhook":
-      return { type: "webhook", source: "GitHub", label: "event", filter: null, signed: false };
+      return { type: "webhook", source: tr("common.github"), label: "event", filter: null, signed: false };
     case "event":
       return { type: "event", on: "finished", agent: null };
     case "after_workflow":
       return { type: "after_workflow", workflow: known.workflows[0] ?? "", on: "finished" };
     case "agent":
-      return { type: "agent", agent: known.agents[0] ?? "researcher", prompt: "Describe what this step should do." };
+      return { type: "agent", agent: known.agents[0] ?? "researcher", prompt: tr("workflow.describeWhatThisStep") };
     case "team":
-      return { type: "team", team: known.teams[0] ?? "research-desk", prompt: "Describe what this step should do." };
+      return { type: "team", team: known.teams[0] ?? "research-desk", prompt: tr("workflow.describeWhatThisStep") };
     case "condition":
-      return { type: "condition", expr: previous ? `steps.${previous}.output.text contains "yes"` : "true" };
+      return { type: "condition", expr: previous ? tr("workflow.stepsOutputTextContains", { previous }) : "true" };
     case "loop":
-      return { type: "loop", over: "{{trigger.payload.items}}", agent: known.agents[0] ?? "researcher", prompt: "Check {{item}}." };
+      return { type: "loop", over: "{{trigger.payload.items}}", agent: known.agents[0] ?? "researcher", prompt: tr("workflow.check") };
     case "wait":
       return { type: "wait", for_ms: 10 * UNIT_MS.min };
     case "approval":
-      return { type: "approval", message: "Go ahead?", show: [], timeout_ms: 2 * UNIT_MS.h, then: "refuse" };
+      return { type: "approval", message: tr("workflow.goAhead"), show: [], timeout_ms: 2 * UNIT_MS.h, then: "refuse" };
     case "question":
-      return { type: "question", question: "What should I know?", then: "refuse" };
+      return { type: "question", question: tr("workflow.whatShouldIKnow"), then: "refuse" };
     case "send":
-      return { type: "send", service: "slack", channel: "#general", text: "Hello from ZORIX.", ask: "always" };
+      return { type: "send", service: "slack", channel: "#general", text: tr("workflow.helloFromZorix"), ask: "always" };
     case "http":
       return { type: "http", method: "POST", url: "https://example.com/hook", ask: "always" };
   }
@@ -362,8 +373,8 @@ export function defaultKind(kind: StepKindName, known: Known, previous?: string)
 
 /** Add a step of a kind, below `after` when given. The spec itself is not changed. */
 export function addStep(spec: WorkflowSpec, kind: StepKindName, known: Known, after?: string, at?: Pt): { spec: WorkflowSpec; id: string } | { error: string } {
-  if (spec.steps.length >= MAX_STEPS) return { error: `A workflow has ${MAX_STEPS} steps at most.` };
-  if (kind === "after_workflow" && known.workflows.length === 0) return { error: "There is no other workflow to follow yet." };
+  if (spec.steps.length >= MAX_STEPS) return { error: tr("workflow.aWorkflowHasSteps", { MAX_STEPS }) };
+  if (kind === "after_workflow" && known.workflows.length === 0) return { error: tr("workflow.thereIsNoOther") };
   const anchor = after ? spec.steps.find((s) => s.id === after) : undefined;
   const id = uniqueId(kind === "send" ? "message" : kind === "http" ? "request" : kind, spec.steps);
   const prior = anchor && !kindIsTrigger(anchor.kind.type) ? anchor.id : undefined;
@@ -391,16 +402,16 @@ export function reaches(spec: WorkflowSpec, from: string, to: string): boolean {
 export function connect(spec: WorkflowSpec, from: string, to: string): { spec: WorkflowSpec } | { error: string } {
   const a = spec.steps.find((s) => s.id === from);
   const b = spec.steps.find((s) => s.id === to);
-  if (!a || !b) return { error: "That step is gone." };
-  if (from === to) return { error: "A step cannot lead into itself." };
-  if (kindIsTrigger(b.kind.type)) return { error: "Nothing leads into a trigger: it is how the workflow starts." };
-  if (spec.edges.some((e) => e.from === from && e.to === to)) return { error: "Those two are already joined." };
-  if (reaches(spec, to, from)) return { error: "That would make a loop. A workflow goes one way; use a loop step to repeat." };
+  if (!a || !b) return { error: tr("workflow.thatStepIsGone") };
+  if (from === to) return { error: tr("workflow.aStepCannotLead") };
+  if (kindIsTrigger(b.kind.type)) return { error: tr("workflow.nothingLeadsIntoA") };
+  if (spec.edges.some((e) => e.from === from && e.to === to)) return { error: tr("workflow.thoseTwoAreAlready") };
+  if (reaches(spec, to, from)) return { error: tr("workflow.thatWouldMakeA") };
   let label: string | null = null;
   if (a.kind.type === "condition") {
     const used = spec.edges.filter((e) => e.from === from).map((e) => e.label);
     label = !used.includes("yes") ? "yes" : !used.includes("no") ? "no" : null;
-    if (!label) return { error: "A condition has one yes arrow and one no arrow." };
+    if (!label) return { error: tr("workflow.aConditionHasOne") };
   }
   const edge: WfEdge = label ? { from, to, label } : { from, to };
   return { spec: { ...spec, edges: [...spec.edges, edge] } };
@@ -426,9 +437,9 @@ export function relabel(spec: WorkflowSpec, from: string, to: string, label: "ye
 /** Remove a step and every arrow that touches it. The last trigger stays: a workflow needs one. */
 export function removeStep(spec: WorkflowSpec, id: string): { spec: WorkflowSpec } | { error: string } {
   const step = spec.steps.find((s) => s.id === id);
-  if (!step) return { error: "That step is gone." };
+  if (!step) return { error: tr("workflow.thatStepIsGone") };
   if (kindIsTrigger(step.kind.type) && spec.steps.filter((s) => kindIsTrigger(s.kind.type)).length === 1) {
-    return { error: "A workflow needs a trigger. Add another before removing this one." };
+    return { error: tr("workflow.aWorkflowNeedsA") };
   }
   return { spec: { ...spec, steps: spec.steps.filter((s) => s.id !== id), edges: spec.edges.filter((e) => e.from !== id && e.to !== id) } };
 }
@@ -465,8 +476,8 @@ export function showOptions(spec: WorkflowSpec, id: string): { path: string; lab
     if (t === "agent" || t === "team") out.push({ path: `steps.${step.id}.output.text`, label: step.title });
     else if (t === "question") out.push({ path: `steps.${step.id}.output.answer`, label: step.title });
   }
-  out.push({ path: "trigger.payload", label: "What started it" });
-  out.push({ path: "run.cost_micros", label: "Cost so far" });
+  out.push({ path: "trigger.payload", label: tr("workflow.whatStartedIt") });
+  out.push({ path: "run.cost_micros", label: tr("workflow.costSoFar") });
   return out;
 }
 
@@ -534,16 +545,16 @@ export function barHeights(bars: readonly Pick<WfBar, "ms">[]): number[] {
 }
 
 export const RUN_STATE_LABEL: Record<RunStateName, string> = {
-  running: "Running",
-  waiting: "Waiting for a person",
-  completed: "Finished",
-  failed: "Failed",
-  cancelled: "Cancelled",
+  running: tr("common.running"),
+  waiting: tr("workflow.waitingForAPerson"),
+  completed: tr("workflow.finished"),
+  failed: tr("common.failed"),
+  cancelled: tr("common.cancelled"),
 };
 
 /** "minutes saved" as the figure under Time saved: `31 h`, `45 min`. */
 export function savedText(minutes: number): string {
-  return minutes >= 120 ? `${Math.round(minutes / 60)} h` : `${minutes} min`;
+  return minutes >= 120 ? tr("format.h", { value: Math.round(minutes / 60) }) : tr("format.min", { value: minutes });
 }
 
 /** A workflow name made into a short name: `Incident triage!` becomes `incident-triage`. */

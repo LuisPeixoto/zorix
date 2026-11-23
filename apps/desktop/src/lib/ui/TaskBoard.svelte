@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends { id: string; lane: string; label: string }">
+  import { t } from "../i18n/index.ts";
   import { type Snippet, tick } from "svelte";
 
   import { dropIndex, nextSpot } from "../project.ts";
@@ -141,7 +142,7 @@
         event.preventDefault();
         picked = item.id;
         spot = positionOf(item);
-        announcement = `Picked up ${item.label}. The arrow keys move it, Space drops it, Escape lets it go.`;
+        announcement = t("ui.taskBoard.pickedUpTheArrow", { label: item.label });
       }
       return;
     }
@@ -150,7 +151,7 @@
       event.preventDefault();
       picked = null;
       spot = null;
-      announcement = `${item.label} stays where it was.`;
+      announcement = t("ui.taskBoard.staysWhereItWas", { label: item.label });
       return;
     }
     if (event.key === " " || event.key === "Enter") {
@@ -158,16 +159,16 @@
       const target = spot;
       picked = null;
       spot = null;
-      announcement = `${item.label} dropped in ${laneName(target.lane)}, place ${target.index + 1}.`;
+      announcement = t("ui.taskBoard.droppedInPlace", { label: item.label, value: laneName(target.lane), value2: target.index + 1 });
       refocus = item.id;
       onmove(item, target.lane, target.index);
       return;
     }
-    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+    if ([t("ui.taskBoard.arrowleft"), t("ui.taskBoard.arrowright"), t("ui.taskBoard.arrowup"), t("ui.taskBoard.arrowdown")].includes(event.key)) {
       event.preventDefault();
       const next = nextSpot(lanes.map((l) => l.id), others, spot, event.key);
       spot = next;
-      announcement = `${laneName(next.lane)}, place ${next.index + 1} of ${(others[next.lane] ?? 0) + 1}.`;
+      announcement = t("ui.taskBoard.placeOf", { value: laneName(next.lane), value2: next.index + 1, value3: (others[next.lane] ?? 0) + 1 });
     }
   }
 
@@ -178,7 +179,7 @@
     if (!id) return;
     void tick().then(() => {
       for (const el of Object.values(laneEls)) {
-        const button = el?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] button`);
+        const button = el?.querySelector<HTMLElement>(t("ui.taskBoard.dataIdButton", { value: CSS.escape(id) }));
         if (button) {
           button.focus();
           refocus = null;
@@ -222,7 +223,7 @@
         {/each}
       </ul>
       {#if onadd}
-        <Button variant="ghost" size="sm" icon="plus" class="justify-start" onclick={() => onadd(lane.id)}>Add task</Button>
+        <Button variant="ghost" size="sm" icon="plus" class="justify-start" onclick={() => onadd(lane.id)}>{t("common.addTask")}</Button>
       {/if}
     </section>
   {/each}

@@ -1,3 +1,4 @@
+import { t as tr } from "../i18n/index.ts";
 // Small Svelte actions shared by the kit.
 
 /** A tooltip that follows the element, shown on hover and keyboard focus. Plain text only. */
@@ -11,7 +12,7 @@ export function tooltip(node: HTMLElement, text: string) {
     tip.textContent = label;
     tip.setAttribute("role", "tooltip");
     tip.className =
-      "pointer-events-none fixed z-[70] rounded-md bg-fg px-2 py-1 text-xs font-medium text-bg shadow-pop";
+      tr("ui.actions.pointerEventsNoneFixed");
     document.body.appendChild(tip);
     const r = node.getBoundingClientRect();
     const t = tip.getBoundingClientRect();
@@ -47,7 +48,7 @@ export function tooltip(node: HTMLElement, text: string) {
   };
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = tr("ui.actions.aHrefButtonNot");
 
 /** Keep Tab inside a dialog, put focus in it when it opens, and give focus back when it closes. */
 export function trapFocus(node: HTMLElement) {

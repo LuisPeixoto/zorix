@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Badge from "./Badge.svelte";
   import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
@@ -41,7 +42,7 @@
     connecting?: boolean;
   } = $props();
 
-  const STATE_WORD: Record<NodeState, string> = { idle: "", running: "running", waiting: "waiting for a person", done: "done", failed: "failed", skipped: "skipped" };
+  const STATE_WORD: Record<NodeState, string> = { idle: "", running: "running", waiting: t("ui.workflowNode.waitingForAPerson"), done: "done", failed: "failed", skipped: "skipped" };
 </script>
 
 <div

@@ -30,6 +30,11 @@ cheaper than finding stray strings later.
   not know (a newer backend). A generated `reasons.json` and a test keep the Rust table and the catalogue in step.
 - **Text from outside is shown as it is.** The operating system's, SQLite's and a provider's own messages are arguments of a
   generic code (`io.failed`, `storage.failed`, `provider.failed`), never translated or rewritten.
+- **The migration was done by a program** (`tools/i18n-codemod.mjs`, removed once it had run): it read each component's syntax tree, turned text between tags, the attributes a person reads and the prose literals of the scripts into catalogue messages (a run of text
+  and expressions is one sentence with placeholders; a `n === 1 ? "task" : "tasks"` becomes plural forms), and added the import. English output was held identical by the existing helper tests and by reading the diff of the screens; where it could not
+  do it safely (a sentence with two counts) a person did it. Its keys and placeholder names are mechanical, and Phase 15 reads each message in its context before it is translated.
+- **One screen is exempt: the design-system showcase** (⌘⇧D), a developer screen that documents the kit in English. It is listed in the lint's allowlist with that reason.
+- **Units are messages** (`{value} min`, `{h} h {m} min`), because their words and order belong to a language, and money, numbers, percentages, dates, weekdays and lists use `Intl`. English lists are written without the serial comma, as the interface always did.
 - **Phase 10 adds no language.** The picker and the translations are Phase 15; the locale store holds English only.
 
 ## Consequences

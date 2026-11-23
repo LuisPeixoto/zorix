@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
 
@@ -30,7 +31,7 @@
   <table class="w-full border-collapse text-sm">
     <thead>
       <tr class="bg-panel-2">
-        <th scope="col" class="sticky left-0 z-10 min-w-48 bg-panel-2 px-3 py-2 text-left text-xs font-semibold text-muted">Case</th>
+        <th scope="col" class="sticky left-0 z-10 min-w-48 bg-panel-2 px-3 py-2 text-left text-xs font-semibold text-muted">{t("ui.scoreMatrix.case")}</th>
         {#each runs as run (run.id)}
           <th scope="col" class="min-w-28 px-3 py-2 text-left align-bottom">
             <span class="block text-xs font-semibold">{run.label}</span>
@@ -62,7 +63,7 @@
                 )}
                 title={c.note}
               >
-                {#if c.state === "pass"}<Icon name="check" size={13} stroke={2.4} />Pass{:else if c.state === "fail"}<Icon name="x" size={13} stroke={2.4} />Fail{:else}<span aria-hidden="true">–</span><span class="sr-only">Not run</span>{/if}
+                {#if c.state === "pass"}<Icon name="check" size={13} stroke={2.4} />{t("ui.scoreMatrix.pass")}{:else if c.state === "fail"}<Icon name="x" size={13} stroke={2.4} />{t("ui.scoreMatrix.fail")}{:else}<span aria-hidden="true">–</span><span class="sr-only">{t("ui.scoreMatrix.notRun")}</span>{/if}
               </button>
             </td>
           {/each}
@@ -71,7 +72,7 @@
     </tbody>
     <tfoot>
       <tr class="border-t border-line bg-panel-2">
-        <th scope="row" class="sticky left-0 bg-panel-2 px-3 py-2 text-left text-xs font-semibold text-muted">Passed</th>
+        <th scope="row" class="sticky left-0 bg-panel-2 px-3 py-2 text-left text-xs font-semibold text-muted">{t("ui.scoreMatrix.passed")}</th>
         {#each runs as run (run.id)}
           <td class="tnum px-3 py-2 text-xs font-semibold">{passed(run.id)} / {ran(run.id)}</td>
         {/each}

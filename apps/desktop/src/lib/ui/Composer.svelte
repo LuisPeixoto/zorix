@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Icon from "./Icon.svelte";
@@ -13,8 +14,8 @@
     onstop,
     busy = false,
     disabled = false,
-    placeholder = "Write a message…",
-    label = "Message",
+    placeholder = t("ui.composer.writeAMessage"),
+    label = t("ui.composer.message"),
     maxRows = 8,
     tools,
     class: klass = "",
@@ -73,9 +74,9 @@
   ></textarea>
   <div class="flex items-center gap-2 px-2.5 pb-2.5">
     <div class="flex min-w-0 flex-1 items-center gap-2">{@render tools?.()}</div>
-    <span class="hidden items-center gap-1 text-xs text-faint sm:flex"><Kbd>↵</Kbd> send <Kbd>⇧↵</Kbd> new line</span>
+    <span class="hidden items-center gap-1 text-xs text-faint sm:flex"><Kbd>↵</Kbd> send <Kbd>⇧↵</Kbd> {t("ui.composer.newLine")}</span>
     {#if busy && onstop}
-      <button type="button" onclick={onstop} use:tooltip={"Stop"} aria-label="Stop" class="grid size-8 place-items-center rounded-full border border-line bg-panel-2 text-fg transition hover:bg-hover active:scale-95">
+      <button type="button" onclick={onstop} use:tooltip={"Stop"} aria-label={t("common.stop")} class="grid size-8 place-items-center rounded-full border border-line bg-panel-2 text-fg transition hover:bg-hover active:scale-95">
         <Icon name="stop" size={14} />
       </button>
     {:else}
@@ -83,7 +84,7 @@
         type="button"
         onclick={send}
         disabled={!ready}
-        aria-label="Send"
+        aria-label={t("ui.composer.send")}
         class={cn(
           "grid size-8 place-items-center rounded-xl transition duration-150 active:scale-95",
           ready ? "surface-send hover:brightness-105" : "bg-hover text-faint",

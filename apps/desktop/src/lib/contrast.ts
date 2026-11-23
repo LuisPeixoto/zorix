@@ -1,3 +1,4 @@
+import { t } from "./i18n/index.ts";
 // WCAG contrast, and a reader for the colour tokens in app.css, so a test can hold the design to a standard.
 
 export type Rgb = [number, number, number];
@@ -5,7 +6,7 @@ export type Rgb = [number, number, number];
 export function parseHex(hex: string): Rgb {
   const h = hex.trim().replace(/^#/, "");
   const full = h.length === 3 ? [...h].map((c) => c + c).join("") : h;
-  if (!/^[0-9a-fA-F]{6}$/.test(full)) throw new Error(`not a hex colour: ${hex}`);
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) throw new Error(t("contrast.notAHexColour", { hex }));
   return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as Rgb;
 }
 
@@ -35,6 +36,6 @@ export function readTokens(block: string): Record<string, string> {
 export function readThemes(css: string): { light: Record<string, string>; dark: Record<string, string> } {
   const dark = css.match(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/);
   const light = css.match(/\n:root\s*\{([\s\S]*?)\n\}/);
-  if (!light || !dark) throw new Error("app.css has no light and dark token blocks");
+  if (!light || !dark) throw new Error(t("contrast.appCssHasNo"));
   return { light: readTokens(light[1]), dark: readTokens(dark[1]) };
 }

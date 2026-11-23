@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Icon from "./Icon.svelte";
@@ -22,6 +23,6 @@
 >
   <button type="button" {onclick} aria-pressed={onclick ? selected : undefined} class={cn("h-full rounded-full px-2.5", onremove && "pr-1")}>{@render children()}</button>
   {#if onremove}
-    <button type="button" onclick={onremove} aria-label="Remove" class="mr-1 grid size-5 place-items-center rounded-full hover:bg-hover"><Icon name="x" size={12} /></button>
+    <button type="button" onclick={onremove} aria-label={t("common.remove")} class="mr-1 grid size-5 place-items-center rounded-full hover:bg-hover"><Icon name="x" size={12} /></button>
   {/if}
 </span>

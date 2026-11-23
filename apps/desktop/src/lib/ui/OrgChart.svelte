@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { onMount } from "svelte";
 
   import { type OrgNode, fitScale, layoutChart } from "../workforce.ts";
@@ -27,7 +28,7 @@
   });
 </script>
 
-<div bind:this={box} class={cn("overflow-hidden", klass)} role="group" aria-label="Organisation chart">
+<div bind:this={box} class={cn("overflow-hidden", klass)} role="group" aria-label={t("ui.orgChart.organisationChart")}>
   <div class="relative mx-auto" style:width="{chart.width * scale}px" style:height="{chart.height * scale}px">
     <div class="absolute top-0 left-0 origin-top-left" style:width="{chart.width}px" style:height="{chart.height}px" style:transform="scale({scale})">
       <svg class="absolute inset-0" width={chart.width} height={chart.height} fill="none" stroke="var(--line-strong)" stroke-width="1.5" aria-hidden="true">

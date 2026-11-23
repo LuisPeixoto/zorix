@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { fmt, t } from "../i18n/index.ts";
   import { tick } from "svelte";
 
   import type { ExecutionState } from "../api.ts";
-  import { stateLabel, stateTone } from "../format.ts";
+  import { duration, stateLabel, stateTone } from "../format.ts";
   import { type TreeNode, costShares, elapsed, flatten } from "../tree.ts";
   import Avatar from "./Avatar.svelte";
   import Badge from "./Badge.svelte";
@@ -17,7 +18,7 @@
     selected = null,
     collapsed = $bindable(new Set<string>()),
     now = Date.now(),
-    look = () => ({ emoji: "🤖", color: "muted", name: "Run" }),
+    look = () => ({ emoji: "🤖", color: "muted", name: t("common.run") }),
     onselect,
     class: klass = "",
   }: {
@@ -88,11 +89,11 @@
     event.preventDefault();
   }
 
-  const clock = (ms: number | null) => (ms === null ? "–" : ms < 1000 ? `${Math.round(ms)} ms` : ms < 60_000 ? `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s` : `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`);
-  const money = (micros: number) => (micros === 0 ? "free" : `$${(micros / 1_000_000).toFixed(4)}`);
+  const clock = (ms: number | null) => duration(ms);
+  const money = (micros: number) => (micros === 0 ? t("format.free") : fmt.usd4(micros));
 </script>
 
-<ul bind:this={list} role="tree" aria-label="Runs in this work" class={cn("overflow-hidden rounded-2xl border border-line bg-panel", klass)}>
+<ul bind:this={list} role="tree" aria-label={t("ui.treeView.runsInThisWork")} class={cn("overflow-hidden rounded-2xl border border-line bg-panel", klass)}>
   {#each rows as row, index (row.node.run.id)}
     {@const run = row.node.run}
     {@const face = look(run)}
@@ -114,7 +115,7 @@
         style:padding-left="{12 + row.depth * 22}px"
       >
         {#if row.hasChildren}
-          <button type="button" tabindex="-1" class="grid size-5 shrink-0 place-items-center rounded-md text-faint transition hover:bg-line hover:text-fg" aria-label={row.expanded ? `Hide what ${face.name} started` : `Show what ${face.name} started`} onclick={(e) => { e.stopPropagation(); toggle(run.id, !row.expanded); }}>
+          <button type="button" tabindex="-1" class="grid size-5 shrink-0 place-items-center rounded-md text-faint transition hover:bg-line hover:text-fg" aria-label={row.expanded ? t("ui.treeView.hideWhatStarted", { name: face.name }) : t("ui.treeView.showWhatStarted", { name: face.name })} onclick={(e) => { e.stopPropagation(); toggle(run.id, !row.expanded); }}>
             <Icon name={row.expanded ? "chevron-down" : "chevron-right"} size={14} />
           </button>
         {:else}
@@ -131,7 +132,7 @@
         <span class="hidden w-20 shrink-0 text-right text-xs text-muted tabular-nums sm:block">{run.usage.model_calls} step{run.usage.model_calls === 1 ? "" : "s"}</span>
         <span class="hidden w-16 shrink-0 text-right text-xs text-muted tabular-nums md:block">{clock(elapsed(run, now))}</span>
         <span class="hidden w-24 shrink-0 items-center justify-end gap-2 text-xs text-muted tabular-nums md:flex">
-          <Sparkbar value={shares.get(run.id) ?? 0} label="Share of the cost of {face.name}" />
+          <Sparkbar value={shares.get(run.id) ?? 0} label={t("common.shareOfTheCost", { name: face.name })} />
           {money(run.usage.cost_micros)}
         </span>
         <Badge tone={stateTone(run.state as ExecutionState)} live={["running", "waiting_for_model", "waiting_for_tool", "waiting_for_children", "queued"].includes(run.state)} dot>{stateLabel(run.state as ExecutionState)}</Badge>

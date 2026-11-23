@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
 
   type Option = { value: string; label: string; icon?: string };
-  let { options, value = $bindable(), label = "Choose one", class: klass = "" }: { options: Option[]; value: string; label?: string; class?: string } = $props();
+  let { options, value = $bindable(), label = t("ui.segmented.chooseOne"), class: klass = "" }: { options: Option[]; value: string; label?: string; class?: string } = $props();
 
   const index = $derived(Math.max(0, options.findIndex((o) => o.value === value)));
 

@@ -1,3 +1,4 @@
+import { t } from "../i18n/index.ts";
 // The one place that maps a tone to Tailwind classes. Class names are written out in full so Tailwind can see them.
 
 export type UiTone = "ok" | "warn" | "err" | "info" | "muted" | "accent";
@@ -7,50 +8,50 @@ const MAP: Record<UiTone, Record<ToneKind, string>> = {
   ok: {
     text: "text-ok",
     dot: "bg-ok",
-    soft: "bg-ok/12 text-ok",
+    soft: t("ui.tone.bgOk12Text"),
     border: "border-ok/40",
-    solid: "bg-ok text-bg",
-    callout: "border-ok/35 bg-ok/8",
+    solid: t("ui.tone.bgOkTextBg"),
+    callout: t("ui.tone.borderOk35Bg"),
   },
   warn: {
     text: "text-warn",
     dot: "bg-warn",
-    soft: "bg-warn/14 text-warn",
+    soft: t("ui.tone.bgWarn14Text"),
     border: "border-warn/45",
-    solid: "bg-warn text-bg",
-    callout: "border-warn/40 bg-warn/8",
+    solid: t("ui.tone.bgWarnTextBg"),
+    callout: t("ui.tone.borderWarn40Bg"),
   },
   err: {
     text: "text-err",
     dot: "bg-err",
-    soft: "bg-err/12 text-err",
+    soft: t("ui.tone.bgErr12Text"),
     border: "border-err/40",
-    solid: "bg-err text-bg",
-    callout: "border-err/35 bg-err/8",
+    solid: t("ui.tone.bgErrTextBg"),
+    callout: t("ui.tone.borderErr35Bg"),
   },
   info: {
     text: "text-info",
     dot: "bg-info",
-    soft: "bg-info/12 text-info",
+    soft: t("ui.tone.bgInfo12Text"),
     border: "border-info/40",
-    solid: "bg-info text-bg",
-    callout: "border-info/35 bg-info/8",
+    solid: t("ui.tone.bgInfoTextBg"),
+    callout: t("ui.tone.borderInfo35Bg"),
   },
   muted: {
     text: "text-muted",
     dot: "bg-faint",
-    soft: "bg-hover text-muted",
+    soft: t("ui.tone.bgHoverTextMuted"),
     border: "border-line",
-    solid: "bg-muted text-bg",
-    callout: "border-line bg-panel-2",
+    solid: t("ui.tone.bgMutedTextBg"),
+    callout: t("ui.tone.borderLineBgPanel"),
   },
   accent: {
     text: "text-accent",
     dot: "bg-accent",
-    soft: "bg-accent-soft text-accent",
+    soft: t("ui.tone.bgAccentSoftText"),
     border: "border-accent/40",
-    solid: "bg-accent text-accent-fg",
-    callout: "border-accent/35 bg-accent-soft",
+    solid: t("ui.tone.bgAccentTextAccent"),
+    callout: t("ui.tone.borderAccent35Bg"),
   },
 };
 

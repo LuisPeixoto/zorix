@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { onDestroy, onMount } from "svelte";
 
   import {
@@ -56,7 +57,7 @@
       embedded: (d) => {
         running = false;
         if (d.error) toast.err(d.error);
-        else toast.ok("Vectors are up to date.");
+        else toast.ok(t("embeddings.vectorsAreUpTo"));
         void load();
       },
     });
@@ -83,11 +84,11 @@
 
   const use = () => act(async () => {
     const size = await setEmbeddings(pick, undefined, cloud);
-    toast.ok(`Using ${pick} (${size} dimensions). Press Embed everything to make vectors for what is indexed.`);
+    toast.ok(t("embeddings.usingDimensionsPressEmbed", { pick, size }));
   });
   const test = () => act(async () => {
     const [size, ms] = await testEmbeddings();
-    toast.ok(`${size} dimensions in ${ms} ms.`);
+    toast.ok(t("embeddings.dimensionsInMs", { size, ms }));
   });
   const embedAll = () => act(async () => {
     running = await reembed();
@@ -95,61 +96,60 @@
 </script>
 
 <div id="embeddings">
-<Card title="Search by meaning" icon="sparkles">
+<Card title={t("embeddings.searchByMeaning")} icon="sparkles">
   <p class="text-sm text-muted">
-    Keyword search always works. An embeddings model also finds text that means the same with different words. Pick a model that runs on
-    this computer, for example <span class="mono">ollama/all-minilm</span>.
+    {t("embeddings.keywordSearchAlwaysWorks")} <span class="mono">ollama/all-minilm</span>.
   </p>
 
   {#if info?.model}
     <div class="mt-4 flex flex-wrap items-center gap-2">
       <Badge tone="accent" dot>{info.model}</Badge>
       {#if info.dimensions}<Badge tone="muted">{info.dimensions} dimensions</Badge>{/if}
-      <Badge tone={percent === 100 ? "ok" : "warn"} dot>{info.embedded} of {info.texts} texts embedded ({percent}%)</Badge>
-      {#if info.allow_cloud}<Badge tone="warn" dot>cloud allowed</Badge>{/if}
+      <Badge tone={percent === 100 ? "ok" : "warn"} dot>{t("embeddings.ofTextsEmbedded", { embedded: info.embedded, texts: info.texts, percent })}</Badge>
+      {#if info.allow_cloud}<Badge tone="warn" dot>{t("embeddings.cloudAllowed")}</Badge>{/if}
     </div>
   {:else}
-    <p class="mt-3 text-sm text-muted">Off: keyword search only.</p>
+    <p class="mt-3 text-sm text-muted">{t("embeddings.offKeywordSearchOnly")}</p>
   {/if}
 
   <div class="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-    <Field label="Model">
+    <Field label={t("common.model")}>
       {#snippet children(f)}
         <Select id={f.id} bind:value={pick}>
-          <option value="">Choose a model…</option>
+          <option value="">{t("embeddings.chooseAModel")}</option>
           {#if info?.model && !models.some((m) => m.reference === info?.model)}
-            <option value={info.model}>{info.model} · in use</option>
+            <option value={info.model}>{t("embeddings.inUse", { model: info.model })}</option>
           {/if}
           {#each models as m (m.reference)}
-            <option value={m.reference}>{m.reference}{m.dimensions ? ` · ${m.dimensions} dims` : ""}{m.local ? " · on this computer" : " · cloud"}{m.installed ? "" : " · not installed"}</option>
+            <option value={m.reference}>{m.reference}{m.dimensions ? ` · ${m.dimensions} dims` : ""}{m.local ? t("embeddings.onThisComputer") : t("embeddings.cloud")}{m.installed ? "" : t("embeddings.notInstalled")}</option>
           {/each}
         </Select>
       {/snippet}
     </Field>
-    <Button variant="primary" icon="check" loading={busy} disabled={!pick || (needsCloud && !cloud) || (pick === info?.model && cloud === info?.allow_cloud)} onclick={use}>Use it</Button>
+    <Button variant="primary" icon="check" loading={busy} disabled={!pick || (needsCloud && !cloud) || (pick === info?.model && cloud === info?.allow_cloud)} onclick={use}>{t("embeddings.useIt")}</Button>
   </div>
 
   {#if needsCloud}
     <div class="mt-3">
-      <Callout tone="warn" icon="cloud" title="This sends your text to a cloud provider">
-        To make vectors, the text of your documents and facts, and every question a run asks, is sent to the provider.
+      <Callout tone="warn" icon="cloud" title={t("embeddings.thisSendsYourText")}>
+        {t("embeddings.toMakeVectorsThe")}
         {#snippet actions()}
-          <Checkbox bind:checked={cloud}>I understand and allow it</Checkbox>
+          <Checkbox bind:checked={cloud}>{t("embeddings.iUnderstandAndAllow")}</Checkbox>
         {/snippet}
       </Callout>
     </div>
   {/if}
   {#each problems as problem}<p class="mt-2 text-xs text-faint">{problem}</p>{/each}
   {#if models.length === 0 && problems.length === 0}
-    <p class="mt-2 text-xs text-faint">No embeddings model found. For a local one, run <span class="mono">ollama pull all-minilm</span>.</p>
+    <p class="mt-2 text-xs text-faint">{t("embeddings.noEmbeddingsModelFound")} <span class="mono">{t("embeddings.ollamaPullAllMinilm")}</span>.</p>
   {/if}
   {#if error}<div class="mt-3"><Callout tone="err">{error}</Callout></div>{/if}
 
   {#if info?.model}
     <div class="mt-4 flex flex-wrap gap-2">
-      <Button icon="refresh" disabled={busy} onclick={test}>Test</Button>
-      <Button icon="database" loading={running} disabled={busy || running} onclick={embedAll}>Embed everything</Button>
-      <Button variant="danger" icon="x" disabled={busy} onclick={() => act(() => embeddingsOff(), "Embeddings are off.")}>Turn off</Button>
+      <Button icon="refresh" disabled={busy} onclick={test}>{t("common.test")}</Button>
+      <Button icon="database" loading={running} disabled={busy || running} onclick={embedAll}>{t("embeddings.embedEverything")}</Button>
+      <Button variant="danger" icon="x" disabled={busy} onclick={() => act(() => embeddingsOff(), t("embeddings.areOff"))}>{t("embeddings.turnOff")}</Button>
     </div>
   {/if}
 </Card>

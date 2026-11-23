@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import { type TaskPriority, type TaskState, type TaskView, errorText, taskAdd } from "../../api.ts";
   import { LANE_NAME, PRIORITIES, PRIORITY, whoKey, whoOf } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
@@ -37,7 +38,7 @@
     void projects.loadPeople();
   });
 
-  const dateError = $derived(start && due && start > due ? "A task cannot start after it is due." : null);
+  const dateError = $derived(start && due && start > due ? tr("projects.newTaskModal.aTaskCannotStart") : null);
   const valid = $derived(title.trim() !== "" && !dateError);
   const runs = $derived(assignee.startsWith("agent:") || assignee.startsWith("team:"));
   const options = $derived(tasks.filter((t) => !after.includes(t.task.key)));
@@ -56,7 +57,7 @@
         due: due || null,
         depends_on: after,
       });
-      toast.ok(`${made.key} added${lane === "in_progress" && runs ? ". Its run is starting." : "."}`);
+      toast.ok(`${made.key} added${lane === "in_progress" && runs ? tr("projects.newTaskModal.itsRunIsStarting") : "."}`);
       open = false;
       onadded(made.key);
     } catch (e) {
@@ -67,47 +68,47 @@
   }
 </script>
 
-<Modal bind:open title="New task" icon="plus" size="md">
-  <p class="mb-4 text-sm text-muted">It starts in {LANE_NAME[lane]}.{runs && lane === "in_progress" ? " Its agent starts working on it as soon as you add it." : ""}</p>
+<Modal bind:open title={tr("projects.newTaskModal.newTask")} icon="plus" size="md">
+  <p class="mb-4 text-sm text-muted">{tr("projects.newTaskModal.itStartsIn")} {LANE_NAME[lane]}.{runs && lane === "in_progress" ? tr("projects.newTaskModal.itsAgentStartsWorking") : ""}</p>
   <div class="flex flex-col gap-4">
-    <Field label="Title" required>
-      {#snippet children(f)}<Input id={f.id} bind:value={title} maxlength={200} placeholder="Triage the incident backlog" />{/snippet}
+    <Field label={tr("common.title")} required>
+      {#snippet children(f)}<Input id={f.id} bind:value={title} maxlength={200} placeholder={tr("projects.newTaskModal.triageTheIncidentBacklog")} />{/snippet}
     </Field>
-    <Field label="Description" hint="What to do and what good looks like. An agent reads this.">
+    <Field label={tr("common.description")} hint={tr("projects.newTaskModal.whatToDoAnd")}>
       {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={description} maxlength={20000} />{/snippet}
     </Field>
     <div class="grid grid-cols-2 gap-3">
-      <Field label="Who has it" hint={runs ? "Moving it to In progress starts a run." : undefined}>
+      <Field label={tr("projects.newTaskModal.whoHasIt")} hint={runs ? tr("projects.newTaskModal.movingItToIn") : undefined}>
         {#snippet children(f)}
           <Select id={f.id} bind:value={assignee}>
-            <option value="none">Nobody yet</option>
-            <option value={whoKey({ type: "you" })}>You</option>
+            <option value="none">{tr("projects.newTaskModal.nobodyYet")}</option>
+            <option value={whoKey({ type: "you" })}>{tr("common.you")}</option>
             {#each projects.agents.filter((a) => !a.archived) as agent (agent.slug)}<option value={`agent:${agent.slug}`}>{agent.name}</option>{/each}
             {#each projects.teams as team (team.team.slug)}<option value={`team:${team.team.slug}`}>{team.team.name} (team)</option>{/each}
           </Select>
         {/snippet}
       </Field>
-      <Field label="Priority">
+      <Field label={tr("common.priority")}>
         {#snippet children()}
-          <Segmented bind:value={priority} label="Priority" options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY[p].label }))} />
+          <Segmented bind:value={priority} label={tr("common.priority")} options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY[p].label }))} />
         {/snippet}
       </Field>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <Field label="Start">
+      <Field label={tr("common.start")}>
         {#snippet children(f)}<Input id={f.id} type="date" bind:value={start} />{/snippet}
       </Field>
-      <Field label="Due" error={dateError}>
+      <Field label={tr("common.due")} error={dateError}>
         {#snippet children(f)}<Input id={f.id} type="date" bind:value={due} invalid={f.invalid} />{/snippet}
       </Field>
     </div>
     {#if tasks.length > 0}
-      <Field label="Waits for" hint="Its run starts when these are done.">
+      <Field label={tr("projects.newTaskModal.waitsFor")} hint={tr("projects.newTaskModal.itsRunStartsWhen")}>
         {#snippet children(f)}
           <div class="flex flex-wrap items-center gap-2">
             {#each after as key (key)}<Chip onremove={() => (after = after.filter((k) => k !== key))}>{key}</Chip>{/each}
             <Select id={f.id} bind:value={pick} class="w-56" onchange={() => { if (pick) { after = [...after, pick]; pick = ""; } }}>
-              <option value="">Add a task…</option>
+              <option value="">{tr("projects.newTaskModal.addATask")}</option>
               {#each options as t (t.task.key)}<option value={t.task.key}>{t.task.key} · {t.task.title}</option>{/each}
             </Select>
           </div>
@@ -116,7 +117,7 @@
     {/if}
   </div>
   {#snippet footer()}
-    <Button disabled={busy} onclick={() => (open = false)}>Cancel</Button>
-    <Button variant="primary" icon="plus" disabled={!valid || busy} onclick={() => void create()}>Add task</Button>
+    <Button disabled={busy} onclick={() => (open = false)}>{tr("common.cancel")}</Button>
+    <Button variant="primary" icon="plus" disabled={!valid || busy} onclick={() => void create()}>{tr("common.addTask")}</Button>
   {/snippet}
 </Modal>

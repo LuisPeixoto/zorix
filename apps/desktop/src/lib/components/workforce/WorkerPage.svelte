@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import { type OrgReport, errorText, workerFire, workerPlan, workerReport } from "../../api.ts";
   import { dayLabel } from "../../project.ts";
   import { store } from "../../stores/runs.svelte.ts";
@@ -56,12 +57,12 @@
   const time = $derived(Number(minutes));
   const capError = $derived.by(() => {
     const cap = boss?.worker.weekly_budget_micros ?? null;
-    if (micros === undefined) return "Write an amount in dollars, such as 25.";
+    if (micros === undefined) return tr("workforce.workerPage.writeAnAmountIn");
     if (cap === null) return null;
-    if (micros === null) return `${boss?.name} has a weekly budget of ${money(cap)}, so this one needs one too.`;
-    return micros > cap ? `Up to ${money(cap)}, the budget of ${boss?.name}.` : null;
+    if (micros === null) return tr("workforce.workerPage.hasAWeeklyBudget", { name: boss?.name, value: money(cap) });
+    return micros > cap ? tr("workforce.workerPage.upToTheBudget", { value: money(cap), name: boss?.name }) : null;
   });
-  const timeError = $derived(!Number.isFinite(time) || time < 1 || time > 1440 ? "Between 1 and 1440 minutes." : null);
+  const timeError = $derived(!Number.isFinite(time) || time < 1 || time > 1440 ? tr("workforce.workerPage.between1And1440") : null);
   const dirty = $derived(
     view !== null &&
       (level !== view.worker.autonomy || (micros ?? null) !== view.worker.weekly_budget_micros || Math.round(time) * 60_000 !== view.worker.task_time_ms || patterns.join("\n") !== view.worker.still_ask.join("\n")),
@@ -72,7 +73,7 @@
     busy = true;
     const ok = await workforce.edit(view.worker.agent, (f) => ({ ...f, autonomy: level, weekly_budget_micros: micros ?? null, task_time_ms: Math.round(time) * 60_000, still_ask: patterns }));
     busy = false;
-    if (ok) toast.ok("Saved.");
+    if (ok) toast.ok(tr("common.saved"));
   }
 
   function addPattern() {
@@ -91,7 +92,7 @@
     busy = true;
     try {
       const started = kind === "plan" ? await workerPlan(view.worker.agent) : await workerReport(view.worker.agent);
-      toast.ok(kind === "plan" ? `${view.name} is planning the week.` : `${view.name} is writing the report.`);
+      toast.ok(kind === "plan" ? tr("workforce.workerPage.isPlanningTheWeek", { name: view.name }) : tr("workforce.workerPage.isWritingTheReport", { name: view.name }));
       await workforce.refreshDetail();
       void store.select(started.run);
     } catch (e) {
@@ -106,7 +107,7 @@
     busy = true;
     try {
       await workerFire(view.worker.agent);
-      toast.ok(`${view.name} was let go.`);
+      toast.ok(tr("workforce.workerPage.wasLetGo", { name: view.name }));
       store.showWorkforce("chart");
     } catch (e) {
       toast.err(errorText(e));
@@ -131,15 +132,15 @@
   <div class="mx-auto max-w-[1100px] p-6">
     {#if !view}
       {#if workforce.error}
-        <Callout tone="err" title="The worker could not be read">{workforce.error}</Callout>
-        <Button class="mt-3" icon="chevron-left" onclick={() => store.showWorkforce("chart")}>Back to the workforce</Button>
+        <Callout tone="err" title={tr("workforce.workerPage.theWorkerCouldNot")}>{workforce.error}</Callout>
+        <Button class="mt-3" icon="chevron-left" onclick={() => store.showWorkforce("chart")}>{tr("workforce.workerPage.backToTheWorkforce")}</Button>
       {:else}
-        <p class="text-muted" role="status"><Icon name="loader" size={14} class="mr-1.5 inline animate-spin" />Reading the worker…</p>
+        <p class="text-muted" role="status"><Icon name="loader" size={14} class="mr-1.5 inline animate-spin" />{tr("workforce.workerPage.readingTheWorker")}</p>
       {/if}
     {:else}
       {@const w = view.worker}
-      <nav aria-label="Where you are" class="mb-1 flex items-center gap-1.5 text-sm text-muted">
-        <button type="button" class="inline-flex items-center gap-1.5 rounded outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/60" onclick={() => store.showWorkforce("chart")}><Icon name="building" size={13} />Workforce</button>
+      <nav aria-label={tr("workforce.workerPage.whereYouAre")} class="mb-1 flex items-center gap-1.5 text-sm text-muted">
+        <button type="button" class="inline-flex items-center gap-1.5 rounded outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/60" onclick={() => store.showWorkforce("chart")}><Icon name="building" size={13} />{tr("common.workforce")}</button>
         <Icon name="chevron-right" size={12} /><span aria-current="page" class="text-fg">{view.name}</span>
       </nav>
       <header class="mb-5 flex flex-wrap items-start gap-4">
@@ -149,85 +150,85 @@
             {view.name}
             {#if view.status}<Badge tone={view.status === "ok" ? "ok" : view.status === "warn" ? "warn" : "err"} dot live={view.status === "ok"}>{STATUS_TEXT[view.status]}</Badge>{/if}
           </h1>
-          <p class="mt-1 text-base text-muted">{w.manager ? "Virtual manager" : w.role} · {dept} · reports to {boss ? boss.name : "you"}{view.description ? `. ${view.description}` : ""}</p>
+          <p class="mt-1 text-base text-muted">{w.manager ? tr("workforce.workerPage.virtualManager") : w.role} · {dept} {tr("workforce.workerPage.reportsTo")} {boss ? boss.name : "you"}{view.description ? `. ${view.description}` : ""}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Button icon="edit" onclick={() => (editing = true)}>Edit</Button>
-          <Button icon="message" onclick={() => store.showAgents(w.agent, "chat")}>Open chat</Button>
-          <Button variant="primary" icon="plus" onclick={() => (assigning = true)}>Assign a task</Button>
+          <Button icon="edit" onclick={() => (editing = true)}>{tr("workforce.workerPage.edit")}</Button>
+          <Button icon="message" onclick={() => store.showAgents(w.agent, "chat")}>{tr("workforce.workerPage.openChat")}</Button>
+          <Button variant="primary" icon="plus" onclick={() => (assigning = true)}>{tr("common.assignATask")}</Button>
         </div>
       </header>
 
       <div class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile icon="kanban" label="Tasks" value={String(view.figures.tasks)} detail="{view.own.tasks} {view.own.tasks === 1 ? 'is' : 'are'} its own" color={1} />
-        <MetricTile icon="clock" label="On time" value={onTimeText(view.figures.on_time_done, view.figures.on_time_all).replace("%", "")} unit={view.figures.on_time_all > 0 ? "%" : undefined} detail={view.figures.on_time_all > 0 ? `last 30 days · ${view.figures.on_time_done} of ${view.figures.on_time_all}` : "no task with a due date finished in 30 days"} color={2} />
-        <MetricTile icon="flask" label="Eval score" value={evalText(view.own.eval)} detail={view.own.eval === null ? `no evaluation has run for ${view.name}` : "latest finished evaluation"} color={3} />
-        <MetricTile icon="dollar" label="Spend this week" value={usd(view.own.week_micros).replace(/\.00$/, "")} {delta} detail={w.weekly_budget_micros !== null ? `of ${money(w.weekly_budget_micros)} budget · resets Monday` : "no weekly budget · resets Monday"} series={detail?.spend_days} seriesLabel="Spend each of the last 7 days, in micro-dollars" color={4} />
+        <MetricTile icon="kanban" label={tr("common.tasks")} value={String(view.figures.tasks)} detail="{view.own.tasks} {view.own.tasks === 1 ? 'is' : 'are'} its own" color={1} />
+        <MetricTile icon="clock" label={tr("common.onTime")} value={onTimeText(view.figures.on_time_done, view.figures.on_time_all).replace("%", "")} unit={view.figures.on_time_all > 0 ? "%" : undefined} detail={view.figures.on_time_all > 0 ? `last 30 days · ${view.figures.on_time_done} of ${view.figures.on_time_all}` : "no task with a due date finished in 30 days"} color={2} />
+        <MetricTile icon="flask" label={tr("workforce.workerPage.evalScore")} value={evalText(view.own.eval)} detail={view.own.eval === null ? `no evaluation has run for ${view.name}` : "latest finished evaluation"} color={3} />
+        <MetricTile icon="dollar" label={tr("workforce.workerPage.spendThisWeek")} value={usd(view.own.week_micros).replace(/\.00$/, "")} {delta} detail={w.weekly_budget_micros !== null ? `of ${money(w.weekly_budget_micros)} budget · resets Monday` : "no weekly budget · resets Monday"} series={detail?.spend_days} seriesLabel="Spend each of the last 7 days, in micro-dollars" color={4} />
       </div>
 
       <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div class="flex min-w-0 flex-col gap-4">
-          <section class="flex flex-col gap-3 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Autonomy">
+          <section class="flex flex-col gap-3 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label={tr("common.autonomy")}>
             <div class="flex items-baseline justify-between gap-3">
-              <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Autonomy</h2>
-              <span class="text-xs text-muted">{boss ? `It can only be as free as ${boss.name}` : "It answers to you, so any level"}</span>
+              <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("common.autonomy")}</h2>
+              <span class="text-xs text-muted">{boss ? tr("workforce.workerPage.itCanOnlyBe", { name: boss.name }) : tr("workforce.workerPage.itAnswersToYou")}</span>
             </div>
-            <AutonomyDial bind:level max={top} label="Autonomy for {view.name}" />
-            <p class="text-sm text-muted">{limitsSentence({ autonomy: level, weekly_budget_micros: micros ?? null, task_time_ms: Math.round(time) * 60_000 || w.task_time_ms, still_ask: patterns })} Calls that ask only by default run without asking at Notify and above, and are listed in Activity. Tools that always ask still ask.</p>
+            <AutonomyDial bind:level max={top} label={tr("workforce.workerPage.autonomyFor", { name: view.name })} />
+            <p class="text-sm text-muted">{tr("workforce.workerPage.callsThatAskOnly", { value: limitsSentence({ autonomy: level, weekly_budget_micros: micros ?? null, task_time_ms: Math.round(time) * 60_000 || w.task_time_ms, still_ask: patterns }) })}</p>
             <div class="grid grid-cols-2 gap-3">
-              <label class="flex flex-col gap-1 text-sm font-medium">Budget per week
-                <Input bind:value={budget} icon="dollar" inputmode="decimal" placeholder="No limit" invalid={capError !== null} />
+              <label class="flex flex-col gap-1 text-sm font-medium">{tr("common.budgetPerWeek")}
+                <Input bind:value={budget} icon="dollar" inputmode="decimal" placeholder={tr("workforce.workerPage.noLimit")} invalid={capError !== null} />
                 {#if capError}<span class="text-xs font-normal text-err" role="alert">{capError}</span>{/if}
               </label>
-              <label class="flex flex-col gap-1 text-sm font-medium">Time per task
+              <label class="flex flex-col gap-1 text-sm font-medium">{tr("workforce.workerPage.timePerTask")}
                 <Input bind:value={minutes} inputmode="numeric" invalid={timeError !== null} />
-                <span class="text-xs font-normal {timeError ? 'text-err' : 'text-faint'}">{timeError ?? "minutes of work"}</span>
+                <span class="text-xs font-normal {timeError ? 'text-err' : 'text-faint'}">{timeError ?? tr("workforce.workerPage.minutesOfWork")}</span>
               </label>
             </div>
             <div class="flex flex-col gap-1.5">
-              <span class="text-sm font-medium">Still asks, whatever the level</span>
+              <span class="text-sm font-medium">{tr("workforce.workerPage.stillAsksWhateverThe")}</span>
               <div class="flex flex-wrap items-center gap-2">
                 {#each patterns as p (p)}<Chip selected onremove={() => (patterns = patterns.filter((x) => x !== p))}><span class="mono text-xs">{p}</span></Chip>{/each}
                 <span class="flex items-center gap-1.5">
-                  <Input size="sm" class="w-44" bind:value={pattern} placeholder="repo:acme/web:write" aria-label="An access that always asks" onkeydown={(e) => e.key === "Enter" && addPattern()} />
-                  <Button size="sm" variant="ghost" icon="plus" disabled={pattern.trim() === ""} onclick={addPattern}>Add</Button>
+                  <Input size="sm" class="w-44" bind:value={pattern} placeholder="repo:acme/web:write" aria-label={tr("workforce.workerPage.anAccessThatAlways")} onkeydown={(e) => e.key === "Enter" && addPattern()} />
+                  <Button size="sm" variant="ghost" icon="plus" disabled={pattern.trim() === ""} onclick={addPattern}>{tr("common.add")}</Button>
                 </span>
               </div>
-              <span class="text-xs text-faint">Access patterns, like the ones an agent is granted.</span>
+              <span class="text-xs text-faint">{tr("workforce.workerPage.accessPatternsLikeThe")}</span>
             </div>
             <div class="flex items-center justify-between gap-2 border-t border-line-soft pt-3">
               {#if confirmFire}
-                <span class="text-sm text-err">Let {view.name} go?</span>
-                <span class="flex gap-2"><Button disabled={busy} onclick={() => (confirmFire = false)}>Keep</Button><Button variant="danger" icon="trash" disabled={busy} onclick={() => void fire()}>Let go</Button></span>
+                <span class="text-sm text-err">{tr("workforce.workerPage.letGo", { name: view.name })}</span>
+                <span class="flex gap-2"><Button disabled={busy} onclick={() => (confirmFire = false)}>{tr("workforce.workerPage.keep")}</Button><Button variant="danger" icon="trash" disabled={busy} onclick={() => void fire()}>{tr("workforce.workerPage.letGo2")}</Button></span>
               {:else}
-                <Button variant="ghost" icon="trash" onclick={() => (confirmFire = true)}>Let go</Button>
-                <Button variant="primary" icon="check" disabled={!dirty || capError !== null || timeError !== null || busy} onclick={() => void save()}>Save</Button>
+                <Button variant="ghost" icon="trash" onclick={() => (confirmFire = true)}>{tr("workforce.workerPage.letGo2")}</Button>
+                <Button variant="primary" icon="check" disabled={!dirty || capError !== null || timeError !== null || busy} onclick={() => void save()}>{tr("common.save")}</Button>
               {/if}
             </div>
           </section>
 
-          <section aria-label="This week" class="flex flex-col gap-2">
-            <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">This week</h2>
-            <LogStream {lines} now={store.now} scope={view.name} empty="Nothing yet this week." onopen={openRun} />
+          <section aria-label={tr("workforce.workerPage.thisWeek")} class="flex flex-col gap-2">
+            <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workforce.workerPage.thisWeek")}</h2>
+            <LogStream {lines} now={store.now} scope={view.name} empty={tr("workforce.workerPage.nothingYetThisWeek")} onopen={openRun} />
           </section>
         </div>
 
         <div class="flex min-w-0 flex-col gap-4">
           {#if w.manager}
-            <section class="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Schedule">
-              <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Schedule</h2>
-              <ToggleRow class="-mx-4 border-b border-line-soft" checked={w.schedule.enabled} label="Plan on Mondays at 09:00 and report on Fridays at 16:00" description="Assigns tasks through the project tools. Runs only while the app or `zorix serve` is open." onchange={(on) => void toggleSchedule(on)} />
+            <section class="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label={tr("workforce.workerPage.schedule")}>
+              <h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workforce.workerPage.schedule")}</h2>
+              <ToggleRow class="-mx-4 border-b border-line-soft" checked={w.schedule.enabled} label={tr("workforce.workerPage.planOnMondaysAt")} description={tr("workforce.workerPage.assignsTasksThroughThe")} onchange={(on) => void toggleSchedule(on)} />
               <div class="flex flex-wrap gap-2 pt-1">
-                <Button size="sm" icon="calendar" disabled={busy || detail?.busy_with === "plan"} onclick={() => void ask("plan")}>{detail?.busy_with === "plan" ? "Planning…" : "Plan the week"}</Button>
-                <Button size="sm" icon="book" disabled={busy || detail?.busy_with === "report"} onclick={() => void ask("report")}>{detail?.busy_with === "report" ? "Writing…" : "Write the report"}</Button>
+                <Button size="sm" icon="calendar" disabled={busy || detail?.busy_with === "plan"} onclick={() => void ask("plan")}>{detail?.busy_with === "plan" ? tr("workforce.workerPage.planning") : tr("workforce.workerPage.planTheWeek")}</Button>
+                <Button size="sm" icon="book" disabled={busy || detail?.busy_with === "report"} onclick={() => void ask("report")}>{detail?.busy_with === "report" ? tr("workforce.workerPage.writing") : tr("workforce.workerPage.writeTheReport")}</Button>
               </div>
             </section>
           {/if}
 
-          <section class="flex flex-col rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Open tasks">
-            <div class="mb-1.5 flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Open tasks</h2><span class="text-xs text-muted tnum">{detail?.tasks.length ?? 0}</span></div>
+          <section class="flex flex-col rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label={tr("workforce.workerPage.openTasks")}>
+            <div class="mb-1.5 flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workforce.workerPage.openTasks")}</h2><span class="text-xs text-muted tnum">{detail?.tasks.length ?? 0}</span></div>
             {#if (detail?.tasks.length ?? 0) === 0}
-              <p class="py-2 text-sm text-muted">No open tasks.</p>
+              <p class="py-2 text-sm text-muted">{tr("workforce.workerPage.noOpenTasks")}</p>
             {:else}
               <ul>
                 {#each detail?.tasks ?? [] as t (t.key)}
@@ -244,8 +245,8 @@
           </section>
 
           {#if view.reports.length > 0}
-            <section class="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Reports to {view.name}">
-              <div class="flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Reports to {view.name}</h2><span class="text-xs text-muted">{view.reports.length} {view.reports.length === 1 ? "worker" : "workers"}</span></div>
+            <section class="flex flex-col gap-2 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label={tr("workforce.workerPage.reportsTo2", { name: view.name })}>
+              <div class="flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workforce.workerPage.reportsTo2", { name: view.name })}</h2><span class="text-xs text-muted">{view.reports.length} {view.reports.length === 1 ? "worker" : "workers"}</span></div>
               {#each view.reports as slug (slug)}
                 {@const r = overview?.workers.find((o) => o.worker.agent === slug)}
                 {#if r}
@@ -260,12 +261,12 @@
           {/if}
 
           {#if w.manager}
-            <section class="flex flex-col gap-1.5 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label="Latest report">
-              <div class="flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">Latest {latest?.kind === "plan" ? "plan" : "report"}</h2>{#if latest}<span class="text-xs text-muted">Week of {dayName(latest.week)}</span>{/if}</div>
+            <section class="flex flex-col gap-1.5 rounded-2xl border border-line bg-panel p-4 shadow-card" aria-label={tr("workforce.workerPage.latestReport")}>
+              <div class="flex items-baseline justify-between"><h2 class="text-2xs font-semibold tracking-wider text-faint uppercase">{tr("workforce.workerPage.latest", { value: latest?.kind === "plan" ? "plan" : "report" })}</h2>{#if latest}<span class="text-xs text-muted">{tr("workforce.workerPage.weekOf", { value: dayName(latest.week) })}</span>{/if}</div>
               {#if latest}
                 <div class="selectable max-h-72 overflow-y-auto text-sm"><Markdown text={latest.body.trim()} /></div>
               {:else}
-                <EmptyState icon="book" title="No plan or report yet" text="Ask {view.name} to plan the week or write the report, or turn its schedule on." />
+                <EmptyState icon="book" title={tr("workforce.workerPage.noPlanOrReport")} text={tr("workforce.workerPage.askToPlanThe", { name: view.name })} />
               {/if}
             </section>
           {/if}

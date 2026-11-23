@@ -31,6 +31,7 @@ import {
   sandboxStatus,
 } from "../api.ts";
 import { toast } from "./toast.svelte.ts";
+import { t } from "../i18n/index.ts";
 
 class IntegrationsStore {
   servers = $state<ServerRow[]>([]);
@@ -126,20 +127,20 @@ class IntegrationsStore {
 
   async add(request: AddServer): Promise<ServerRow | undefined> {
     const row = await this.#act(() => mcpAdd(request));
-    if (row) toast.ok(`${row.name} was added. It is off until you turn it on.`);
+    if (row) toast.ok(t("stores.integrations.wasAddedItIs", { name: row.name }));
     return row;
   }
 
   async setEnabled(name: string, enabled: boolean): Promise<void> {
     const row = await this.#act(() => mcpSetEnabled(name, enabled));
-    if (row) toast.ok(enabled ? `${name} is starting.` : `${name} is off. Its tools are no longer offered.`);
+    if (row) toast.ok(enabled ? t("stores.integrations.isStarting", { name }) : t("stores.integrations.isOffItsTools", { name }));
   }
 
   async remove(name: string): Promise<void> {
     const ok = await this.#act(() => mcpRemove(name).then(() => true));
     if (ok) {
       this.close();
-      toast.ok(`${name} was removed, with the secrets kept for it.`);
+      toast.ok(t("stores.integrations.wasRemovedWithThe", { name }));
     }
   }
 
@@ -149,7 +150,7 @@ class IntegrationsStore {
 
   async refreshTools(name: string): Promise<void> {
     const ok = await this.#act(() => mcpRefresh(name).then(() => true));
-    if (ok) toast.info(`Asked ${name} for its tools again.`);
+    if (ok) toast.info(t("stores.integrations.askedForItsTools", { name }));
   }
 
   async review(name: string, tool: string, action: "approve" | "disable"): Promise<void> {
@@ -158,7 +159,7 @@ class IntegrationsStore {
 
   async approveAll(name: string): Promise<void> {
     const n = await this.#act(() => mcpApproveAll(name));
-    if (n !== undefined) toast.ok(`Approved ${n} tool(s).`);
+    if (n !== undefined) toast.ok(t("stores.integrations.approvedToolS", { n }));
   }
 
   async trust(name: string, tool: string, skipAsking: boolean): Promise<void> {
@@ -167,10 +168,10 @@ class IntegrationsStore {
 
   async login(name: string): Promise<void> {
     this.signingIn = [...this.signingIn, name];
-    toast.info("Your browser opened to sign in.");
+    toast.info(t("stores.integrations.yourBrowserOpenedTo"));
     try {
       const issuer = await mcpLogin(name);
-      toast.ok(`Signed in to ${name} through ${issuer}.`);
+      toast.ok(t("stores.integrations.signedInToThrough", { name, issuer }));
     } catch (e) {
       toast.err(errorText(e));
     } finally {
@@ -185,7 +186,7 @@ class IntegrationsStore {
 
   async logout(name: string): Promise<void> {
     const ok = await this.#act(() => mcpLogout(name).then(() => true));
-    if (ok) toast.ok(`Forgot the sign-in of ${name}.`);
+    if (ok) toast.ok(t("stores.integrations.forgotTheSignIn", { name }));
   }
 
   // Connections
@@ -213,14 +214,14 @@ class IntegrationsStore {
 
   async removeConnection(name: string): Promise<void> {
     const ok = await this.#act(() => connectionRemove(name).then(() => true));
-    if (ok) toast.ok(`${name} was removed, with its secret.`);
+    if (ok) toast.ok(t("stores.integrations.wasRemovedWithIts", { name }));
   }
 
   async installPython(): Promise<void> {
     this.installing = { done: 0, total: 1 };
     try {
       await sandboxInstallPython((done, total) => (this.installing = { done, total }));
-      toast.ok("Python is installed for the sandbox.");
+      toast.ok(t("stores.integrations.pythonIsInstalledFor"));
     } catch (e) {
       toast.err(errorText(e));
     } finally {

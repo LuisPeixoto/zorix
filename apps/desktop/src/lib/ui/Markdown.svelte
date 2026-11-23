@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import CodeBlock from "./CodeBlock.svelte";
   import { type Block, type Inline, parseMarkdown } from "./markdown.ts";
   import type { Language } from "./highlight.ts";
@@ -42,7 +43,7 @@
     {:else if block.t === "p"}
       <p class={cn(tight ? "" : "mb-2.5 last:mb-0")}>{@render inline(block.children)}</p>
     {:else if block.t === "code"}
-      <CodeBlock class="my-2.5" code={block.text} language={LANGS[block.lang.toLowerCase()] ?? "text"} label={block.lang || "Code"} maxHeight={360} wrap />
+      <CodeBlock class="my-2.5" code={block.text} language={LANGS[block.lang.toLowerCase()] ?? "text"} label={block.lang || t("common.code")} maxHeight={360} wrap />
     {:else if block.t === "quote"}
       <blockquote class="my-2.5 border-l-2 border-accent/40 pl-3 text-muted">{@render flow(block.children, false)}</blockquote>
     {:else if block.t === "list"}

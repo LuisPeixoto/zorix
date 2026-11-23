@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
   import { type UiTone, toneClass } from "./tone.ts";
@@ -14,7 +15,7 @@
     unit,
     delta,
     series,
-    seriesLabel = "Recent values",
+    seriesLabel = t("ui.metricTile.recentValues"),
     color = 1,
     detail,
     class: klass = "",

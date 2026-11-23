@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { ActivityLine, Overview } from "../../api.ts";
   import { store } from "../../stores/runs.svelte.ts";
   import { workforce } from "../../stores/workforce.svelte.ts";
@@ -32,20 +33,20 @@
   const share = $derived(view?.worker.weekly_budget_micros ? view.figures.week_micros / view.worker.weekly_budget_micros : null);
 </script>
 
-<aside class="flex min-h-0 flex-col overflow-y-auto border-l border-line bg-panel" aria-label={you ? "You" : (view?.name ?? "Worker")}>
+<aside class="flex min-h-0 flex-col overflow-y-auto border-l border-line bg-panel" aria-label={you ? t("common.you") : (view?.name ?? t("workforce.workerPanel.worker"))}>
   {#if you}
     <header class="flex items-center gap-2.5 border-b border-line-soft px-4 py-3.5">
-      <Avatar human size="lg" label="You" />
-      <span class="min-w-0 flex-1"><span class="block text-lg font-semibold">You</span><span class="block text-sm text-muted">Owner · approves</span></span>
-      <IconButton icon="x" label="Close" onclick={onclose} />
+      <Avatar human size="lg" label={t("common.you")} />
+      <span class="min-w-0 flex-1"><span class="block text-lg font-semibold">{t("common.you")}</span><span class="block text-sm text-muted">{t("workforce.workerPanel.ownerApproves")}</span></span>
+      <IconButton icon="x" label={t("common.close")} onclick={onclose} />
     </header>
     <div class="flex flex-col gap-4 p-4">
       <div class="grid grid-cols-2 gap-2">
-        <Stat compact label="To review" value={overview.you.to_review} />
-        <Stat compact label="Approvals" value={overview.you.approvals} />
+        <Stat compact label={t("workforce.workerPanel.toReview")} value={overview.you.to_review} />
+        <Stat compact label={t("workforce.workerPanel.approvals")} value={overview.you.approvals} />
       </div>
-      <p class="text-sm text-muted">Every chain ends at you. What waits for you is in the Inbox: approvals to answer and tasks to review.</p>
-      <Button icon="bell" class="self-start" onclick={() => store.showInbox()}>Open the Inbox</Button>
+      <p class="text-sm text-muted">{t("workforce.workerPanel.everyChainEndsAt")}</p>
+      <Button icon="bell" class="self-start" onclick={() => store.showInbox()}>{t("workforce.workerPanel.openTheInbox")}</Button>
     </div>
   {:else if view}
     {@const w = view.worker}
@@ -53,28 +54,28 @@
       <Avatar emoji={view.avatar.emoji} color={view.avatar.color} status={view.status} size="lg" label={view.name} />
       <span class="min-w-0 flex-1">
         <span class="block truncate text-lg font-semibold">{view.name}</span>
-        <span class="block text-sm text-muted">{w.role} · reports to {boss ? boss.name : "you"}</span>
+        <span class="block text-sm text-muted">{t("workforce.workerPanel.reportsTo", { role: w.role, value: boss ? boss.name : "you" })}</span>
       </span>
       {#if view.figures.waiting > 0}<Badge tone="warn" dot>{view.figures.waiting} waiting</Badge>{/if}
-      <IconButton icon="x" label="Close" onclick={onclose} />
+      <IconButton icon="x" label={t("common.close")} onclick={onclose} />
     </header>
     <div class="flex flex-col gap-5 p-4">
       <div class="grid grid-cols-3 gap-2">
-        <Stat compact label="Tasks" value={view.figures.tasks} />
-        <Stat compact label={w.manager || view.reports.length > 0 ? "On time" : view.own.eval !== null ? "Eval" : "On time"} value={w.manager || view.reports.length > 0 || view.own.eval === null ? onTimeText(view.figures.on_time_done, view.figures.on_time_all) : evalText(view.own.eval)} />
-        <Stat compact label="Week" value={money(view.figures.week_micros)} />
+        <Stat compact label={t("common.tasks")} value={view.figures.tasks} />
+        <Stat compact label={w.manager || view.reports.length > 0 ? t("common.onTime") : view.own.eval !== null ? t("workforce.workerPanel.eval") : t("common.onTime")} value={w.manager || view.reports.length > 0 || view.own.eval === null ? onTimeText(view.figures.on_time_done, view.figures.on_time_all) : evalText(view.own.eval)} />
+        <Stat compact label={t("workforce.workerPanel.week")} value={money(view.figures.week_micros)} />
       </div>
 
-      <section class="flex flex-col gap-2" aria-label="Autonomy">
-        <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">Autonomy</h3>
-        <AutonomyDial bind:level max={top} label="Autonomy for {view.name}" onchange={(l) => void choose(l)} />
+      <section class="flex flex-col gap-2" aria-label={t("common.autonomy")}>
+        <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">{t("common.autonomy")}</h3>
+        <AutonomyDial bind:level max={top} label={t("workforce.workerPanel.autonomyFor", { name: view.name })} onchange={(l) => void choose(l)} />
         <p class="min-h-8 text-sm text-muted">{limitsSentence({ ...w, autonomy: level })}</p>
       </section>
 
-      <section class="flex flex-col gap-2" aria-label="This week">
-        <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">This week</h3>
+      <section class="flex flex-col gap-2" aria-label={t("workforce.workerPanel.thisWeek")}>
+        <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">{t("workforce.workerPanel.thisWeek")}</h3>
         {#if mine.length === 0}
-          <p class="text-sm text-muted">Nothing yet this week.</p>
+          <p class="text-sm text-muted">{t("workforce.workerPanel.nothingYetThisWeek")}</p>
         {:else}
           <ul class="flex flex-col gap-2">
             {#each mine as line (line.id)}
@@ -89,16 +90,16 @@
       </section>
 
       {#if w.weekly_budget_micros !== null && share !== null}
-        <section class="flex flex-col gap-1.5" aria-label="Budget">
-          <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">Budget</h3>
-          <span class="flex items-center gap-3"><Sparkbar value={share * 100} max={100} label="Budget used" tone={share >= 1 ? "err" : share >= 0.8 ? "warn" : "accent"} class="h-2 flex-1" /><span class="tnum text-sm">{money(view.figures.week_micros)} of {money(w.weekly_budget_micros)}</span></span>
+        <section class="flex flex-col gap-1.5" aria-label={t("workforce.workerPanel.budget")}>
+          <h3 class="text-2xs font-semibold tracking-wider text-faint uppercase">{t("workforce.workerPanel.budget")}</h3>
+          <span class="flex items-center gap-3"><Sparkbar value={share * 100} max={100} label={t("workforce.workerPanel.budgetUsed")} tone={share >= 1 ? "err" : share >= 0.8 ? "warn" : "accent"} class="h-2 flex-1" /><span class="tnum text-sm">{money(view.figures.week_micros)} of {money(w.weekly_budget_micros)}</span></span>
         </section>
       {/if}
 
       <div class="flex flex-wrap gap-2">
-        <Button size="sm" icon="message" onclick={() => store.showAgents(w.agent, "chat")}>Open chat</Button>
-        <Button size="sm" icon="plus" onclick={() => (assigning = true)}>Assign a task</Button>
-        <Button size="sm" variant="ghost" icon="maximize" onclick={() => store.showWorkforce("chart", w.agent, true)}>Open page</Button>
+        <Button size="sm" icon="message" onclick={() => store.showAgents(w.agent, "chat")}>{t("workforce.workerPanel.openChat")}</Button>
+        <Button size="sm" icon="plus" onclick={() => (assigning = true)}>{t("common.assignATask")}</Button>
+        <Button size="sm" variant="ghost" icon="maximize" onclick={() => store.showWorkforce("chart", w.agent, true)}>{t("workforce.workerPanel.openPage")}</Button>
       </div>
     </div>
     <AssignTaskModal bind:open={assigning} agent={w.agent} name={view.name} />

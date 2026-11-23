@@ -1,3 +1,4 @@
+import { t } from "./i18n/index.ts";
 // Theme logic with no DOM in it, so it can be tested: which theme is shown, and what the toggle does next.
 
 export type Mode = "light" | "dark" | "system";
@@ -39,4 +40,4 @@ export function nextMode(mode: Mode): Mode {
   return mode === "light" ? "dark" : mode === "dark" ? "system" : "light";
 }
 
-export const MODE_LABEL: Record<Mode, string> = { light: "Light", dark: "Dark", system: "System" };
+export const MODE_LABEL: Record<Mode, string> = { light: t("theme.light"), dark: t("theme.dark"), system: t("theme.system") };

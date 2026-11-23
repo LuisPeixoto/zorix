@@ -1,13 +1,10 @@
 // The numbers the shell shows around the app: today's spend, what is running, and the Runs page filters. Pure, tested in shell.test.ts.
 import type { Execution, ExecutionState } from "./api.ts";
 import { isFinished } from "./format.ts";
+import { fmt } from "./i18n/index.ts";
 
 /** Money as the design system writes it: `$9.80`, and four digits while it is still under a cent. */
-export function usd(micros: number): string {
-  const dollars = micros / 1_000_000;
-  if (dollars === 0) return "$0.00";
-  return dollars < 0.01 ? `$${dollars.toFixed(4)}` : `$${dollars.toFixed(2)}`;
-}
+export const usd = (micros: number): string => fmt.usd(micros);
 
 /** Midnight, local time, of the day `now` falls on. */
 export function startOfDay(now: number): number {

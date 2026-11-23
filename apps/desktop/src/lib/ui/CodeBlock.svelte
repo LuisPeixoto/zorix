@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { type Language, highlight, markJsonKeys } from "../ui/highlight.ts";
   import IconButton from "./IconButton.svelte";
   import { cn } from "./cn.ts";
@@ -9,7 +10,7 @@
     maxHeight = 280,
     wrap = false,
     copy = true,
-    label = "Code",
+    label = t("common.code"),
     class: klass = "",
   }: { code: string; language?: Language; maxHeight?: number; wrap?: boolean; copy?: boolean; label?: string; class?: string } = $props();
 
@@ -34,7 +35,7 @@
   </div>
   {#if copy}
     <div class="absolute top-1.5 right-1.5 opacity-0 transition duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
-      <IconButton icon={copied ? "check" : "copy"} label={copied ? "Copied" : "Copy"} variant="secondary" size="sm" onclick={copyCode} />
+      <IconButton icon={copied ? "check" : "copy"} label={copied ? t("ui.codeBlock.copied") : t("ui.codeBlock.copy")} variant="secondary" size="sm" onclick={copyCode} />
     </div>
   {/if}
 </div>

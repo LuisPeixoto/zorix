@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Badge from "./Badge.svelte";
   import type { UiTone } from "./tone.ts";
 
@@ -8,14 +9,14 @@
   let { state, label }: { state: PillState; label?: string } = $props();
 
   const MAP: Record<PillState, { tone: UiTone; text: string; live: boolean }> = {
-    ready: { tone: "ok", text: "Ready", live: false },
-    starting: { tone: "info", text: "Starting", live: true },
-    restarting: { tone: "warn", text: "Restarting", live: true },
-    needs_login: { tone: "warn", text: "Sign in", live: false },
-    failed: { tone: "err", text: "Failed", live: false },
-    stopped: { tone: "muted", text: "Stopped", live: false },
-    off: { tone: "muted", text: "Off", live: false },
-    review: { tone: "accent", text: "Review", live: false },
+    ready: { tone: "ok", text: t("ui.statusPill.ready"), live: false },
+    starting: { tone: "info", text: t("ui.statusPill.starting"), live: true },
+    restarting: { tone: "warn", text: t("ui.statusPill.restarting"), live: true },
+    needs_login: { tone: "warn", text: t("ui.statusPill.signIn"), live: false },
+    failed: { tone: "err", text: t("common.failed"), live: false },
+    stopped: { tone: "muted", text: t("common.stopped"), live: false },
+    off: { tone: "muted", text: t("ui.statusPill.off"), live: false },
+    review: { tone: "accent", text: t("common.review"), live: false },
   };
   const shown = $derived(MAP[state]);
 </script>

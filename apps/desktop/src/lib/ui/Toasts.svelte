@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { fly } from "svelte/transition";
 
   import { toast } from "../stores/toast.svelte.ts";
@@ -18,7 +19,7 @@
     >
       <Icon name={icon[item.kind]} size={17} class={cn("mt-px", tone[item.kind])} />
       <p class="selectable min-w-0 flex-1 break-words">{item.text}</p>
-      <button type="button" onclick={() => toast.dismiss(item.id)} aria-label="Dismiss" class="grid size-5 place-items-center rounded text-faint hover:text-fg"><Icon name="x" size={13} /></button>
+      <button type="button" onclick={() => toast.dismiss(item.id)} aria-label={t("ui.toasts.dismiss")} class="grid size-5 place-items-center rounded text-faint hover:text-fg"><Icon name="x" size={13} /></button>
     </div>
   {/each}
 </div>

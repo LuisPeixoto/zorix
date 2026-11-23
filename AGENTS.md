@@ -37,7 +37,8 @@ CARGO_INCREMENTAL=0 cargo fmt --all --check && cargo clippy --workspace --all-ta
 ```
 
 For interface work, in `apps/desktop`: `npm run check && npm test && npm run build`. From the root:
-`node tools/design-tokens.mjs --check && node tools/check-design.mjs && node tools/check-docs.mjs`.
+`node tools/design-tokens.mjs --check && node tools/check-design.mjs && node tools/check-text.mjs && node tools/check-docs.mjs`.
+Interface text goes in the catalogue, never in a component (see [Text and languages](docs/desktop.md#text-and-languages)).
 
 The crates and the app must build and test on macOS, Windows and Linux. CI runs all three; wait for it before a release.
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmt, t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import Avatar from "./Avatar.svelte";
@@ -37,12 +38,12 @@
   }: { children: ChildRow[]; open?: boolean; onopen?: (id: string) => void; row?: Snippet<[ChildRow]>; class?: string } = $props();
 
   const LOOK: Record<ChildRow["state"], { tone: UiTone; text: string; live: boolean }> = {
-    starting: { tone: "muted", text: "Starting", live: true },
-    working: { tone: "info", text: "Working", live: true },
-    waiting: { tone: "warn", text: "Needs you", live: false },
-    completed: { tone: "ok", text: "Done", live: false },
-    failed: { tone: "err", text: "Failed", live: false },
-    cancelled: { tone: "muted", text: "Stopped", live: false },
+    starting: { tone: "muted", text: t("ui.delegationCard.starting"), live: true },
+    working: { tone: "info", text: t("common.working"), live: true },
+    waiting: { tone: "warn", text: t("common.needsYou"), live: false },
+    completed: { tone: "ok", text: t("common.done"), live: false },
+    failed: { tone: "err", text: t("common.failed"), live: false },
+    cancelled: { tone: "muted", text: t("common.stopped"), live: false },
   };
 
   let expanded = $state<Record<string, boolean>>({});
@@ -50,18 +51,18 @@
   const settled = $derived(rows.filter((r) => ["completed", "failed", "cancelled"].includes(r.state)).length);
   const overall = $derived<UiTone>(rows.some((r) => r.state === "waiting") ? "warn" : settled < rows.length ? "info" : rows.some((r) => r.state === "failed") ? "err" : "ok");
   const panel = $props.id();
-  const money = (micros: number) => (micros === 0 ? "free" : `$${(micros / 1_000_000).toFixed(4)}`);
+  const money = (micros: number) => (micros === 0 ? t("format.free") : fmt.usd4(micros));
   const isOpen = (r: ChildRow) => expanded[r.id] ?? (r.state === "working" || r.state === "waiting");
 </script>
 
-<section class={cn("overflow-hidden rounded-2xl border bg-panel-2", overall === "warn" ? "border-warn/50" : "border-line", klass)} aria-label="Work handed to other agents">
+<section class={cn("overflow-hidden rounded-2xl border bg-panel-2", overall === "warn" ? "border-warn/50" : "border-line", klass)} aria-label={t("ui.delegationCard.workHandedToOther")}>
   <button type="button" class="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition hover:bg-hover" aria-expanded={open} aria-controls={open ? panel : undefined} onclick={() => (open = !open)}>
     <span class="grid size-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><Icon name="branch" size={15} /></span>
     <span class="min-w-0 flex-1">
-      <span class="block text-md font-semibold">Asked {rows.length} agent{rows.length === 1 ? "" : "s"}</span>
-      <span class="block text-xs text-muted">{settled} of {rows.length} finished · {money(total)} so far</span>
+      <span class="block text-md font-semibold">{t("ui.delegationCard.askedAgents", { count: rows.length })}</span>
+      <span class="block text-xs text-muted">{t("ui.delegationCard.ofFinishedSoFar", { settled, length: rows.length, value: money(total) })}</span>
     </span>
-    <Badge tone={overall} live={settled < rows.length && overall === "info"}>{settled < rows.length ? (overall === "warn" ? "Needs you" : "Working") : overall === "err" ? "Some failed" : "All done"}</Badge>
+    <Badge tone={overall} live={settled < rows.length && overall === "info"}>{settled < rows.length ? (overall === "warn" ? t("common.needsYou") : t("common.working")) : overall === "err" ? t("ui.delegationCard.someFailed") : t("ui.delegationCard.allDone")}</Badge>
     <Icon name={open ? "chevron-down" : "chevron-right"} size={14} class="text-faint" />
   </button>
   {#if open}
@@ -75,9 +76,9 @@
               <span class="flex items-baseline gap-2"><span class="text-md font-medium">{r.name}</span><span class="mono text-xs text-faint">{r.agent}</span></span>
               <span class="block truncate text-sm text-muted">{r.task}</span>
             </button>
-            <span class="hidden items-center gap-2 text-xs text-muted tabular-nums sm:flex"><Sparkbar value={r.cost_micros} max={total} label="Share of the cost of {r.name}" />{r.steps} step{r.steps === 1 ? "" : "s"}</span>
+            <span class="hidden items-center gap-2 text-xs text-muted tabular-nums sm:flex"><Sparkbar value={r.cost_micros} max={total} label={t("common.shareOfTheCost", { name: r.name })} />{r.steps} step{r.steps === 1 ? "" : "s"}</span>
             <Badge tone={look.tone} live={look.live} dot>{look.text}</Badge>
-            {#if onopen}<button type="button" class="grid size-7 place-items-center rounded-lg text-faint transition hover:bg-hover hover:text-fg" aria-label="Open the run of {r.name}" onclick={() => onopen?.(r.id)}><Icon name="external" size={14} /></button>{/if}
+            {#if onopen}<button type="button" class="grid size-7 place-items-center rounded-lg text-faint transition hover:bg-hover hover:text-fg" aria-label={t("ui.delegationCard.openTheRunOf", { name: r.name })} onclick={() => onopen?.(r.id)}><Icon name="external" size={14} /></button>{/if}
           </div>
           {#if isOpen(r)}
             <div class="mt-2 ml-10 space-y-2">
@@ -88,7 +89,7 @@
               {:else if r.live}
                 <div class="stream-caret rounded-xl border border-line bg-panel px-3 py-2"><Markdown text={r.live} /></div>
               {:else}
-                <p class="text-sm text-muted">Working on it…</p>
+                <p class="text-sm text-muted">{t("ui.delegationCard.workingOnIt")}</p>
               {/if}
               {@render rowExtra?.(r)}
             </div>

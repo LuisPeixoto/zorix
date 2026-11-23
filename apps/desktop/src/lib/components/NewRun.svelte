@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../i18n/index.ts";
   import { open } from "@tauri-apps/plugin-dialog";
   import { type AgentDetail, agentGet, workflowCreate, workflowSave, workflowStart } from "../api.ts";
   import { workflows } from "../stores/workflows.svelte.ts";
@@ -15,10 +16,10 @@
   import StatusBadge from "./StatusBadge.svelte";
 
   const examples = [
-    "What is 17*23 and save it as result",
-    "What time is it?",
-    "Recall result",
-    'Count the words in "the quick brown fox"',
+    tr("newRun.whatIs1723"),
+    tr("newRun.whatTimeIsIt"),
+    tr("newRun.recallResult"),
+    tr("newRun.countTheWordsIn"),
   ];
 
   let prompt = $state("");
@@ -82,18 +83,18 @@
   const isOn = (id: string) => overrides[id] ?? !id.startsWith("workspace.");
 
   const how = (t: { requires_approval: boolean; annotations: { read_only: boolean } }) =>
-    t.requires_approval ? "asks first" : t.annotations.read_only ? "read-only" : "changes things";
+    t.requires_approval ? tr("newRun.asksFirst") : t.annotations.read_only ? "read-only" : tr("newRun.changesThings");
   const howTone = (t: { requires_approval: boolean; annotations: { read_only: boolean } }) =>
     t.requires_approval ? "warn" : t.annotations.read_only ? "ok" : "err";
 
-  const defaultName = $derived(store.models && "Ok" in store.models.default ? store.models.default.Ok : "the built-in demo model");
+  const defaultName = $derived(store.models && "Ok" in store.models.default ? store.models.default.Ok : tr("newRun.theBuiltInDemo"));
   const chosen = $derived(store.models?.models.find((m) => m.reference === model));
   const goesToCloud = $derived(!!model && model !== "demo" && !chosen?.local);
 
   async function pickWorkspace() {
     pickError = null;
     try {
-      const folder = await open({ directory: true, multiple: false, title: "Choose the workspace folder" });
+      const folder = await open({ directory: true, multiple: false, title: tr("newRun.chooseTheWorkspaceFolder") });
       if (typeof folder === "string") workspace = folder;
     } catch (e) {
       pickError = errorText(e);
@@ -122,7 +123,7 @@
     store.runs.filter((r) => (team ? r.agent?.team === team.team.slug : agentSlug ? r.agent?.slug === agentSlug : false)).slice(0, 3),
   );
   const memoryOn = $derived([useConversation && "conversation", useMemory && "memory", useKnowledge && "documents"].filter(Boolean).join(", ") || "none");
-  const shortcut = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent) ? "⌘↵" : "Ctrl ↵";
+  const shortcut = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent) ? "⌘↵" : tr("newRun.ctrl");
   function onkey(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && prompt.trim() && !store.busy) submit(event);
   }
@@ -139,12 +140,12 @@
       const kind = team
         ? { type: "team" as const, team: team.team.slug, prompt: prompt.trim() }
         : { type: "agent" as const, agent: agentSlug, prompt: prompt.trim(), ...(model ? { model } : {}) };
-      spec.steps.push({ id: team ? "team" : "agent", title: team ? `Ask ${team.team.name}` : `Ask ${agentDetail?.version.spec.name ?? agentSlug}`, x: 96, y: 176, kind });
+      spec.steps.push({ id: team ? "team" : "agent", title: team ? tr("newRun.ask", { name: team.team.name }) : tr("newRun.ask2", { agentSlug: agentDetail?.version.spec.name ?? agentSlug }), x: 96, y: 176, kind });
       spec.edges.push({ from: spec.steps[0].id, to: spec.steps[1].id });
       await workflowSave(made.id, spec);
       savingAs = false;
       workflowName = "";
-      toast.ok("Saved as a workflow draft. Open it to add steps, then publish.");
+      toast.ok(tr("newRun.savedAsAWorkflow"));
       store.showWorkflows("editor", made.id);
     } catch (e) {
       toast.err(errorText(e));
@@ -204,16 +205,16 @@
 
 <form class="h-full overflow-y-auto" onsubmit={submit}>
   <div class="mx-auto max-w-[1100px] p-6">
-    <PageHeader title="New run" subtitle="Say what you want done and what it may use. Anything that changes something asks you first." glow />
+    <PageHeader title={tr("common.newRun")} subtitle={tr("newRun.sayWhatYouWant")} glow />
 
     <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div class="min-w-0 space-y-5">
         {#if agents.cards.length || workflowChoices.length}
-          <section aria-label="Run as" class="space-y-3">
+          <section aria-label={tr("newRun.runAs")} class="space-y-3">
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-sm font-medium">Run as</span>
+              <span class="text-sm font-medium">{tr("newRun.runAs")}</span>
               <Segmented
-                label="Run as"
+                label={tr("newRun.runAs")}
                 bind:value={() => mode, setMode}
                 options={[
                   { value: "plain", label: "Plain run", icon: "terminal" },
@@ -224,20 +225,20 @@
               />
             </div>
             {#if mode === "team"}
-              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label="Teams">
+              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label={tr("common.teams")}>
                 {#each agents.teams as t (t.team.slug)}
                   {@const on = choice === `team:${t.team.slug}`}
                   <li>
                     <button type="button" aria-pressed={on} onclick={() => (choice = `team:${t.team.slug}`)} class="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition duration-150 {on ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel hover:border-line-strong'}">
                       <Avatar emoji={t.team.avatar.emoji} color={t.team.avatar.color} size="md" />
-                      <span class="min-w-0 flex-1"><span class="block truncate text-md font-semibold">{t.team.name}</span><span class="block truncate text-xs text-muted">lead · {t.team.members.length + 1} agents</span></span>
+                      <span class="min-w-0 flex-1"><span class="block truncate text-md font-semibold">{t.team.name}</span><span class="block truncate text-xs text-muted">{tr("newRun.leadAgents", { value: t.team.members.length + 1 })}</span></span>
                       {#if on}<Icon name="check" size={15} class="text-accent" />{/if}
                     </button>
                   </li>
                 {/each}
               </ul>
             {:else if mode === "workflow"}
-              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label="Workflows">
+              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label={tr("common.workflows")}>
                 {#each workflowChoices as c (c.workflow.id)}
                   {@const on = choice === `workflow:${c.workflow.id}`}
                   <li>
@@ -249,9 +250,9 @@
                   </li>
                 {/each}
               </ul>
-              <p class="text-sm text-muted">What you write below reaches the workflow as <span class="mono">trigger.payload.prompt</span>. Its own steps decide what runs, and anything that changes something still asks first.</p>
+              <p class="text-sm text-muted">{tr("newRun.whatYouWriteBelow")} <span class="mono">trigger.payload.prompt</span>{tr("newRun.itsOwnStepsDecide")}</p>
             {:else if mode === "agent"}
-              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label="Agents">
+              <ul class="grid gap-2.5 sm:grid-cols-2" aria-label={tr("common.agents")}>
                 {#each agents.cards as c (c.slug)}
                   {@const on = choice === c.slug}
                   <li>
@@ -265,23 +266,23 @@
               </ul>
             {/if}
             {#if team}
-              <p class="text-sm text-muted">{team.lead?.name ?? team.team.lead} leads and may hand work to {team.team.members.length} other agent{team.team.members.length === 1 ? "" : "s"}. Their cost and tokens count against this run.</p>
+              <p class="text-sm text-muted">{tr("newRun.leadsAndMayHand", { lead: team.lead?.name ?? team.team.lead, count: team.team.members.length })}</p>
             {:else if agentDetail}
-              <p class="text-sm text-muted">It keeps its instructions, skills, tools and access. This form can only narrow them; it never adds.</p>
+              <p class="text-sm text-muted">{tr("newRun.itKeepsItsInstructions")}</p>
             {/if}
           </section>
         {/if}
 
-        <Card title="What should it do?" icon="sparkles">
-          <Textarea id="prompt" rows={5} bind:value={prompt} maxlength={20000} placeholder="For example: What is 17*23 and save it as result" aria-label="What should it do?" />
+        <Card title={tr("newRun.whatShouldItDo")} icon="sparkles">
+          <Textarea id="prompt" rows={5} bind:value={prompt} maxlength={20000} placeholder={tr("newRun.forExampleWhatIs")} aria-label={tr("newRun.whatShouldItDo")} />
           <div class="mt-3 flex flex-wrap gap-2">
             {#each examples as example}<Chip onclick={() => (prompt = example)}>{example}</Chip>{/each}
           </div>
         </Card>
 
         {#if !agentSlug}
-          <Card title="What it may use" icon="wrench">
-            <p class="mb-3 text-sm text-muted">Anything marked <span class="font-semibold text-fg">asks</span> waits for you before it runs.</p>
+          <Card title={tr("newRun.whatItMayUse")} icon="wrench">
+            <p class="mb-3 text-sm text-muted">{tr("newRun.anythingMarked")} <span class="font-semibold text-fg">asks</span> {tr("newRun.waitsForYouBefore")}</p>
             <div class="flex flex-wrap gap-2">
               {#each builtinTools as tool (tool.id)}
                 <Chip selected={isOn(tool.id)} onclick={() => (overrides[tool.id] = !isOn(tool.id))}>
@@ -291,13 +292,13 @@
             </div>
           </Card>
 
-          <Card title="Servers and services" icon="plug">
+          <Card title={tr("newRun.serversAndServices")} icon="plug">
             {#if !reach}
-              <p class="text-sm text-muted">Nothing is connected yet. <button type="button" class="text-accent underline" onclick={() => store.showIntegrations("catalogue")}>Connect a server or a service</button> to let a run use your repositories, tickets, databases and more.</p>
+              <p class="text-sm text-muted">{tr("newRun.nothingIsConnectedYet")} <button type="button" class="text-accent underline" onclick={() => store.showIntegrations("catalogue")}>{tr("newRun.connectAServerOr")}</button> {tr("newRun.toLetARun")}</p>
             {:else}
-              <p class="mb-3 text-sm text-muted">A run reaches only what you pick here. Each MCP tool still asks you first; databases are read-only unless you allow writes, and writes ask too.</p>
+              <p class="mb-3 text-sm text-muted">{tr("newRun.aRunReachesOnly")}</p>
               {#if readyServers.length}
-                <p class="mb-1.5 text-xs font-medium text-muted">MCP servers</p>
+                <p class="mb-1.5 text-xs font-medium text-muted">{tr("newRun.mcpServers")}</p>
                 <div class="mb-4 flex flex-wrap gap-2">
                   {#each readyServers as server (server.name)}
                     <button
@@ -307,124 +308,124 @@
                       class="flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition duration-150 {pickedServers[server.name] ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel hover:border-line-strong'}"
                     >
                       <BrandLogo name={server.logo ?? (server.kind === "http" ? "globe" : "server")} size={28} />
-                      <span><span class="block text-base font-medium">{server.name}</span><span class="tnum block text-xs text-muted">{server.tools_ready} tools ready</span></span>
+                      <span><span class="block text-base font-medium">{server.name}</span><span class="tnum block text-xs text-muted">{tr("newRun.toolsReady", { tools_ready: server.tools_ready })}</span></span>
                       {#if pickedServers[server.name]}<Icon name="check" size={14} class="text-accent" />{/if}
                     </button>
                   {/each}
                 </div>
               {/if}
               {#if databases.length}
-                <p class="mb-1.5 text-xs font-medium text-muted">Databases</p>
+                <p class="mb-1.5 text-xs font-medium text-muted">{tr("newRun.databases")}</p>
                 <div class="mb-4 space-y-2">
                   {#each databases as db (db.id)}
                     <div class="flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2 {pickedDbs[db.name] ? 'border-accent/50 bg-accent-soft' : 'border-line bg-panel'}">
                       <Checkbox checked={!!pickedDbs[db.name]} onchange={(e) => (pickedDbs[db.name] = e.currentTarget.checked)}>
                         <BrandLogo name={db.kind} size={24} class="mr-1 inline-grid align-middle" /> <span class="mono text-sm font-medium">{db.name}</span>
                       </Checkbox>
-                      {#if pickedDbs[db.name]}<Switch bind:checked={dbWrites[db.name]} class="ml-auto">Allow writes (each asks first)</Switch>{/if}
+                      {#if pickedDbs[db.name]}<Switch bind:checked={dbWrites[db.name]} class="ml-auto">{tr("newRun.allowWritesEachAsks")}</Switch>{/if}
                     </div>
                   {/each}
                 </div>
               {/if}
-              <p class="mb-1.5 text-xs font-medium text-muted">Code</p>
+              <p class="mb-1.5 text-xs font-medium text-muted">{tr("common.code")}</p>
               <div class="mb-4 flex flex-wrap gap-2">
-                <Chip selected={!!pickedCode.javascript} onclick={() => (pickedCode.javascript = !pickedCode.javascript)}>Run JavaScript</Chip>
+                <Chip selected={!!pickedCode.javascript} onclick={() => (pickedCode.javascript = !pickedCode.javascript)}>{tr("newRun.runJavascript")}</Chip>
                 <Chip selected={!!pickedCode.python} onclick={() => (integrations.sandbox?.python ? (pickedCode.python = !pickedCode.python) : store.showIntegrations("connections"))}>
-                  Run Python{integrations.sandbox?.python ? "" : " (install it first)"}
+                  {tr("newRun.runPython")}{integrations.sandbox?.python ? "" : tr("newRun.installItFirst")}
                 </Chip>
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
-                <Field label="Web hosts" hint="Comma separated, for example api.example.com">
+                <Field label={tr("newRun.webHosts")} hint={tr("newRun.commaSeparatedForExample")}>
                   {#snippet children(f)}<Input id={f.id} mono bind:value={hosts} placeholder="none" />{/snippet}
                 </Field>
-                <Field label="Repositories" hint="owner/repo, or owner/repo:write to also write">
+                <Field label={tr("newRun.repositories")} hint={tr("newRun.ownerRepoOrOwner")}>
                   {#snippet children(f)}<Input id={f.id} mono bind:value={repos} placeholder="none" />{/snippet}
                 </Field>
-                <Field label="Jira projects" hint="KEY, or KEY:write">
+                <Field label={tr("newRun.jiraProjects")} hint={tr("newRun.keyOrKeyWrite")}>
                   {#snippet children(f)}<Input id={f.id} mono bind:value={jira} placeholder="none" />{/snippet}
                 </Field>
-                <Field label="Chat channels" hint="slack:#alerts, discord:<channel id>, add :write to send">
+                <Field label={tr("newRun.chatChannels")} hint={tr("newRun.slackAlertsDiscordChannel")}>
                   {#snippet children(f)}<Input id={f.id} mono bind:value={chat} placeholder="none" />{/snippet}
                 </Field>
               </div>
             {/if}
           </Card>
 
-          <Card title="Workspace folder" icon="folder">
-            <p class="mb-3 text-sm text-muted">The file tools are confined to this folder. With none, they refuse every call.</p>
+          <Card title={tr("newRun.workspaceFolder")} icon="folder">
+            <p class="mb-3 text-sm text-muted">{tr("newRun.theFileToolsAre")}</p>
             <div class="flex gap-2">
-              <Input class="min-w-0 flex-1" mono bind:value={workspace} placeholder="No folder chosen" aria-label="Workspace folder" />
-              <Button icon="folder" onclick={pickWorkspace}>Choose…</Button>
+              <Input class="min-w-0 flex-1" mono bind:value={workspace} placeholder={tr("common.noFolderChosen")} aria-label={tr("newRun.workspaceFolder")} />
+              <Button icon="folder" onclick={pickWorkspace}>{tr("common.choose")}</Button>
             </div>
             {#if pickError}<p class="mt-2 text-sm text-err" role="alert">{pickError}</p>{/if}
             {#if workspace}
               <div class="mt-4 grid grid-cols-2 gap-3">
-                <Field label="May read (patterns)">
-                  {#snippet children(f)}<Input id={f.id} mono bind:value={allowRead} placeholder="* or docs/*" />{/snippet}
+                <Field label={tr("newRun.mayReadPatterns")}>
+                  {#snippet children(f)}<Input id={f.id} mono bind:value={allowRead} placeholder={tr("newRun.orDocs")} />{/snippet}
                 </Field>
-                <Field label="May write (patterns)">
-                  {#snippet children(f)}<Input id={f.id} mono bind:value={allowWrite} placeholder="none, or out/*" />{/snippet}
+                <Field label={tr("newRun.mayWritePatterns")}>
+                  {#snippet children(f)}<Input id={f.id} mono bind:value={allowWrite} placeholder={tr("newRun.noneOrOut")} />{/snippet}
                 </Field>
               </div>
             {/if}
           </Card>
         {/if}
 
-        <Card title="Model and memory" icon="cpu">
-          <Field label="Which model answers?">
+        <Card title={tr("newRun.modelAndMemory")} icon="cpu">
+          <Field label={tr("newRun.whichModelAnswers")}>
             {#snippet children(f)}
               <Select id={f.id} bind:value={model}>
-                <option value="">{agentDetail ? "Agent default" : "Default"} ({agentDetail ? agentDetail.version.spec.models.default : defaultName})</option>
-                <option value="demo">demo (built-in, no network)</option>
+                <option value="">{agentDetail ? tr("newRun.agentDefault") : tr("newRun.default")} ({agentDetail ? agentDetail.version.spec.models.default : defaultName})</option>
+                <option value="demo">{tr("newRun.demoBuiltInNo")}</option>
                 {#each store.models?.routes ?? [] as r}<option value={"route:" + r}>route: {r}</option>{/each}
                 {#each store.models?.aliases ?? [] as a}<option value={a}>alias: {a}</option>{/each}
                 {#each store.models?.models ?? [] as m (m.reference)}
-                  <option value={m.reference}>{m.reference}{m.local ? " · on this computer" : ""}</option>
+                  <option value={m.reference}>{m.reference}{m.local ? tr("newRun.onThisComputer") : ""}</option>
                 {/each}
               </Select>
             {/snippet}
           </Field>
           <div class="mt-3">
             {#if where.kind === "cloud"}
-              <Callout tone="info" icon="cloud">{providerName(where.provider)} receives the conversation of this run, including tool results. Documents are sent only as the passages a step cites.</Callout>
+              <Callout tone="info" icon="cloud">{tr("newRun.receivesTheConversationOf", { value: providerName(where.provider) })}</Callout>
             {:else if where.kind === "routed"}
-              <Callout tone="info" icon="route">The route <span class="mono">{where.name}</span> decides which provider receives the conversation. See Providers.</Callout>
+              <Callout tone="info" icon="route">{tr("newRun.theRoute")} <span class="mono">{where.name}</span> {tr("newRun.decidesWhichProviderReceives")}</Callout>
             {:else if where.kind === "local"}
-              <Badge tone="ok" dot>Stays on this computer</Badge>
+              <Badge tone="ok" dot>{tr("newRun.staysOnThisComputer")}</Badge>
             {:else}
-              <p class="flex items-center gap-1.5 text-sm text-muted"><Icon name="info" size={14} /> No provider is set up yet, so this run uses the demo model. Add a key under Providers.</p>
+              <p class="flex items-center gap-1.5 text-sm text-muted"><Icon name="info" size={14} /> {tr("newRun.noProviderIsSet")}</p>
             {/if}
           </div>
 
           <div class="mt-5 border-t border-line-soft pt-4">
             {#if continuing}
               <Callout tone="info" icon="history">
-                Continuing a conversation that began with “{continuing.prompt.length > 70 ? continuing.prompt.slice(0, 70) + "…" : continuing.prompt}”.
-                <button type="button" class="ml-1 underline" onclick={() => (store.continuing = null)}>Start a new one instead</button>
+                {tr("newRun.continuingAConversationThat", { prompt: continuing.prompt.length > 70 ? continuing.prompt.slice(0, 70) + "…" : continuing.prompt })}
+                <button type="button" class="ml-1 underline" onclick={() => (store.continuing = null)}>{tr("newRun.startANewOne")}</button>
               </Callout>
             {:else}
-              <p class="text-sm text-muted">This starts a new conversation. Use Continue on a finished run to add to one.</p>
+              <p class="text-sm text-muted">{tr("newRun.thisStartsANew")}</p>
             {/if}
             <div class="mt-3 space-y-2.5">
-              <Switch bind:checked={useConversation}>Earlier runs of this conversation</Switch>
-              <Switch bind:checked={useMemory}>Things you asked it to remember, and past work</Switch>
-              <Switch bind:checked={useKnowledge}>Indexed documents</Switch>
+              <Switch bind:checked={useConversation}>{tr("newRun.earlierRunsOfThis")}</Switch>
+              <Switch bind:checked={useMemory}>{tr("newRun.thingsYouAskedIt")}</Switch>
+              <Switch bind:checked={useKnowledge}>{tr("newRun.indexedDocuments")}</Switch>
             </div>
-            <p class="mt-3 text-xs text-muted">What is used is chosen once, when the run starts, and shown on the run under Context.</p>
+            <p class="mt-3 text-xs text-muted">{tr("newRun.whatIsUsedIs")}</p>
           </div>
         </Card>
 
         {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
 
         <div class="sticky bottom-0 z-20 -mx-6 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-6 py-3 backdrop-blur">
-          <span class="flex items-center gap-1.5 text-xs text-muted"><Kbd>{shortcut}</Kbd> to start</span>
-          {#if agentSlug && prompt.trim()}<Button type="button" variant="ghost" size="lg" icon="workflow" onclick={() => { workflowName = shorten(prompt.trim(), 40); savingAs = true; }}>Save as workflow</Button>{/if}
-          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim() || (mode === "workflow" && !picked)}>{mode === "workflow" ? "Run workflow" : "Start run"}</Button>
+          <span class="flex items-center gap-1.5 text-xs text-muted"><Kbd>{shortcut}</Kbd> {tr("newRun.toStart")}</span>
+          {#if agentSlug && prompt.trim()}<Button type="button" variant="ghost" size="lg" icon="workflow" onclick={() => { workflowName = shorten(prompt.trim(), 40); savingAs = true; }}>{tr("newRun.saveAsWorkflow")}</Button>{/if}
+          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim() || (mode === "workflow" && !picked)}>{mode === "workflow" ? tr("newRun.runWorkflow") : tr("newRun.startRun")}</Button>
         </div>
       </div>
 
-      <aside class="space-y-5 lg:sticky lg:top-0" aria-label="Before you start">
-        <Card title="Before you start" icon="shield">
+      <aside class="space-y-5 lg:sticky lg:top-0" aria-label={tr("newRun.beforeYouStart")}>
+        <Card title={tr("newRun.beforeYouStart")} icon="shield">
           <KeyValue
             items={[
               { key: team ? "Lead" : agentSlug ? "Agent" : "Run as", value: team ? (team.lead?.name ?? team.team.lead) : agentDetail ? `${agentDetail.version.spec.name} v${agentDetail.agent.current_version}` : "Plain run" },
@@ -434,10 +435,10 @@
               { key: "Memory", value: memoryOn },
             ]}
           />
-          <p class="mt-3 text-xs text-muted">Anything that changes something waits for you. Budgets and permissions only shrink down a team.</p>
+          <p class="mt-3 text-xs text-muted">{tr("newRun.anythingThatChangesSomething")}</p>
         </Card>
         {#if recent.length}
-          <Card title={team ? "Recent with this team" : "Recent with this agent"} icon="history" padding="none">
+          <Card title={team ? tr("newRun.recentWithThisTeam") : tr("newRun.recentWithThisAgent")} icon="history" padding="none">
             <ul class="divide-y divide-line-soft">
               {#each recent as run (run.id)}
                 <li>
@@ -455,8 +456,8 @@
   </div>
 </form>
 
-<Modal bind:open={savingAs} title="Save as workflow" icon="workflow" size="sm">
-  <p class="text-base text-muted">This makes a draft that starts by hand and asks {team ? "the team" : "the agent"} what you wrote. You can add steps, a schedule or an approval, then publish it.</p>
+<Modal bind:open={savingAs} title={tr("newRun.saveAsWorkflow")} icon="workflow" size="sm">
+  <p class="text-base text-muted">{tr("newRun.thisMakesADraft")} {team ? tr("newRun.theTeam") : tr("newRun.theAgent")} {tr("newRun.whatYouWroteYou")}</p>
   <form
     class="mt-4"
     onsubmit={(e) => {
@@ -464,12 +465,12 @@
       void saveAsWorkflow();
     }}
   >
-    <Field label="Name" hint={slugify(workflowName) ? `Short name: ${slugify(workflowName)}` : "Use some letters or digits."}>
+    <Field label={tr("common.name")} hint={slugify(workflowName) ? tr("newRun.shortName", { value: slugify(workflowName) }) : tr("newRun.useSomeLettersOr")}>
       {#snippet children(f)}<Input id={f.id} bind:value={workflowName} maxlength={80} />{/snippet}
     </Field>
     <div class="mt-4 flex justify-end gap-2">
-      <Button type="button" onclick={() => (savingAs = false)}>Cancel</Button>
-      <Button type="submit" variant="primary" disabled={savingBusy || !slugify(workflowName)}>Save</Button>
+      <Button type="button" onclick={() => (savingAs = false)}>{tr("common.cancel")}</Button>
+      <Button type="submit" variant="primary" disabled={savingBusy || !slugify(workflowName)}>{tr("common.save")}</Button>
     </div>
   </form>
 </Modal>

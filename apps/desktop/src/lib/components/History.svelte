@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { type Found, errorText, tryQuery } from "../api.ts";
   import { store } from "../stores/runs.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Input } from "../ui/index.ts";
@@ -31,17 +32,16 @@
 
 <div class="space-y-5">
   <Callout tone="info" icon="history">
-    ZORIX keeps a short record of every run that ends: what you asked, which tools it used, who approved what, and how it ended. Runs
-    can search it with <span class="mono">history.search</span>, and they see the most relevant records as past work.
+    {t("history.zorixKeepsAShort")} <span class="mono">history.search</span>{t("history.andTheySeeThe")}
   </Callout>
   {#if error}<Callout tone="err">{error}</Callout>{/if}
   <form class="flex gap-2" onsubmit={(e) => { e.preventDefault(); void search(); }}>
-    <Input class="min-w-0 flex-1" bind:value={query} placeholder="Search past work, for example: staging deploy" aria-label="Search past work" />
-    <Button type="submit" variant="primary" icon="search" loading={searching} disabled={!query.trim()}>Search</Button>
+    <Input class="min-w-0 flex-1" bind:value={query} placeholder={t("history.searchPastWorkFor")} aria-label={t("history.searchPastWork")} />
+    <Button type="submit" variant="primary" icon="search" loading={searching} disabled={!query.trim()}>{t("history.search")}</Button>
   </form>
 
   {#if found}
-    {#if found.degraded}<p class="text-xs text-warn">{found.degraded}; showing keyword results.</p>{/if}
+    {#if found.degraded}<p class="text-xs text-warn">{t("history.showingKeywordResults", { degraded: found.degraded })}</p>{/if}
     {#each found.hits as hit}
       <Card interactive>
         <div class="flex items-start justify-between gap-3">
@@ -52,16 +52,16 @@
             </div>
             <p class="selectable mt-1.5 text-sm text-muted">{hit.text}</p>
             <p class="mt-1.5 text-xs text-faint">
-              {[hit.keyword_rank ? `keyword #${hit.keyword_rank}` : "", hit.vector_rank ? `vector #${hit.vector_rank}` : ""].filter(Boolean).join(" · ")}
+              {[hit.keyword_rank ? t("history.keyword", { keyword_rank: hit.keyword_rank }) : "", hit.vector_rank ? t("history.vector", { vector_rank: hit.vector_rank }) : ""].filter(Boolean).join(" · ")}
             </p>
           </div>
-          {#if hit.execution}<Button size="sm" icon="external" onclick={() => open(hit.execution!)}>Open run</Button>{/if}
+          {#if hit.execution}<Button size="sm" icon="external" onclick={() => open(hit.execution!)}>{t("history.openRun")}</Button>{/if}
         </div>
       </Card>
     {:else}
-      <EmptyState icon="history" title="Nothing found" text="No past work matches. Try other words." />
+      <EmptyState icon="history" title={t("history.nothingFound")} text={t("history.noPastWorkMatches")} />
     {/each}
   {:else}
-    <EmptyState icon="history" title="Search what was done before" text="Type a few words from a past request." />
+    <EmptyState icon="history" title={t("history.searchWhatWasDone")} text={t("history.typeAFewWords")} />
   {/if}
 </div>

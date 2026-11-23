@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import Icon from "./Icon.svelte";
   import { cn } from "./cn.ts";
 
@@ -6,7 +7,7 @@
   let { steps, current, class: klass = "" }: { steps: { label: string; hint?: string }[]; current: number; class?: string } = $props();
 </script>
 
-<ol class={cn("flex items-start gap-2", klass)} aria-label="Progress">
+<ol class={cn("flex items-start gap-2", klass)} aria-label={t("common.progress")}>
   {#each steps as step, i (step.label)}
     {@const done = i < current}
     {@const here = i === current}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { HTMLButtonAttributes } from "svelte/elements";
 
   import Icon from "./Icon.svelte";
@@ -16,9 +17,9 @@
   let { label, icon, variant = "ghost", size = "md", type = "button", class: klass = "", ...rest }: Props = $props();
 
   const variants = {
-    ghost: "text-muted hover:bg-hover hover:text-fg",
-    secondary: "border border-line bg-panel text-muted shadow-sm hover:border-line-strong hover:bg-hover hover:text-fg",
-    danger: "text-err hover:bg-err/12",
+    ghost: t("ui.iconButton.textMutedHoverBg"),
+    secondary: t("ui.iconButton.borderBorderLineBg"),
+    danger: t("ui.iconButton.textErrHoverBg"),
   };
 </script>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { type Project, errorText, projectCreate, projectRemove, projectUpdate } from "../../api.ts";
   import { isProjectKey, microsToUsd, suggestKey, usdToMicros } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
@@ -41,10 +42,10 @@
 
   const cost = $derived(usdToMicros(limit));
   const keyError = $derived(
-    project || key === "" ? null : !isProjectKey(key) ? "Use 2 to 5 capital letters or digits, starting with a letter." : projects.cards.some((c) => c.project.key === key) ? "Another project already uses this key." : null,
+    project || key === "" ? null : !isProjectKey(key) ? t("projects.newProjectModal.use2To5") : projects.cards.some((c) => c.project.key === key) ? t("projects.newProjectModal.anotherProjectAlreadyUses") : null,
   );
-  const dateError = $derived(start && due && start > due ? "A project cannot start after it is due." : null);
-  const costError = $derived(cost === undefined ? "Write an amount in dollars, such as 1.50." : null);
+  const dateError = $derived(start && due && start > due ? t("projects.newProjectModal.aProjectCannotStart") : null);
+  const costError = $derived(cost === undefined ? t("projects.newProjectModal.writeAnAmountIn") : null);
   const valid = $derived(name.trim() !== "" && (project !== null || (key !== "" && !keyError)) && !dateError && !costError);
 
   async function save() {
@@ -54,12 +55,12 @@
       const fields = { name: name.trim(), description, manager: manager || null, start: start || null, due: due || null, cost_limit_micros: cost ?? null };
       if (project) {
         await projectUpdate(project.key, { ...fields, archived: project.archived });
-        toast.ok("Saved.");
+        toast.ok(t("common.saved"));
         open = false;
         await projects.refreshBoard();
       } else {
         const made = await projectCreate({ key, ...fields });
-        toast.ok(`${made.name} is ready. Add its first task.`);
+        toast.ok(t("projects.newProjectModal.isReadyAddIts", { name: made.name }));
         open = false;
         store.showProjects(made.key);
       }
@@ -83,7 +84,7 @@
         cost_limit_micros: project.cost_limit_micros,
         archived: !project.archived,
       });
-      toast.ok(project.archived ? `${project.name} is active again.` : `${project.name} is archived.`);
+      toast.ok(project.archived ? t("projects.newProjectModal.isActiveAgain", { name: project.name }) : t("projects.newProjectModal.isArchived", { name: project.name }));
       open = false;
       store.showProjects();
     } catch (e) {
@@ -98,7 +99,7 @@
     busy = true;
     try {
       await projectRemove(project.key);
-      toast.ok(`${project.name} was deleted.`);
+      toast.ok(t("projects.newProjectModal.wasDeleted", { name: project.name }));
       open = false;
       store.showProjects();
     } catch (e) {
@@ -109,38 +110,38 @@
   }
 </script>
 
-<Modal bind:open title={project ? "Project settings" : "New project"} icon="kanban" size="md">
-  <p class="mb-4 text-sm text-muted">{project ? "Its key cannot change. Tasks keep their keys." : "Its tasks get keys from the project: OPS-1, OPS-2 and so on."}</p>
+<Modal bind:open title={project ? t("projects.newProjectModal.projectSettings") : t("projects.newProjectModal.newProject")} icon="kanban" size="md">
+  <p class="mb-4 text-sm text-muted">{project ? t("projects.newProjectModal.itsKeyCannotChange") : t("projects.newProjectModal.itsTasksGetKeys")}</p>
   <div class="flex flex-col gap-4">
     <div class="grid grid-cols-[1fr_7.5rem] gap-3">
-      <Field label="Name" required>
-        {#snippet children(f)}<Input id={f.id} bind:value={name} maxlength={200} placeholder="Q4 Operations" />{/snippet}
+      <Field label={t("common.name")} required>
+        {#snippet children(f)}<Input id={f.id} bind:value={name} maxlength={200} placeholder={t("projects.newProjectModal.q4Operations")} />{/snippet}
       </Field>
-      <Field label="Key" hint={project ? "Fixed" : "2 to 5 capitals"} error={keyError} required>
+      <Field label={t("projects.newProjectModal.key")} hint={project ? t("projects.newProjectModal.fixed") : t("projects.newProjectModal.2To5Capitals")} error={keyError} required>
         {#snippet children(f)}<Input id={f.id} mono bind:value={key} disabled={project !== null} maxlength={5} invalid={f.invalid} oninput={() => { keyTouched = true; key = key.toUpperCase(); }} />{/snippet}
       </Field>
     </div>
-    <Field label="Description">
-      {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={description} maxlength={20000} placeholder="What it is for." />{/snippet}
+    <Field label={t("common.description")}>
+      {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={description} maxlength={20000} placeholder={t("projects.newProjectModal.whatItIsFor")} />{/snippet}
     </Field>
     <div class="grid grid-cols-2 gap-3">
-      <Field label="Start">
+      <Field label={t("common.start")}>
         {#snippet children(f)}<Input id={f.id} type="date" bind:value={start} />{/snippet}
       </Field>
-      <Field label="Due" error={dateError}>
+      <Field label={t("common.due")} error={dateError}>
         {#snippet children(f)}<Input id={f.id} type="date" bind:value={due} invalid={f.invalid} />{/snippet}
       </Field>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <Field label="Manager" hint="An agent that plans the project. It asks before it changes anything.">
+      <Field label={t("projects.newProjectModal.manager")} hint={t("projects.newProjectModal.anAgentThatPlans")}>
         {#snippet children(f)}
           <Select id={f.id} bind:value={manager}>
-            <option value="">No manager</option>
+            <option value="">{t("projects.newProjectModal.noManager")}</option>
             {#each projects.agents.filter((a) => !a.archived) as agent (agent.slug)}<option value={agent.slug}>{agent.name}</option>{/each}
           </Select>
         {/snippet}
       </Field>
-      <Field label="Cost limit per task run" hint="Each task run stops at this cost. Empty means no limit." error={costError}>
+      <Field label={t("projects.newProjectModal.costLimitPerTask")} hint={t("projects.newProjectModal.eachTaskRunStops")} error={costError}>
         {#snippet children(f)}<Input id={f.id} bind:value={limit} icon="dollar" inputmode="decimal" placeholder="1.00" invalid={f.invalid} />{/snippet}
       </Field>
     </div>
@@ -148,20 +149,20 @@
   {#snippet footer()}
     {#if project}
       {#if confirmDelete}
-        <span class="mr-auto text-sm text-err">Delete {project.key} with all its tasks?</span>
-        <Button disabled={busy} onclick={() => (confirmDelete = false)}>Keep it</Button>
-        <Button variant="danger" icon="trash" disabled={busy} onclick={() => void remove()}>Delete project</Button>
+        <span class="mr-auto text-sm text-err">{t("projects.newProjectModal.deleteWithAllIts", { key: project.key })}</span>
+        <Button disabled={busy} onclick={() => (confirmDelete = false)}>{t("common.keepIt")}</Button>
+        <Button variant="danger" icon="trash" disabled={busy} onclick={() => void remove()}>{t("projects.newProjectModal.deleteProject")}</Button>
       {:else}
         <span class="mr-auto flex gap-1.5">
-          <Button variant="ghost" icon="archive" disabled={busy} onclick={() => void archive()}>{project.archived ? "Bring back" : "Archive"}</Button>
-          <Button variant="ghost" icon="trash" disabled={busy} onclick={() => (confirmDelete = true)}>Delete</Button>
+          <Button variant="ghost" icon="archive" disabled={busy} onclick={() => void archive()}>{project.archived ? t("projects.newProjectModal.bringBack") : t("projects.newProjectModal.archive")}</Button>
+          <Button variant="ghost" icon="trash" disabled={busy} onclick={() => (confirmDelete = true)}>{t("common.delete")}</Button>
         </span>
-        <Button disabled={busy} onclick={() => (open = false)}>Cancel</Button>
-        <Button variant="primary" icon="check" disabled={!valid || busy} onclick={() => void save()}>Save</Button>
+        <Button disabled={busy} onclick={() => (open = false)}>{t("common.cancel")}</Button>
+        <Button variant="primary" icon="check" disabled={!valid || busy} onclick={() => void save()}>{t("common.save")}</Button>
       {/if}
     {:else}
-      <Button disabled={busy} onclick={() => (open = false)}>Cancel</Button>
-      <Button variant="primary" icon="plus" disabled={!valid || busy} onclick={() => void save()}>Create project</Button>
+      <Button disabled={busy} onclick={() => (open = false)}>{t("common.cancel")}</Button>
+      <Button variant="primary" icon="plus" disabled={!valid || busy} onclick={() => void save()}>{t("projects.newProjectModal.createProject")}</Button>
     {/if}
   {/snippet}
 </Modal>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { Snippet } from "svelte";
   import { fade, scale } from "svelte/transition";
 
@@ -38,7 +39,7 @@
 
 {#if open}
   <div transition:fade={{ duration: 120 }} class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-8 backdrop-blur-[2px]">
-    <button type="button" class="absolute inset-0 cursor-default" aria-label="Close" tabindex="-1" onclick={close}></button>
+    <button type="button" class="absolute inset-0 cursor-default" aria-label={t("common.close")} tabindex="-1" onclick={close}></button>
     <div
       role="dialog"
       aria-modal="true"
@@ -50,7 +51,7 @@
       <header class="flex items-center gap-2.5 border-b border-line px-5 py-3.5">
         {#if icon}<Icon name={icon} size={17} class="text-accent" />{/if}
         <h2 id="{uid}-title" data-autofocus tabindex="-1" class="min-w-0 flex-1 truncate text-xl font-semibold outline-none">{title}</h2>
-        <IconButton label="Close" icon="x" size="sm" onclick={close} />
+        <IconButton label={t("common.close")} icon="x" size="sm" onclick={close} />
       </header>
       <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">{@render children?.()}</div>
       {#if footer}<footer class="flex items-center justify-end gap-2 border-t border-line bg-panel-2 px-5 py-3">{@render footer()}</footer>{/if}

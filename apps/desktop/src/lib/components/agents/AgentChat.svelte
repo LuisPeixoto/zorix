@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import { onDestroy, tick, untrack } from "svelte";
 
   import {
@@ -91,7 +92,7 @@
   const settledState = (e: Execution) => ["completed", "failed", "cancelled"].includes(e.state);
   const face = (e: Execution) => {
     const card = e.agent ? agents.card(e.agent.slug) : undefined;
-    return { name: card?.name ?? e.agent?.slug ?? "Agent", emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted" };
+    return { name: card?.name ?? e.agent?.slug ?? tr("common.agent"), emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted" };
   };
 
   /** Read the sub-runs of every run here that delegated, and follow the text of those that are writing. */
@@ -227,9 +228,9 @@
 </script>
 
 <div class="flex h-full min-h-0">
-  <aside class="flex w-64 shrink-0 flex-col border-r border-line bg-panel-2" aria-label="Conversations">
+  <aside class="flex w-64 shrink-0 flex-col border-r border-line bg-panel-2" aria-label={tr("agents.agentChat.conversations")}>
     <div class="p-3">
-      <Button class="w-full" icon="plus" variant="secondary" onclick={() => select(null)}>New chat</Button>
+      <Button class="w-full" icon="plus" variant="secondary" onclick={() => select(null)}>{tr("agents.agentChat.newChat")}</Button>
     </div>
     <nav class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       {#each threads as t (t.conversation)}
@@ -243,21 +244,21 @@
           <span class="mt-0.5 flex justify-between text-xs text-muted"><span>{t.runs} message{t.runs === 1 ? "" : "s"}</span><span class="tnum">{ago(t.last_at)}</span></span>
         </button>
       {:else}
-        <p class="px-2.5 py-2 text-sm text-muted">No conversations yet.</p>
+        <p class="px-2.5 py-2 text-sm text-muted">{tr("agents.agentChat.noConversationsYet")}</p>
       {/each}
     </nav>
   </aside>
 
   <section class="flex min-w-0 flex-1 flex-col">
-    <div bind:this={scroller} {onscroll} class="min-h-0 flex-1 overflow-y-auto" role="log" aria-live="polite" aria-label="Conversation with {spec.name}">
+    <div bind:this={scroller} {onscroll} class="min-h-0 flex-1 overflow-y-auto" role="log" aria-live="polite" aria-label={tr("agents.agentChat.conversationWith", { name: spec.name })}>
       <div class="mx-auto flex max-w-3xl flex-col gap-5 px-6 py-6">
         {#if items.length === 0}
           <div class="mx-auto flex max-w-md flex-col items-center py-16 text-center">
             <Avatar emoji={spec.avatar.emoji} color={spec.avatar.color} size="xl" />
-            <h2 class="mt-4 text-2xl font-semibold">{team ? `Ask ${team.team.name}` : `Ask ${spec.name}`}</h2>
-            <p class="mt-1.5 text-base text-muted">{team ? `${spec.name} leads and can hand work to ${team.team.members.length} other agent${team.team.members.length === 1 ? "" : "s"}.` : spec.description || "Say what you want done."}</p>
+            <h2 class="mt-4 text-2xl font-semibold">{team ? tr("agents.agentChat.ask", { name: team.team.name }) : tr("agents.agentChat.ask", { name: spec.name })}</h2>
+            <p class="mt-1.5 text-base text-muted">{team ? tr("agents.agentChat.leadsAndCanHand", { name: spec.name, count: team.team.members.length }) : spec.description || tr("agents.agentChat.sayWhatYouWant")}</p>
             {#if suggestions.length}
-              <div class="mt-5 flex flex-wrap justify-center gap-2" aria-label="Things to try">
+              <div class="mt-5 flex flex-wrap justify-center gap-2" aria-label={tr("agents.agentChat.thingsToTry")}>
                 {#each suggestions as s (s.id)}
                   <Chip onclick={() => (draft = s.case.prompt)}>{shorten(s.case.prompt, 54)}</Chip>
                 {/each}
@@ -272,7 +273,7 @@
           {:else if item.kind === "answer"}
             <ChatBubble role="assistant" name={spec.name} time={item.streaming ? "writing…" : `${ago(item.at)}${item.version ? " · v" + item.version : ""}`} streaming={item.streaming}>
               {#snippet avatar()}<Avatar emoji={spec.avatar.emoji} color={spec.avatar.color} />{/snippet}
-              {#if item.text}<Markdown text={item.text} onlink={(href) => void openExternal(href).catch((e) => toast.err(errorText(e)))} />{:else}<span class="text-muted">Thinking…</span>{/if}
+              {#if item.text}<Markdown text={item.text} onlink={(href) => void openExternal(href).catch((e) => toast.err(errorText(e)))} />{:else}<span class="text-muted">{tr("agents.agentChat.thinking")}</span>{/if}
             </ChatBubble>
           {:else if item.kind === "tool" && item.call.tool === DELEGATE}
             {@const rows = childRows(item.call, family, needsYou, face, childLive)}
@@ -291,10 +292,10 @@
             <div class="pl-12">
               {#if item.approval?.status === "pending"}
                 <ToolCallCard tool={item.call.tool} status="awaiting_approval" args={item.call.arguments} error={item.call.error} open>
-                  <p class="mb-2 flex items-center gap-1.5 text-sm font-medium text-warn"><Icon name="shield" size={14} /> {item.approval.reason || "This step asks for your approval."}</p>
+                  <p class="mb-2 flex items-center gap-1.5 text-sm font-medium text-warn"><Icon name="shield" size={14} /> {item.approval.reason || tr("agents.agentChat.thisStepAsksFor")}</p>
                   <div class="flex gap-2">
-                    <Button size="sm" variant="primary" icon="check" onclick={() => decide(item.runId, item.approval!.id, item.approval!.call_hash, true)}>Approve</Button>
-                    <Button size="sm" icon="x" onclick={() => decide(item.runId, item.approval!.id, item.approval!.call_hash, false)}>Refuse</Button>
+                    <Button size="sm" variant="primary" icon="check" onclick={() => decide(item.runId, item.approval!.id, item.approval!.call_hash, true)}>{tr("common.approve")}</Button>
+                    <Button size="sm" icon="x" onclick={() => decide(item.runId, item.approval!.id, item.approval!.call_hash, false)}>{tr("common.refuse")}</Button>
                   </div>
                 </ToolCallCard>
               {:else}
@@ -304,7 +305,7 @@
           {:else if item.kind === "problem"}
             <div class="pl-12"><div class="rounded-xl border px-3.5 py-2.5 text-sm {item.tone === 'err' ? 'border-err/35 bg-err/8 text-err' : 'border-line bg-panel-2 text-muted'}" role={item.tone === "err" ? "alert" : undefined}><strong class="font-semibold">{item.title}.</strong> {item.text}</div></div>
           {:else}
-            <p class="pl-12 text-sm text-muted"><Badge tone="warn" dot>Waiting</Badge> <span class="ml-1.5">{item.text}</span></p>
+            <p class="pl-12 text-sm text-muted"><Badge tone="warn" dot>{tr("agents.agentChat.waiting")}</Badge> <span class="ml-1.5">{item.text}</span></p>
           {/if}
         {/each}
       </div>
@@ -317,11 +318,11 @@
           onsend={send}
           busy={sending || !ready}
           disabled={!!agents.error}
-          placeholder={ready ? `Ask ${spec.name}…` : "Waiting for this answer…"}
-          label={`Message ${spec.name}`}
+          placeholder={ready ? tr("agents.agentChat.ask2", { name: spec.name }) : tr("agents.agentChat.waitingForThisAnswer")}
+          label={tr("agents.agentChat.message", { name: spec.name })}
         >
           {#snippet tools()}
-            {#if team}<Badge tone="info" dot>Team · {team.team.name}</Badge>{/if}
+            {#if team}<Badge tone="info" dot>{tr("agents.agentChat.team", { name: team.team.name })}</Badge>{/if}
             <Badge tone="muted">{spec.models.default}</Badge>
             <Badge tone="accent">v{detail.agent.current_version}</Badge>
           {/snippet}
@@ -330,28 +331,28 @@
     </div>
   </section>
 
-  <aside class="hidden w-72 shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel-2 p-4 xl:block" aria-label="About this chat">
-    <Card title={team ? "About this team" : "About this agent"} icon={team ? "users" : "bot"}>
+  <aside class="hidden w-72 shrink-0 space-y-4 overflow-y-auto border-l border-line bg-panel-2 p-4 xl:block" aria-label={tr("agents.agentChat.aboutThisChat")}>
+    <Card title={team ? tr("agents.agentChat.aboutThisTeam") : tr("agents.agentChat.aboutThisAgent")} icon={team ? "users" : "bot"}>
       {#if team}
         <ul class="space-y-2.5">
           {#each [team.lead, ...team.members].filter((m) => m) as m, i (m?.slug)}
             {#if m}
               <li class="flex items-center gap-2.5">
                 <Avatar emoji={m.emoji} color={m.color} size="sm" />
-                <span class="min-w-0 flex-1"><span class="block truncate text-base font-medium">{m.name}</span><span class="mono block text-xs text-muted">{i === 0 ? "lead · " : ""}v{m.version}</span></span>
+                <span class="min-w-0 flex-1"><span class="block truncate text-base font-medium">{m.name}</span><span class="mono block text-xs text-muted">{i === 0 ? tr("agents.agentChat.lead") : ""}v{m.version}</span></span>
               </li>
             {/if}
           {/each}
         </ul>
       {:else}
-        <p class="text-sm text-muted">{spec.description || "No description yet."}</p>
+        <p class="text-sm text-muted">{spec.description || tr("common.noDescriptionYet")}</p>
         {#if detail.version.spec.skills.length}
-          <p class="mt-3 mb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">Skills</p>
+          <p class="mt-3 mb-1.5 text-2xs font-semibold tracking-wider text-faint uppercase">{tr("agents.agentChat.skills")}</p>
           <div class="flex flex-wrap gap-1.5">{#each detail.version.spec.skills as k (k.name)}<Badge tone="info">{k.name}</Badge>{/each}</div>
         {/if}
       {/if}
     </Card>
-    <Card title="This conversation" icon="message">
+    <Card title={tr("agents.agentChat.thisConversation")} icon="message">
       <KeyValue
         items={[
           { key: "Spent", value: usd(spent), mono: true },

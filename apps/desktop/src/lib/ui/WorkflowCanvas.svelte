@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import type { UiTone } from "./tone.ts";
   import type { WfRun, WorkflowSpec } from "../api.ts";
   import Icon from "./Icon.svelte";
@@ -212,7 +213,7 @@
     } else if ((key === "Delete" || key === "Backspace") && !readonly) {
       event.preventDefault();
       remove();
-    } else if (key.startsWith("Arrow") && selected && !readonly) {
+    } else if (key.startsWith(t("ui.workflowCanvas.arrow")) && selected && !readonly) {
       event.preventDefault();
       const step = spec.steps.find((s) => s.id === selected);
       if (!step) return;
@@ -276,7 +277,7 @@
   bind:clientWidth={width}
   bind:clientHeight={height}
   role="application"
-  aria-label="Workflow canvas. {spec.steps.length} steps. Arrow keys move the selected step, Delete removes it, plus and minus zoom, zero fits everything."
+  aria-label={t("ui.workflowCanvas.workflowCanvasStepsArrow", { length: spec.steps.length })}
   tabindex="0"
   class={cn("relative h-full min-h-80 touch-none overflow-hidden border border-line bg-panel-2 outline-none select-none", klass)}
   style:background-image="radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--faint) 45%, transparent) 1px, transparent 0)"
@@ -338,18 +339,18 @@
     {/each}
   </div>
 
-  <ol class="sr-only" aria-label="Steps">
+  <ol class="sr-only" aria-label={t("ui.workflowCanvas.steps")}>
     {#each outline as row (row.id)}
-      <li>{row.text}{row.to.length ? `. Leads to ${row.to.join(", ")}.` : "."}</li>
+      <li>{row.text}{row.to.length ? t("ui.workflowCanvas.leadsTo", { value: row.to.join(", ") }) : "."}</li>
     {/each}
   </ol>
 
   <div data-chrome class="glass absolute bottom-4 left-4 flex items-center gap-0.5 rounded-xl border border-glass-line p-1 shadow-raised">
     {#if !readonly}
       <div class="relative">
-        <IconButton icon="plus" label="Add a step" size="sm" aria-haspopup="menu" aria-expanded={menu} onclick={() => (menu = !menu)} />
+        <IconButton icon="plus" label={t("ui.workflowCanvas.addAStep")} size="sm" aria-haspopup="menu" aria-expanded={menu} onclick={() => (menu = !menu)} />
         {#if menu}
-          <div role="menu" aria-label="Add a step" class="absolute bottom-10 left-0 z-20 max-h-96 w-52 overflow-y-auto rounded-xl border border-line bg-elevated p-1.5 shadow-pop">
+          <div role="menu" aria-label={t("ui.workflowCanvas.addAStep")} class="absolute bottom-10 left-0 z-20 max-h-96 w-52 overflow-y-auto rounded-xl border border-line bg-elevated p-1.5 shadow-pop">
             {#each PALETTE_GROUPS as group (group)}
               <p class="px-2 pt-1.5 pb-1 text-2xs font-semibold tracking-wider text-faint uppercase">{group}</p>
               {#each KINDS.filter((k) => k.group === group) as k (k.kind)}
@@ -362,10 +363,10 @@
         {/if}
       </div>
     {/if}
-    <IconButton icon="zoom-in" label="Zoom in" size="sm" onclick={() => zoomBy(1.1)} />
-    <IconButton icon="zoom-out" label="Zoom out" size="sm" onclick={() => zoomBy(1 / 1.1)} />
-    <IconButton icon="maximize" label="Fit everything" size="sm" onclick={refit} />
-    {#if !readonly}<IconButton icon="undo" label="Undo" size="sm" disabled={!canUndo} onclick={() => onundo?.()} />{/if}
+    <IconButton icon="zoom-in" label={t("ui.workflowCanvas.zoomIn")} size="sm" onclick={() => zoomBy(1.1)} />
+    <IconButton icon="zoom-out" label={t("ui.workflowCanvas.zoomOut")} size="sm" onclick={() => zoomBy(1 / 1.1)} />
+    <IconButton icon="maximize" label={t("ui.workflowCanvas.fitEverything")} size="sm" onclick={refit} />
+    {#if !readonly}<IconButton icon="undo" label={t("ui.workflowCanvas.undo")} size="sm" disabled={!canUndo} onclick={() => onundo?.()} />{/if}
     <span class="tnum px-2 text-xs text-faint" aria-live="polite">{percent}%</span>
   </div>
 

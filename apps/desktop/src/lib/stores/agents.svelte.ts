@@ -16,6 +16,7 @@ import {
   type TeamView,
 } from "../api.ts";
 import { toast } from "./toast.svelte.ts";
+import { t as tr } from "../i18n/index.ts";
 
 export const AGENT_TABS = ["chat", "definition", "skills", "versions", "evals", "memory"] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
@@ -86,7 +87,7 @@ class AgentsStore {
   async addTemplate(id: string): Promise<string | null> {
     try {
       const saved = await agentAddTemplate(id);
-      toast.ok(saved.created ? `Added ${saved.slug}.` : `${saved.slug} is already here.`);
+      toast.ok(saved.created ? tr("stores.agents.added", { slug: saved.slug }) : tr("stores.agents.isAlreadyHere", { slug: saved.slug }));
       await this.refresh();
       return saved.slug;
     } catch (e) {
@@ -98,7 +99,7 @@ class AgentsStore {
   async importFile(file: string, rename?: string): Promise<string | null> {
     try {
       const saved = await agentImport(file, rename?.trim() || undefined);
-      toast.ok(saved.created ? `Imported ${saved.slug}.` : saved.changed ? `${saved.slug} is now at v${saved.version}.` : `${saved.slug} is unchanged.`);
+      toast.ok(saved.created ? tr("stores.agents.imported", { slug: saved.slug }) : saved.changed ? tr("stores.agents.isNowAtV", { slug: saved.slug, version: saved.version }) : tr("stores.agents.isUnchanged", { slug: saved.slug }));
       await this.refresh();
       return saved.slug;
     } catch (e) {
@@ -119,7 +120,7 @@ class AgentsStore {
   async addTeamTemplate(id: string): Promise<string | null> {
     try {
       const slug = await teamAddTemplate(id);
-      toast.ok(`Added the team ${slug}.`);
+      toast.ok(tr("stores.agents.addedTheTeam", { slug }));
       await this.refresh();
       return slug;
     } catch (e) {

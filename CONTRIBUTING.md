@@ -35,7 +35,7 @@ Run all of these from the repository root, chained so a failure stops the chain:
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --exclude zorix-desktop
 ```
 
-For interface changes also run, in `apps/desktop`, `npm run check && npm test && npm run build`, and from the root `node tools/design-tokens.mjs --check && node tools/check-design.mjs && node tools/check-docs.mjs`.
+For interface changes also run, in `apps/desktop`, `npm run check && npm test && npm run build`, and from the root `node tools/design-tokens.mjs --check && node tools/check-design.mjs && node tools/check-text.mjs && node tools/check-docs.mjs`.
 
 ## Design system contract
 
@@ -45,7 +45,8 @@ The app follows the design system in [`design/`](design/README.md) strictly ([AD
 2. Use tokens and the kit only. `tools/check-design.mjs` rejects colour literals, arbitrary values for colour, type, radius, shadow and duration, and slow transitions; an exception needs a reason in its allowlist.
 3. A screen or component the design system lacks is added there first, then re-vendored into `design/`.
 4. An element that needs data ZORIX does not have yet is left out and listed in the [roadmap](docs/roadmap.md), never mocked.
-5. Done means real-app Light and Dark screenshots beside the design system's, a design critique and an accessibility review with their findings fixed, and any remaining difference written under [Known differences](docs/design-system.md#known-differences).
+5. Every sentence a person reads is in the catalogue (`apps/desktop/src/lib/i18n/messages.en.ts`) and reaches the screen through `t("key")`; money, numbers, dates and lists go through `fmt`. `tools/check-text.mjs` fails on text written in a component ([ADR-0040](docs/adr/0040-interface-text-and-error-reasons.md), [how](docs/desktop.md#text-and-languages)).
+6. Done means real-app Light and Dark screenshots beside the design system's, a design critique and an accessibility review with their findings fixed, and any remaining difference written under [Known differences](docs/design-system.md#known-differences).
 
 ## Conventions
 

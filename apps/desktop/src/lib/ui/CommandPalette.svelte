@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { tick } from "svelte";
   import { fade, scale } from "svelte/transition";
 
@@ -77,11 +78,11 @@
 
 {#if open}
   <div transition:fade={{ duration: 120 }} class="fixed inset-0 z-[60] grid items-start justify-items-center bg-black/35 px-6 pt-[14vh] backdrop-blur-[2px]">
-    <button type="button" class="absolute inset-0 cursor-default" aria-label="Close" tabindex="-1" onclick={() => (open = false)}></button>
+    <button type="button" class="absolute inset-0 cursor-default" aria-label={t("common.close")} tabindex="-1" onclick={() => (open = false)}></button>
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
+      aria-label={t("ui.commandPalette.commandPalette")}
       transition:scale={{ start: 0.97, duration: 150 }}
       use:trapFocus
       class="glass relative flex max-h-[min(460px,70vh)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border shadow-3"
@@ -95,15 +96,15 @@
           aria-expanded="true"
           aria-controls="{uid}-list"
           aria-activedescendant={matches.length ? `${uid}-opt-${active}` : undefined}
-          aria-label="Type a command"
-          placeholder="Search runs, workflows, servers and actions…"
+          aria-label={t("ui.commandPalette.typeACommand")}
+          placeholder={t("ui.commandPalette.searchRunsWorkflowsServers")}
           autocomplete="off"
           spellcheck="false"
           class="h-12 min-w-0 flex-1 bg-transparent text-lg outline-none placeholder:text-faint"
         />
         <Kbd>esc</Kbd>
       </div>
-      <div id="{uid}-list" role="listbox" aria-label="Commands" class="min-h-0 flex-1 overflow-y-auto p-2">
+      <div id="{uid}-list" role="listbox" aria-label={t("ui.commandPalette.commands")} class="min-h-0 flex-1 overflow-y-auto p-2">
         {#each groups as group (group.name)}
           <div role="group" aria-label={group.name}>
           <p class="px-2.5 pt-2 pb-1 text-2xs font-semibold tracking-wider text-muted uppercase" aria-hidden="true">{group.name}</p>
@@ -125,7 +126,7 @@
           {/each}
           </div>
         {:else}
-          <p class="px-3 py-8 text-center text-base text-muted" role="presentation">Nothing matches “{query}”.</p>
+          <p class="px-3 py-8 text-center text-base text-muted" role="presentation">{t("ui.commandPalette.nothingMatches", { query })}</p>
         {/each}
       </div>
     </div>
