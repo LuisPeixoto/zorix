@@ -21,6 +21,7 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Faults in storage | `zorix-runtime/tests/faults.rs` (a `FaultyRepository` that breaks the Nth call of a method, before or after it is written), `zorix-store/tests/disk_full.rs`, `tests/concurrency.rs`, `zorix-cli/tests/cli.rs` (`kill -9`) | A commit that fails anywhere in a run and a restart that finishes it without repeating an unsafe tool; a file that cannot grow, told in words, with the work continuing when there is room; four connections writing at once without a lost update or a repeated event number; a real crash of the command line |
 | Adversarial | `zorix-runtime/tests/adversarial.rs`, `zorix-agents/tests/delegation.rs`, `zorix-tools` and `zorix-agents` path tables, `zorix-mcp` tool tests, `zorix-integrations` address tables | Text that tries to give itself powers (a result that says the person approved, a child's answer that closes and opens wrappers, a delegation that invents fields to get more, a tool description of a million characters) and paths that try to leave a folder (`..`, drive letters, UNC, reserved names, `.ZORIX`, zip entries) |
 | Coverage | the **Coverage** CI job, `tools/coverage-summary.mjs` | What the tests run, per crate, and which files nothing tests |
+| End-to-end | `tools/e2e/` (a WebDriver client of our own, the scenarios, the smoke check), the **End-to-end** workflow | The built app on a throwaway data folder: every part of it opens, a run with the demo model finishes, a change waits at an approval and carries on after Approve and after Refuse, a project is created, the workforce shows you. Linux and Windows drive it through tauri-driver; macOS has no WebDriver for its web view, so it only starts the app and waits for it to say it has loaded (`ZORIX_SMOKE`) |
 | Interface text | `lib/i18n/*.test.ts`, `tools/check-text.mjs` | Messages are filled in, plurals follow the language, a key that does not exist is a type error, no message is dead, the pseudo-locale touches every message, formats are right in English, German and Portuguese, and the lint fails on a sentence in a component (proved with a probe file) |
 | Benchmarks | `crates/zorix-bench`, the **Benchmarks** CI job | The paths people wait for, at 10,000 runs, a million events and 50,000 pieces of documents, with limits that fail a large regression |
 | Fuzzing | `fuzz/` (14 targets, a seed corpus each), `.github/workflows/fuzz.yml` | Every reader of text or bytes from outside (the agent file and its YAML, `SKILL.md`, server-sent events cut anywhere, MCP messages and other clients' configs, workflow files, conditions, templates, cron expressions and zones, documents, access patterns, file paths, the data wrappers) takes any input without a panic or a hang, and keeps the property it promises |
@@ -131,6 +132,20 @@ What the numbers say, so the audits start from them:
 - The core of the product is well covered: `zorix-core` 95 %, `zorix-runtime` 94 %, `zorix-store` 97 %, `zorix-sim` 98 %.
 
 Coverage counts lines that ran, not whether the test would notice a wrong answer; it finds what nothing tests, and says nothing about the rest.
+
+## End-to-end tests
+
+```bash
+cd apps/desktop && npx tauri build --debug --no-bundle     # build the app once
+node tools/e2e/smoke.mjs target/debug/zorix-desktop        # any system: starts it and waits for "ZORIX ready"
+cargo install tauri-driver --locked                        # Linux and Windows only, then:
+node tools/e2e/run.mjs target/debug/zorix-desktop          # drives it through tauri-driver (needs a display; xvfb-run on a server)
+```
+
+`tools/e2e/webdriver.mjs` is a small client for the W3C WebDriver protocol (just `fetch`), `scenarios.mjs` holds the flows, and `run.mjs` gives each scenario a fresh data folder and a fresh app. A failing scenario leaves a screenshot and the
+page's source in `e2e-artifacts/`, which the **End-to-end** workflow uploads. Scenarios use what a person sees (a button's text, a page's title), so they break when the interface's words change: that is on purpose, and the fix is one line.
+
+**The limit on macOS:** WebKit's web view has no WebDriver, so macOS only checks that the built app starts and loads its interface (`ZORIX_SMOKE`, the `app_ready` command). The flows are proved on Linux and Windows, and the interface code is the same on all three.
 
 ## Benchmarks
 
