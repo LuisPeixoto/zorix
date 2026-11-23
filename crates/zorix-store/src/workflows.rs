@@ -692,6 +692,42 @@ impl WorkflowStore for SqliteWorkflowStore {
         })
     }
 
+    async fn record_delivery(
+        &self,
+        tenant: &TenantId,
+        workflow: WorkflowId,
+        key: &str,
+        now: Timestamp,
+        keep_ms: i64,
+    ) -> Result<bool> {
+        self.with(|db| {
+            let (tenant, workflow) = (tenant.as_str(), workflow.to_string());
+            let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate).map_err(storage)?;
+            tx.execute(
+                "DELETE FROM workflow_deliveries WHERE tenant = ?1 AND workflow_id = ?2 AND at < ?3",
+                params![tenant, workflow, now.millis() - keep_ms],
+            )
+            .map_err(storage)?;
+            let first = tx
+                .execute(
+                    "INSERT OR IGNORE INTO workflow_deliveries (tenant, workflow_id, key, at) VALUES (?1, ?2, ?3, ?4)",
+                    params![tenant, workflow, key, now.millis()],
+                )
+                .map_err(storage)?
+                == 1;
+            // A flood of distinct ids cannot grow the table without bound: only the newest ones are kept.
+            tx.execute(
+                "DELETE FROM workflow_deliveries WHERE tenant = ?1 AND workflow_id = ?2 AND key IN (
+                     SELECT key FROM workflow_deliveries WHERE tenant = ?1 AND workflow_id = ?2
+                     ORDER BY at DESC, key LIMIT -1 OFFSET 10000)",
+                params![tenant, workflow],
+            )
+            .map_err(storage)?;
+            tx.commit().map_err(storage)?;
+            Ok(first)
+        })
+    }
+
     async fn set_meta(&self, tenant: &TenantId, key: &str, value: &str) -> Result<()> {
         self.with(|db| {
             db.execute(

@@ -27,6 +27,27 @@ use crate::host::{Inner, signing_key, token_key};
 /// The most a request body may be.
 pub const MAX_BODY: usize = 1024 * 1024;
 
+/// How long a delivery id is remembered, so a repeat of it (a retry, or a captured request sent again) starts nothing.
+pub const DELIVERY_KEPT_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// Headers in which senders put an id that is unique to each delivery, in the order they are looked at.
+const DELIVERY_ID_HEADERS: [&str; 4] = ["x-github-delivery", "x-gitlab-event-uuid", "webhook-id", "idempotency-key"];
+
+/// The sender's own id of this delivery, when it sends one. A body is never used as an id: a sender may legitimately send the same
+/// body again and again (a timer posting `{}`), and each one is wanted.
+fn delivery_id(headers: &HeaderMap) -> Option<String> {
+    let text = DELIVERY_ID_HEADERS.iter().find_map(|name| headers.get(*name)?.to_str().ok())?.trim();
+    if text.is_empty() {
+        return None;
+    }
+    // A long id is kept by its hash, so the table's keys stay small.
+    Some(if text.chars().count() > 200 {
+        format!("sha256:{:x}", <Sha256 as sha2::Digest>::digest(text.as_bytes()))
+    } else {
+        text.to_string()
+    })
+}
+
 fn same(a: &[u8], b: &[u8]) -> bool {
     // Compared in full whatever the contents, so the time taken says nothing about how much matched.
     let mut diff = (a.len() ^ b.len()) as u8;
@@ -87,15 +108,24 @@ async fn receive(
     } else {
         serde_json::from_slice(&body).unwrap_or_else(|_| json!({"body": String::from_utf8_lossy(&body)}))
     };
-    let mut started = Vec::new();
-    for (step, filter, signed) in hooks {
-        if signed {
-            let secret = inner.secret(signing_key(workflow.id)).await.ok().flatten();
-            let header = headers.get("x-hub-signature-256").and_then(|v| v.to_str().ok());
-            if !secret.is_some_and(|s| signature_ok(&s, &body, header)) {
-                return (StatusCode::UNAUTHORIZED, "The signature is missing or wrong.").into_response();
-            }
+    // Every signature is checked before anything starts, and before a delivery is remembered: an unsigned request cannot use up an id.
+    if hooks.iter().any(|(_, _, signed)| *signed) {
+        let secret = inner.secret(signing_key(workflow.id)).await.ok().flatten();
+        let header = headers.get("x-hub-signature-256").and_then(|v| v.to_str().ok());
+        if !secret.is_some_and(|s| signature_ok(&s, &body, header)) {
+            return (StatusCode::UNAUTHORIZED, "The signature is missing or wrong.").into_response();
         }
+    }
+    if let Some(id) = delivery_id(&headers) {
+        match store.record_delivery(&inner.tenant, workflow.id, &id, inner.clock.now(), DELIVERY_KEPT_MS).await {
+            Ok(true) => {}
+            Ok(false) => return (StatusCode::OK, axum::Json(json!({"duplicate": true}))).into_response(),
+            // Better to refuse than to risk running a delivery twice.
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
+    }
+    let mut started = Vec::new();
+    for (step, filter, _) in hooks {
         if let Some(filter) = filter {
             match Expr::parse(&filter) {
                 Ok(expr) if expr.test(&payload) => {}

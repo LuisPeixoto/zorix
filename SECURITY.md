@@ -92,6 +92,9 @@ These notes grow with each feature that handles data, files, network or permissi
 - **Text from triggers and tasks is untrusted data too.** A webhook body, a step's output, a request's input and the text of a task
   reach a model wrapped in `<data … untrusted="true">`, with ZORIX's own tags defused in any case and spacing. (Before 0.10.0
   a prompt template put such values in as the author's own words; this is fixed.)
+- **A webhook delivery is started once.** An id the sender gives a delivery is remembered for 24 hours, so a retry or a replay of a captured request starts nothing. A sender
+  that gives no id cannot be told apart from a new delivery, and a captured signed request can then be replayed until the signing secret is replaced; say so to
+  anyone who exposes the listener.
 - **Retrieved documents and past work are untrusted data.** They are wrapped, their closing tags defused, and never placed in the
   system prompt. Indexing reads files only: `.gitignore`, hidden files, links and credential-like files (`.env*`, keys,
   `credentials*`) are skipped, text that looks like a secret is removed from pieces before storage, and PDFs are parsed on an

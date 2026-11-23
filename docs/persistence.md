@@ -100,6 +100,12 @@ A call is delegated at most once (the children's idempotency keys), so a restart
 
 Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuses a schema-8 database. Spend is not stored: it is read from the cost of the runs.
 
+### Webhook deliveries (schema 9)
+
+`workflow_deliveries` holds the id each sender gave a delivery, per tenant and workflow, with the time it arrived. An id is remembered for 24 hours and at most the newest 10,000 of
+a workflow are kept, so a repeat is recognised and the table cannot grow without bound ([workflows](workflows.md#webhooks)). Opening a schema-8 database upgrades it in one
+transaction; a 0.9 program refuses a schema-9 database.
+
 ### Projects (schema 7)
 
 | Table | What it holds |

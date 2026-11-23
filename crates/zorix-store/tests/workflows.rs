@@ -351,3 +351,33 @@ async fn trigger_state_and_meta_are_kept_and_cleared() {
     store.set_meta(&a, "cursor", "13").await.unwrap();
     assert_eq!(store.meta(&a, "cursor").await.unwrap().as_deref(), Some("13"));
 }
+
+#[tokio::test]
+async fn a_delivery_is_new_once_and_remembered_for_a_day_per_workflow_and_tenant() {
+    let store = SqliteWorkflowStore::open_in_memory().unwrap();
+    let (a, b) = (WorkflowId::new(), WorkflowId::new());
+    let (me, other) = (tenant("local"), tenant("other"));
+    let day = 24 * 60 * 60 * 1000;
+
+    assert!(store.record_delivery(&me, a, "d-1", Timestamp(1_000), day).await.unwrap(), "the first time");
+    assert!(!store.record_delivery(&me, a, "d-1", Timestamp(2_000), day).await.unwrap(), "a repeat");
+    assert!(store.record_delivery(&me, a, "d-2", Timestamp(2_000), day).await.unwrap(), "another delivery");
+    assert!(store.record_delivery(&me, b, "d-1", Timestamp(2_000), day).await.unwrap(), "another workflow");
+    assert!(store.record_delivery(&other, a, "d-1", Timestamp(2_000), day).await.unwrap(), "another tenant");
+    // After the keeping time the id is forgotten, so the table does not grow for ever.
+    assert!(store.record_delivery(&me, a, "d-1", Timestamp(1_000 + day + 1), day).await.unwrap());
+}
+
+#[tokio::test]
+async fn a_flood_of_distinct_deliveries_keeps_only_the_newest_ten_thousand() {
+    let store = SqliteWorkflowStore::open_in_memory().unwrap();
+    let (me, workflow) = (tenant("local"), WorkflowId::new());
+    for n in 0..10_050 {
+        assert!(
+            store.record_delivery(&me, workflow, &format!("d-{n}"), Timestamp(1_000 + n), i64::MAX / 2).await.unwrap()
+        );
+    }
+    // The oldest were dropped (and are new again); the newest are still remembered.
+    assert!(store.record_delivery(&me, workflow, "d-0", Timestamp(20_000), i64::MAX / 2).await.unwrap());
+    assert!(!store.record_delivery(&me, workflow, "d-10049", Timestamp(20_000), i64::MAX / 2).await.unwrap());
+}

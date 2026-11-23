@@ -12,6 +12,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** a webhook delivery that carries the sender's delivery id (`X-GitHub-Delivery` and the like) starts a workflow once: a retry or a replayed request answers `200` and
+  starts nothing. Database schema 9.
 - **Security:** the wrappers around data (tool results, documents, past work, task and trigger text) now defuse every tag of ZORIX in any case and spacing, opening
   as well as closing, and keep attribute values inside their attribute. Before, only the exact lower-case closing tag was defused. One implementation
   serves all four wrappers, and property tests check it against arbitrary hostile text.
