@@ -1,0 +1,20 @@
+[package]
+name = "zorix-bench"
+description = "ZORIX bench: builds a realistic data folder and times what people wait for (see docs/testing.md)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-store.workspace = true
+zorix-sim.workspace = true
+zorix-runtime = { workspace = true, features = ["testing"] }
+clap.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true

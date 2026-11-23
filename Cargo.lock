@@ -8014,6 +8014,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zorix-bench"
+version = "0.9.0"
+dependencies = [
+ "clap",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "zorix-core",
+ "zorix-runtime",
+ "zorix-sim",
+ "zorix-store",
+]
+
+[[package]]
 name = "zorix-cli"
 version = "0.9.0"
 dependencies = [
