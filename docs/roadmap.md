@@ -164,7 +164,7 @@ The tools every audit needs, and the gaps already known.
 - **Scale benchmarks:** 10,000 executions, 1,000,000 events, 200 agents (the most a tenant keeps), 5,000 facts and 50,000 pieces of documents, timing listing, replay, search and the Inbox. The numbers go into [testing](testing.md#benchmarks), and a large regression fails.
 - **An adversarial suite:** prompt injection at every untrusted input (tool results, documents, MCP descriptions, webhook payloads, memory, task text), tampering with approvals, path traversal, SSRF in the HTTP integration, child runs that try to widen their grants, and fuzz targets for the parsers run on a schedule.
 - **Fault injection:** provider outages and timeouts, a crash during a commit, a full disk and concurrent writers, each followed by a resume.
-- **Coverage** reported per crate in CI, published, with no artificial target.
+- **Coverage** reported per crate in CI, published, with no artificial target ([testing](testing.md#coverage)). The first report puts the command line at 51 % (the project, workflow and workforce commands are tested only by live scripts); Phase 14 brings them into `cargo test`.
 - **Installers verified on clean machines** ([#3](https://github.com/LuisPeixoto/zorix/issues/3)), with a checklist for each release in [distribution](distribution.md).
 - **Replace `chrono`** ([#17](https://github.com/LuisPeixoto/zorix/issues/17)) with a maintained date library; every schedule test passes unchanged.
 - **Documentation drift:** every "not yet" and "later" claim in the guides is checked against the code.
