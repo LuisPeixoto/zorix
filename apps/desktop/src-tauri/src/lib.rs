@@ -90,6 +90,7 @@ pub fn run() {
             workflow_commands::workflow_step_history,
             workflow_commands::workflow_webhook,
             commands::app_info,
+            commands::app_ready,
             commands::list_tools,
             commands::list_runs,
             commands::run_detail,

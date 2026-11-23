@@ -34,6 +34,16 @@ pub struct AppInfo {
     start_view: Option<String>,
 }
 
+/// The interface has loaded. With `ZORIX_SMOKE` set (a check that an installed app starts, in the installer and end-to-end jobs) the
+/// app says so on its standard output and closes, so a script can wait for one line instead of looking at a window.
+#[tauri::command]
+pub fn app_ready(app: tauri::AppHandle) {
+    if std::env::var_os("ZORIX_SMOKE").is_some() {
+        println!("ZORIX ready {}", env!("CARGO_PKG_VERSION"));
+        app.exit(0);
+    }
+}
+
 #[tauri::command]
 pub fn app_info(state: State<'_, AppState>) -> AppInfo {
     AppInfo {
