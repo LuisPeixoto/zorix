@@ -1,0 +1,75 @@
+name: End-to-end
+
+# Builds the desktop app and drives it (ADR-0042). Linux and Windows go through tauri-driver; macOS's web view has no WebDriver, so it starts the app and
+# waits for it to say it has loaded. Every run uses a throwaway data folder. A failing scenario uploads a screenshot and the page's source.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb
+      - name: Install the frontend dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Build the app
+        working-directory: apps/desktop
+        run: npx tauri build --debug --no-bundle
+
+      # macOS: no WebDriver for WebKit, so a launch check.
+      - name: Start the app and wait for it to load
+        if: runner.os == 'macOS'
+        run: node tools/e2e/smoke.mjs target/debug/zorix-desktop 120
+
+      # Linux and Windows: the scenarios.
+      - name: Install tauri-driver
+        if: runner.os != 'macOS'
+        run: cargo install tauri-driver --locked
+      - name: Install the Edge driver that matches WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip
+          Expand-Archive edgedriver.zip -DestinationPath edgedriver
+      - name: Run the scenarios (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node tools/e2e/run.mjs target/debug/zorix-desktop
+      - name: Run the scenarios (Windows)
+        if: runner.os == 'Windows'
+        run: node tools/e2e/run.mjs target/debug/zorix-desktop.exe edgedriver/msedgedriver.exe
+      - name: Keep what a failure left
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.os }}
+          path: e2e-artifacts
+          if-no-files-found: ignore
