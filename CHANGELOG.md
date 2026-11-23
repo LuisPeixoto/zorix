@@ -12,6 +12,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** an approval answer must name the call it is for. Before, an answer without the call's hash was accepted, so it could have been
+  applied to a call the person never saw. A test now edits the stored call and approval and shows that an altered call asks again.
 - **Security:** what a webhook, a workflow step, a request's input or a task says now reaches the model wrapped as untrusted data. Before, a
   prompt template put those values in as if the workflow's author had written them, so a webhook body could give instructions.
 - Dependencies with known vulnerabilities were updated: `wasmtime-wasi` (a WASI filesystem sandbox escape on Windows),

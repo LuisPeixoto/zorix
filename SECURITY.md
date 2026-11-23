@@ -44,7 +44,8 @@ These notes grow with each feature that handles data, files, network or permissi
   context labelled as untrusted data, wrapped so they cannot close their own wrapper.
 - **Approvals are bound to one call.** An approval names the runtime-issued id and the hash of the tool and its exact
   arguments. Only the engine's `decide` can resolve one; it can be answered once, by the right tenant, for the call that
-  is waiting. A call that was running when the process stopped and cannot be repeated safely asks a person.
+  is waiting, and an answer that does not name the call's hash is refused (before 0.10.0 it was accepted). If the stored
+  call is edited while it waits, the altered call does not run on the answer given to the original: it asks again with its own hash. A call that was running when the process stopped and cannot be repeated safely asks a person.
 - **File tools are confined to a workspace folder, per execution.** Paths must be relative, with forward slashes, no
   `..`, no drive letters, no control characters, no Windows reserved names and nothing in `.zorix`. The real path,
   after following links, must stay inside the root; links that point outside are not followed and files are not written
