@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/LuisPeixoto/zorix/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.
+  - name: Ask a question or share an idea
+    url: https://github.com/LuisPeixoto/zorix/discussions
+    about: Questions, ideas and feedback belong in Discussions.
