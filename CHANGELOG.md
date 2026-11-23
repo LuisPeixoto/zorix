@@ -5,8 +5,15 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- Dependencies with known vulnerabilities were updated: `wasmtime-wasi` (a WASI filesystem sandbox escape on Windows),
+  `url` (a stack overflow on nested `blob:` URLs) and `cookie` (a repeated nonce after a fork).
+- The documented minimum Rust version is 1.97, which the dependencies already required.
+
 ### Added
 
+- CI audits the dependencies (`cargo deny`, `npm audit`) and runs CodeQL.
 - The [engineering guidelines](docs/engineering-guidelines.md) and `AGENTS.md`: the rules every change follows, with where
   ZORIX enforces each and the gaps that are still open. The pull request template carries their checklist.
 
