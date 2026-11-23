@@ -40,16 +40,30 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<&'static str> {
         return forbidden_v4(v4);
     }
     let segments = ip.segments();
+    let embedded = |hi: u16, lo: u16| Ipv4Addr::new((hi >> 8) as u8, hi as u8, (lo >> 8) as u8, lo as u8);
     // 64:ff9b::/96 carries an IPv4 address in its last 32 bits.
     if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
-        let [hi, lo] = [segments[6], segments[7]];
-        return forbidden_v4(Ipv4Addr::new((hi >> 8) as u8, hi as u8, (lo >> 8) as u8, lo as u8));
+        return forbidden_v4(embedded(segments[6], segments[7]));
+    }
+    // 64:ff9b:1::/48 is the local-use NAT64 prefix: whoever runs the network decides what it reaches, so it is never public.
+    if segments[..3] == [0x64, 0xff9b, 1] {
+        return Some("a local NAT64 address");
     }
     if ip.is_loopback() {
-        Some("a loopback address (this computer)")
-    } else if ip.is_unspecified() {
-        Some("an unspecified address")
-    } else if segments[0] & 0xfe00 == 0xfc00 {
+        return Some("a loopback address (this computer)");
+    }
+    if ip.is_unspecified() {
+        return Some("an unspecified address");
+    }
+    // ::a.b.c.d (the old IPv4-compatible form) and ::5efe:a.b.c.d (ISATAP) carry an IPv4 address in the last 32 bits.
+    if segments[..6] == [0; 6] || (segments[..4] == [0; 4] && segments[4] & 0xfdff == 0 && segments[5] == 0x5efe) {
+        return forbidden_v4(embedded(segments[6], segments[7])).or(Some("an IPv4-compatible address"));
+    }
+    // 6to4 (2002::/16) carries the IPv4 address of the relay's client in bits 16 to 47.
+    if segments[0] == 0x2002 {
+        return forbidden_v4(embedded(segments[1], segments[2])).or(Some("a 6to4 tunnel address"));
+    }
+    if segments[0] & 0xfe00 == 0xfc00 {
         Some("a private network address")
     } else if segments[0] & 0xffc0 == 0xfe80 || segments[0] & 0xffc0 == 0xfec0 {
         Some("a link-local address")
@@ -57,6 +71,11 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<&'static str> {
         Some("a multicast address")
     } else if segments[0] == 0x2001 && segments[1] == 0x0db8 {
         Some("a documentation address")
+    } else if segments[0] == 0x2001 && segments[1] < 0x0200 {
+        // 2001::/23 is for protocol assignments (Teredo, benchmarking, anycast services), not for ordinary hosts.
+        Some("a special-purpose address (Teredo and other protocol assignments)")
+    } else if segments[..4] == [0x100, 0, 0, 0] {
+        Some("a discard-only address")
     } else {
         None
     }
@@ -90,6 +109,11 @@ pub async fn resolve(host: &str, port: u16, private_ok: bool) -> Result<Vec<Sock
             tokio::net::lookup_host((bare, port)).await.map_err(|_| NetError::NotFound(host.to_string()))?.collect()
         }
     };
+    check(host, addresses, private_ok)
+}
+
+/// Judge the answers of a lookup. Every one must be fine: a single private address among public ones refuses the host.
+pub fn check(host: &str, addresses: Vec<SocketAddr>, private_ok: bool) -> Result<Vec<SocketAddr>, NetError> {
     if addresses.is_empty() {
         return Err(NetError::NotFound(host.to_string()));
     }
@@ -144,6 +168,23 @@ mod tests {
             "::ffff:169.254.169.254",
             "64:ff9b::7f00:1",
             "64:ff9b::a9fe:a9fe",
+            // The tunnels and encodings that carry an IPv4 address (or a network of their own) inside an IPv6 one.
+            "64:ff9b:1::1",
+            "64:ff9b:1:ffff::a9fe:a9fe",
+            "::7f00:1",
+            "::a9fe:a9fe",
+            "::808:808",
+            "2002:7f00:1::1",
+            "2002:a9fe:a9fe::1",
+            "2002:0a00:0001::5",
+            "2002:0808:0808::1",
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+            "2001:1::1",
+            "2001:2::1",
+            "2001:10::1",
+            "::5efe:7f00:1",
+            "::200:5efe:a00:1",
+            "100::1",
         ] {
             assert!(!bad(text).is_empty(), "{text}");
         }
@@ -162,9 +203,30 @@ mod tests {
             "2606:4700:4700::1111",
             "::ffff:8.8.8.8",
             "64:ff9b::808:808",
+            "2001:4860:4860::8888",
+            "2001:200::1",
         ] {
             fine(text);
         }
+    }
+
+    #[test]
+    fn a_name_with_one_private_answer_among_public_ones_is_refused_whatever_the_order() {
+        let answer = |text: &str| SocketAddr::new(text.parse().unwrap(), 443);
+        for order in [["93.184.216.34", "10.0.0.5"], ["10.0.0.5", "93.184.216.34"]] {
+            let result = check("rebind.example", order.iter().map(|a| answer(a)).collect(), false);
+            assert!(matches!(&result, Err(NetError::Private { ip, .. }) if ip.to_string() == "10.0.0.5"), "{result:?}");
+        }
+        // The same goes for a private answer hidden in an IPv6 tunnel form next to a public one.
+        let mixed = vec![answer("93.184.216.34"), answer("2002:7f00:1::1")];
+        assert!(matches!(check("rebind.example", mixed, false), Err(NetError::Private { .. })));
+        // All public is fine, an exact grant opens a private one, and nothing at all is "not found".
+        assert_eq!(
+            check("ok.example", vec![answer("93.184.216.34"), answer("2606:4700:4700::1111")], false).unwrap().len(),
+            2
+        );
+        assert!(check("lan.example", vec![answer("10.0.0.5")], true).is_ok());
+        assert!(matches!(check("empty.example", vec![], false), Err(NetError::NotFound(_))));
     }
 
     #[tokio::test]
