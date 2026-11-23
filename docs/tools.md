@@ -69,11 +69,15 @@ call:
 
 1. **The grant** must cover `workspace:<relative path>` for `read` or `write`.
 2. **The path** must be relative, with forward slashes and no `..`, no drive letter, no backslash, no control
-   characters, no names Windows reserves (`CON`, `NUL`…), and not inside the reserved `.zorix` folder. After that the real
+   characters, no names Windows reserves (`CON`, `NUL`…), and not inside the reserved `.zorix` folder (in any case: `.ZORIX` is the same folder on macOS and Windows). After that the real
    path (following symbolic links) must still be inside the workspace. A link that points outside is not followed, and
    ZORIX will not write *through* a link.
 
 Writes go to a temporary file that is renamed over the target, so a crash never leaves half a file.
+
+**A limit, stated plainly:** the real path is checked and then the file is opened, as two steps. Somebody who can change the workspace folder *at that very moment* (another program of
+the same user, replacing a folder with a link between the check and the open) could redirect one call. Closing that gap needs `openat` and `O_NOFOLLOW` all the way down, which is not
+portable to Windows; the workspace is a folder you gave the run, so this is documented rather than hidden. Do not point a run at a folder another program is writing to.
 
 This is confinement of **paths**, not a code sandbox. No built-in tool runs code. A tool that runs commands will need
 real isolation first; that is planned work, not part of this phase.
