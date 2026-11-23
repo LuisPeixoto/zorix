@@ -116,7 +116,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 ## Install
 
 Prebuilt installers will be attached to each [release](https://github.com/LuisPeixoto/zorix/releases). The first releases
-are not signed (see [distribution](docs/distribution.md)). To build from source you need Rust 1.90 or newer and, for the
+are not signed (see [distribution](docs/distribution.md)). To build from source you need Rust 1.97 or newer and, for the
 desktop app, Node.js 22 or newer:
 
 ```bash

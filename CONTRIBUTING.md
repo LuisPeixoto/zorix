@@ -5,7 +5,7 @@ the [Code of Conduct](CODE_OF_CONDUCT.md). For anything bigger than a small fix,
 
 ## Development setup
 
-You need [Rust](https://rustup.rs) (stable, 1.90 or newer), [Node.js](https://nodejs.org) 22 or newer and, on Linux,
+You need [Rust](https://rustup.rs) (stable, 1.97 or newer), [Node.js](https://nodejs.org) 22 or newer and, on Linux,
 the [Tauri system dependencies](https://tauri.app/start/prerequisites/#linux).
 
 ```bash
