@@ -161,6 +161,28 @@ Memory, Documents) and **Operate** (Settings), and shows only what has shipped. 
 For reviews, `ZORIX_START_VIEW` also accepts `inbox`, `runs`, `new`, `documents` and `settings`, and `memory:approve`. Where the app differs from the design system's screens, and why, is
 listed in [design system](design-system.md#known-differences).
 
+## Text and languages
+
+Every sentence a person reads is in one catalogue, `apps/desktop/src/lib/i18n/messages.en.ts`, and reaches the screen through `t("key")`; no component holds a sentence of its own. English is the source, and the fallback for any key
+another language lacks. A message is a sentence with `{placeholders}`, or its plural forms for a message that counts something (`{ one: "{count} task", other: "{count} tasks" }`, chosen by the language's own plural rules, so a language with three
+forms only needs its own). Money, numbers, percentages, dates, times, weekdays, lists and sizes go through `fmt` (`Intl` in the active language), never through a hand-written helper, and a duration or a relative time is a message too (`format.min`, `format.hMin`).
+
+```svelte
+<script lang="ts">
+  import { fmt, t } from "../i18n/index.ts";
+</script>
+<p>{t("runs.count", { count: runs.length })} · {fmt.usd(run.cost_micros)}</p>
+```
+
+- **Adding text:** add the key to `messages.en.ts` (a key that does not exist is a type error), use it, and run `node tools/check-text.mjs`, which fails on any sentence written in a component or a helper: text between tags, the attributes a person reads (`aria-label`, `title`,
+  `placeholder`, `label`, `hint`...), the text of a toast in a handler, and prose in a script. A real exception goes in the lint's `ALLOW` list with its reason (the catalogue itself, SVG path data, the design-system showcase).
+- **A test keeps the catalogue honest:** every message is used somewhere (no dead sentences), a message with plural forms has `other` and only plural categories, and the pseudo-locale touches every message.
+- **The pseudo-locale `en-XA`** shows each sentence accented and about 40 % longer (`[Çáñçél···]`), so a layout that cuts a longer language, and any text that skipped the catalogue, is plain to see. Turn it on with `localStorage.setItem("zorix.locale", "en-XA")`
+  and reload, or build with `VITE_START_LOCALE=en-XA`.
+- **The language is read once, when the app starts,** and a change reloads the window; nothing is reactive, so any module may call `t` while it is being set up. This version has English and the pseudo-locale; the translations and the language picker are
+  [Phase 15](roadmap.md#phase-15--interface-and-languages--v0150).
+- **The text was moved by a program** ([ADR-0040](adr/0040-interface-text-and-error-reasons.md)), so its keys and some placeholder names (`value`, `value2`) are mechanical. Phase 15 reads every message with its context before it is translated.
+
 ## Projects (version 0.8)
 
 *Projects* sits in the Work group of the sidebar: the projects as cards, and in a project the board (drag with the pointer or the keyboard), the list, the timeline, the deliverables and the

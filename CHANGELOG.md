@@ -39,6 +39,9 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **The interface's text is in one catalogue** ([ADR-0040](docs/adr/0040-interface-text-and-error-reasons.md), [guide](docs/desktop.md#text-and-languages)): about 1,900 sentences moved out of the components, with plural forms,
+  a pseudo-locale (`en-XA`) that shows text that does not fit, `Intl` formatters for money, numbers, dates and lists, and a lint (`tools/check-text.mjs`) that fails on a sentence written in a component. The window's language is announced to the browser.
+  The English the app shows is the same, except that numbers have the grouping of their language (token counts were written with French spaces, and are `12,345` now) and money has thousands separators.
 - A coverage report per crate in CI, with the first numbers and what they show ([testing](docs/testing.md#coverage)).
 - `zorix-bench`: a data folder of realistic size (10,000 runs, a million events, 50,000 pieces of documents) built through the real stores and timed, with a tenth of it checked in CI against limits ([testing](docs/testing.md#benchmarks)).
 - Fuzzing: `fuzz/` has 14 targets for every reader of text or bytes from outside, with a seed corpus, and a weekly workflow runs them ([testing](docs/testing.md#fuzzing)).
