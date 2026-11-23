@@ -12,6 +12,9 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** the web tools now also refuse IPv6 addresses that tunnel to a private IPv4 address or to a network of their own (6to4, Teredo,
+  ISATAP, IPv4-compatible and the local NAT64 prefix). They could pass the check as ordinary public addresses while a translator or tunnel
+  on the network sent them to a private IPv4 address.
 - **Security:** an approval answer must name the call it is for. Before, an answer without the call's hash was accepted, so it could have been
   applied to a call the person never saw. A test now edits the stored call and approval and shows that an altered call asks again.
 - **Security:** what a webhook, a workflow step, a request's input or a task says now reaches the model wrapped as untrusted data. Before, a

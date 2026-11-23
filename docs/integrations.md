@@ -40,7 +40,10 @@ sent to by a test.
 
 **Web (`http.*`).** HTTPS only (plain HTTP only to this computer). Every address is resolved, **every** resulting IP is checked,
 and the connection goes to the IP that was checked, so DNS rebinding does not help; loopback, private and link-local addresses
-(including `169.254.169.254`) are refused unless the exact host is granted. Redirects are followed manually, at most 5, and each
+(including `169.254.169.254`) are refused unless the exact host is granted. The IPv6 forms that carry an IPv4 address or a network of
+their own are refused too: IPv4-mapped and NAT64 (`64:ff9b::/96` and the local-use `64:ff9b:1::/48`), the old IPv4-compatible form,
+ISATAP, 6to4 (`2002::/16`), Teredo and the rest of `2001::/23`, and the discard prefix. A name with one private answer among public ones is
+refused whatever the order of the answers. Redirects are followed manually, at most 5, and each
 hop is checked and must be granted. No proxy is used. The model cannot send `Authorization`, cookies or similar headers; when a
 connection exists for the host, ZORIX adds its credential, only over HTTPS and only to that host. GET and HEAD may run
 without asking; everything else asks. Limits: 30 s, 2 MB of response, 1 MB of request, 20 headers.
