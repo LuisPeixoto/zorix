@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { TaskState, TaskView } from "../../api.ts";
   import { LANE_NAME, LANE_TONE, PRIORITY, type SortBy, cardStatus, dayLabel, dueLabel, sortTasks } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
@@ -28,19 +29,19 @@
   }
 
   const COLUMNS: { id: SortBy | null; label: string }[] = [
-    { id: "key", label: "Key" },
-    { id: null, label: "Task" },
-    { id: "priority", label: "Priority" },
-    { id: null, label: "Assignee" },
-    { id: "state", label: "State" },
-    { id: "progress", label: "Progress" },
-    { id: "due", label: "Due" },
+    { id: "key", label: t("projects.projectList.key") },
+    { id: null, label: t("common.task") },
+    { id: "priority", label: t("common.priority") },
+    { id: null, label: t("projects.projectList.assignee") },
+    { id: "state", label: t("projects.projectList.state") },
+    { id: "progress", label: t("common.progress") },
+    { id: "due", label: t("common.due") },
   ];
 </script>
 
 {#if views.length === 0}
-  <EmptyState icon="kanban" title="No tasks here" text="Add a task, or change the filter.">
-    {#snippet actions()}<Button variant="primary" icon="plus" onclick={() => onadd("backlog")}>Add task</Button>{/snippet}
+  <EmptyState icon="kanban" title={t("projects.projectList.noTasksHere")} text={t("projects.projectList.addATaskOr")}>
+    {#snippet actions()}<Button variant="primary" icon="plus" onclick={() => onadd("backlog")}>{t("common.addTask")}</Button>{/snippet}
   </EmptyState>
 {:else}
   <div class="overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
@@ -68,7 +69,7 @@
             {@const status = cardStatus(view, manager, projects.agentName)}
             <tr class="cursor-pointer border-b border-line-soft last:border-b-0 hover:bg-hover" onclick={() => onopen(task.key)}>
               <td class="mono px-3.5 py-2.5 text-xs whitespace-nowrap text-faint">
-                <button type="button" class="rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/60" onclick={(e) => { e.stopPropagation(); onopen(task.key); }} aria-label="Open {task.key}">{task.key}</button>
+                <button type="button" class="rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/60" onclick={(e) => { e.stopPropagation(); onopen(task.key); }} aria-label={t("projects.projectList.open", { key: task.key })}>{task.key}</button>
               </td>
               <td class="px-3.5 py-2.5 font-medium">
                 {task.title}
@@ -84,7 +85,7 @@
               </td>
               <td class="px-3.5 py-2.5"><Badge tone={LANE_TONE[task.state]}>{LANE_NAME[task.state]}</Badge></td>
               <td class="w-40 px-3.5 py-2.5">
-                <span class="flex items-center gap-2"><Sparkbar value={task.progress} max={100} label="Progress" class="flex-1" /><span class="tnum w-9 text-right text-xs text-muted">{task.progress}%</span></span>
+                <span class="flex items-center gap-2"><Sparkbar value={task.progress} max={100} label={t("common.progress")} class="flex-1" /><span class="tnum w-9 text-right text-xs text-muted">{task.progress}%</span></span>
               </td>
               <td class="px-3.5 py-2.5 whitespace-nowrap">
                 {#if due && task.state !== "done"}
@@ -98,7 +99,7 @@
     </div>
   </div>
   <div class="mt-3 flex items-center justify-between">
-    <Button variant="ghost" size="sm" icon="plus" onclick={() => onadd("backlog")}>Add task</Button>
+    <Button variant="ghost" size="sm" icon="plus" onclick={() => onadd("backlog")}>{t("common.addTask")}</Button>
     <span class="text-xs text-muted">{views.length} {views.length === 1 ? "task" : "tasks"}</span>
   </div>
 {/if}

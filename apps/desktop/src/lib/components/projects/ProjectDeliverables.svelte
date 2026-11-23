@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { Deliverable, TaskView } from "../../api.ts";
   import { LANE_NAME, LANE_TONE, clock, dayLabel, todayOf } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
@@ -19,25 +20,25 @@
   );
 
   const icon = (d: Deliverable) => (d.kind === "link" ? (d.body.includes("/pull/") || d.body.includes("merge_requests") ? "git-branch" : "link") : "file-text");
-  const kindWord = (d: Deliverable) => (d.kind === "answer" ? "Answer" : d.kind === "link" ? "Link" : "File");
+  const kindWord = (d: Deliverable) => (d.kind === "answer" ? t("projects.projectDeliverables.answer") : d.kind === "link" ? t("projects.projectDeliverables.link") : t("projects.projectDeliverables.file"));
 
   function when(at: number): string {
     const day = todayOf(at);
-    return day === todayOf(store.now) ? `Today ${clock(at)}` : dayLabel(day);
+    return day === todayOf(store.now) ? t("projects.projectDeliverables.today", { value: clock(at) }) : dayLabel(day);
   }
 
   async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.ok("Copied.");
+      toast.ok(t("projects.projectDeliverables.copied"));
     } catch {
-      toast.err("Could not copy.");
+      toast.err(t("projects.projectDeliverables.couldNotCopy"));
     }
   }
 </script>
 
 {#if groups.length === 0}
-  <EmptyState icon="file-text" title="Nothing produced yet" text="What a run answers, and what you or an agent attach to a task, is listed here. Move an agent's task to In progress to start one." />
+  <EmptyState icon="file-text" title={t("projects.projectDeliverables.nothingProducedYet")} text={t("projects.projectDeliverables.whatARunAnswers")} />
 {:else}
   <div class="flex flex-col gap-5">
     {#each groups as group (group.view.task.key)}
@@ -59,9 +60,9 @@
                   <p class="text-xs text-muted">{kindWord(d)} · {d.by ? projects.face(d.by).label : "ZORIX"} · {when(d.at)}</p>
                 </div>
                 {#if d.kind === "answer"}
-                  <Button variant="ghost" size="sm" iconRight={openId === d.id ? "chevron-up" : "chevron-down"} onclick={() => (openId = openId === d.id ? null : d.id)}>{openId === d.id ? "Hide" : "Open"}</Button>
+                  <Button variant="ghost" size="sm" iconRight={openId === d.id ? "chevron-up" : "chevron-down"} onclick={() => (openId = openId === d.id ? null : d.id)}>{openId === d.id ? t("projects.projectDeliverables.hide") : t("common.open")}</Button>
                 {:else}
-                  <Button variant="ghost" size="sm" iconRight="copy" onclick={() => void copy(d.body)}>Copy link</Button>
+                  <Button variant="ghost" size="sm" iconRight="copy" onclick={() => void copy(d.body)}>{t("projects.projectDeliverables.copyLink")}</Button>
                 {/if}
               </div>
               {#if openId === d.id && d.kind === "answer"}

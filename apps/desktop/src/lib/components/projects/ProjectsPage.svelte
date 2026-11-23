@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { dueLabel, progressOf, todayOf } from "../../project.ts";
   import { projects } from "../../stores/projects.svelte.ts";
   import { store } from "../../stores/runs.svelte.ts";
@@ -27,31 +28,31 @@
 
 <div class="h-full overflow-y-auto">
   <div class="mx-auto max-w-[1100px] p-6">
-    <PageHeader title="Projects" subtitle="Tasks for you and your agents. Moving a task to In progress starts its run; a manager can plan a project, and asks before it changes anything." glow>
+    <PageHeader title={t("common.projects")} subtitle={t("projects.projectsPage.tasksForYouAnd")} glow>
       {#snippet actions()}
-        <Button variant="primary" icon="plus" onclick={() => (creating = true)}>New project</Button>
+        <Button variant="primary" icon="plus" onclick={() => (creating = true)}>{t("projects.projectsPage.newProject")}</Button>
       {/snippet}
     </PageHeader>
 
     {#if projects.error && cards.length === 0}
-      <Callout tone="err" title="Projects could not be read">{projects.error}</Callout>
+      <Callout tone="err" title={t("projects.projectsPage.projectsCouldNotBe")}>{projects.error}</Callout>
     {:else}
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2" role="group" aria-label="Which projects">
-          <Chip selected={!projects.showArchived} onclick={() => show(false)}>Active</Chip>
-          <Chip selected={projects.showArchived} onclick={() => show(true)}>Archived</Chip>
+        <div class="flex items-center gap-2" role="group" aria-label={t("projects.projectsPage.whichProjects")}>
+          <Chip selected={!projects.showArchived} onclick={() => show(false)}>{t("projects.projectsPage.active")}</Chip>
+          <Chip selected={projects.showArchived} onclick={() => show(true)}>{t("projects.projectsPage.archived")}</Chip>
         </div>
-        <span class="text-sm text-muted">{cards.length} {cards.length === 1 ? "project" : "projects"}{needing > 0 ? ` · ${needing} ${needing === 1 ? "task needs" : "tasks need"} you` : ""}</span>
+        <span class="text-sm text-muted">{cards.length} {cards.length === 1 ? "project" : "projects"}{needing > 0 ? ` · ${needing} ${needing === 1 ? t("projects.projectsPage.taskNeeds") : t("projects.projectsPage.tasksNeed")} you` : ""}</span>
       </div>
 
       {#if cards.length === 0}
         <EmptyState
           icon="kanban"
-          title={projects.showArchived ? "No archived projects" : "No projects yet"}
-          text={projects.showArchived ? "A project you archive is kept here, with its tasks and history." : "A project holds tasks for you and your agents. Give an agent a task and move it to In progress to start its run."}
+          title={projects.showArchived ? t("projects.projectsPage.noArchivedProjects") : t("projects.projectsPage.noProjectsYet")}
+          text={projects.showArchived ? t("projects.projectsPage.aProjectYouArchive") : t("projects.projectsPage.aProjectHoldsTasks")}
         >
           {#snippet actions()}
-            {#if !projects.showArchived}<Button variant="primary" icon="plus" onclick={() => (creating = true)}>New project</Button>{/if}
+            {#if !projects.showArchived}<Button variant="primary" icon="plus" onclick={() => (creating = true)}>{t("projects.projectsPage.newProject")}</Button>{/if}
           {/snippet}
         </EmptyState>
       {:else}
@@ -69,15 +70,15 @@
               >
                 <span class="flex min-h-5.5 items-center justify-between">
                   <span class="mono text-xs font-medium text-faint">{p.key}</span>
-                  {#if card.needs_you > 0}<Badge tone="warn">{card.needs_you} need you</Badge>{/if}
+                  {#if card.needs_you > 0}<Badge tone="warn">{t("projects.projectsPage.needYou", { needs_you: card.needs_you })}</Badge>{/if}
                 </span>
                 <span>
                   <span class="block text-lg font-semibold">{p.name}</span>
                   {#if p.description}<span class="mt-0.5 line-clamp-2 block text-sm leading-snug text-muted">{p.description}</span>{/if}
                 </span>
                 <span class="flex flex-col gap-1.5">
-                  <span class="flex items-center justify-between text-xs"><span class="text-muted">Progress</span><b class="tnum font-semibold">{progress.text}</b></span>
-                  <Sparkbar value={progress.percent} max={100} label="Progress" class="w-full" />
+                  <span class="flex items-center justify-between text-xs"><span class="text-muted">{t("common.progress")}</span><b class="tnum font-semibold">{progress.text}</b></span>
+                  <Sparkbar value={progress.percent} max={100} label={t("common.progress")} class="w-full" />
                 </span>
                 <span class="flex items-center justify-between gap-2 border-t border-line-soft pt-3 text-sm">
                   <span class="flex min-w-0 items-center gap-1.5 text-muted">
@@ -85,7 +86,7 @@
                       <WhoAvatar who={{ type: "agent", slug: p.manager ?? "" }} />
                       <span class="truncate">{managerFace.label}</span>
                     {:else}
-                      No manager
+                      {t("projects.projectsPage.noManager")}
                     {/if}
                   </span>
                   <span class="flex items-center gap-2.5">

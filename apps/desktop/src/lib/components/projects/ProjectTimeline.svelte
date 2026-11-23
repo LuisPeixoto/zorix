@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { TaskView } from "../../api.ts";
   import { type Scale, buildTimeline } from "../../project.ts";
   import { Chip, Icon, Timeline } from "../../ui/index.ts";
@@ -17,23 +18,23 @@
 
 <!-- The arrows are a drawing; this says the same in words for a screen reader. -->
 {#if hasArrows}
-  <ul class="sr-only" aria-label="What waits for what">
+  <ul class="sr-only" aria-label={t("projects.projectTimeline.whatWaitsForWhat")}>
     {#each timeline.bars.filter((b) => b.view.task.depends_on.length > 0) as bar (bar.view.task.key)}
-      <li>{bar.view.task.key} waits for {bar.view.task.depends_on.join(" and ")}{timeline.bars.some((o) => bar.view.task.depends_on.includes(o.view.task.key) && o.end >= bar.start) ? ", and starts before one of them is due" : ""}.</li>
+      <li>{bar.view.task.key} {t("projects.projectTimeline.waitsFor")} {bar.view.task.depends_on.join(" and ")}{timeline.bars.some((o) => bar.view.task.depends_on.includes(o.view.task.key) && o.end >= bar.start) ? t("projects.projectTimeline.andStartsBeforeOne") : ""}.</li>
     {/each}
   </ul>
 {/if}
 
 {#if timeline.unscheduled.length > 0}
   <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-    <b class="font-semibold text-fg">Not scheduled · {timeline.unscheduled.length}</b>
+    <b class="font-semibold text-fg">{t("projects.projectTimeline.notScheduled", { length: timeline.unscheduled.length })}</b>
     {#each timeline.unscheduled as view (view.task.key)}
       <Chip onclick={() => onopen(view.task.key)}><span class="mono mr-1.5 text-2xs text-faint">{view.task.key}</span>{view.task.title}</Chip>
     {/each}
-    <span>Give a task a start and a due date to place it.</span>
+    <span>{t("projects.projectTimeline.giveATaskA")}</span>
   </div>
 {/if}
 <p class="mt-3 flex items-center gap-1.5 text-sm text-muted">
   <Icon name="alert" size={13} class="shrink-0" />
-  <span>Bars fill with progress.{hasArrows ? " An arrow joins a task to the one that waits for it; a red arrow means the later task starts before the first is due." : ""}</span>
+  <span>{t("projects.projectTimeline.barsFillWithProgress")}{hasArrows ? t("projects.projectTimeline.anArrowJoinsA") : ""}</span>
 </p>
