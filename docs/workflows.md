@@ -80,7 +80,7 @@ one program owns the data folder, so only one host exists.
 `POST /hooks/<workflow>/<secret>`. The secret is made per workflow and kept in the keychain; `zorix workflow webhook NAME` and the editor show the address, and *make a new one*
 replaces it. A wrong secret, an unknown workflow and a workflow that is off all answer the same `404`. A body over 1 MB answers `413`. With *signed*, a request needs a valid
 `X-Hub-Signature-256` (HMAC-SHA256 of the body with the signing secret, as GitHub sends) or it answers `401`. The body is JSON (anything else arrives as `{"body": "…"}`) and
-reaches steps only through templates: it is data, never an instruction. To receive from the internet, put a tunnel or a reverse proxy in front: ZORIX does not open itself to it.
+reaches steps only through templates: it is data, never an instruction: in an agent's prompt every value a template puts in is wrapped as `<data … untrusted="true">`, so what a payload says cannot pose as the workflow's own words. To receive from the internet, put a tunnel or a reverse proxy in front: ZORIX does not open itself to it.
 
 ## The command line
 

@@ -104,6 +104,11 @@ runtime does not rely on the model resisting:
   `<past_work … untrusted="true">`) like tool results, and are never put in the system prompt. Facts are the exception: a person
   approved each one. See [memory](memory.md#untrusted-data).
 
+- **What a trigger or a task brings is data as well.** A value a prompt template puts in (a webhook body, a step's output, a loop
+  item), the input a request carries and the text of a task (its title, description, links and the titles it builds on) are
+  wrapped in `<data source="…" untrusted="true">`, with any tag of ZORIX inside the text defused in every spelling and case.
+  The words the author of the workflow or the person wrote around them stay outside the wrapper.
+
 What injection *can* still do is persuade a model to **ask** for something it is allowed to ask for. That is why
 destructive tools ask a person first.
 

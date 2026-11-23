@@ -12,6 +12,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** what a webhook, a workflow step, a request's input or a task says now reaches the model wrapped as untrusted data. Before, a
+  prompt template put those values in as if the workflow's author had written them, so a webhook body could give instructions.
 - Dependencies with known vulnerabilities were updated: `wasmtime-wasi` (a WASI filesystem sandbox escape on Windows),
   `url` (a stack overflow on nested `blob:` URLs) and `cookie` (a repeated nonce after a fork).
 - The documented minimum Rust version is 1.97, which the dependencies already required.

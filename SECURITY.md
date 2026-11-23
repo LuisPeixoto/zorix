@@ -88,6 +88,9 @@ These notes grow with each feature that handles data, files, network or permissi
 - **Memory is written only with a person's approval.** A model can propose a fact with `memory.remember`; the approval cannot be
   automatic (the engine refuses it), shows the exact text, and credential-shaped text is refused. Approved facts are labelled to the
   model as possibly out of date. Memory is scoped per tenant, and a project's memory is visible only to runs in that folder.
+- **Text from triggers and tasks is untrusted data too.** A webhook body, a step's output, a request's input and the text of a task
+  reach a model wrapped in `<data … untrusted="true">`, with ZORIX's own tags defused in any case and spacing. (Before 0.10.0
+  a prompt template put such values in as the author's own words; this is fixed.)
 - **Retrieved documents and past work are untrusted data.** They are wrapped, their closing tags defused, and never placed in the
   system prompt. Indexing reads files only: `.gitignore`, hidden files, links and credential-like files (`.env*`, keys,
   `credentials*`) are skipped, text that looks like a secret is removed from pieces before storage, and PDFs are parsed on an
