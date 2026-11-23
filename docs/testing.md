@@ -19,6 +19,7 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Model faults | `zorix-sim` tests, `zorix-runtime/tests/model_faults.rs` | A model that fails like a real provider (every kind of error with its pause, a stream cut part-way, an empty, cut-off or refused answer, calls that make no sense, failures that come and go by seed) and how the loop copes: retries, what is shown live, and a tool that never runs twice |
 | Faults in storage | `zorix-runtime/tests/faults.rs` (a `FaultyRepository` that breaks the Nth call of a method, before or after it is written), `zorix-store/tests/disk_full.rs`, `tests/concurrency.rs`, `zorix-cli/tests/cli.rs` (`kill -9`) | A commit that fails anywhere in a run and a restart that finishes it without repeating an unsafe tool; a file that cannot grow, told in words, with the work continuing when there is room; four connections writing at once without a lost update or a repeated event number; a real crash of the command line |
 | Adversarial | `zorix-runtime/tests/adversarial.rs`, `zorix-agents/tests/delegation.rs`, `zorix-tools` and `zorix-agents` path tables, `zorix-mcp` tool tests, `zorix-integrations` address tables | Text that tries to give itself powers (a result that says the person approved, a child's answer that closes and opens wrappers, a delegation that invents fields to get more, a tool description of a million characters) and paths that try to leave a folder (`..`, drive letters, UNC, reserved names, `.ZORIX`, zip entries) |
+| Benchmarks | `crates/zorix-bench`, the **Benchmarks** CI job | The paths people wait for, at 10,000 runs, a million events and 50,000 pieces of documents, with limits that fail a large regression |
 | Fuzzing | `fuzz/` (14 targets, a seed corpus each), `.github/workflows/fuzz.yml` | Every reader of text or bytes from outside (the agent file and its YAML, `SKILL.md`, server-sent events cut anywhere, MCP messages and other clients' configs, workflow files, conditions, templates, cron expressions and zones, documents, access patterns, file paths, the data wrappers) takes any input without a panic or a hang, and keeps the property it promises |
 | Untrusted text | `zorix-core/src/untrusted.rs` (with property tests), `zorix-store/tests/tampering.rs` | Text from outside cannot close or open a wrapper of ours in any spelling, and a call or approval edited on disk never runs on the answer given to the original |
 | Contract | `zorix-runtime/src/testing.rs` | Every `ExecutionRepository` behaves the same. The in-memory and the SQLite repositories run the **same** cases |
@@ -85,6 +86,37 @@ seed that fails the same calls every time) and a rule-based demo model.
 | Forged approvals | `approvals::an_approval_applies_to_the_call_it_names_and_cannot_be_forged_or_repeated` |
 | Secrets in logs | `tracing_output::spans_follow_the_genai_names_and_nothing_secret_reaches_the_logs`, `tools::secrets_in_arguments_are_kept_out_of_events…`, the `redact::` tests |
 | Two programs on one folder | `paths::only_one_holder_at_a_time`, CLI `only_one_zorix_program_works_on_a_data_folder_at_a_time` |
+
+## Benchmarks
+
+`zorix-bench` builds a data folder through the real stores and times what a person waits for. It is a program, not a test:
+
+```bash
+cargo run --release -p zorix-bench -- --scale 1 --json bench.json    # the full size; --scale 0.1 is a tenth
+cargo run --release -p zorix-bench -- --scale 0.1 --check crates/zorix-bench/limits.json
+```
+
+The full size is 10,000 runs with 1,000,000 events, 200 agents (the most a tenant keeps), 5,000 facts (the most a tenant keeps) and 50,000 pieces of documents with a vector each. A tenth of it runs in CI
+(**Benchmarks**), where every measurement is compared with a limit in `limits.json` that is many times what a healthy run takes, so that only a large regression fails; a measurement with no limit fails too, so a new one is not forgotten.
+
+Full-size numbers, in milliseconds (the median of 15 runs, release build, an Intel 3.4 GHz Mac with an SSD; the data folder is 345 MB):
+
+| What a person waits for | Median |
+|---|---|
+| The newest page of runs (100) | 0.3 |
+| Runs of one agent | 9 |
+| Runs waiting for approval | 18 |
+| Runs of one conversation | 17 |
+| Runs since a week ago | 5 |
+| Replaying all 10,000 events of a run (in pages of 1,000) | 10 |
+| The Inbox: runs waiting for a person, and the approvals of fifty of them | 0.3 and 1 |
+| Keyword search over 5,000 facts | 2 |
+| Keyword search over 50,000 pieces of documents | 67 |
+| Search by meaning over 50,000 pieces (every vector is read) | 190 |
+| Opening the store again | 0.5 |
+
+Search by meaning grows with the number of vectors, since each is compared with the query; at the product's limit of 200,000 pieces it would be about four times as long. An on-disk index for large collections is planned
+([roadmap](roadmap.md), Phase 11).
 
 ## Fuzzing
 
