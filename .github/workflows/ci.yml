@@ -45,6 +45,17 @@ jobs:
       - name: Test
         run: cargo test --workspace --exclude zorix-desktop
 
+  audit:
+    # Known vulnerabilities, licences, banned and unknown sources (deny.toml). Runs on every change, and the advisory
+    # database is fetched fresh, so a new advisory can turn an unchanged tree red.
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
   postgres:
     # The Postgres tools need a real server, and a service container only exists on Linux runners.
     name: Postgres tools
@@ -101,6 +112,9 @@ jobs:
       - name: Check that the Tauri crates and npm packages match
         working-directory: apps/desktop
         run: node scripts/check-tauri-versions.mjs
+      - name: Audit the production dependencies
+        working-directory: apps/desktop
+        run: npm audit --omit=dev --audit-level=high
       - name: Type-check the interface
         working-directory: apps/desktop
         run: npm run check
