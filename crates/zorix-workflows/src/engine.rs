@@ -19,7 +19,7 @@ use crate::expr::Expr;
 use crate::graph::{Readiness, readiness};
 use crate::launcher::{Outcome, RunStart, StepLauncher, Target, ToolCall, http_call, send_call};
 use crate::schedule::next_time_of_day;
-use crate::template::{render, render_value};
+use crate::template::{render, render_prompt, render_value};
 
 /// The most characters of a step's text kept in a run.
 const MAX_OUTPUT_CHARS: usize = 50_000;
@@ -833,7 +833,7 @@ impl WorkflowEngine {
         ctx: &Value,
         now: Timestamp,
     ) -> Result<()> {
-        let prompt = match render(prompt, ctx) {
+        let prompt = match render_prompt(prompt, ctx) {
             Ok(p) => p,
             Err(error) => return self.failed(run, id, error.to_string(), now),
         };
@@ -895,7 +895,7 @@ impl WorkflowEngine {
             let mut local = ctx.clone();
             local["item"] = item.clone();
             local["index"] = json!(index);
-            let text = match render(prompt, &local) {
+            let text = match render_prompt(prompt, &local) {
                 Ok(t) => t,
                 Err(error) => return self.failed(run, id, error.to_string(), now),
             };
