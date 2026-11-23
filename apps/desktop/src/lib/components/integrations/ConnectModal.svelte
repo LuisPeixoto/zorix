@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { open as pickFile } from "@tauri-apps/plugin-dialog";
 
   import { type ConnectionKind, errorText } from "../../api.ts";
@@ -8,7 +9,7 @@
 
   let { open = $bindable(false), kind }: { open?: boolean; kind: ConnectionKind | null } = $props();
 
-  const steps = [{ label: "Details" }, { label: "Secret", hint: "Kept in your keychain" }, { label: "Test" }];
+  const steps = [{ label: t("integrations.connectModal.details") }, { label: t("integrations.connectModal.secret"), hint: t("integrations.connectModal.keptInYourKeychain") }, { label: t("common.test") }];
   let step = $state(0);
   let name = $state("");
   let values = $state<Record<string, string>>({});
@@ -38,7 +39,7 @@
 
   async function choose(key: string) {
     try {
-      const file = await pickFile({ directory: false, multiple: false, title: "Choose the database file" });
+      const file = await pickFile({ directory: false, multiple: false, title: t("integrations.connectModal.chooseTheDatabaseFile") });
       if (typeof file === "string") values[key] = file;
     } catch (e) {
       error = errorText(e);
@@ -85,7 +86,7 @@
   }
 </script>
 
-<Modal bind:open title={spec ? `Connect ${spec.title}` : "Connect"} icon="plug" size="lg">
+<Modal bind:open title={spec ? t("integrations.connectModal.connect", { title: spec.title }) : t("integrations.connectModal.connect2")} icon="plug" size="lg">
   {#if spec && kind}
     <Stepper {steps} current={step} class="mb-5" />
     {#if step === 0}
@@ -94,7 +95,7 @@
           <BrandLogo name={spec.logo} size={44} />
           <p class="text-base text-muted">{spec.summary}</p>
         </div>
-        <Field label="Name" hint="Used in grants and by the model to pick this connection." error={taken ? "A connection with this name exists." : undefined}>
+        <Field label={t("common.name")} hint={t("integrations.connectModal.usedInGrantsAnd")} error={taken ? "A connection with this name exists." : undefined}>
           {#snippet children(f)}<Input id={f.id} bind:value={name} mono invalid={taken} maxlength={32} />{/snippet}
         </Field>
         {#each spec.fields as field (field.key)}
@@ -102,12 +103,12 @@
             {#snippet children(f)}
               <div class="flex gap-2">
                 <Input id={f.id} class="min-w-0 flex-1" mono bind:value={values[field.key]} placeholder={field.placeholder} inputmode={field.number ? "numeric" : undefined} />
-                {#if field.file}<Button icon="folder" onclick={() => choose(field.key)}>Choose…</Button>{/if}
+                {#if field.file}<Button icon="folder" onclick={() => choose(field.key)}>{t("common.choose")}</Button>{/if}
               </div>
             {/snippet}
           </Field>
         {/each}
-        <p class="text-xs text-muted">A run can use it only when you grant it, for example <span class="mono">{spec.grant}</span> on the command line, or in the New run form.</p>
+        <p class="text-xs text-muted">{t("integrations.connectModal.aRunCanUse")} <span class="mono">{spec.grant}</span> {t("integrations.connectModal.onTheCommandLine")}</p>
       </div>
     {:else if step === 1}
       <div class="space-y-4">
@@ -115,11 +116,11 @@
           <Field label={spec.secret.label} hint={spec.secret.hint} required={spec.secret.required}>
             {#snippet children(f)}<Input id={f.id} type="password" mono autocomplete="off" bind:value={secret} />{/snippet}
           </Field>
-          <Callout tone="muted" icon="lock">It goes straight to your system keychain. ZORIX never shows it again, never writes it to a file and never puts it in a prompt or a log.</Callout>
+          <Callout tone="muted" icon="lock">{t("integrations.connectModal.itGoesStraightTo")}</Callout>
         {:else}
-          <Callout tone="ok" icon="check-circle">This one needs no secret.</Callout>
+          <Callout tone="ok" icon="check-circle">{t("integrations.connectModal.thisOneNeedsNo")}</Callout>
         {/if}
-        {#if kind === "postgres"}<Callout tone="info" icon="shield">Connections are encrypted and the server's certificate is checked. Queries run in read-only transactions.</Callout>{/if}
+        {#if kind === "postgres"}<Callout tone="info" icon="shield">{t("integrations.connectModal.connectionsAreEncryptedAnd")}</Callout>{/if}
         {#if error}<Callout tone="err">{error}</Callout>{/if}
       </div>
     {:else}
@@ -130,9 +131,9 @@
           <span class={result.ok ? "grid size-12 place-items-center rounded-full bg-ok/15 text-ok" : "grid size-12 place-items-center rounded-full bg-err/15 text-err"}>
             <Icon name={result.ok ? "check" : "x"} size={24} stroke={2.2} />
           </span>
-          <p class="text-xl font-semibold">{result.ok ? "It works" : "It did not work"}</p>
+          <p class="text-xl font-semibold">{result.ok ? t("integrations.connectModal.itWorks") : t("integrations.connectModal.itDidNotWork")}</p>
           <p class="selectable max-w-md text-base text-muted">{result.note}</p>
-          {#if !result.ok}<p class="text-sm text-muted">The connection was kept. Remove it from the list and add it again with the right details.</p>{/if}
+          {#if !result.ok}<p class="text-sm text-muted">{t("integrations.connectModal.theConnectionWasKept")}</p>{/if}
         {/if}
       </div>
     {/if}
@@ -140,13 +141,13 @@
 
   {#snippet footer()}
     {#if step === 0}
-      <Button onclick={() => (open = false)}>Cancel</Button>
-      <Button variant="primary" iconRight="arrow-right" disabled={!ready} onclick={() => (step = 1)}>Continue</Button>
+      <Button onclick={() => (open = false)}>{t("common.cancel")}</Button>
+      <Button variant="primary" iconRight="arrow-right" disabled={!ready} onclick={() => (step = 1)}>{t("common.continue")}</Button>
     {:else if step === 1}
-      <Button onclick={() => (step = 0)}>Back</Button>
-      <Button variant="primary" icon="check" loading={busy} disabled={!!spec?.secret?.required && !secret.trim()} onclick={addAndTest}>Add and test</Button>
+      <Button onclick={() => (step = 0)}>{t("integrations.connectModal.back")}</Button>
+      <Button variant="primary" icon="check" loading={busy} disabled={!!spec?.secret?.required && !secret.trim()} onclick={addAndTest}>{t("integrations.connectModal.addAndTest")}</Button>
     {:else}
-      <Button variant="primary" onclick={() => (open = false)}>Done</Button>
+      <Button variant="primary" onclick={() => (open = false)}>{t("common.done")}</Button>
     {/if}
   {/snippet}
 </Modal>

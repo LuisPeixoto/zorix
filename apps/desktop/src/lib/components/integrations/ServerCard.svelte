@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { ServerRow } from "../../api.ts";
   import { Badge, BrandLogo, Icon, StatusPill, cn } from "../../ui/index.ts";
 
   let { server, onopen }: { server: ServerRow; onopen: () => void } = $props();
 
   const pill = $derived(server.tools_to_review > 0 && server.state === "ready" ? "review" : server.state);
-  const label = $derived(server.tools_to_review > 0 && server.state === "ready" ? `${server.tools_to_review} to review` : undefined);
+  const label = $derived(server.tools_to_review > 0 && server.state === "ready" ? t("integrations.serverCard.toReview", { tools_to_review: server.tools_to_review }) : undefined);
 </script>
 
 <button
@@ -27,11 +28,11 @@
   <div class="flex flex-wrap items-center gap-2">
     <StatusPill state={pill} {label} />
     {#if server.enabled && server.state !== "needs_login"}
-      <span class="tnum text-xs text-muted">{server.tools_ready} of {server.tools_listed} tools ready</span>
+      <span class="tnum text-xs text-muted">{t("integrations.serverCard.ofToolsReady", { tools_ready: server.tools_ready, tools_listed: server.tools_listed })}</span>
     {/if}
     {#if server.reason}<span class="min-w-0 flex-1 truncate text-xs text-muted" title={server.reason}>{server.reason}</span>{/if}
     <span class="ml-auto flex gap-1.5">
-      <Badge tone="muted">{server.kind === "stdio" ? "runs here" : "remote"}</Badge>
+      <Badge tone="muted">{server.kind === "stdio" ? t("integrations.serverCard.runsHere") : "remote"}</Badge>
     </span>
   </div>
 </button>
