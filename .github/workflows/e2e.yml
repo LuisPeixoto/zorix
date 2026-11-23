@@ -47,7 +47,10 @@ jobs:
       # Every system: the app starts and loads its interface. On macOS, where WebKit has no WebDriver, this is the whole check.
       - name: Start the app and wait for it to load
         shell: bash
-        run: node tools/e2e/smoke.mjs "target/debug/zorix-desktop$([ "$RUNNER_OS" = Windows ] && echo .exe)" 120
+        run: |
+          app="target/debug/zorix-desktop"
+          if [ "$RUNNER_OS" = Windows ]; then app="$app.exe"; fi
+          if [ "$RUNNER_OS" = Linux ]; then xvfb-run -a node tools/e2e/smoke.mjs "$app" 120; else node tools/e2e/smoke.mjs "$app" 120; fi
 
       # Linux and Windows: the scenarios.
       - name: Install tauri-driver

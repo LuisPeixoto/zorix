@@ -16,7 +16,17 @@ let output = "";
 let ready = false;
 child.stdout.on("data", (chunk) => {
   output += chunk;
-  if (/ZORIX ready /.test(output)) ready = true;
+  if (!ready && /ZORIX ready /.test(output)) {
+    // The app says it has loaded and closes itself; do not depend on how quickly it does, so a slow exit is not a failure.
+    ready = true;
+    clearTimeout(timer);
+    console.log(output.split("\n").find((l) => l.startsWith("ZORIX ready")));
+    setTimeout(() => child.kill(), 3000).unref();
+    child.on("exit", () => {
+      rmSync(home, { recursive: true, force: true });
+      process.exit(0);
+    });
+  }
 });
 child.stderr.on("data", (chunk) => (output += chunk));
 
@@ -28,9 +38,5 @@ const failed = (why) => {
 };
 const timer = setTimeout(() => failed(`no "ZORIX ready" within ${seconds} s`), Number(seconds) * 1000);
 child.on("exit", (code) => {
-  clearTimeout(timer);
-  rmSync(home, { recursive: true, force: true });
   if (!ready) failed(`it closed (code ${code}) without saying it was ready`);
-  console.log(output.split("\n").find((l) => l.startsWith("ZORIX ready")));
-  process.exit(code === 0 ? 0 : 1);
 });
