@@ -25,3 +25,4 @@ zorix-runtime = { workspace = true, features = ["testing"] }
 tempfile.workspace = true
 zorix-sim.workspace = true
 zorix-tools.workspace = true
+tokio-util.workspace = true

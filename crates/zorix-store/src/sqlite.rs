@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::errors::storage;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params, params_from_iter};
@@ -19,10 +20,6 @@ use crate::schema;
 #[derive(Clone)]
 pub struct SqliteRepository {
     conn: Arc<Mutex<Connection>>,
-}
-
-fn storage(error: impl std::fmt::Display) -> Error {
-    Error::Storage(error.to_string())
 }
 
 fn parse<T: serde::de::DeserializeOwned>(text: &str) -> Result<T> {
@@ -58,6 +55,24 @@ impl SqliteRepository {
         }
         schema::migrate(&mut conn).map_err(Error::Storage)?;
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+    }
+
+    /// Stop the file from growing past `bytes`, as a full disk would (SQLite's `max_page_count`), or lift the limit with `None`. This is how
+    /// the tests make the disk "full" without filling one; a program has no use for it.
+    pub fn limit_size(&self, bytes: Option<u64>) -> Result<()> {
+        let conn = self.conn.lock();
+        let page_size: i64 = conn.pragma_query_value(None, "page_size", |r| r.get(0)).map_err(storage)?;
+        let pages = bytes.map_or(i64::from(u32::MAX), |b| (b as i64 / page_size.max(1)).max(1));
+        conn.pragma_update(None, "max_page_count", pages).map_err(storage)?;
+        Ok(())
+    }
+
+    /// The size of the file now, in bytes.
+    pub fn size(&self) -> Result<u64> {
+        let conn = self.conn.lock();
+        let page_size: i64 = conn.pragma_query_value(None, "page_size", |r| r.get(0)).map_err(storage)?;
+        let pages: i64 = conn.pragma_query_value(None, "page_count", |r| r.get(0)).map_err(storage)?;
+        Ok((page_size * pages) as u64)
     }
 
     /// Run blocking database work off the async threads.
