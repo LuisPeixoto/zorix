@@ -1313,6 +1313,16 @@ pub trait WorkflowStore: Send + Sync {
     async fn meta(&self, tenant: &TenantId, key: &str) -> Result<Option<String>>;
     /// Keep a small value.
     async fn set_meta(&self, tenant: &TenantId, key: &str, value: &str) -> Result<()>;
+    /// Remember that a webhook delivery (named by the sender's own delivery id) reached a workflow. Returns `true` the first time and
+    /// `false` for a repeat. A delivery is remembered for `keep_ms`, and at most the newest 10,000 of a workflow are kept.
+    async fn record_delivery(
+        &self,
+        tenant: &TenantId,
+        workflow: WorkflowId,
+        key: &str,
+        now: Timestamp,
+        keep_ms: i64,
+    ) -> Result<bool>;
 }
 
 #[cfg(test)]
