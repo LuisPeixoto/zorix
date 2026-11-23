@@ -149,7 +149,7 @@ async fn moving_an_agents_task_to_in_progress_starts_a_run_and_a_finished_run_se
     assert_eq!(start.metadata.get("project").map(String::as_str), Some("OPS"));
     assert_eq!(start.access, vec!["task:OPS-1".to_string()]);
     assert_eq!(start.max_cost_micros, Some(1_000_000), "the project's limit narrows the run");
-    assert!(start.prompt.contains("OPS-1: Triage the backlog"));
+    assert!(start.prompt.contains("OPS-1: <data source=\"task.title\" untrusted=\"true\">Triage the backlog</data>"));
     let detail = rig.service.task(&key).await.unwrap();
     assert_eq!(detail.task.task.runs.len(), 1);
     assert!(detail.task.working && detail.task.needs_you.is_none());
@@ -271,7 +271,13 @@ async fn a_task_waits_for_what_it_depends_on_and_starts_when_that_is_done() {
     rig.service.move_task(&first, to(TaskState::Done), None).await.unwrap();
     assert_eq!(rig.service.reconcile().await.unwrap(), 1);
     assert_eq!(rig.fake.started(), 1);
-    assert!(rig.fake.start_of(0).prompt.contains("OPS-1: Alert on slow queries"), "it is told what it builds on");
+    assert!(
+        rig.fake
+            .start_of(0)
+            .prompt
+            .contains("OPS-1: <data source=\"task.title\" untrusted=\"true\">Alert on slow queries</data>"),
+        "it is told what it builds on"
+    );
 }
 
 #[tokio::test]
