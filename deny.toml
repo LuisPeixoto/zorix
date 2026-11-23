@@ -7,10 +7,6 @@ all-features = true
 # Known vulnerabilities and unmaintained crates fail the check. An ignore needs an id and the reason it is safe.
 # Each entry is an advisory that was read and judged not to affect ZORIX, with the reason.
 ignore = [
-  # chrono is the date library of the workflow scheduler and of the schedule rules; the advisory is "unmaintained",
-  # not a vulnerability, and no safe upgrade exists. Replacing it (for example with jiff) is a planned change.
-  { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, no vulnerability; replacement is tracked in #17" },
-  { id = "RUSTSEC-2026-0555", reason = "chrono-tz is unmaintained, no vulnerability; replacement is tracked in #17" },
   # Pulled in by Tauri's GTK and D-Bus layers (Linux only), which the project does not control.
   { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained, build-time only, comes from Tauri's GTK bindings" },
   { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained, comes from the keyring's D-Bus layer" },
