@@ -14,6 +14,8 @@ pub struct Faulty<M> {
     retry_after_ms: Option<u64>,
     latency: Duration,
     calls: AtomicU32,
+    error: Option<ModelError>,
+    seeded: Option<(u64, u32)>,
 }
 
 impl<M: ModelGateway> Faulty<M> {
@@ -25,7 +27,22 @@ impl<M: ModelGateway> Faulty<M> {
             retry_after_ms: None,
             latency: Duration::ZERO,
             calls: AtomicU32::new(0),
+            error: None,
+            seeded: None,
         }
+    }
+
+    /// The error a failing call gives, in place of the default temporary one (a rate limit, a refusal, bad credentials...).
+    pub fn fail_with(mut self, error: ModelError) -> Self {
+        self.error = Some(error);
+        self
+    }
+
+    /// From a seed, fail about `percent` calls in a hundred. The same seed fails the same calls in the same order, so a run that
+    /// found a problem can be run again. The first call is never one of them, so a run always starts.
+    pub fn seeded(mut self, seed: u64, percent: u32) -> Self {
+        self.seeded = Some((seed, percent.min(100)));
+        self
     }
 
     /// The first `n` calls fail with a transient error.
@@ -57,6 +74,14 @@ impl<M: ModelGateway> Faulty<M> {
     }
 }
 
+/// A small, fixed mixing function (splitmix64), so the faults of a seed do not depend on a library's version.
+fn mix(seed: u64, call: u64) -> u64 {
+    let mut z = seed.wrapping_add(call.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
 #[async_trait]
 impl<M: ModelGateway> ModelGateway for Faulty<M> {
     async fn generate(&self, request: ModelRequest, cancel: CancellationToken) -> Result<ModelResponse, ModelError> {
@@ -68,7 +93,9 @@ impl<M: ModelGateway> ModelGateway for Faulty<M> {
             }
         }
         // A compare-and-swap loop keeps this correct when calls overlap (and works on the oldest supported Rust).
-        let failing = loop {
+        let call = u64::from(self.calls.load(Ordering::SeqCst));
+        let by_seed = self.seeded.is_some_and(|(seed, percent)| call > 1 && mix(seed, call) % 100 < u64::from(percent));
+        let by_count = loop {
             let left = self.fail_first.load(Ordering::SeqCst);
             if left == 0 {
                 break false;
@@ -77,11 +104,11 @@ impl<M: ModelGateway> ModelGateway for Faulty<M> {
                 break true;
             }
         };
-        if failing {
-            return Err(ModelError::Transient {
+        if by_count || by_seed {
+            return Err(self.error.clone().unwrap_or_else(|| ModelError::Transient {
                 message: "The simulated model is overloaded.".into(),
                 retry_after_ms: self.retry_after_ms,
-            });
+            }));
         }
         self.inner.generate(request, cancel).await
     }
@@ -118,6 +145,37 @@ mod tests {
         assert_eq!(model.generate(request(), CancellationToken::new()).await.unwrap().text, "ok");
         assert_eq!(model.calls(), 3);
         assert_eq!(model.inner().remaining(), 0, "failed calls did not use up the script");
+    }
+
+    #[tokio::test]
+    async fn a_failing_call_can_carry_any_error() {
+        let error = ModelError::Provider {
+            kind: zorix_core::ModelErrorKind::RateLimited,
+            message: "Slow down.".into(),
+            retry_after_ms: Some(7),
+        };
+        let model = Faulty::new(ScriptedModel::new([Turn::Say("ok".into())])).fail_first(1).fail_with(error.clone());
+        assert_eq!(model.generate(request(), CancellationToken::new()).await.unwrap_err(), error);
+    }
+
+    #[tokio::test]
+    async fn the_same_seed_fails_the_same_calls_and_the_first_call_always_works() {
+        async fn pattern(seed: u64, percent: u32) -> Vec<bool> {
+            let model = Faulty::new(ScriptedModel::new((0..200).map(|_| Turn::Say("ok".into())))).seeded(seed, percent);
+            let mut out = Vec::new();
+            for _ in 0..200 {
+                out.push(model.generate(request(), CancellationToken::new()).await.is_err());
+            }
+            out
+        }
+        let a = pattern(42, 30).await;
+        assert_eq!(a, pattern(42, 30).await, "repeatable");
+        assert_ne!(a, pattern(43, 30).await, "another seed, another pattern");
+        assert!(!a[0], "the first call works");
+        let failed = a.iter().filter(|f| **f).count();
+        assert!((30..=90).contains(&failed), "about 30 % of 200, got {failed}");
+        assert!(pattern(7, 0).await.iter().all(|f| !f));
+        assert!(pattern(7, 100).await.iter().skip(1).all(|f| *f));
     }
 
     #[tokio::test]
