@@ -489,6 +489,14 @@ const MIGRATIONS: &[&str] = &[
     ) WITHOUT ROWID;
     CREATE INDEX workflow_deliveries_by_time ON workflow_deliveries (tenant, workflow_id, at);
     ",
+    // 10: the run list's filters read in the order the list is shown. A conversation's runs and the runs in one state had no index that
+    // ended in the sort key, and an agent's index lacked the tie-break, so each of them read and sorted every match (found by `zorix-bench`).
+    "
+    CREATE INDEX executions_by_conversation ON executions (tenant, conversation, created_at DESC, id DESC) WHERE conversation IS NOT NULL;
+    CREATE INDEX executions_by_tenant_state ON executions (tenant, state, created_at DESC, id DESC);
+    DROP INDEX executions_by_agent;
+    CREATE INDEX executions_by_agent ON executions (tenant, agent, created_at DESC, id DESC) WHERE agent IS NOT NULL;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -716,6 +724,50 @@ mod tests {
     }
 
     #[test]
+    fn a_database_of_schema_9_upgrades_to_the_list_indexes_and_the_lists_use_them() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(9) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, created_at, doc) VALUES ('e1','local','c1','completed',1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        assert_eq!(LATEST, 10);
+        let plan = |sql: &str| -> String {
+            let mut statement = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+            let rows: Vec<String> =
+                statement.query_map([], |r| r.get::<_, String>(3)).unwrap().map(|r| r.unwrap()).collect();
+            rows.join(" | ")
+        };
+        // Each filter now walks an index in the order of the list, so no sort step is needed.
+        for (sql, index) in [
+            (
+                "SELECT doc FROM executions WHERE tenant='local' AND conversation='c1' ORDER BY created_at DESC, id DESC LIMIT 100",
+                "executions_by_conversation",
+            ),
+            (
+                "SELECT doc FROM executions WHERE tenant='local' AND state='waiting_for_approval' ORDER BY created_at DESC, id DESC LIMIT 100",
+                "executions_by_tenant_state",
+            ),
+            (
+                "SELECT doc FROM executions WHERE tenant='local' AND agent='a1' ORDER BY created_at DESC, id DESC LIMIT 100",
+                "executions_by_agent",
+            ),
+        ] {
+            let found = plan(sql);
+            assert!(found.contains(index), "{sql}: {found}");
+            assert!(!found.contains("TEMP B-TREE"), "{sql} still sorts: {found}");
+        }
+        let kept: u32 = conn.query_row("SELECT COUNT(*) FROM executions", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 1);
+    }
+
+    #[test]
     fn a_database_of_schema_8_upgrades_to_webhook_deliveries_and_keeps_its_data() {
         let mut conn = Connection::open_in_memory().unwrap();
         for (index, sql) in MIGRATIONS.iter().enumerate().take(8) {
@@ -725,7 +777,6 @@ mod tests {
         conn.execute("INSERT INTO org_settings (tenant, doc) VALUES ('local', '{}')", []).unwrap();
         migrate(&mut conn).unwrap();
         assert_eq!(version(&conn), LATEST);
-        assert_eq!(LATEST, 9);
         let found: u32 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'workflow_deliveries'",
