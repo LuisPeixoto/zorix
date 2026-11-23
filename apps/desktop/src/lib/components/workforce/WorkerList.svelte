@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { Overview } from "../../api.ts";
   import { Avatar, Badge } from "../../ui/index.ts";
   import { STATUS_TEXT, evalText, levelLabel, money, onTimeText } from "../../workforce.ts";
@@ -21,7 +22,7 @@
     return out;
   });
   const dept = (slug: string) => overview.settings.departments.find((d) => d.slug === slug)?.name ?? slug;
-  const nameOf = (slug: string | null) => (slug === null ? "You" : (overview.workers.find((w) => w.worker.agent === slug)?.name ?? slug));
+  const nameOf = (slug: string | null) => (slug === null ? t("common.you") : (overview.workers.find((w) => w.worker.agent === slug)?.name ?? slug));
 </script>
 
 <div class="overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
@@ -29,14 +30,14 @@
     <table class="w-full min-w-[760px] text-left text-base">
       <thead>
         <tr class="border-b border-line-soft bg-panel-2 text-2xs font-semibold tracking-wider text-faint uppercase">
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Worker</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Department</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Reports to</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Autonomy</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Tasks</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">On time</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Eval</th>
-          <th scope="col" class="px-3.5 py-2.5 font-semibold">Week</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("workforce.workerList.worker")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("workforce.workerList.department")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("workforce.workerList.reportsTo")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("common.autonomy")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("common.tasks")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("common.onTime")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("workforce.workerList.eval")}</th>
+          <th scope="col" class="px-3.5 py-2.5 font-semibold">{t("workforce.workerList.week")}</th>
         </tr>
       </thead>
       <tbody>
@@ -48,14 +49,14 @@
                 <Avatar emoji={v.avatar.emoji} color={v.avatar.color} status={v.status} size="sm" label={v.status ? `${v.name}: ${STATUS_TEXT[v.status]}` : undefined} />
                 <span class="min-w-0 leading-tight">
                   <button type="button" class="block rounded font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/60" onclick={(e) => { e.stopPropagation(); onselect(w.agent); }}>{v.name}</button>
-                  <span class="block text-xs text-muted">{w.manager ? "Virtual manager" : w.role}</span>
+                  <span class="block text-xs text-muted">{w.manager ? t("workforce.workerList.virtualManager") : w.role}</span>
                 </span>
               </span>
             </td>
             <td class="px-3.5 py-2">{dept(w.department)}</td>
             <td class="px-3.5 py-2">
               <span class="flex items-center gap-1.5">
-                {#if w.reports_to === null}<Avatar human size="xs" label="You" />{:else}<Avatar emoji={overview.workers.find((o) => o.worker.agent === w.reports_to)?.avatar.emoji ?? "🤖"} color={overview.workers.find((o) => o.worker.agent === w.reports_to)?.avatar.color ?? "accent"} size="xs" />{/if}
+                {#if w.reports_to === null}<Avatar human size="xs" label={t("common.you")} />{:else}<Avatar emoji={overview.workers.find((o) => o.worker.agent === w.reports_to)?.avatar.emoji ?? "🤖"} color={overview.workers.find((o) => o.worker.agent === w.reports_to)?.avatar.color ?? "accent"} size="xs" />{/if}
                 {nameOf(w.reports_to)}
               </span>
             </td>

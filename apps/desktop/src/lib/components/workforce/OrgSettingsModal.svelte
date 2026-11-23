@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import { type AutonomyLevel, errorText, workforceSettingsSave } from "../../api.ts";
   import { usdToMicros } from "../../project.ts";
   import { toast } from "../../stores/toast.svelte.ts";
@@ -16,7 +17,7 @@
 
   const workers = $derived(workforce.overview?.workers ?? []);
   const micros = $derived(usdToMicros(budget));
-  const budgetError = $derived(micros === undefined ? "Write an amount in dollars, such as 120." : null);
+  const budgetError = $derived(micros === undefined ? t("workforce.orgSettingsModal.writeAnAmountIn") : null);
   const used = (slug: string) => workers.filter((w) => w.worker.department === slug).length;
   const valid = $derived(!budgetError && departments.every((d) => d.name.trim() !== ""));
 
@@ -48,7 +49,7 @@
     busy = true;
     try {
       await workforceSettingsSave({ weekly_budget_micros: micros ?? null, default_level: level, departments: departments.map((d) => ({ ...d, lead: d.lead || null })) });
-      toast.ok("Saved.");
+      toast.ok(t("common.saved"));
       open = false;
       await workforce.refresh();
     } catch (e) {
@@ -59,43 +60,43 @@
   }
 </script>
 
-<Modal bind:open title="Org settings" icon="sliders" size="md">
-  <p class="mb-4 text-sm text-muted">What applies to the whole organisation.</p>
+<Modal bind:open title={t("workforce.orgSettingsModal.orgSettings")} icon="sliders" size="md">
+  <p class="mb-4 text-sm text-muted">{t("workforce.orgSettingsModal.whatAppliesToThe")}</p>
   <div class="flex flex-col gap-4">
     <div class="grid grid-cols-2 gap-3">
-      <Field label="Budget per week" hint="Across all workers. Empty means no limit." error={budgetError}>
+      <Field label={t("common.budgetPerWeek")} hint={t("workforce.orgSettingsModal.acrossAllWorkersEmpty")} error={budgetError}>
         {#snippet children(f)}<Input id={f.id} bind:value={budget} icon="dollar" inputmode="decimal" placeholder="120" invalid={f.invalid} />{/snippet}
       </Field>
-      <Field label="Week starts" hint="Budgets reset then.">
+      <Field label={t("workforce.orgSettingsModal.weekStarts")} hint={t("workforce.orgSettingsModal.budgetsResetThen")}>
         {#snippet children(f)}<Input id={f.id} value="Monday" disabled />{/snippet}
       </Field>
     </div>
-    <Field label="Level for new workers" hint="A worker still cannot be freer than who it reports to.">
-      {#snippet children()}<AutonomyDial bind:level label="Level for new workers" />{/snippet}
+    <Field label={t("workforce.orgSettingsModal.levelForNewWorkers")} hint={t("workforce.orgSettingsModal.aWorkerStillCannot")}>
+      {#snippet children()}<AutonomyDial bind:level label={t("workforce.orgSettingsModal.levelForNewWorkers")} />{/snippet}
     </Field>
-    <section aria-label="Departments" class="flex flex-col gap-2">
-      <h3 class="text-sm font-medium">Departments</h3>
+    <section aria-label={t("workforce.orgSettingsModal.departments")} class="flex flex-col gap-2">
+      <h3 class="text-sm font-medium">{t("workforce.orgSettingsModal.departments")}</h3>
       <ul class="divide-y divide-line-soft rounded-xl border border-line">
         {#each departments as d, i (d.slug)}
           <li class="flex items-center gap-2 px-3 py-2">
-            <Input class="flex-1" size="sm" bind:value={d.name} maxlength={60} aria-label="Name of {d.slug}" />
-            <Select class="w-36" bind:value={d.lead} aria-label="Lead of {d.name}">
-              <option value="">No lead</option>
+            <Input class="flex-1" size="sm" bind:value={d.name} maxlength={60} aria-label={t("workforce.orgSettingsModal.nameOf", { slug: d.slug })} />
+            <Select class="w-36" bind:value={d.lead} aria-label={t("workforce.orgSettingsModal.leadOf", { name: d.name })}>
+              <option value="">{t("workforce.orgSettingsModal.noLead")}</option>
               {#each workers.filter((w) => w.worker.department === d.slug) as w (w.worker.agent)}<option value={w.worker.agent}>{w.name}</option>{/each}
             </Select>
             <span class="tnum w-16 text-right text-xs text-muted">{used(d.slug)} {used(d.slug) === 1 ? "worker" : "workers"}</span>
-            <IconButton icon="trash" label="Remove {d.name}" disabled={used(d.slug) > 0} title={used(d.slug) > 0 ? "It has workers" : undefined} onclick={() => (departments = departments.filter((_, k) => k !== i))} />
+            <IconButton icon="trash" label={t("workforce.orgSettingsModal.remove", { name: d.name })} disabled={used(d.slug) > 0} title={used(d.slug) > 0 ? t("workforce.orgSettingsModal.itHasWorkers") : undefined} onclick={() => (departments = departments.filter((_, k) => k !== i))} />
           </li>
         {/each}
       </ul>
       <div class="flex items-center gap-2">
-        <Input class="flex-1" size="sm" bind:value={pending} placeholder="New department" maxlength={60} aria-label="Name of a new department" onkeydown={(e) => e.key === "Enter" && add()} />
-        <Button size="sm" icon="plus" disabled={pending.trim() === ""} onclick={add}>Add department</Button>
+        <Input class="flex-1" size="sm" bind:value={pending} placeholder={t("workforce.orgSettingsModal.newDepartment")} maxlength={60} aria-label={t("workforce.orgSettingsModal.nameOfANew")} onkeydown={(e) => e.key === "Enter" && add()} />
+        <Button size="sm" icon="plus" disabled={pending.trim() === ""} onclick={add}>{t("workforce.orgSettingsModal.addDepartment")}</Button>
       </div>
     </section>
   </div>
   {#snippet footer()}
-    <Button disabled={busy} onclick={() => (open = false)}>Cancel</Button>
-    <Button variant="primary" icon="check" disabled={!valid || busy} onclick={() => void save()}>Save</Button>
+    <Button disabled={busy} onclick={() => (open = false)}>{t("common.cancel")}</Button>
+    <Button variant="primary" icon="check" disabled={!valid || busy} onclick={() => void save()}>{t("common.save")}</Button>
   {/snippet}
 </Modal>
