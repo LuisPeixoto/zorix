@@ -478,6 +478,17 @@ const MIGRATIONS: &[&str] = &[
     ) WITHOUT ROWID;
     CREATE INDEX org_events_by_worker ON org_events (tenant, worker, seq);
     ",
+    // 9: the webhook deliveries a workflow has already received, by the sender's own delivery id, so a repeat is recognised.
+    "
+    CREATE TABLE workflow_deliveries (
+        tenant TEXT NOT NULL,
+        workflow_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        at INTEGER NOT NULL,
+        PRIMARY KEY (tenant, workflow_id, key)
+    ) WITHOUT ROWID;
+    CREATE INDEX workflow_deliveries_by_time ON workflow_deliveries (tenant, workflow_id, at);
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -702,5 +713,28 @@ mod tests {
         }
         let projects: u32 = conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0)).unwrap();
         assert_eq!(projects, 1);
+    }
+
+    #[test]
+    fn a_database_of_schema_8_upgrades_to_webhook_deliveries_and_keeps_its_data() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(8) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute("INSERT INTO org_settings (tenant, doc) VALUES ('local', '{}')", []).unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        assert_eq!(LATEST, 9);
+        let found: u32 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'workflow_deliveries'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 1);
+        let settings: u32 = conn.query_row("SELECT COUNT(*) FROM org_settings", [], |r| r.get(0)).unwrap();
+        assert_eq!(settings, 1);
     }
 }
