@@ -19,6 +19,7 @@ cd apps/desktop && npm run check && npm test && npm run build
 | Model faults | `zorix-sim` tests, `zorix-runtime/tests/model_faults.rs` | A model that fails like a real provider (every kind of error with its pause, a stream cut part-way, an empty, cut-off or refused answer, calls that make no sense, failures that come and go by seed) and how the loop copes: retries, what is shown live, and a tool that never runs twice |
 | Faults in storage | `zorix-runtime/tests/faults.rs` (a `FaultyRepository` that breaks the Nth call of a method, before or after it is written), `zorix-store/tests/disk_full.rs`, `tests/concurrency.rs`, `zorix-cli/tests/cli.rs` (`kill -9`) | A commit that fails anywhere in a run and a restart that finishes it without repeating an unsafe tool; a file that cannot grow, told in words, with the work continuing when there is room; four connections writing at once without a lost update or a repeated event number; a real crash of the command line |
 | Adversarial | `zorix-runtime/tests/adversarial.rs`, `zorix-agents/tests/delegation.rs`, `zorix-tools` and `zorix-agents` path tables, `zorix-mcp` tool tests, `zorix-integrations` address tables | Text that tries to give itself powers (a result that says the person approved, a child's answer that closes and opens wrappers, a delegation that invents fields to get more, a tool description of a million characters) and paths that try to leave a folder (`..`, drive letters, UNC, reserved names, `.ZORIX`, zip entries) |
+| Coverage | the **Coverage** CI job, `tools/coverage-summary.mjs` | What the tests run, per crate, and which files nothing tests |
 | Benchmarks | `crates/zorix-bench`, the **Benchmarks** CI job | The paths people wait for, at 10,000 runs, a million events and 50,000 pieces of documents, with limits that fail a large regression |
 | Fuzzing | `fuzz/` (14 targets, a seed corpus each), `.github/workflows/fuzz.yml` | Every reader of text or bytes from outside (the agent file and its YAML, `SKILL.md`, server-sent events cut anywhere, MCP messages and other clients' configs, workflow files, conditions, templates, cron expressions and zones, documents, access patterns, file paths, the data wrappers) takes any input without a panic or a hang, and keeps the property it promises |
 | Untrusted text | `zorix-core/src/untrusted.rs` (with property tests), `zorix-store/tests/tampering.rs` | Text from outside cannot close or open a wrapper of ours in any spelling, and a call or approval edited on disk never runs on the answer given to the original |
@@ -86,6 +87,48 @@ seed that fails the same calls every time) and a rule-based demo model.
 | Forged approvals | `approvals::an_approval_applies_to_the_call_it_names_and_cannot_be_forged_or_repeated` |
 | Secrets in logs | `tracing_output::spans_follow_the_genai_names_and_nothing_secret_reaches_the_logs`, `tools::secrets_in_arguments_are_kept_out_of_events…`, the `redact::` tests |
 | Two programs on one folder | `paths::only_one_holder_at_a_time`, CLI `only_one_zorix_program_works_on_a_data_folder_at_a_time` |
+
+## Coverage
+
+```bash
+cargo install cargo-llvm-cov            # once, and: rustup component add llvm-tools-preview
+cargo llvm-cov --workspace --exclude zorix-desktop --exclude zorix-bench --json --summary-only --output-path cov.json
+node tools/coverage-summary.mjs cov.json            # a table per crate (add --markdown for a Markdown table)
+```
+
+The **Coverage** CI job does the same on every change, writes the table into the job's summary and keeps `lcov.info` and `coverage.json` as an artifact. It is a report and not a gate: there is no number to reach, and
+the table says where an audit ([roadmap](roadmap.md#how-a-quality-phase-works)) should look first. What the tests cover on 2026-11-23, at 0.9.0 plus the Phase 10 work (lines, with functions and regions beside them):
+
+| Crate | Lines | Functions | Regions |
+|---|---|---|---|
+| `zorix-agents` | 92.9 % (1824/1963) | 88.8 % | 90.5 % |
+| `zorix-cli` | 51.0 % (2862/5608) | 47.2 % | 49.0 % |
+| `zorix-core` | 94.8 % (3654/3856) | 94.9 % | 95.3 % |
+| `zorix-hub` | 85.5 % (655/766) | 81.4 % | 80.4 % |
+| `zorix-integrations` | 82.5 % (2354/2854) | 72.9 % | 79.7 % |
+| `zorix-mcp` | 84.4 % (2757/3268) | 81.6 % | 82.5 % |
+| `zorix-memory` | 91.5 % (2242/2451) | 88.8 % | 91.5 % |
+| `zorix-projects` | 79.6 % (1083/1361) | 73.6 % | 76.8 % |
+| `zorix-providers` | 92.2 % (3375/3662) | 87.7 % | 92.3 % |
+| `zorix-runtime` | 94.2 % (3112/3304) | 93.1 % | 94.4 % |
+| `zorix-sandbox` | 83.7 % (319/381) | 83.0 % | 81.8 % |
+| `zorix-sim` | 97.9 % (749/765) | 96.3 % | 96.9 % |
+| `zorix-store` | 97.2 % (3984/4098) | 90.8 % | 88.1 % |
+| `zorix-tools` | 95.0 % (805/847) | 84.0 % | 94.2 % |
+| `zorix-workflows` | 87.6 % (2715/3101) | 83.1 % | 84.2 % |
+| `zorix-workforce` | 91.1 % (1111/1219) | 81.4 % | 89.3 % |
+| **all** | **85.1 %** (33601/39504) | **81.6 %** | **82.7 %** |
+
+What the numbers say, so the audits start from them:
+
+- **The command line is the least covered (51 %).** Its project, workflow and workforce commands (`zorix-cli/src/projects.rs`, `workflows.rs`, `workforce.rs`) show 0 %: they are exercised end to end by `tools/live-projects.sh`, `live-workflows.sh` and `live-workforce.sh`, which
+  run the real program, but not by `cargo test`, so a change to them is not caught by the gates. Phase 14 brings them into the test suite. `mcp_serve.rs` is at 21 % for the same reason.
+- **`postgres_db.rs` (30 %)** is covered only by the **Postgres tools** job, which runs against a real server and is not part of this measurement.
+- **Below 80 %** among the code that people's data goes through: `zorix-projects/src/rules.rs` (73 %), `zorix-workflows/src/service.rs` (75 %), `zorix-providers/src/secrets.rs` (79 %, the keychain paths that need a real keychain), `zorix-hub/src/lib.rs` (72 %).
+- This measurement was made without the Python module of the sandbox tests, so `zorix-sandbox` (84 %) is lower here than in the CI job, which downloads it.
+- The core of the product is well covered: `zorix-core` 95 %, `zorix-runtime` 94 %, `zorix-store` 97 %, `zorix-sim` 98 %.
+
+Coverage counts lines that ran, not whether the test would notice a wrong answer; it finds what nothing tests, and says nothing about the rest.
 
 ## Benchmarks
 
