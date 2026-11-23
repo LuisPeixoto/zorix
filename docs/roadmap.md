@@ -3,6 +3,10 @@
 ZORIX is built in phases. Each phase ends in a release with acceptance criteria, and each is designed to work alone and
 plug into the rest. The order follows what depends on what: the runtime first, because everything else runs on it.
 
+Phases 1 to 9 built the product. Phases 10 to 15 make sure what was built meets the [engineering guidelines](engineering-guidelines.md),
+fix what that finds, and complete the features that were deferred. The Command Center and the Marketplace come after them,
+on a base that has been audited.
+
 ## ✅ Phase 1 — Harness Runtime · v0.1.0
 
 The execution core: [executions with a strict lifecycle](runtime.md#the-lifecycle) · [the loop with limits, retries,
@@ -23,7 +27,7 @@ real window · [native turn replay](adr/0012-native-turns-append-only.md) · tok
 is known · the provider and model of every step · `zorix models`, `provider` and `route` and a providers screen in the desktop
 app · [live tests](testing.md#live-tests) against Ollama and, with your keys, the cloud.
 
-Not yet: live text while the model writes, a classifier-based router, embeddings, batch APIs.
+Live text and embeddings arrived in Phases 5 and 3. Later: a classifier-based router and image or audio generation (see [Ideas](#ideas)), and batch APIs for evaluations (Phase 13).
 
 ## ✅ Phase 3 — Context & Memory Engine · v0.3.0
 
@@ -32,8 +36,7 @@ HTML and PDF folders, with citations) and **past work**, found by keyword search
 model, by meaning (Ollama, OpenAI, Gemini). What was retrieved is frozen per execution. Token counts are learned per model from the
 usage providers report. Scopes: global, project, conversation. Guides: [memory](memory.md), [knowledge](knowledge.md).
 
-Not yet: summarising long conversations, a file watcher, OCR, memory shared between people, an on-disk vector index for very
-large collections.
+Later: summarising long conversations, a file watcher, OCR and an on-disk vector index for very large collections (Phase 11); memory shared between people (Phase 16).
 
 ## ✅ Phase 4 — Tool & Integration Engine · v0.4.0
 
@@ -46,8 +49,8 @@ large collections.
 - The CLI (`mcp`, `connect`, `sandbox`, run flags), the **Integrations screens**, approval cards per kind of call, a command
   palette and design system v2.
 
-Later: sandboxing of stdio MCP servers, MCP sampling and elicitation, inbound webhooks (with workflows), OAuth for the native
-integrations, more catalogue entries, cloud providers' APIs.
+Inbound webhooks arrived with workflows (Phase 7). Later (Phase 12): sandboxing of stdio MCP servers, MCP sampling and elicitation, OAuth for the native
+integrations, more catalogue entries. Cloud providers' APIs are in [Ideas](#ideas).
 
 ## ✅ Phase 5 — AI Agent Engine · v0.5.0
 
@@ -60,7 +63,7 @@ integrations, more catalogue entries, cloud providers' APIs.
 - Four **starter agents** with skills and evaluation suites; agents over **MCP** (`zorix.agents`, `zorix.run_agent`).
 - The CLI (`agent`, `skill`, `eval`, `run --agent`), and the **Agents screens**: gallery, chat, definition, skills, versions, evals and memory.
 
-Later: skills that need native packages, reasoning-token streaming.
+Later (Phase 13): skills that need native packages, reasoning-token streaming.
 
 ## ✅ Phase 6 — Multi-Agent Orchestration · v0.6.0
 
@@ -73,7 +76,7 @@ Later: skills that need native packages, reasoning-token streaming.
 - The CLI (`team`, `run --team`, `tree`, roots-only `list`), **MCP** (`team` on `zorix.run_agent`), and the app: delegation cards in the chat, a work tree in the run view,
   the Teams screens, and teams in New run and ⌘K. Database schema 5.
 
-Later: adaptive budget splits, a scratchpad shared by siblings, team versions and a team file format.
+Later (Phase 13): adaptive budget splits, a scratchpad shared by siblings, team versions and a team file format.
 
 ## Design system v3 · v0.6.1
 
@@ -103,7 +106,8 @@ Decisions: [ADR-0033](adr/0033-workflows-are-versioned-graphs-that-create-execut
 The screens add *Workflow run* to the design system, logged in `design/local-additions.md`.
 
 Later: a **pull request** action (no tool creates branches or commits yet), the **new ticket** event (needs polling of integrations),
-an **on-call rotation** as the approver (needs people and accounts, Phase 10), and per-period workflow budgets.
+per-period workflow budgets and sub-workflows (Phase 14, on the tools of Phase 12), and an **on-call rotation** as the approver (needs people and
+accounts, Phase 16).
 
 ## ✅ Phase 8 — Task & Project Management · v0.8.0
 
@@ -120,9 +124,9 @@ Guide: [projects](projects.md). Shipped: the model and store (schema 7), `zorix-
 Decisions: [ADR-0036](adr/0036-projects-and-tasks-are-records-that-create-runs.md) (projects and tasks are records that create runs; fixed lanes; *Needs you* is derived)
 and [ADR-0037](adr/0037-project-tools-and-the-manager.md) (project tools and the manager; a move to Done always asks).
 The screens add *Projects*, the project's *List*, *Deliverables* and *History*, *Task* and *New project* to the design system, and dependency arrows to the timeline,
-logged in `design/local-additions.md`. Until accounts exist (Phase 10) the only person is you, so there is no *Share*.
+logged in `design/local-additions.md`. Until accounts exist (Phase 16) the only person is you, so there is no *Share*. A task now remembers the day it went to Done (0.9.0).
 
-Later: **people and sharing** (Phase 10), custom lanes, recurring tasks, a workflow step and trigger for tasks, import and export of a project, and the day a task finished.
+Later: **people and sharing** (Phase 16), custom lanes, recurring tasks, a workflow step and trigger for tasks, and import and export of a project (Phase 14).
 
 ## ✅ Phase 9 — AI Workforce Management · v0.9.0
 
@@ -139,9 +143,70 @@ Decisions: [ADR-0038](adr/0038-workers-are-records-over-agents.md) (workers are 
 and [ADR-0039](adr/0039-autonomy-is-decided-by-the-policy.md) (autonomy is decided by the policy; what still asks; budgets are narrowings).
 The screens add the Workforce *List* and *Activity* tabs, *Worker*, *Hire a worker* and *Org settings* to the design system, logged in `design/local-additions.md`.
 
-Later: people other than you and hiring them (Phase 10), a **daily** budget (Phase 10), moving workers between departments by drag, teams as workers, and importing an org chart.
+Later: people other than you and hiring them (Phase 16), a **daily** budget (Phase 16, with the Command Center), and moving workers between departments by drag, teams as workers and importing an org chart (Phase 14).
 
-## Phase 10 — Command Center
+## How a quality phase works
+
+Phases 11 to 15 each take one area of the product through the same steps, so nothing is left to luck:
+
+1. **Audit.** Check the area against sections 2 to 14 of the [guidelines](engineering-guidelines.md): tests, completeness, UX, architecture, security, performance, errors, documentation, compatibility, accessibility, observability, AI quality and dependencies. The result is `docs/audits/<area>.md`, with a severity for every finding.
+2. **Issues.** Every finding becomes an issue in the phase's milestone. Security findings are fixed first.
+3. **Fixes.** Each fix is its own branch and carries a regression test that fails without it.
+4. **Completion.** Then the area's deferred features are built, each with its tests, documentation and a security review where it touches permissions, tools or execution.
+5. **Close.** The phase ends with the [final approval criteria](engineering-guidelines.md#17-final-approval-criteria), the documentation checked against the code, and a release.
+
+## Phase 10 — Quality foundation · v0.10.0
+
+The tools every audit needs, and the gaps already known.
+
+- **End-to-end tests of the built app** ([#2](https://github.com/LuisPeixoto/zorix/issues/2)): first run, a run with the demo model, an approval, a project task and the workforce screens, on a throwaway `ZORIX_HOME`, with a screenshot attached to a failure. Linux and Windows drive the app through `tauri-driver`; macOS has no WebDriver for its web view, so it gets a launch smoke test.
+- **Interface strings in one catalogue** ([#1](https://github.com/LuisPeixoto/zorix/issues/1)): English as the source, every component reading from it, a lint that rejects user-facing literals, one locale-aware formatter for dates, times, numbers and money, and a pseudo-language of longer, accented text in the tests to catch cut-off words.
+- **Scale benchmarks:** 10,000 executions, 1,000,000 events, 1,000 agents and tools and 50,000 memory pieces, timing listing, replay, search and the Inbox. The numbers go into [testing](testing.md), and a large regression fails.
+- **An adversarial suite:** prompt injection at every untrusted input (tool results, documents, MCP descriptions, webhook payloads, memory, task text), tampering with approvals, path traversal, SSRF in the HTTP integration, child runs that try to widen their grants, and fuzz targets for the parsers run on a schedule.
+- **Fault injection:** provider outages and timeouts, a crash during a commit, a full disk and concurrent writers, each followed by a resume.
+- **Coverage** reported per crate in CI, published, with no artificial target.
+- **Installers verified on clean machines** ([#3](https://github.com/LuisPeixoto/zorix/issues/3)), with a checklist for each release in [distribution](distribution.md).
+- **Replace `chrono`** ([#17](https://github.com/LuisPeixoto/zorix/issues/17)) with a maintained date library; every schedule test passes unchanged.
+- **Documentation drift:** every "not yet" and "later" claim in the guides is checked against the code.
+
+## Phase 11 — Runtime, providers and memory · v0.11.0
+
+Audit and complete Phases 1 to 3.
+
+- **Audit focus:** crash recovery under concurrency, lease and idempotency races, provider failure and fallback with each adapter, token and cost accounting, redaction on every path that stores text, and memory isolation between tenants and scopes.
+- **Completion:** summarising long conversations instead of dropping the oldest turns · **retention policies** for stored executions · a **cost and time estimate** before a run starts · **OpenTelemetry export** with the GenAI conventions · a **file watcher** for document folders · optional local **OCR** for scanned PDFs · an on-disk vector index for large collections · **attachments** with `@` and drag and drop in New run.
+
+## Phase 12 — Tools, integrations and sandbox · v0.12.0
+
+Audit and complete Phase 4.
+
+- **Audit focus:** SSRF and redirects in HTTP, path confinement, MCP conformance for both protocol eras, OAuth token storage and refresh, sandbox escape tests on all three systems (including the Windows WASI case fixed in 0.9.x), and output caps.
+- **Completion:** sandboxing of stdio MCP servers · MCP **sampling** and **elicitation** · **OAuth** for the native integrations · more catalogue entries · a **git tool** (branch, commit, push, through grants and approvals) · a **pull request** tool for GitHub and GitLab · **polling** of integrations for new events, which the "new ticket" workflow event needs · an **MCP server that exposes ZORIX itself** (runs, approvals, agents), beside the read-only memory.
+
+## Phase 13 — Agents, teams and orchestration · v0.13.0
+
+Audit and complete Phases 5 and 6.
+
+- **Audit focus:** delegation limits and budget roll-up under failure, approvals up the tree, children never widening grants, the agent file format round-trip, behavioural regressions when instructions, models or tools change (evaluation suites run in CI on the simulated models), and a test matrix over several models.
+- **Completion:** **reasoning-token streaming** · skills that need native packages, inside the sandbox · **adaptive budget splits** · a **scratchpad shared by siblings** · **team versions** and a team file format · **replaying an execution against another model** to compare · **answer-quality evaluation suites** · batch APIs for running evaluations at lower cost.
+
+## Phase 14 — Workflows, projects and workforce · v0.14.0
+
+Audit and complete Phases 7 to 9.
+
+- **Audit focus:** schedules and the missed-fire rule across time zones and daylight saving, webhook signing, unattended actions, the autonomy table at every level, spend figures that never count twice, and migrations 6 to 8 with real data.
+- **Completion:** the **pull request** action and the **new ticket** event (on the tools of Phase 12) · per-period workflow budgets and **sub-workflows** · **custom lanes**, **recurring tasks**, a **workflow step and trigger for tasks** and **import and export of a project** · moving workers between departments by dragging, **teams as workers** and **importing an org chart**.
+
+## Phase 15 — Interface and languages · v0.15.0
+
+Every screen audited and finished.
+
+- **Layout:** responsive at the smallest window, 1280, 1440 and very large sizes, with nothing cut, overlapping or off screen.
+- **States:** loading, empty, error, success and disabled on every screen.
+- **Accessibility:** keyboard paths, visible focus, screen-reader labels and contrast, with a design critique and an accessibility review whose findings are fixed. Light and Dark screenshots beside the design system.
+- **Languages:** full translations into **Português (Brasil)**, **Español** and **简体中文**, with a language picker in Settings and each language's date and number formats; font fallback and text-width checks for Chinese; a CI check that every key is translated; a glossary per language; and an invitation to native speakers to review through Discussions.
+
+## Phase 16 — Command Center · v0.16.0
 
 The complete interface: dashboards, monitoring, logs and observability, reports, settings and permissions.
 Screens: Overview, Logs and traces, Settings (permissions and policy, members, secrets, retention, updates). Built from MetricTile, ChartPanel, LogStream, HealthGrid, ToggleRow and KeyValue.
@@ -150,8 +215,9 @@ Screens: Overview, Logs and traces, Settings (permissions and policy, members, s
 - **Logs and traces:** a live view with filters by source and level, a trace waterfall for a run or workflow, the selected line with its span and run, secrets redacted before anything is stored, export and alerts.
 - **Settings:** permission and policy rules (ask first, allow or deny, with the hits of the week), the approval switches ("Always for this run" off for databases and money), members and roles (Owner, Approver, Viewer), secrets, retention and updates.
 - Per-provider latency (p95) and spend; today's budget in the sidebar.
+- **Accounts, people and roles** (Owner, Approver, Viewer), behind the existing repository trait (the tenant is already part of every record). They unlock what earlier phases deferred: *Share* on projects, hiring people as workers, on-call rotations as workflow approvers, memory shared between people, and the **daily budget**.
 
-## Phase 11 — Marketplace & Ecosystem
+## Phase 17 — Marketplace & Ecosystem · v0.17.0
 
 Sharing agents, skills, integrations and workflows.
 Screens: Browse, listing, publish. Built from ListingCard, Tabs, Stepper, Callout and Modal.
@@ -163,12 +229,8 @@ Screens: Browse, listing, publish. Built from ListingCard, Tabs, Stepper, Callou
 ## Across phases
 
 - **Signed releases and automatic updates** (see [distribution](distribution.md)).
-- **Accounts, organisations and a shared store** for teams, behind the existing repository trait (the tenant is already part of every record).
-- **OpenTelemetry export** once the GenAI conventions stabilise.
-- **Retention policies** for stored executions.
-- A **cost and time estimate** before a run starts, **attachments** with `@` and drop in New run, and **accounts and avatars** for people.
+- **Organisations and a shared store** for teams, behind the existing repository trait (the tenant is already part of every record). People and roles arrive with the Command Center (Phase 16).
 
 ## Ideas
 
-Not planned yet: a Temporal or Postgres backend for team deployments; an MCP server that exposes ZORIX itself; replay of
-an execution against another model for comparison; evaluation suites for answer quality.
+Not planned yet: a Temporal or Postgres backend for team deployments; a classifier-based router; image and audio generation; the cloud providers' own APIs as integrations.
