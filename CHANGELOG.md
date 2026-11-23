@@ -12,6 +12,9 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** the wrappers around data (tool results, documents, past work, task and trigger text) now defuse every tag of ZORIX in any case and spacing, opening
+  as well as closing, and keep attribute values inside their attribute. Before, only the exact lower-case closing tag was defused. One implementation
+  serves all four wrappers, and property tests check it against arbitrary hostile text.
 - **Security:** the web tools now also refuse IPv6 addresses that tunnel to a private IPv4 address or to a network of their own (6to4, Teredo,
   ISATAP, IPv4-compatible and the local NAT64 prefix). They could pass the check as ordinary public addresses while a translator or tunnel
   on the network sent them to a private IPv4 address.
