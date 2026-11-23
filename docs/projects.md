@@ -90,5 +90,4 @@ Schema 7: `projects` (with the counter that numbers tasks), `tasks` (with a revi
 
 ## Limits
 
-No custom lanes, recurring tasks or import and export of a project; no workflow step or trigger for tasks; no *Share* or other people (Phase 16); no weekly planning or autonomy levels (Phase 9); a
-task does not record when it finished.
+No custom lanes, recurring tasks or import and export of a project, and no workflow step or trigger for tasks (Phase 14); no *Share* or other people (Phase 16). Weekly planning and the autonomy levels are in the [workforce](workforce.md) guide.

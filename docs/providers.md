@@ -118,7 +118,7 @@ next step goes to another model, it sends the portable form instead. See [ADR-00
 
 ## Limits of this version
 
-- Answers arrive when complete; live text as it is generated is not shown yet (adapters stream internally).
-- No classifier-based routing, embeddings, image or audio generation, or batch APIs.
+- No classifier-based routing, image or audio generation, or batch APIs (the roadmap places batch APIs for evaluations in Phase 13).
+- Live text appears as an answer is written, but not the reasoning tokens (Phase 13). Embeddings are used for [documents](knowledge.md) and [memory](memory.md) only.
 - Prices are known only for some models.
 - The Windows and Linux keychain paths are covered by CI builds, not by a hands-on run.
