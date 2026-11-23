@@ -3,6 +3,7 @@
 import type { ActivityLine, AutonomyLevel, Figures, Notice, Overview, WorkerView } from "./api.ts";
 import { usd } from "./shell.ts";
 import type { UiTone } from "./ui/tone.ts";
+import { fmt, t } from "./i18n/index.ts";
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Levels
@@ -16,11 +17,11 @@ export interface LevelInfo {
 }
 
 export const LEVELS: LevelInfo[] = [
-  { id: "suggest", label: "Suggest", blurb: "Proposes; a person acts. Nothing it wants to change runs.", tone: "muted" },
-  { id: "ask", label: "Ask", blurb: "Acts after each approval. Every change asks first.", tone: "info" },
-  { id: "notify", label: "Notify", blurb: "Acts, then tells you. What only the default would ask runs on its own.", tone: "accent" },
-  { id: "budgeted", label: "Budgeted", blurb: "Acts within its weekly budget and its time for a task.", tone: "accent" },
-  { id: "full", label: "Full", blurb: "Acts and reports every week.", tone: "warn" },
+  { id: "suggest", label: t("workforce.suggest"), blurb: t("workforce.proposesAPersonActs"), tone: "muted" },
+  { id: "ask", label: t("workforce.ask"), blurb: t("workforce.actsAfterEachApproval"), tone: "info" },
+  { id: "notify", label: t("workforce.notify"), blurb: t("workforce.actsThenTellsYou"), tone: "accent" },
+  { id: "budgeted", label: t("workforce.budgeted"), blurb: t("workforce.actsWithinItsWeekly"), tone: "accent" },
+  { id: "full", label: t("workforce.full"), blurb: t("workforce.actsAndReportsEvery"), tone: "warn" },
 ];
 
 export const levelIndex = (level: AutonomyLevel): number => LEVELS.findIndex((l) => l.id === level);
@@ -38,16 +39,16 @@ export function levelsUnder(managerLevel: AutonomyLevel | null): AutonomyLevel[]
 /** `2 h`, `45 min`, `1 h 30 min`. */
 export function duration(ms: number): string {
   const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 60) return t("format.min", { value: minutes });
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+  return m === 0 ? t("format.h", { value: h }) : t("format.hMin", { h, m });
 }
 
 /** Whole dollars when they are whole (`$25`), else cents (`$12.50`), as the design system writes a budget. */
 export function money(micros: number): string {
   const dollars = micros / 1_000_000;
-  return Number.isInteger(dollars) ? `$${dollars}` : usd(micros);
+  return Number.isInteger(dollars) ? fmt.dollars(dollars) : usd(micros);
 }
 
 /** `repo:acme/web:write` → `acme/web`. Anything else is shown as it is. */
@@ -61,38 +62,38 @@ export function stillAskName(entry: string): string {
 
 /** The sentence under the dial: what the level lets the worker do, within what limits, and what always asks. */
 export function limitsSentence(w: Pick<WorkerView["worker"], "autonomy" | "weekly_budget_micros" | "task_time_ms" | "still_ask">): string {
-  const limits = [w.weekly_budget_micros !== null ? `${money(w.weekly_budget_micros)} a week` : null, `${duration(w.task_time_ms)} a task`].filter(Boolean).join(" and ");
+  const limits = [w.weekly_budget_micros !== null ? t("workforce.aWeek", { value: money(w.weekly_budget_micros) }) : null, t("workforce.aTask", { value: duration(w.task_time_ms) })].filter(Boolean).join(" and ");
   let first: string;
   switch (w.autonomy) {
     case "suggest":
-      first = "Proposes; you act. Nothing it wants to change runs.";
+      first = t("workforce.proposesYouActNothing");
       break;
     case "ask":
-      first = `Acts after each approval, within ${limits}.`;
+      first = t("workforce.actsAfterEachApproval2", { limits });
       break;
     case "notify":
-      first = `Acts, then tells you, within ${limits}.`;
+      first = t("workforce.actsThenTellsYou2", { limits });
       break;
     case "budgeted":
-      first = `Acts within ${limits}.`;
+      first = t("workforce.actsWithin", { limits });
       break;
     default:
-      first = `Acts and reports weekly, within ${limits}.`;
+      first = t("workforce.actsAndReportsWeekly", { limits });
   }
   if (w.still_ask.length === 0) return first;
   const names = w.still_ask.map(stillAskName);
   const what = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  return `${first} Writes to ${what} still ask.`;
+  return t("workforce.writesToStillAsk", { first, what });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Figures
 
 export function onTimeText(done: number, all: number): string {
-  return all === 0 ? "—" : `${Math.round((done / all) * 100)}%`;
+  return all === 0 ? "—" : fmt.percent(done / all);
 }
 
-export const evalText = (score: number | null): string => (score === null ? "—" : score.toFixed(2));
+export const evalText = (score: number | null): string => (score === null ? "—" : fmt.number(score, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 export type Figure = [value: string, label: string];
 
@@ -101,10 +102,10 @@ export function cardFigures(v: Pick<WorkerView, "figures" | "worker" | "own" | "
   const f = v.figures;
   const tasks: Figure = [String(f.tasks), f.tasks === 1 ? "task" : "tasks"];
   const week: Figure = [money(f.week_micros), "week"];
-  if (v.worker.manager) return [tasks, [onTimeText(f.on_time_done, f.on_time_all), "on time"], week];
+  if (v.worker.manager) return [tasks, [onTimeText(f.on_time_done, f.on_time_all), t("workforce.onTime")], week];
   if (f.waiting > 0) return [tasks, [String(f.waiting), "waiting"], week];
   if (v.own.eval !== null && v.reports.length === 0) return [tasks, [evalText(v.own.eval), "eval"], week];
-  return [tasks, [onTimeText(f.on_time_done, f.on_time_all), "on time"], week];
+  return [tasks, [onTimeText(f.on_time_done, f.on_time_all), t("workforce.onTime")], week];
 }
 
 /** More spend reads `warn` and less reads `ok`, whatever the direction: the change is toned by whether it is good. */
@@ -115,7 +116,7 @@ export function spendDelta(now: number, before: number): { text: string; tone: U
   return { text: `${change > 0 ? "▲" : "▼"} ${Math.abs(change)}%`, tone: change > 0 ? "warn" : "ok" };
 }
 
-export const STATUS_TEXT: Record<string, string> = { ok: "Working", warn: "Waiting for you", err: "Stopped" };
+export const STATUS_TEXT: Record<string, string> = { ok: t("common.working"), warn: t("common.waitingForYou"), err: t("common.stopped") };
 
 /** Who a worker's weekly budget is nearly or fully used up for: a share from 0 to 1, for the bar. */
 export function budgetShare(figures: Pick<Figures, "week_micros">, budget: number | null): number | null {
@@ -252,8 +253,7 @@ export function lineTime(at: number, now: number): string {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   if (at >= start.getTime()) return time;
-  const day = d.toLocaleDateString("en-US", { weekday: "short" });
-  return `${day} ${time.slice(0, 5)}`;
+  return `${fmt.weekday(d)} ${time.slice(0, 5)}`;
 }
 
 /** What the Inbox says about a notice, as the sentence under its title. */
@@ -286,18 +286,18 @@ export function orgNodes(overview: Pick<Overview, "workers" | "you"> & { setting
     {
       id: YOU,
       parent: null,
-      name: "You",
-      role: "Owner · approves",
+      name: t("common.you"),
+      role: t("workforce.ownerApproves"),
       emoji: "",
       color: "muted",
       status: null,
       human: true,
       figures: [
-        [String(you.to_review), "to review"],
+        [String(you.to_review), t("workforce.toReview")],
         [String(you.approvals), "approvals"],
         ["—", ""],
       ],
-      label: `You, owner. ${you.to_review} to review, ${you.approvals} approvals waiting`,
+      label: t("workforce.youOwnerToReview", { to_review: you.to_review, approvals: you.approvals }),
     },
   ];
   for (const v of overview.workers) {
@@ -306,7 +306,7 @@ export function orgNodes(overview: Pick<Overview, "workers" | "you"> & { setting
       id: v.worker.agent,
       parent: v.worker.reports_to ?? YOU,
       name: v.name,
-      role: v.worker.manager ? `Virtual manager · ${department(v.worker.department)}` : v.worker.role,
+      role: v.worker.manager ? t("workforce.virtualManager", { value: department(v.worker.department) }) : v.worker.role,
       emoji: v.avatar.emoji,
       color: v.avatar.color,
       status: v.status,

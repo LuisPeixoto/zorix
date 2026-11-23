@@ -1,6 +1,7 @@
 // Turns the runs of a conversation into what the chat draws: the person's message, the agent's tool calls with their
 // approvals in the flow, and the answer (or what went wrong). Pure, so it is easy to test.
 import type { Approval, ThreadRun, ToolCall } from "./api.ts";
+import { t } from "./i18n/index.ts";
 
 export type ThreadItem =
   | { kind: "user"; id: string; runId: string; text: string; at: number }
@@ -29,15 +30,15 @@ export function buildThread(runs: ThreadRun[], live: Live | null = null): Thread
     if (run.state === "completed" && run.result) {
       items.push({ kind: "answer", id: `${run.id}:answer`, runId: run.id, text: run.result.text, at: run.finished_at ?? run.updated_at, version, streaming: false });
     } else if (run.state === "failed") {
-      items.push({ kind: "problem", id: `${run.id}:problem`, runId: run.id, tone: "err", title: "This run failed", text: run.failure?.message ?? "It stopped without saying why." });
+      items.push({ kind: "problem", id: `${run.id}:problem`, runId: run.id, tone: "err", title: t("thread.thisRunFailed"), text: run.failure?.message ?? t("thread.itStoppedWithoutSaying") });
     } else if (run.state === "cancelled") {
-      items.push({ kind: "problem", id: `${run.id}:problem`, runId: run.id, tone: "muted", title: "Stopped", text: run.cancel_reason ?? "This run was cancelled." });
+      items.push({ kind: "problem", id: `${run.id}:problem`, runId: run.id, tone: "muted", title: t("common.stopped"), text: run.cancel_reason ?? t("thread.thisRunWasCancelled") });
     } else if (run.state === "waiting_for_approval") {
-      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Waiting for you to decide on the step above." });
+      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: t("thread.waitingForYouTo") });
     } else if (run.state === "waiting_for_children") {
-      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Waiting for the agents it asked." });
+      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: t("thread.waitingForTheAgents") });
     } else if (run.state === "paused") {
-      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: "Paused." });
+      items.push({ kind: "waiting", id: `${run.id}:waiting`, runId: run.id, text: t("thread.paused") });
     } else if (WORKING.has(run.state)) {
       const text = live && live.runId === run.id ? live.text : "";
       items.push({ kind: "answer", id: `${run.id}:answer`, runId: run.id, text, at: run.updated_at, version, streaming: true });

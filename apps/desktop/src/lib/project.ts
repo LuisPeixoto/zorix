@@ -2,6 +2,7 @@
 // anything (moves, runs, approvals) live in Rust. Tested in project.test.ts.
 import type { Counts, NeedsYou, ProjectEvent, TaskPriority, TaskState, TaskView, Who } from "./api.ts";
 import type { UiTone } from "./ui/tone.ts";
+import { fmt, t } from "./i18n/index.ts";
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Lanes, priorities, words
@@ -13,29 +14,29 @@ export interface Lane {
 }
 
 export const LANES: Lane[] = [
-  { id: "backlog", name: "Backlog", tone: "muted" },
-  { id: "in_progress", name: "In progress", tone: "info" },
-  { id: "review", name: "Review", tone: "warn" },
-  { id: "done", name: "Done", tone: "ok" },
+  { id: "backlog", name: t("project.backlog"), tone: "muted" },
+  { id: "in_progress", name: t("project.inProgress"), tone: "info" },
+  { id: "review", name: t("common.review"), tone: "warn" },
+  { id: "done", name: t("common.done"), tone: "ok" },
 ];
 
-export const LANE_NAME: Record<TaskState, string> = { backlog: "Backlog", in_progress: "In progress", review: "Review", done: "Done" };
+export const LANE_NAME: Record<TaskState, string> = { backlog: t("project.backlog"), in_progress: t("project.inProgress"), review: t("common.review"), done: t("common.done") };
 export const LANE_TONE: Record<TaskState, UiTone> = { backlog: "muted", in_progress: "info", review: "warn", done: "ok" };
 
 // Written out in full so Tailwind can see every class.
 export const PRIORITY: Record<TaskPriority, { label: string; text: string; order: number }> = {
-  urgent: { label: "Urgent", text: "text-priority-urgent", order: 0 },
-  high: { label: "High", text: "text-priority-high", order: 1 },
-  normal: { label: "Normal", text: "text-priority-normal", order: 2 },
-  low: { label: "Low", text: "text-priority-low", order: 3 },
+  urgent: { label: t("project.urgent"), text: "text-priority-urgent", order: 0 },
+  high: { label: t("project.high"), text: "text-priority-high", order: 1 },
+  normal: { label: t("project.normal"), text: "text-priority-normal", order: 2 },
+  low: { label: t("project.low"), text: "text-priority-low", order: 3 },
 };
 
 export const PRIORITIES: TaskPriority[] = ["urgent", "high", "normal", "low"];
 
 export const NEEDS_TEXT: Record<NeedsYou, { label: string; tone: UiTone }> = {
-  review: { label: "Needs you", tone: "warn" },
-  run_failed: { label: "Run failed", tone: "err" },
-  run_waiting: { label: "Waiting for you", tone: "warn" },
+  review: { label: t("common.needsYou"), tone: "warn" },
+  run_failed: { label: t("project.runFailed"), tone: "err" },
+  run_waiting: { label: t("common.waitingForYou"), tone: "warn" },
 };
 
 export const keyNumber = (key: string): number => Number(key.slice(key.lastIndexOf("-") + 1)) || 0;
@@ -44,7 +45,6 @@ export const keyNumber = (key: string): number => Number(key.slice(key.lastIndex
 // Days
 
 const DAY_MS = 86_400_000;
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Days since 1970-01-01 of a `YYYY-MM-DD` day. */
 export function dayNumber(day: string): number {
@@ -71,17 +71,15 @@ export function addDays(day: string, n: number): string {
 
 /** "Dec 12". */
 export function dayLabel(day: string): string {
-  const n = dayNumber(day);
-  const date = new Date(n * DAY_MS);
-  return `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
+  return fmt.day(new Date(dayNumber(day) * DAY_MS), { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 /** What a card shows for a due date: a late one is `err` and says how late; any other is the day. */
 export function dueLabel(due: string | null, today: string): { text: string; late: boolean } | null {
   if (!due) return null;
   const late = dayNumber(today) - dayNumber(due);
-  if (late === 0) return { text: "Today", late: true };
-  if (late > 0) return { text: late === 1 ? "1 day late" : `${late} days late`, late: true };
+  if (late === 0) return { text: t("project.today"), late: true };
+  if (late > 0) return { text: late === 1 ? t("project.1DayLate") : t("project.daysLate", { late }), late: true };
   return { text: dayLabel(due), late: false };
 }
 
@@ -90,10 +88,10 @@ export function dueLabel(due: string | null, today: string): { text: string; lat
 
 export type Filter = "everyone" | "agents" | "people" | "urgent";
 export const FILTERS: { id: Filter; label: string }[] = [
-  { id: "everyone", label: "Everyone" },
-  { id: "agents", label: "Agents" },
-  { id: "people", label: "People" },
-  { id: "urgent", label: "Urgent and high" },
+  { id: "everyone", label: t("project.everyone") },
+  { id: "agents", label: t("common.agents") },
+  { id: "people", label: t("project.people") },
+  { id: "urgent", label: t("project.urgentAndHigh") },
 ];
 
 export function filterTasks(views: TaskView[], filter: Filter): TaskView[] {
@@ -131,8 +129,8 @@ export function countsOf(views: TaskView[]): Counts {
 }
 
 export function whoName(who: Who | null, agentName: (slug: string) => string): string {
-  if (!who) return "Nobody";
-  return who.type === "you" ? "You" : agentName(who.slug);
+  if (!who) return t("common.nobody");
+  return who.type === "you" ? t("common.you") : agentName(who.slug);
 }
 
 export function whoKey(who: Who | null): string {
@@ -157,12 +155,12 @@ export interface CardStatus {
 export function cardStatus(view: TaskView, manager: string | null, agentName: (slug: string) => string): CardStatus | null {
   if (view.needs_you) return { text: NEEDS_TEXT[view.needs_you].label, tone: NEEDS_TEXT[view.needs_you].tone, live: false };
   if (view.blocked_by.length > 0 && view.task.state === "in_progress") {
-    return { text: `Waiting for ${view.blocked_by[0]}${view.blocked_by.length > 1 ? ` and ${view.blocked_by.length - 1} more` : ""}`, tone: "muted", live: false };
+    return { text: t("project.waitingFor", { value: view.blocked_by[0], value2: view.blocked_by.length > 1 ? ` and ${view.blocked_by.length - 1} more` : "" }), tone: "muted", live: false };
   }
   const who = view.task.assignee;
   if (view.working && who && who.type !== "you") {
     const name = agentName(who.slug);
-    return { text: who.type === "agent" && who.slug === manager ? `${name} is planning` : `${name} is working`, tone: "info", live: true };
+    return { text: who.type === "agent" && who.slug === manager ? t("project.isPlanning", { name }) : t("project.isWorking", { name }), tone: "info", live: true };
   }
   return null;
 }
@@ -205,9 +203,9 @@ export function dropIndex(middles: number[], y: number): number {
 /** What a link says about itself: a pull request shows its number. */
 export function linkLabel(url: string, title: string | null): { kind: "pr" | "link"; text: string } {
   const github = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/.exec(url);
-  if (github) return { kind: "pr", text: `PR #${github[1]}` };
+  if (github) return { kind: "pr", text: t("project.pr", { value: github[1] }) };
   const gitlab = /^https?:\/\/[^/]*gitlab[^/]*\/.+\/-\/merge_requests\/(\d+)/.exec(url);
-  if (gitlab) return { kind: "pr", text: `MR !${gitlab[1]}` };
+  if (gitlab) return { kind: "pr", text: t("project.mr", { value: gitlab[1] }) };
   if (title) return { kind: "link", text: title };
   try {
     const parsed = new URL(url);
@@ -299,14 +297,14 @@ export function buildTimeline(views: TaskView[], scale: Scale, today: string): T
     const count = Math.min(60, Math.max(21, latest - first + 1));
     for (let i = 0; i < count; i += 1) {
       const date = new Date((first + i) * DAY_MS);
-      columns.push({ label: `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`, start: first + i, days: 1 });
+      columns.push({ label: fmt.day(date, { month: "short", day: "numeric", timeZone: "UTC" }), start: first + i, days: 1 });
     }
   } else if (scale === "weeks") {
     const first = mondayOf(earliest);
     const count = Math.min(26, Math.max(8, Math.ceil((latest - first + 1) / 7)));
     for (let i = 0; i < count; i += 1) {
       const date = new Date((first + i * 7) * DAY_MS);
-      columns.push({ label: `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`, start: first + i * 7, days: 7 });
+      columns.push({ label: fmt.day(date, { month: "short", day: "numeric", timeZone: "UTC" }), start: first + i * 7, days: 7 });
     }
   } else {
     let cursor = monthStart(earliest);
@@ -314,7 +312,7 @@ export function buildTimeline(views: TaskView[], scale: Scale, today: string): T
     for (let i = 0; i < count; i += 1) {
       const next = nextMonth(cursor);
       const date = new Date(cursor * DAY_MS);
-      columns.push({ label: `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`, start: cursor, days: next - cursor });
+      columns.push({ label: fmt.day(date, { month: "short", year: "numeric", timeZone: "UTC" }), start: cursor, days: next - cursor });
       cursor = next;
     }
   }
@@ -389,46 +387,46 @@ export function eventGroup(event: ProjectEvent): EventGroup {
 
 /** One line of history in words. `name` turns an agent's slug into what people call it. */
 export function eventSentence(event: ProjectEvent, name: (slug: string) => string): string {
-  const who = event.by ? (event.by.type === "you" ? "You" : name(event.by.slug)) : "ZORIX";
-  const task = event.task ?? "the project";
+  const who = event.by ? (event.by.type === "you" ? t("common.you") : name(event.by.slug)) : "ZORIX";
+  const task = event.task ?? t("project.theProject");
   const k = event.kind;
   switch (k.type) {
     case "project_created":
-      return `${who} made the project`;
+      return t("project.madeTheProject", { who });
     case "project_edited":
-      return `${who} changed the project`;
+      return t("project.changedTheProject", { who });
     case "project_archived":
-      return `${who} ${k.archived ? "archived" : "brought back"} the project`;
+      return t("project.theProject2", { who, value: k.archived ? "archived" : t("project.broughtBack") });
     case "task_created":
       return `${who} added ${task}: ${k.title}`;
     case "task_edited":
       return `${who} changed ${task}`;
     case "moved":
-      return `${who} ${k.approved_by ? "asked to move" : "moved"} ${task} ${k.approved_by ? "to" : `from ${LANE_NAME[k.from]} to`} ${LANE_NAME[k.to]}${k.note ? `: “${k.note}”` : ""}`;
+      return `${who} ${k.approved_by ? t("project.askedToMove") : "moved"} ${task} ${k.approved_by ? "to" : `from ${LANE_NAME[k.from]} to`} ${LANE_NAME[k.to]}${k.note ? `: “${k.note}”` : ""}`;
     case "assigned":
-      return k.to ? `${who} gave ${task} to ${k.to.type === "you" ? "you" : name(k.to.slug)}` : `${who} took ${task} off whoever had it`;
+      return k.to ? `${who} gave ${task} to ${k.to.type === "you" ? "you" : name(k.to.slug)}` : t("project.tookOffWhoeverHad", { who, task });
     case "run_started":
-      return `A run started on ${task}`;
+      return t("project.aRunStartedOn", { task });
     case "run_finished":
-      return `The run on ${task} finished`;
+      return t("project.theRunOnFinished", { task });
     case "run_failed":
-      return `The run on ${task} failed: ${k.reason}`;
+      return t("project.theRunOnFailed", { task, reason: k.reason });
     case "start_failed":
-      return `A run could not start on ${task}: ${k.reason}`;
+      return t("project.aRunCouldNot", { task, reason: k.reason });
     case "run_cancelled":
-      return `The run on ${task} was stopped`;
+      return t("project.theRunOnWas", { task });
     case "blocked":
-      return `${task} waits for ${k.by.join(", ")}`;
+      return t("project.waitsFor", { task, value: k.by.join(", ") });
     case "progress":
-      return `${who} reported ${k.percent}% on ${task}`;
+      return t("project.reportedOn", { who, percent: k.percent, task });
     case "deliverable":
-      return `${who} added a deliverable to ${task}: ${k.title}`;
+      return t("project.addedADeliverableTo", { who, task, title: k.title });
     case "comment":
-      return `${who} commented on ${task}: ${k.text}`;
+      return t("project.commentedOn", { who, task, text: k.text });
     case "linked":
       return `${who} linked ${k.url} to ${task}`;
     case "manager_asked":
-      return `${who} asked the manager to plan`;
+      return t("project.askedTheManagerTo", { who });
   }
 }
 
@@ -439,20 +437,18 @@ export function groupByDay(events: ProjectEvent[], today: string): { label: stri
     const day = todayOf(event.at);
     const last = out[out.length - 1];
     if (last && last.day === day) last.events.push(event);
-    else out.push({ label: day === today ? "Today" : day === addDays(today, -1) ? "Yesterday" : dayLabel(day), day, events: [event] });
+    else out.push({ label: day === today ? t("project.today") : day === addDays(today, -1) ? t("project.yesterday") : dayLabel(day), day, events: [event] });
   }
   return out.map(({ label, events: list }) => ({ label, events: list }));
 }
 
 /** The time of day of an event, `09:31`. */
 export function clock(at: number): string {
-  const date = new Date(at);
-  const pad = (v: number) => String(v).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return fmt.clock(at);
 }
 
 /** A cost in dollars from millionths. */
-export const usd = (micros: number): string => `$${(micros / 1_000_000).toFixed(2)}`;
+export const usd = (micros: number): string => fmt.usd2(micros);
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Forms and sorting

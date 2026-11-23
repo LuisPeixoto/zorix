@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { onMount } from "svelte";
 
   import History from "./History.svelte";
@@ -69,7 +70,7 @@
   async function save() {
     formError = null;
     if (where === "project" && !projectPath.trim()) {
-      formError = "Write the project folder, or choose another scope.";
+      formError = t("memory.writeTheProjectFolder");
       return;
     }
     if (editing) {
@@ -122,19 +123,19 @@
   const scopeName = (m: MemoryRow) => {
     if (!m.scope.startsWith("agent:")) return m.scope_label;
     const card = agents.cards.find((c) => c.id === m.scope.slice(6));
-    return card ? `${card.emoji} ${card.name}` : "an agent";
+    return card ? `${card.emoji} ${card.name}` : t("memory.anAgent");
   };
 </script>
 
 <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 overflow-y-auto p-8 [&>*]:shrink-0">
   <PageHeader
-    title="Memory"
-    subtitle="What ZORIX remembers between runs. Nothing is added without you: a run can only propose, and you approve."
+    title={t("common.memory")}
+    subtitle={t("memory.whatZorixRemembersBetween")}
     glow
     class="mb-1"
   >
     {#snippet actions()}
-      {#if tab === "facts"}<Button variant="primary" icon="plus" onclick={openAdd}>Remember something</Button>{/if}
+      {#if tab === "facts"}<Button variant="primary" icon="plus" onclick={openAdd}>{t("memory.rememberSomething")}</Button>{/if}
     {/snippet}
   </PageHeader>
 
@@ -145,7 +146,7 @@
       { value: "history", label: "Past work" },
     ]}
     bind:value={tab}
-    label="Memory"
+    label={t("common.memory")}
   />
 
   {#if store.error}<Callout tone="err">{store.error}</Callout>{/if}
@@ -156,10 +157,10 @@
     <History />
   {:else}
     <div class="flex flex-wrap items-center gap-3">
-      <Input class="min-w-56 flex-1" bind:value={query} placeholder="Search what is remembered" aria-label="Search what is remembered" />
+      <Input class="min-w-56 flex-1" bind:value={query} placeholder={t("memory.searchWhatIsRemembered")} aria-label={t("memory.searchWhatIsRemembered")} />
       <Segmented
         class="w-96"
-        label="Scope"
+        label={t("memory.scope")}
         bind:value={scope}
         options={[
           { value: "all", label: "All" },
@@ -169,16 +170,16 @@
           { value: "agent", label: "Agent" },
         ]}
       />
-      <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" bind:checked={showOld} /> Show replaced and expired</label>
+      <label class="flex items-center gap-2 text-sm text-muted"><input type="checkbox" bind:checked={showOld} /> {t("memory.showReplacedAndExpired")}</label>
     </div>
 
     {#if rows.length === 0}
       <EmptyState
           icon="book"
-          title={store.memory.length ? "Nothing matches" : "Nothing is remembered yet"}
+          title={store.memory.length ? t("memory.nothingMatches") : t("memory.nothingIsRememberedYet")}
           text={store.memory.length
-            ? "Change the search or the scope."
-            : "Add a fact or a preference yourself, or let a run propose one and approve it."}
+            ? t("memory.changeTheSearchOr")
+            : t("memory.addAFactOr")}
         />
     {/if}
 
@@ -194,22 +195,22 @@
                 {#if m.subject}<Badge tone="muted">about: {m.subject}</Badge>{/if}
                 {#if m.status === "replaced"}<Badge tone="warn" dot>replaced{m.replaced_by ? ` by ${m.replaced_by}` : ""}</Badge>{/if}
                 {#if m.status === "expired"}<Badge tone="warn" dot>expired</Badge>{/if}
-                {#if m.stale_days}<Badge tone="warn" dot>not confirmed for {m.stale_days} days</Badge>{/if}
+                {#if m.stale_days}<Badge tone="warn" dot>{t("memory.notConfirmedForDays", { stale_days: m.stale_days })}</Badge>{/if}
                 {#if m.valid_until && m.status === "active"}<Badge tone="muted">until {date(m.valid_until)}</Badge>{/if}
               </div>
               <p class="mt-2 text-xs text-faint">
-                {m.by} · added {ago(m.created_at, store.now)} · confirmed {date(m.confirmed_at)} · used in {m.use_count} run(s)
+                {t("memory.addedConfirmedUsedIn", { by: m.by, value: ago(m.created_at, store.now), value2: date(m.confirmed_at), use_count: m.use_count })}
                 <span class="mono">{m.id}</span>
               </p>
             </div>
             {#if m.status === "active"}
               <div class="flex shrink-0 gap-1.5">
-                {#if m.stale_days}<Button size="sm" icon="check" onclick={() => store.changeFact({ id: m.id, confirm: true }, true)}>Still true</Button>{/if}
-                <Button size="sm" icon="edit" onclick={() => openEdit(m)}>Edit</Button>
-                <Button size="sm" variant="danger" icon="trash" onclick={() => askDelete(m)}>Forget</Button>
+                {#if m.stale_days}<Button size="sm" icon="check" onclick={() => store.changeFact({ id: m.id, confirm: true }, true)}>{t("memory.stillTrue")}</Button>{/if}
+                <Button size="sm" icon="edit" onclick={() => openEdit(m)}>{t("memory.edit")}</Button>
+                <Button size="sm" variant="danger" icon="trash" onclick={() => askDelete(m)}>{t("memory.forget")}</Button>
               </div>
             {:else}
-              <Button size="sm" variant="danger" icon="trash" onclick={() => askDelete(m)}>Forget</Button>
+              <Button size="sm" variant="danger" icon="trash" onclick={() => askDelete(m)}>{t("memory.forget")}</Button>
             {/if}
           </div>
         </Card>
@@ -218,67 +219,66 @@
   {/if}
 </div>
 
-<Modal bind:open={dialog} title={editing ? "Edit memory" : "Remember something"} icon="book" size="lg">
+<Modal bind:open={dialog} title={editing ? t("memory.editMemory") : t("memory.rememberSomething")} icon="book" size="lg">
   <div class="space-y-4">
-    <Field label="What should be remembered? (one short sentence)">
-      {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={content} maxlength={500} placeholder="For example: Deploys go to staging first." />{/snippet}
+    <Field label={t("memory.whatShouldBeRemembered")}>
+      {#snippet children(f)}<Textarea id={f.id} rows={3} bind:value={content} maxlength={500} placeholder={t("memory.forExampleDeploysGo")} />{/snippet}
     </Field>
     <div class="grid grid-cols-2 gap-3">
       {#if !editing}
-        <Field label="Kind">
+        <Field label={t("common.kind")}>
           {#snippet children(f)}
             <Select id={f.id} bind:value={kind}>
-              <option value="fact">Fact: something true</option>
-              <option value="preference">Preference: how you want things done</option>
+              <option value="fact">{t("memory.factSomethingTrue")}</option>
+              <option value="preference">{t("memory.preferenceHowYouWant")}</option>
             </Select>
           {/snippet}
         </Field>
       {/if}
-      <Field label="Where it applies">
+      <Field label={t("memory.whereItApplies")}>
         {#snippet children(f)}
           <Select id={f.id} bind:value={where}>
-            <option value="global">Everywhere</option>
-            <option value="project">One project folder</option>
-            {#if editing?.scope.startsWith("conversation:")}<option value={editing.scope}>This conversation</option>{/if}
+            <option value="global">{t("memory.everywhere")}</option>
+            <option value="project">{t("memory.oneProjectFolder")}</option>
+            {#if editing?.scope.startsWith("conversation:")}<option value={editing.scope}>{t("memory.thisConversation")}</option>{/if}
           </Select>
         {/snippet}
       </Field>
     </div>
     {#if where === "project"}
-      <Field label="Project folder">
+      <Field label={t("memory.projectFolder")}>
         {#snippet children(f)}<Input id={f.id} mono bind:value={projectPath} placeholder="/path/to/the/project" />{/snippet}
       </Field>
     {/if}
     <div class="grid grid-cols-2 gap-3">
-      <Field label="About (optional): a newer memory about the same thing replaces this one">
-        {#snippet children(f)}<Input id={f.id} bind:value={subject} maxlength={80} placeholder="for example: language" />{/snippet}
+      <Field label={t("memory.aboutOptionalANewer")}>
+        {#snippet children(f)}<Input id={f.id} bind:value={subject} maxlength={80} placeholder={t("memory.forExampleLanguage")} />{/snippet}
       </Field>
-      <Field label="Forget after (optional)">
+      <Field label={t("memory.forgetAfterOptional")}>
         {#snippet children(f)}<Input id={f.id} type="date" bind:value={until} />{/snippet}
       </Field>
     </div>
-    <p class="text-xs text-faint">Do not store passwords or keys here: text that looks like one is refused.</p>
+    <p class="text-xs text-faint">{t("memory.doNotStorePasswords")}</p>
     {#if formError}<Callout tone="err">{formError}</Callout>{/if}
   </div>
   {#snippet footer()}
-    <Button onclick={() => (dialog = false)}>Cancel</Button>
-    <Button variant="primary" icon="check" loading={store.busy} disabled={!content.trim()} onclick={save}>{editing ? "Save" : "Remember"}</Button>
+    <Button onclick={() => (dialog = false)}>{t("common.cancel")}</Button>
+    <Button variant="primary" icon="check" loading={store.busy} disabled={!content.trim()} onclick={save}>{editing ? t("common.save") : t("memory.remember")}</Button>
   {/snippet}
 </Modal>
 
-<Modal bind:open={confirm} title="Forget this?" icon="trash" size="md">
+<Modal bind:open={confirm} title={t("memory.forgetThis")} icon="trash" size="md">
   {#if doomed}
     <p class="selectable text-md">{doomed.content}</p>
-    <p class="mt-3 text-sm text-muted">It is deleted from everything ZORIX keeps, including the record of runs that used it.</p>
+    <p class="mt-3 text-sm text-muted">{t("memory.itIsDeletedFrom")}</p>
     {#if doomedRuns.length}
       <Callout tone="warn" class="mt-3">
-        It was used in {doomedRuns.length} run(s). What those runs already received (their transcripts, and whatever a cloud provider
-        received) cannot be taken back.
+        {t("memory.itWasUsedIn", { length: doomedRuns.length })}
       </Callout>
     {/if}
   {/if}
   {#snippet footer()}
-    <Button onclick={() => (confirm = false)}>Keep it</Button>
-    <Button variant="danger" icon="trash" loading={store.busy} onclick={reallyDelete}>Forget</Button>
+    <Button onclick={() => (confirm = false)}>{t("common.keepIt")}</Button>
+    <Button variant="danger" icon="trash" loading={store.busy} onclick={reallyDelete}>{t("memory.forget")}</Button>
   {/snippet}
 </Modal>

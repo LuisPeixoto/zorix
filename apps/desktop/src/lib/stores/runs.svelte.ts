@@ -47,6 +47,7 @@ import { type ProjectTab, projects } from "./projects.svelte.ts";
 import { type WorkforceTab, workforce } from "./workforce.svelte.ts";
 import { type WorkflowSection, workflows } from "./workflows.svelte.ts";
 import { toast } from "./toast.svelte.ts";
+import { t } from "../i18n/index.ts";
 
 class RunsStore {
   info = $state<AppInfo | null>(null);
@@ -143,7 +144,7 @@ class RunsStore {
 
   async deleteFact(id: string, includeInactive: boolean): Promise<void> {
     const ok = await this.#act(() => forgetMemory(id));
-    if (ok) toast.ok("Forgotten.");
+    if (ok) toast.ok(t("stores.runs.forgotten"));
     await this.refreshMemory(includeInactive);
   }
 
@@ -232,14 +233,14 @@ class RunsStore {
 
   async saveKey(name: string, key: string): Promise<boolean> {
     const ok = await this.#act(() => setProviderKey(name, key));
-    if (ok) toast.ok(`Key for ${name} saved in the system keychain.`);
+    if (ok) toast.ok(t("stores.runs.keyForSavedIn", { name }));
     await this.refreshProviders();
     return ok;
   }
 
   async deleteKey(name: string): Promise<void> {
     const ok = await this.#act(() => removeProviderKey(name));
-    if (ok) toast.ok(`Key for ${name} removed.`);
+    if (ok) toast.ok(t("stores.runs.keyForRemoved", { name }));
     await this.refreshProviders();
   }
 
@@ -248,7 +249,7 @@ class RunsStore {
     const ok = await this.#act(async () => {
       count = await testProvider(name);
     });
-    if (ok) toast.ok(`${name} answered: ${count} model(s) available.`);
+    if (ok) toast.ok(t("stores.runs.answeredModelSAvailable", { name, total: count }));
     await this.refreshProviders();
   }
 
@@ -374,7 +375,7 @@ class RunsStore {
   async cancel(): Promise<void> {
     const id = this.selectedId;
     if (!id) return;
-    await this.#act(() => cancelRun(id, "Cancelled from the desktop app"));
+    await this.#act(() => cancelRun(id, t("stores.runs.cancelledFromTheDesktop")));
     this.#scheduleRefresh(id);
   }
 

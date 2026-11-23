@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmt, t } from "../i18n/index.ts";
   import { ago, duration, isFinished, isLive, shortId, tokens } from "../format.ts";
   import { providerCount, runSteps } from "../steps.ts";
   import { usd } from "../shell.ts";
@@ -58,19 +59,19 @@
   const sums = $derived(tree ? totals(tree) : null);
   const look = (e: Execution) => {
     const card = e.agent ? agents.card(e.agent.slug) : undefined;
-    return { emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted", name: card?.name ?? e.agent?.slug ?? "Run" };
+    return { emoji: card?.emoji ?? "🤖", color: card?.color ?? "muted", name: card?.name ?? e.agent?.slug ?? t("common.run") };
   };
 
   const context = $derived(store.context);
-  const kindLabel: Record<string, string> = { fact: "remembered", exchange: "earlier in this conversation", chunk: "document", past_work: "past work" };
+  const kindLabel: Record<string, string> = { fact: "remembered", exchange: t("runView.earlierInThisConversation"), chunk: "document", past_work: t("runView.pastWork") };
   const used = $derived(context?.recall?.items ?? []);
 
   async function copyId(id: string) {
     try {
       await navigator.clipboard.writeText(id);
-      toast.ok("Run id copied.");
+      toast.ok(t("runView.runIdCopied"));
     } catch {
-      toast.err("Could not copy the id.");
+      toast.err(t("runView.couldNotCopyThe"));
     }
   }
 
@@ -87,11 +88,11 @@
     chosen = null;
   });
   const tabs = $derived([
-    ...(tree ? [{ value: "tree", label: "Work tree", count: sums?.runs }] : []),
-    { value: "steps", label: "Steps", count: steps.length },
-    { value: "events", label: "Events", count: store.events.length },
-    { value: "context", label: "Context" },
-    { value: "cost", label: "Cost" },
+    ...(tree ? [{ value: "tree", label: t("runView.workTree"), count: sums?.runs }] : []),
+    { value: "steps", label: t("runView.steps"), count: steps.length },
+    { value: "events", label: t("runView.events"), count: store.events.length },
+    { value: "context", label: t("runView.context") },
+    { value: "cost", label: t("runView.cost") },
   ]);
   const resultText = (value: unknown) => (value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value, null, 2));
 </script>
@@ -101,19 +102,19 @@
     <div class="mx-auto w-full max-w-[1200px] p-6">
       <header class="relative mb-5">
         <span class="glow -top-20 -left-16 size-56" aria-hidden="true"></span>
-        <nav aria-label="Where you are" class="relative flex flex-wrap items-center gap-2 text-sm text-muted">
-          <button type="button" class="inline-flex items-center gap-1 transition hover:text-fg" onclick={() => store.showRuns()}><Icon name="history" size={13} />Runs</button>
+        <nav aria-label={t("runView.whereYouAre")} class="relative flex flex-wrap items-center gap-2 text-sm text-muted">
+          <button type="button" class="inline-flex items-center gap-1 transition hover:text-fg" onclick={() => store.showRuns()}><Icon name="history" size={13} />{t("common.runs")}</button>
           <Icon name="chevron-right" size={12} class="text-faint" />
           <span class="mono selectable" title={run.id}>{shortId(run.id)}</span>
-          <IconButton label="Copy the run id" icon="copy" size="sm" onclick={() => copyId(run.id)} />
+          <IconButton label={t("runView.copyTheRunId")} icon="copy" size="sm" onclick={() => copyId(run.id)} />
           <StatusBadge state={run.state} />
           {#if run.parent}
-            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-hover px-2 text-xs font-medium text-muted transition hover:text-fg" title="Open the run that asked for this one" onclick={() => void store.select(run.root ?? run.parent!)}>
-              <Icon name="branch" size={12} /> sub-run · level {run.depth ?? 1}
+            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-hover px-2 text-xs font-medium text-muted transition hover:text-fg" title={t("runView.openTheRunThat")} onclick={() => void store.select(run.root ?? run.parent!)}>
+              <Icon name="branch" size={12} /> {t("runView.subRunLevel", { value: run.depth ?? 1 })}
             </button>
           {/if}
           {#if run.agent}
-            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-accent-soft px-2 text-xs font-medium text-accent transition hover:bg-select" title="Open {run.agent.slug} and this conversation" onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null, team)}>
+            <button type="button" class="inline-flex h-5 items-center gap-1.5 rounded-full bg-accent-soft px-2 text-xs font-medium text-accent transition hover:bg-select" title={t("runView.openAndThisConversation", { slug: run.agent.slug })} onclick={() => store.showAgents(run.agent!.slug, "chat", run.conversation ?? null, team)}>
               <Icon name={team ? "users" : "bot"} size={12} /> {team ?? run.agent.slug} · v{run.agent.version}
             </button>
           {/if}
@@ -122,62 +123,62 @@
           <div class="min-w-0 flex-1">
             <h1 class="selectable text-3xl leading-tight font-semibold tracking-tight break-words text-balance">{run.request.prompt}</h1>
             <p class="mt-1.5 text-base text-muted">
-              Started {ago(run.created_at, store.now)}{#if helpers > 0}{" · "}{team ?? run.agent?.slug ?? "this run"} asked {helpers} {helpers === 1 ? "agent" : "agents"}{/if}
+              {t("runView.started", { value: ago(run.created_at, store.now) })}{#if helpers > 0}{" · "}{team ?? run.agent?.slug ?? t("runView.thisRun")} asked {helpers} {helpers === 1 ? "agent" : "agents"}{/if}
               {#if run.request.metadata?.task}
-                {" · "}From task
+                {t("runView.fromTask", { value: " · " })}
                 <button type="button" class="mono rounded font-medium text-accent outline-none hover:underline focus-visible:underline" onclick={() => store.showProjects(run.request.metadata?.project ?? "", "board", run.request.metadata?.task ?? null)}>{run.request.metadata.task}</button>
               {:else if run.request.metadata?.project_manager}
-                {" · "}Planning
+                {t("runView.planning", { value: " · " })}
                 <button type="button" class="mono rounded font-medium text-accent outline-none hover:underline focus-visible:underline" onclick={() => store.showProjects(run.request.metadata?.project ?? "")}>{run.request.metadata.project}</button>
               {/if}
               {#if run.request.metadata?.workflow_run}
-                {" · "}From workflow
-                <button type="button" class="rounded font-medium text-accent outline-none hover:underline focus-visible:underline" onclick={() => store.showWorkflows("run", null, run.request.metadata?.workflow_run ?? null)}>{run.request.metadata.workflow ?? "a workflow"}</button>
+                {t("runView.fromWorkflow", { value: " · " })}
+                <button type="button" class="rounded font-medium text-accent outline-none hover:underline focus-visible:underline" onclick={() => store.showWorkflows("run", null, run.request.metadata?.workflow_run ?? null)}>{run.request.metadata.workflow ?? t("runView.aWorkflow")}</button>
               {/if}
             </p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            {#if run.state === "paused"}<Button variant="primary" icon="play" disabled={store.busy} onclick={() => store.resume()}>Resume</Button>{/if}
-            {#if isLive(run.state)}<Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>Pause</Button>{/if}
-            {#if !isFinished(run.state)}<Button variant="danger" icon="x" disabled={store.busy} onclick={() => store.cancel()}>Cancel</Button>{/if}
+            {#if run.state === "paused"}<Button variant="primary" icon="play" disabled={store.busy} onclick={() => store.resume()}>{t("runView.resume")}</Button>{/if}
+            {#if isLive(run.state)}<Button icon="pause" disabled={store.busy} onclick={() => store.pause()}>{t("runView.pause")}</Button>{/if}
+            {#if !isFinished(run.state)}<Button variant="danger" icon="x" disabled={store.busy} onclick={() => store.cancel()}>{t("common.cancel")}</Button>{/if}
             {#if run.conversation}
-              <Button variant="ghost" icon="message" onclick={() => (run.agent ? store.showAgents(run.agent.slug, "chat", run.conversation ?? null, team) : store.continueConversation())}>Continue in chat</Button>
+              <Button variant="ghost" icon="message" onclick={() => (run.agent ? store.showAgents(run.agent.slug, "chat", run.conversation ?? null, team) : store.continueConversation())}>{t("runView.continueInChat")}</Button>
             {/if}
           </div>
         </div>
       </header>
 
       <div class="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon="cpu" label="Model steps" value={detail.summary.model_calls} detail="{providerCount(detail.summary.steps)} {providerCount(detail.summary.steps) === 1 ? 'provider' : 'providers'}" />
-        <Stat icon="wrench" label="Tool calls" value={run.usage.tool_calls} detail="{approvedByYou} approved by you" />
-        <Stat icon="sparkles" label="Tokens" value={tokens(run.usage).toLocaleString("fr-FR")} detail="{run.usage.input_tokens.toLocaleString('fr-FR')} in · {run.usage.output_tokens.toLocaleString('fr-FR')} out" />
-        <Stat icon="clock" label="Work time" value={duration(run.active_ms)} detail="{usd(run.usage.cost_micros)} · waiting for you is not counted" />
+        <Stat icon="cpu" label={t("runView.modelSteps")} value={detail.summary.model_calls} detail="{providerCount(detail.summary.steps)} {providerCount(detail.summary.steps) === 1 ? 'provider' : 'providers'}" />
+        <Stat icon="wrench" label={t("runView.toolCalls")} value={run.usage.tool_calls} detail="{approvedByYou} approved by you" />
+        <Stat icon="sparkles" label={t("runView.tokens")} value={fmt.number(tokens(run.usage))} detail="{run.usage.input_tokens.toLocaleString('fr-FR')} in · {run.usage.output_tokens.toLocaleString('fr-FR')} out" />
+        <Stat icon="clock" label={t("runView.workTime")} value={duration(run.active_ms)} detail="{usd(run.usage.cost_micros)} · waiting for you is not counted" />
       </div>
 
       <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="min-w-0 space-y-5">
           {#if run.result}
-            <Card title="Result" icon="check-circle">
+            <Card title={t("runView.result")} icon="check-circle">
               {#if run.agent}<Markdown text={run.result.text} />{:else}<pre class="selectable font-sans text-md leading-relaxed whitespace-pre-wrap">{run.result.text}</pre>{/if}
             </Card>
           {/if}
           {#if run.failure}
-            <Callout tone="err" title="It did not finish"><span class="selectable">{run.failure.message}</span></Callout>
+            <Callout tone="err" title={t("runView.itDidNotFinish")}><span class="selectable">{run.failure.message}</span></Callout>
           {/if}
           {#if run.state === "cancelled"}
-            <Callout tone="muted" icon="stop" title="Cancelled">{run.cancel_reason ?? ""}</Callout>
+            <Callout tone="muted" icon="stop" title={t("common.cancelled")}>{run.cancel_reason ?? ""}</Callout>
           {/if}
 
-          <Tabs {tabs} bind:value={() => tab, (v) => (chosen = v)} label="Run details" />
+          <Tabs {tabs} bind:value={() => tab, (v) => (chosen = v)} label={t("runView.runDetails")} />
 
           {#if tab === "tree" && tree && sums}
             <div class="space-y-3">
               <TreeView root={tree} selected={run.id} {look} now={store.now} onselect={(id) => id !== run.id && void store.select(id)} />
-              <p class="text-xs text-muted tabular-nums">{sums.runs} runs · {sums.done} done{sums.working ? ` · ${sums.working} working` : ""}{sums.waiting ? ` · ${sums.waiting} waiting for you` : ""}{sums.failed ? ` · ${sums.failed} failed` : ""}. The cost and tokens above include everything below. Cancelling this run cancels the whole tree.</p>
+              <p class="text-xs text-muted tabular-nums">{sums.runs} {t("runView.runs2")} {sums.done} done{sums.working ? ` · ${sums.working} working` : ""}{sums.waiting ? t("runView.waitingForYou", { waiting: sums.waiting }) : ""}{sums.failed ? ` · ${sums.failed} failed` : ""}{t("runView.theCostAndTokens")}</p>
             </div>
           {:else if tab === "steps"}
-            <section aria-label="Steps" class="space-y-2.5">
-              <h2 class="flex items-center gap-2 text-base font-semibold"><Icon name="list" size={14} class="text-muted" />Steps of {team ?? run.agent?.slug ?? "this run"}</h2>
+            <section aria-label={t("runView.steps")} class="space-y-2.5">
+              <h2 class="flex items-center gap-2 text-base font-semibold"><Icon name="list" size={14} class="text-muted" />{t("runView.stepsOf")} {team ?? run.agent?.slug ?? t("runView.thisRun")}</h2>
               {#each steps as item, i (i)}
                 {#if item.kind === "tool" && item.call}
                   <ToolCallCard tool={item.title} status={item.call.status === "delegated" ? "started" : item.call.status} args={item.call.arguments} result={resultText(item.call.result)} error={item.call.error} />
@@ -189,20 +190,20 @@
                   </div>
                 {/if}
               {:else}
-                <p class="text-base text-muted">No steps yet.</p>
+                <p class="text-base text-muted">{t("runView.noStepsYet")}</p>
               {/each}
               <p class="flex items-center gap-1.5 pt-1 text-xs {detail.summary.fallbacks > 0 ? 'text-warn' : 'text-muted'}">
                 <Icon name={detail.summary.fallbacks > 0 ? "route" : "check"} size={13} />
-                {detail.summary.fallbacks > 0 ? `Switched model ${detail.summary.fallbacks} time(s) because one was unavailable.` : "No fallback was needed."}
+                {detail.summary.fallbacks > 0 ? t("runView.switchedModelTimeS", { fallbacks: detail.summary.fallbacks }) : t("runView.noFallbackWasNeeded")}
               </p>
             </section>
           {:else if tab === "events"}
-            <Card title="What happened" icon="history"><Timeline events={store.events} /></Card>
+            <Card title={t("runView.whatHappened")} icon="history"><Timeline events={store.events} /></Card>
           {:else if tab === "context"}
             {#if context?.recall || context?.segments}
-              <Card title="Context" icon="book">
-                {#if context.recall?.degraded}<Callout tone="warn" class="mb-3">Search was weaker than usual: {context.recall.degraded}</Callout>{/if}
-                {#if context.recall?.scrubbed}<p class="mb-3 text-xs text-muted">Something this run used was deleted afterwards, so it is no longer listed here.</p>{/if}
+              <Card title={t("runView.context")} icon="book">
+                {#if context.recall?.degraded}<Callout tone="warn" class="mb-3">{t("runView.searchWasWeakerThan", { degraded: context.recall.degraded })}</Callout>{/if}
+                {#if context.recall?.scrubbed}<p class="mb-3 text-xs text-muted">{t("runView.somethingThisRunUsed")}</p>{/if}
                 {#if used.length}
                   <ul class="space-y-2">
                     {#each used as item (item.id + item.kind)}
@@ -218,36 +219,36 @@
                     {/each}
                   </ul>
                 {:else}
-                  <p class="text-sm text-muted">Memory added nothing to this run: nothing relevant was found, or it was switched off.</p>
+                  <p class="text-sm text-muted">{t("runView.memoryAddedNothingTo")}</p>
                 {/if}
                 {#if context.segments?.length}
-                  <p class="mt-4 mb-1.5 text-xs font-medium text-muted">What the first request held{context.token_factor && context.token_factor !== 1 ? ` (tokens × ${context.token_factor.toFixed(2)}, learned from this model)` : ""}</p>
+                  <p class="mt-4 mb-1.5 text-xs font-medium text-muted">{t("runView.whatTheFirstRequest")}{context.token_factor && context.token_factor !== 1 ? t("runView.tokensLearnedFromThis", { value: context.token_factor.toFixed(2) }) : ""}</p>
                   <div class="flex flex-wrap gap-1.5">
-                    {#each context.segments as segment, i (i)}<Badge tone={segment.kept ? "muted" : "warn"}>{segment.origin} · {segment.tokens}{segment.kept ? "" : " · left out"}</Badge>{/each}
+                    {#each context.segments as segment, i (i)}<Badge tone={segment.kept ? "muted" : "warn"}>{segment.origin} · {segment.tokens}{segment.kept ? "" : t("runView.leftOut")}</Badge>{/each}
                   </div>
                 {/if}
               </Card>
             {:else}
-              <p class="text-base text-muted">The context is built when the first model step starts.</p>
+              <p class="text-base text-muted">{t("runView.theContextIsBuilt")}</p>
             {/if}
           {:else}
-            <Card title="Cost" icon="dollar">
+            <Card title={t("runView.cost")} icon="dollar">
               <KeyValue
                 items={[
                   { key: "Cost", value: usd(run.usage.cost_micros), mono: true },
-                  { key: "Input tokens", value: run.usage.input_tokens.toLocaleString("fr-FR"), mono: true },
-                  { key: "Output tokens", value: run.usage.output_tokens.toLocaleString("fr-FR"), mono: true },
+                  { key: "Input tokens", value: fmt.number(run.usage.input_tokens), mono: true },
+                  { key: "Output tokens", value: fmt.number(run.usage.output_tokens), mono: true },
                   { key: "Model calls", value: run.usage.model_calls, mono: true },
                   { key: "Tool calls", value: run.usage.tool_calls, mono: true },
                 ]}
               />
               {#if tree && tree.children.length}
-                <p class="mt-4 mb-2 text-2xs font-semibold tracking-wider text-faint uppercase">Where it went</p>
+                <p class="mt-4 mb-2 text-2xs font-semibold tracking-wider text-faint uppercase">{t("runView.whereItWent")}</p>
                 <ul class="space-y-2">
                   {#each family as member (member.id)}
                     <li class="flex items-center gap-3 text-sm">
                       <span class="min-w-0 flex-1 truncate">{look(member).name}{member.id === run.id ? "" : ` · ${member.request.prompt.slice(0, 40)}`}</span>
-                      <Sparkbar value={member.usage.cost_micros} max={run.root ? (family.find((f) => f.id === run.root)?.usage.cost_micros ?? 1) : run.usage.cost_micros} label="Share of the cost of {look(member).name}" />
+                      <Sparkbar value={member.usage.cost_micros} max={run.root ? (family.find((f) => f.id === run.root)?.usage.cost_micros ?? 1) : run.usage.cost_micros} label={t("common.shareOfTheCost", { name: look(member).name })} />
                       <span class="mono w-16 text-right text-xs text-muted tabular-nums">{usd(member.usage.cost_micros)}</span>
                     </li>
                   {/each}
@@ -257,10 +258,10 @@
           {/if}
         </div>
 
-        <aside class="min-w-0 space-y-5" aria-label="This run">
+        <aside class="min-w-0 space-y-5" aria-label={t("runView.thisRun2")}>
           {#each pending as approval (approval.id)}<ApprovalCard {approval} />{/each}
           <TreeApprovals items={waitingBelow} onanswered={() => { void loadFamily(); void store.select(run.id); }} />
-          <Card title="This run" icon="shield">
+          <Card title={t("runView.thisRun2")} icon="shield">
             <KeyValue
               items={[
                 { key: "Started by", value: run.agent ? `${team ?? run.agent.slug} v${run.agent.version}` : "you" },
@@ -270,14 +271,14 @@
                 { key: "Cost", value: usd(run.usage.cost_micros), mono: true },
               ]}
             />
-            {#if tree}<p class="mt-3 text-xs text-muted">Budgets and permissions only shrink down the tree. What sub-runs spend counts here.</p>{/if}
+            {#if tree}<p class="mt-3 text-xs text-muted">{t("runView.budgetsAndPermissionsOnly")}</p>{/if}
           </Card>
         </aside>
       </div>
     </div>
   </div>
 {:else}
-  <div class="mx-auto max-w-4xl space-y-4 p-6" aria-busy="true" aria-label="Loading">
+  <div class="mx-auto max-w-4xl space-y-4 p-6" aria-busy="true" aria-label={t("common.loading")}>
     <div class="skeleton h-6 w-24"></div>
     <div class="skeleton h-8 w-2/3"></div>
     <div class="grid grid-cols-4 gap-3"><div class="skeleton h-20"></div><div class="skeleton h-20"></div><div class="skeleton h-20"></div><div class="skeleton h-20"></div></div>

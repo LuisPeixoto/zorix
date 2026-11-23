@@ -1,5 +1,6 @@
 // What New run tells a person before they start: where the conversation goes, and what the run may use. Pure, tested in newRun.test.ts.
 import type { ModelRow } from "./api.ts";
+import { t as tr } from "./i18n/index.ts";
 
 export type Destination =
   | { kind: "demo" }
@@ -9,7 +10,7 @@ export type Destination =
   | { kind: "routed"; name: string }
   | { kind: "none" };
 
-const PROVIDER_NAMES: Record<string, string> = { anthropic: "Anthropic", openai: "OpenAI", gemini: "Gemini", ollama: "Ollama" };
+const PROVIDER_NAMES: Record<string, string> = { anthropic: tr("newRun.anthropic"), openai: tr("newRun.openai"), gemini: tr("newRun.gemini"), ollama: tr("newRun.ollama") };
 
 /** `anthropic` becomes "Anthropic"; a provider this does not know keeps its own name. */
 export const providerName = (id: string): string => PROVIDER_NAMES[id] ?? id;

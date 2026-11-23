@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { ago, shorten, shortId } from "../format.ts";
   import { inFilter, type RunFilter, runningCount, usd } from "../shell.ts";
   import { store } from "../stores/runs.svelte.ts";
@@ -15,26 +16,26 @@
 
 <div class="h-full overflow-y-auto">
   <div class="mx-auto max-w-[1100px] p-6">
-    <PageHeader title="Runs" subtitle="Everything you asked ZORIX to do. Open one to see every step, tool call and approval." glow>
+    <PageHeader title={t("common.runs")} subtitle={t("runsPage.everythingYouAskedZorix")} glow>
       {#snippet actions()}
-        <Button variant="primary" icon="plus" onclick={() => { store.continuing = null; store.showForm(); }}>New run</Button>
+        <Button variant="primary" icon="plus" onclick={() => { store.continuing = null; store.showForm(); }}>{t("common.newRun")}</Button>
       {/snippet}
     </PageHeader>
 
     {#if store.runs.length === 0}
-      <EmptyState icon="history" title="No runs yet" text="Say what you want done and what it may use. Anything that changes something asks you first.">
-        {#snippet actions()}<Button variant="primary" icon="plus" onclick={() => store.showForm()}>New run</Button>{/snippet}
+      <EmptyState icon="history" title={t("common.noRunsYet")} text={t("runsPage.sayWhatYouWant")}>
+        {#snippet actions()}<Button variant="primary" icon="plus" onclick={() => store.showForm()}>{t("common.newRun")}</Button>{/snippet}
       </EmptyState>
     {:else}
       <div class="mb-5 grid gap-4 sm:grid-cols-3">
-        <Stat icon="play" label="Running now" value={runningCount(store.runs)} detail="{store.runs.length} runs listed" />
-        <Stat icon="shield" label="Waiting for you" value={waiting} detail={waiting === 1 ? "one run needs a decision" : "runs that need a decision"} />
-        <Stat icon="dollar" label="Cost of these runs" value={usd(spent)} detail="including what agents started" />
+        <Stat icon="play" label={t("runsPage.runningNow")} value={runningCount(store.runs)} detail="{store.runs.length} runs listed" />
+        <Stat icon="shield" label={t("common.waitingForYou")} value={waiting} detail={waiting === 1 ? "one run needs a decision" : "runs that need a decision"} />
+        <Stat icon="dollar" label={t("runsPage.costOfTheseRuns")} value={usd(spent)} detail="including what agents started" />
       </div>
 
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <Segmented
-          label="Show"
+          label={t("common.show")}
           bind:value={filter}
           options={[
             { value: "all", label: `All ${store.runs.length}` },
@@ -46,9 +47,9 @@
       </div>
 
       {#if shown.length === 0}
-        <p class="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-8 text-center text-base text-muted">No runs here.</p>
+        <p class="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-8 text-center text-base text-muted">{t("runsPage.noRunsHere")}</p>
       {:else}
-        <ul aria-label="Runs" class="divide-y divide-line-soft overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
+        <ul aria-label={t("common.runs")} class="divide-y divide-line-soft overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
           {#each shown as run (run.id)}
             <li>
               <button type="button" onclick={() => void store.select(run.id)} class="flex w-full items-center gap-3 px-4 py-3 text-left transition duration-150 hover:bg-hover">
@@ -65,7 +66,7 @@
                     <span class="mono tnum">{usd(run.usage.cost_micros)}</span>
                   </span>
                 </span>
-                {#if store.needsYou[run.id]}<Badge tone="warn" dot>Needs you in the tree</Badge>{/if}
+                {#if store.needsYou[run.id]}<Badge tone="warn" dot>{t("runsPage.needsYouInThe")}</Badge>{/if}
                 <StatusBadge state={run.state} />
                 <span class="tnum w-20 shrink-0 text-right text-xs text-muted">{ago(run.created_at, store.now)}</span>
               </button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { ago, shorten } from "../format.ts";
   import { integrations } from "../stores/integrations.svelte.ts";
   import { inbox } from "../stores/inbox.svelte.ts";
@@ -36,18 +37,18 @@
 
 <div class="h-full overflow-y-auto">
   <div class="mx-auto max-w-[1100px] p-6">
-    <PageHeader title="Inbox" subtitle="Everything that is waiting for a decision from you. Nothing that changes something happens until you answer." glow />
+    <PageHeader title={t("common.inbox")} subtitle={t("inbox.everythingThatIsWaiting")} glow />
 
     {#if items.length === 0 && notices.length === 0}
-      <EmptyState icon="shield-check" title="Nothing is waiting for you" text="When a run wants to change something, a workflow stops for you, a task is ready for review, or a connected server needs a review or a sign-in, it appears here, oldest first." />
+      <EmptyState icon="shield-check" title={t("inbox.nothingIsWaitingFor")} text={t("inbox.whenARunWants")} />
     {:else}
       {#if items.length === 0}
-        <p class="mb-4 text-sm text-muted">Nothing is waiting for a decision from you.</p>
+        <p class="mb-4 text-sm text-muted">{t("inbox.nothingIsWaitingFor2")}</p>
       {:else}
-      <section aria-label="Waiting for you" class="overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
+      <section aria-label={t("common.waitingForYou")} class="overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
         <header class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-4 py-3">
           <Icon name="shield" size={15} class="text-accent" />
-          <h2 class="flex-1 text-base font-semibold">Waiting for you</h2>
+          <h2 class="flex-1 text-base font-semibold">{t("common.waitingForYou")}</h2>
           <Badge tone="warn">{items.length}</Badge>
         </header>
         <ul class="divide-y divide-line-soft">
@@ -58,47 +59,47 @@
                 <span class="min-w-0 flex-1">
                   <span class="flex items-baseline gap-2 truncate"><span class="mono text-base font-semibold">{item.tool}</span>{#if item.target}<span class="mono truncate text-sm text-muted">{item.target}</span>{/if}</span>
                   <span class="mt-0.5 block truncate text-xs text-muted">
-                    {item.agent ? `${item.agent} · ` : ""}{shorten(item.rootPrompt, 60)} · waiting <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span>
+                    {t("inbox.waiting", { value: item.agent ? `${item.agent} · ` : "", value2: shorten(item.rootPrompt, 60) })} <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span>
                   </span>
                 </span>
                 {#if item.depth > 0}<Badge tone="muted">level {item.depth}</Badge>{/if}
               {:else if item.kind === "workflow"}
                 <span class="min-w-0 flex-1">
-                  <span class="flex items-baseline gap-2 truncate"><span class="text-base font-semibold">{item.title}</span><span class="truncate text-sm text-muted">{item.what === "question" ? "asks a question" : item.what === "action" ? "wants to act" : "needs approval"}</span></span>
+                  <span class="flex items-baseline gap-2 truncate"><span class="text-base font-semibold">{item.title}</span><span class="truncate text-sm text-muted">{item.what === "question" ? t("inbox.asksAQuestion") : item.what === "action" ? t("inbox.wantsToAct") : t("inbox.needsApproval")}</span></span>
                   <span class="mt-0.5 block truncate text-xs text-muted">
-                    {item.workflow ? `${item.workflow} · ` : ""}{shorten(item.message, 70)} · waiting <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span>
+                    {t("inbox.waiting", { value: item.workflow ? `${item.workflow} · ` : "", value2: shorten(item.message, 70) })} <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span>
                   </span>
                 </span>
               {:else if item.kind === "task"}
                 <span class="min-w-0 flex-1">
                   <span class="flex items-baseline gap-2 truncate"><span class="mono text-sm font-semibold text-faint">{item.key}</span><span class="truncate text-base font-semibold">{item.title}</span></span>
                   <span class="mt-0.5 block truncate text-xs text-muted">
-                    {item.project} · {item.why === "review" ? "ready for your review" : item.why === "run_failed" ? "its run failed" : "its run waits for an approval"} · <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span> ago
+                    {item.project} · {item.why === "review" ? t("inbox.readyForYourReview") : item.why === "run_failed" ? t("inbox.itsRunFailed") : t("inbox.itsRunWaitsFor")} · <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span> ago
                   </span>
                 </span>
               {:else}
                 <span class="min-w-0 flex-1">
                   <span class="block truncate text-base font-semibold">{item.server}</span>
                   <span class="mt-0.5 block truncate text-xs text-muted">
-                    {item.why === "login" ? "Needs you to sign in" : `${item.tools} tool${item.tools === 1 ? "" : "s"} to review before an agent can use ${item.tools === 1 ? "it" : "them"}`}
+                    {item.why === "login" ? t("inbox.needsYouToSign") : t("inbox.toolsToReviewBefore", { count: item.tools })}
                   </span>
                 </span>
               {/if}
-              <Button size="sm" aria-label={item.kind === "approval" ? `Review ${item.tool}${item.target ? ` ${item.target}` : ""}` : item.kind === "workflow" ? `Review ${item.title}` : item.kind === "task" ? `Open ${item.key}` : `Review ${item.server}`} onclick={() => review(item)}>Review</Button>
+              <Button size="sm" aria-label={item.kind === "approval" ? t("inbox.review", { tool: item.tool, value: item.target ? ` ${item.target}` : "" }) : item.kind === "workflow" ? t("inbox.review2", { title: item.title }) : item.kind === "task" ? t("inbox.open", { key: item.key }) : t("inbox.review3", { server: item.server })} onclick={() => review(item)}>{t("common.review")}</Button>
             </li>
           {/each}
         </ul>
-        <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">Oldest asks first. Answers are bound to the exact call.</footer>
+        <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">{t("inbox.oldestAsksFirstAnswers")}</footer>
       </section>
       {/if}
 
       {#if notices.length > 0}
-        <section aria-label="For your information" class="mt-6 overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
+        <section aria-label={t("inbox.forYourInformation")} class="mt-6 overflow-hidden rounded-2xl border border-line bg-panel shadow-card">
           <header class="flex items-center gap-2 border-b border-line-soft bg-panel-2 px-4 py-3">
             <Icon name="building" size={15} class="text-accent" />
-            <h2 class="flex-1 text-base font-semibold">From your workforce</h2>
+            <h2 class="flex-1 text-base font-semibold">{t("inbox.fromYourWorkforce")}</h2>
             <Badge tone="muted">{notices.length}</Badge>
-            <Button size="sm" variant="ghost" icon="check" onclick={() => void workforce.markSeen()}>Mark all read</Button>
+            <Button size="sm" variant="ghost" icon="check" onclick={() => void workforce.markSeen()}>{t("inbox.markAllRead")}</Button>
           </header>
           <ul class="divide-y divide-line-soft">
             {#each notices as n (n.id)}
@@ -108,11 +109,11 @@
                   <span class="block truncate text-base font-semibold">{n.title}</span>
                   <span class="mt-0.5 block truncate text-xs text-muted">{shorten(n.text, 90)} · <span class="tnum">{ago(n.at, store.now)}</span></span>
                 </span>
-                <Button size="sm" aria-label="Open: {n.title}" onclick={() => openNotice(n)}>Open</Button>
+                <Button size="sm" aria-label={t("inbox.open2", { title: n.title })} onclick={() => openNotice(n)}>{t("common.open")}</Button>
               </li>
             {/each}
           </ul>
-          <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">Nothing here waits for an answer. Proposals are things a worker at Suggest left for you to do.</footer>
+          <footer class="border-t border-line-soft bg-panel-2 px-4 py-2.5 text-xs text-muted">{t("inbox.nothingHereWaitsFor")}</footer>
         </section>
       {/if}
     {/if}

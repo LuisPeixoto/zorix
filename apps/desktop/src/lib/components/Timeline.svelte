@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmt, t } from "../i18n/index.ts";
   import type { ExecEvent } from "../api.ts";
   import { describeEvent, eventIcon, isNoise } from "../format.ts";
   import { Badge, Icon, toneClass } from "../ui/index.ts";
@@ -6,10 +7,10 @@
   let { events }: { events: ExecEvent[] } = $props();
 
   const shown = $derived(events.filter((e) => !isNoise(e)));
-  const time = (at: number) => new Date(at).toLocaleTimeString([], { hour12: false });
+  const time = (at: number) => fmt.clock(at, true);
 </script>
 
-<ol aria-label="What happened" class="relative">
+<ol aria-label={t("timeline.whatHappened")} class="relative">
   {#each shown as event, i (event.seq)}
     {@const view = describeEvent(event)}
     <li class="relative flex gap-3 pb-3 last:pb-0">
@@ -30,6 +31,6 @@
     </li>
   {/each}
   {#if shown.length === 0}
-    <li class="text-base text-muted">Nothing yet.</li>
+    <li class="text-base text-muted">{t("timeline.nothingYet")}</li>
   {/if}
 </ol>

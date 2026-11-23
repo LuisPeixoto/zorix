@@ -1,6 +1,7 @@
 // The only file that talks to the Rust side. Types mirror what the engine sends (serde JSON).
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
+import { t as tr } from "./i18n/index.ts";
 
 export type ExecutionState =
   | "created"
@@ -1247,7 +1248,7 @@ export interface TaskMove {
 }
 
 /** The words a failed move starts with when a run is going and would be stopped. */
-export const RUN_GOING = "run going:";
+export const RUN_GOING = tr("api.runGoing");
 
 // The store leaves out lists that are empty and fields that are not set; the screens always get all of them.
 const fillTask = (t: Partial<Task> & Pick<Task, "key">): Task =>

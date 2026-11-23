@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "./lib/i18n/index.ts";
   import { onMount } from "svelte";
 
   import { store } from "./lib/stores/runs.svelte.ts";
@@ -107,24 +108,24 @@
 
   // The design system opens with Ctrl/⌘ + Shift + D in any build, so it is easy to show.
   const commands = $derived<Command[]>([
-    { id: "new", label: "New run", group: "Actions", icon: "plus", keywords: "start create", run: () => { store.continuing = null; store.showForm(); } },
-    { id: "inbox", label: "Inbox", group: "Go to", icon: "bell", keywords: "approvals waiting review decide", run: () => store.showInbox() },
-    { id: "runs", label: "Runs", group: "Go to", icon: "history", keywords: "history list all", run: () => store.showRuns() },
-    { id: "workflows", label: "Workflows", group: "Go to", icon: "workflow", keywords: "automation schedule trigger webhook approve steps", run: () => store.showWorkflows() },
+    { id: "new", label: tr("common.newRun"), group: tr("app.actions"), icon: "plus", keywords: tr("app.startCreate"), run: () => { store.continuing = null; store.showForm(); } },
+    { id: "inbox", label: tr("common.inbox"), group: tr("app.goTo"), icon: "bell", keywords: tr("app.approvalsWaitingReviewDecide"), run: () => store.showInbox() },
+    { id: "runs", label: tr("common.runs"), group: tr("app.goTo"), icon: "history", keywords: tr("app.historyListAll"), run: () => store.showRuns() },
+    { id: "workflows", label: tr("common.workflows"), group: tr("app.goTo"), icon: "workflow", keywords: tr("app.automationScheduleTriggerWebhook"), run: () => store.showWorkflows() },
     ...(workflows.overview?.cards ?? []).map((card) => ({
       id: `workflow-${card.workflow.slug}`,
-      label: `Workflow: ${card.workflow.draft.name}`,
-      group: "Workflows",
+      label: tr("app.workflow", { name: card.workflow.draft.name }),
+      group: tr("common.workflows"),
       icon: "workflow",
       hint: card.workflow.enabled ? "on" : "off",
       keywords: card.workflow.slug,
       run: () => store.showWorkflows("editor", card.workflow.id),
     })),
-    { id: "projects", label: "Projects", group: "Go to", icon: "kanban", keywords: "tasks board list timeline deliverables history manager", run: () => store.showProjects() },
+    { id: "projects", label: tr("common.projects"), group: tr("app.goTo"), icon: "kanban", keywords: tr("app.tasksBoardListTimeline"), run: () => store.showProjects() },
     ...projects.cards.map((card) => ({
       id: `project-${card.project.key}`,
-      label: `Project: ${card.project.name}`,
-      group: "Projects",
+      label: tr("app.project", { name: card.project.name }),
+      group: tr("common.projects"),
       icon: "kanban",
       hint: card.project.key,
       keywords: card.project.key,
@@ -133,28 +134,28 @@
     ...projects.index.slice(0, 200).map((task) => ({
       id: `task-${task.key}`,
       label: `${task.key} ${task.title}`,
-      group: "Tasks",
+      group: tr("common.tasks"),
       icon: "kanban",
       hint: task.state.replaceAll("_", " "),
       keywords: task.project,
       run: () => store.showProjects(task.project, "board", task.key),
     })),
-    { id: "workforce", label: "Workforce", group: "Go to", icon: "building", keywords: "workers organisation org chart departments autonomy budget manager plan report", run: () => store.showWorkforce() },
+    { id: "workforce", label: tr("common.workforce"), group: tr("app.goTo"), icon: "building", keywords: tr("app.workersOrganisationOrgChart"), run: () => store.showWorkforce() },
     ...(workforce.overview?.workers ?? []).map((v) => ({
       id: `worker-${v.worker.agent}`,
-      label: `Worker: ${v.name}`,
-      group: "Workforce",
+      label: tr("app.worker", { name: v.name }),
+      group: tr("common.workforce"),
       icon: "building",
       hint: v.worker.role,
       keywords: `${v.worker.agent} ${v.worker.department}`,
       run: () => store.showWorkforce("chart", v.worker.agent, true),
     })),
-    { id: "agents", label: "Agents", group: "Go to", icon: "bot", keywords: "assistant worker skills evals versions chat templates", run: () => store.showAgents() },
-    { id: "teams", label: "Teams", group: "Go to", icon: "users", keywords: "lead members delegate orchestrate group crew", run: () => store.showTeams() },
+    { id: "agents", label: tr("common.agents"), group: tr("app.goTo"), icon: "bot", keywords: tr("app.assistantWorkerSkillsEvals"), run: () => store.showAgents() },
+    { id: "teams", label: tr("common.teams"), group: tr("app.goTo"), icon: "users", keywords: tr("app.leadMembersDelegateOrchestrate"), run: () => store.showTeams() },
     ...agents.teams.map((t) => ({
       id: `team-${t.team.slug}`,
-      label: `Team: ${t.team.name}`,
-      group: "Teams",
+      label: tr("app.team", { name: t.team.name }),
+      group: tr("common.teams"),
       icon: "users",
       hint: `${t.team.members.length + 1} agents`,
       keywords: `${t.team.slug} ${t.team.lead}`,
@@ -162,34 +163,34 @@
     })),
     ...agents.cards.map((card) => ({
       id: `agent-${card.slug}`,
-      label: `Agent: ${card.name}`,
-      group: "Agents",
+      label: tr("app.agent", { name: card.name }),
+      group: tr("common.agents"),
       icon: "bot",
       hint: `v${card.version}`,
       keywords: card.slug,
       run: () => store.showAgents(card.slug),
     })),
-    { id: "memory", label: "Memory", group: "Go to", icon: "book", keywords: "facts remember preferences", run: () => store.showMemory() },
-    { id: "documents", label: "Documents", group: "Go to", icon: "folder", keywords: "knowledge folders files search index pdf", run: () => store.showDocuments() },
-    { id: "settings", label: "Settings", group: "Go to", icon: "sliders", keywords: "appearance theme about data folder version", run: () => store.showSettings() },
-    { id: "integrations", label: "Integrations", group: "Go to", icon: "plug", keywords: "mcp servers connections catalogue github slack database", run: () => store.showIntegrations() },
-    { id: "catalogue", label: "Browse the server catalogue", group: "Integrations", icon: "grid", keywords: "mcp add", run: () => store.showIntegrations("catalogue") },
-    { id: "connections", label: "Connections and sandbox", group: "Integrations", icon: "link", keywords: "github gitlab jira slack discord postgres sqlite webhook python", run: () => store.showIntegrations("connections") },
+    { id: "memory", label: tr("common.memory"), group: tr("app.goTo"), icon: "book", keywords: tr("app.factsRememberPreferences"), run: () => store.showMemory() },
+    { id: "documents", label: tr("common.documents"), group: tr("app.goTo"), icon: "folder", keywords: tr("app.knowledgeFoldersFilesSearch"), run: () => store.showDocuments() },
+    { id: "settings", label: tr("common.settings"), group: tr("app.goTo"), icon: "sliders", keywords: tr("app.appearanceThemeAboutData"), run: () => store.showSettings() },
+    { id: "integrations", label: tr("common.integrations"), group: tr("app.goTo"), icon: "plug", keywords: tr("app.mcpServersConnectionsCatalogue"), run: () => store.showIntegrations() },
+    { id: "catalogue", label: tr("app.browseTheServerCatalogue"), group: tr("common.integrations"), icon: "grid", keywords: tr("app.mcpAdd"), run: () => store.showIntegrations("catalogue") },
+    { id: "connections", label: tr("app.connectionsAndSandbox"), group: tr("common.integrations"), icon: "link", keywords: tr("app.githubGitlabJiraSlack"), run: () => store.showIntegrations("connections") },
     ...integrations.servers.map((server) => ({
       id: `server-${server.name}`,
-      label: `Server: ${server.name}`,
-      group: "Integrations",
+      label: tr("app.server", { name: server.name }),
+      group: tr("common.integrations"),
       icon: "plug",
       hint: server.state.replaceAll("_", " "),
       run: () => { store.showIntegrations("connected"); void integrations.open(server.name); },
     })),
-    { id: "providers", label: "Providers & keys", group: "Go to", icon: "key", keywords: "models api settings", run: () => store.showProviders() },
-    { id: "theme", label: "Change theme", group: "Actions", icon: "sun", hint: "light, dark, system", keywords: "dark light appearance", run: () => theme.cycle() },
-    ...(import.meta.env.DEV ? [{ id: "design", label: "Design system", group: "Go to", icon: "layers", run: () => store.showDesign() }] : []),
+    { id: "providers", label: tr("app.providersKeys"), group: tr("app.goTo"), icon: "key", keywords: tr("app.modelsApiSettings"), run: () => store.showProviders() },
+    { id: "theme", label: tr("app.changeTheme"), group: tr("app.actions"), icon: "sun", hint: tr("app.lightDarkSystem"), keywords: tr("app.darkLightAppearance"), run: () => theme.cycle() },
+    ...(import.meta.env.DEV ? [{ id: "design", label: tr("app.designSystem"), group: tr("app.goTo"), icon: "layers", run: () => store.showDesign() }] : []),
     ...store.runs.slice(0, 12).map((run) => ({
       id: `run-${run.id}`,
       label: shorten(run.request.prompt, 70),
-      group: "Runs",
+      group: tr("common.runs"),
       icon: run.state === "waiting_for_approval" ? "shield" : "history",
       hint: run.state.replaceAll("_", " "),
       run: () => { store.showRuns(); void store.select(run.id); },
@@ -224,7 +225,7 @@
     <main class="page-wash min-w-0 flex-1 overflow-hidden bg-bg">
       {#if store.info?.error}
         <div class="mx-auto max-w-xl p-10" role="alert">
-          <h2 class="text-2xl font-semibold text-err">ZORIX could not start</h2>
+          <h2 class="text-2xl font-semibold text-err">{tr("app.zorixCouldNotStart")}</h2>
           <p class="selectable mt-2">{store.info.error}</p>
         </div>
       {:else if store.view === "design"}

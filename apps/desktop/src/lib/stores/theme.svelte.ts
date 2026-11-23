@@ -1,5 +1,6 @@
 // The person's choice of theme: light (the default), dark, or follow the system. Remembered between runs.
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { t } from "../i18n/index.ts";
 
 import {
   type Mode,
@@ -34,7 +35,7 @@ class ThemeStore {
     const forced = import.meta.env.VITE_START_THEME;
     if (forced === "light" || forced === "dark" || forced === "system") this.mode = forced;
     if (typeof matchMedia === "function") {
-      const query = matchMedia("(prefers-color-scheme: dark)");
+      const query = matchMedia(t("stores.theme.prefersColorSchemeDark"));
       this.systemDark = query.matches;
       query.addEventListener("change", (event) => {
         this.systemDark = event.matches;

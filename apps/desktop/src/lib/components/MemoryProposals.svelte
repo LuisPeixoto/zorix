@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.ts";
   import { decideRun, errorText } from "../api.ts";
   import { ago, shortId } from "../format.ts";
   import { inbox } from "../stores/inbox.svelte.ts";
@@ -17,7 +18,7 @@
     busy = item.id;
     try {
       await decideRun(item.execution, item.id, approve, item.approval.call_hash);
-      toast.ok(approve ? "Remembered." : "Refused.");
+      toast.ok(approve ? t("memoryProposals.remembered") : t("memoryProposals.refused"));
       await store.refreshList();
       await store.refreshMemory(true);
     } catch (e) {
@@ -29,25 +30,25 @@
 </script>
 
 {#if items.length === 0}
-  <EmptyState icon="shield-check" title="Nothing to approve" text="When a run proposes to remember something, it waits here. A run can only propose; a person approves every fact before any run uses it." />
+  <EmptyState icon="shield-check" title={t("memoryProposals.nothingToApprove")} text={t("memoryProposals.whenARunProposes")} />
 {:else}
-  <ul class="space-y-3" aria-label="Proposals to approve">
+  <ul class="space-y-3" aria-label={t("memoryProposals.proposalsToApprove")}>
     {#each items as item (item.id)}
       {#if item.kind === "approval"}
         {@const args = (item.approval.arguments ?? {}) as Record<string, unknown>}
         <li class="overflow-hidden rounded-2xl border border-warn/40 bg-panel shadow-card">
           <div class="flex items-center gap-2 border-b border-line-soft bg-warn/8 px-4 py-2.5">
             <Icon name="book" size={15} class="text-warn" />
-            <p class="min-w-0 flex-1 truncate text-base"><span class="font-semibold">{item.agent ?? "A run"}</span> <span class="text-muted">proposes a {text(args.kind) || "fact"} · {text(args.scope) || "global"}</span></p>
-            <Badge tone="warn">to approve</Badge>
+            <p class="min-w-0 flex-1 truncate text-base"><span class="font-semibold">{item.agent ?? t("memoryProposals.aRun")}</span> <span class="text-muted">{t("memoryProposals.proposesA", { value: text(args.kind) || "fact", value2: text(args.scope) || "global" })}</span></p>
+            <Badge tone="warn">{t("memoryProposals.toApprove")}</Badge>
           </div>
           <div class="px-4 py-3">
             <p class="selectable text-md leading-relaxed">{text(args.content)}</p>
-            <p class="mt-1.5 text-xs text-muted">From run <button type="button" class="mono underline decoration-line-strong underline-offset-2 hover:text-fg" onclick={() => void store.select(item.root)}>{shortId(item.root)}</button> · waiting <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span></p>
+            <p class="mt-1.5 text-xs text-muted">{t("memoryProposals.fromRun")} <button type="button" class="mono underline decoration-line-strong underline-offset-2 hover:text-fg" onclick={() => void store.select(item.root)}>{shortId(item.root)}</button> {t("memoryProposals.waiting")} <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span></p>
           </div>
           <div class="flex gap-2 border-t border-line-soft bg-panel-2 px-4 py-2.5">
-            <Button size="sm" variant="primary" icon="check" loading={busy === item.id} onclick={() => answer(item, true)}>Approve</Button>
-            <Button size="sm" icon="x" disabled={busy === item.id} onclick={() => answer(item, false)}>Refuse</Button>
+            <Button size="sm" variant="primary" icon="check" loading={busy === item.id} onclick={() => answer(item, true)}>{t("common.approve")}</Button>
+            <Button size="sm" icon="x" disabled={busy === item.id} onclick={() => answer(item, false)}>{t("common.refuse")}</Button>
           </div>
         </li>
       {/if}

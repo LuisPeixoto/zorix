@@ -20,6 +20,7 @@ import {
   teamsList,
 } from "../api.ts";
 import { toast } from "./toast.svelte.ts";
+import { t as tr } from "../i18n/index.ts";
 
 export type ProjectSection = "list" | "project";
 export const PROJECT_TABS = ["board", "list", "timeline", "deliverables", "history"] as const;
@@ -102,8 +103,8 @@ class ProjectsStore {
 
   /** What a person sees of who has a task: an agent's face, a team's, or a round avatar for you. */
   face(who: Who | null): { human: boolean; emoji: string; color: string; label: string } {
-    if (!who) return { human: false, emoji: "·", color: "muted", label: "Nobody" };
-    if (who.type === "you") return { human: true, emoji: "", color: "muted", label: "You" };
+    if (!who) return { human: false, emoji: "·", color: "muted", label: tr("common.nobody") };
+    if (who.type === "you") return { human: true, emoji: "", color: "muted", label: tr("common.you") };
     if (who.type === "agent") {
       const agent = this.agents.find((a) => a.slug === who.slug);
       return { human: false, emoji: agent?.emoji ?? "🤖", color: agent?.color ?? "accent", label: agent?.name ?? who.slug };

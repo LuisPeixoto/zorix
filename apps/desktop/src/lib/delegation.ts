@@ -1,6 +1,7 @@
 // What a call to `agents.delegate` shows in the chat: which sub-runs it started and how each one stands. Pure, so it is tested.
 import type { Execution, ToolCall } from "./api.ts";
 import type { ChildRow } from "./ui/DelegationCard.svelte";
+import { t as tr } from "./i18n/index.ts";
 
 export const DELEGATE = "agents.delegate";
 
@@ -57,7 +58,7 @@ export function childRows(
         steps: run.iteration,
         cost_micros: run.usage.cost_micros,
         answer: state === "completed" ? (run.result?.text ?? null) : null,
-        error: failed ? (run.failure?.message ?? run.cancel_reason ?? (state === "cancelled" ? "Stopped before it finished." : "It did not finish.")) : null,
+        error: failed ? (run.failure?.message ?? run.cancel_reason ?? (state === "cancelled" ? tr("delegation.stoppedBeforeItFinished") : tr("delegation.itDidNotFinish"))) : null,
         live: state === "working" ? (live[id] ?? null) : null,
       },
     ];

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../../i18n/index.ts";
   import type { Snippet } from "svelte";
 
   import { Icon, cn } from "../../ui/index.ts";
@@ -27,9 +28,9 @@
   <span class="min-w-0 flex-1 truncate text-left">{@render children()}</span>
   {#if count !== undefined && count > 0}
     <span class={cn("tnum rounded-full px-1.5 text-2xs font-semibold", attention ? "bg-warn text-bg" : "bg-hover text-muted")}>
-      {count}<span class="sr-only">{attention ? " need attention" : ""}</span>
+      {count}<span class="sr-only">{attention ? t("shell.navItem.needAttention") : ""}</span>
     </span>
   {:else if attention}
-    <span class="size-1.5 rounded-full bg-warn" role="img" aria-label="Needs attention"></span>
+    <span class="size-1.5 rounded-full bg-warn" role="img" aria-label={t("shell.navItem.needsAttention")}></span>
   {/if}
 </button>
