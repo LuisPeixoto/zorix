@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../i18n/index.ts";
   import { agents } from "../../stores/agents.svelte.ts";
   import { ago } from "../../format.ts";
   import { store } from "../../stores/runs.svelte.ts";
@@ -47,18 +48,18 @@
   <div class="h-full overflow-y-auto">
     <div class="mx-auto max-w-[1100px] p-8">
       <PageHeader
-        title={agents.section === "teams" ? "Teams" : "Agents"}
+        title={agents.section === "teams" ? tr("common.teams") : tr("common.agents")}
         subtitle={agents.section === "teams"
-          ? "Agents that work together: a lead asks the others, several at once, and puts the answers together."
-          : "Reusable AI workers. Each has its own instructions, skills, tools, memory and versions, and is checked by evaluations."}
+          ? tr("agents.agents.agentsThatWorkTogether")
+          : tr("agents.agents.reusableAiWorkersEach")}
         glow
       >
         {#snippet actions()}
-          {#if agents.section === "agents"}<Button icon="download" onclick={() => (importOpen = true)}>Import a file</Button>{/if}
+          {#if agents.section === "agents"}<Button icon="download" onclick={() => (importOpen = true)}>{tr("agents.agents.importAFile")}</Button>{/if}
         {/snippet}
       </PageHeader>
 
-      {#if agents.error}<Callout tone="err" title="Agents could not be read">{agents.error}</Callout>{/if}
+      {#if agents.error}<Callout tone="err" title={tr("agents.agents.agentsCouldNotBe")}>{agents.error}</Callout>{/if}
 
       {#if agents.section === "teams"}
         <TeamsGallery />
@@ -66,12 +67,12 @@
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{#each [0, 1, 2] as i (i)}<Skeleton class="h-40 rounded-2xl" />{/each}</div>
       {:else}
         {#if agents.cards.length === 0}
-          <EmptyState icon="bot" title="No agents yet" text="Start from a ready-made agent below, or import a file. Each one comes with a skill and a few checks you can run." />
+          <EmptyState icon="bot" title={tr("agents.agents.noAgentsYet")} text={tr("agents.agents.startFromAReady")} />
         {:else}
           {#if agents.teams.length}
             <div class="mb-4 flex">
               <Segmented
-                label="Show"
+                label={tr("common.show")}
                 bind:value={show}
                 options={[
                   { value: "all", label: `All ${agents.cards.length}` },
@@ -80,7 +81,7 @@
               />
             </div>
           {/if}
-          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Your agents">
+          <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label={tr("agents.agents.yourAgents")}>
             {#each listed as card (card.slug)}
               <li>
               <button
@@ -96,7 +97,7 @@
                   </span>
                   <Icon name="chevron-right" size={16} class="mt-1 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
                 </span>
-                <span class="mt-3 line-clamp-2 min-h-[2.6em] text-base text-muted">{card.description || "No description yet."}</span>
+                <span class="mt-3 line-clamp-2 min-h-[2.6em] text-base text-muted">{card.description || tr("common.noDescriptionYet")}</span>
                 <span class="mt-4 flex flex-wrap items-center gap-1.5">
                   <Badge tone="accent">v{card.version}</Badge>
                   <Badge tone="muted">{card.default_model}</Badge>
@@ -111,8 +112,8 @@
         {#if free.length}
           <section class="mt-10" aria-labelledby="templates-title">
             <div class="mb-3 flex items-baseline gap-3">
-              <h2 id="templates-title" class="text-xl font-semibold">Add from templates</h2>
-              <p class="text-sm text-muted">Ready-made agents. They are ordinary agents once added: edit, version and remove them freely.</p>
+              <h2 id="templates-title" class="text-xl font-semibold">{tr("agents.agents.addFromTemplates")}</h2>
+              <p class="text-sm text-muted">{tr("agents.agents.readyMadeAgentsThey")}</p>
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
               {#each free as t (t.id)}
@@ -126,7 +127,7 @@
                         <Icon name="file-text" size={12} /> {t.skills.join(", ")} <span aria-hidden="true">·</span> <Icon name="flask" size={12} /> {t.cases} checks
                       </p>
                     </div>
-                    <Button size="sm" variant="subtle" icon="plus" loading={adding === t.id} onclick={() => add(t.id)} aria-label={`Add ${t.name}`}>Add</Button>
+                    <Button size="sm" variant="subtle" icon="plus" loading={adding === t.id} onclick={() => add(t.id)} aria-label={tr("common.add", { name: t.name })}>{tr("common.add")}</Button>
                   </div>
                 </Card>
               {/each}
@@ -135,25 +136,25 @@
         {/if}
 
         {#if store.runs.some((r) => r.agent)}
-          <p class="mt-8 text-xs text-faint">Runs made by agents also appear in the run list, marked with the agent and its version.</p>
+          <p class="mt-8 text-xs text-faint">{tr("agents.agents.runsMadeByAgents")}</p>
         {/if}
       {/if}
     </div>
   </div>
 
-  <Modal bind:open={importOpen} title="Import an agent file" icon="download" size="md">
+  <Modal bind:open={importOpen} title={tr("agents.agents.importAnAgentFile")} icon="download" size="md">
     <div class="space-y-4">
-      <p class="text-sm text-muted">Paste the contents of an agent file (Markdown that starts with <span class="mono">---</span>). A new name makes an agent; an existing one gets a new version. Skills it names must already be in the library.</p>
-      <Field label="Agent file" required>
+      <p class="text-sm text-muted">{tr("agents.agents.pasteTheContentsOf")} <span class="mono">---</span>{tr("agents.agents.aNewNameMakes")}</p>
+      <Field label={tr("agents.agents.agentFile")} required>
         {#snippet children(f)}<Textarea id={f.id} rows={12} mono bind:value={file} placeholder={"---\nzorix: agent/1\nslug: my-agent\nname: \"My agent\"\n..."} />{/snippet}
       </Field>
-      <Field label="Import under another name" hint="Optional: lowercase letters, digits and dashes.">
+      <Field label={tr("agents.agents.importUnderAnotherName")} hint={tr("agents.agents.optionalLowercaseLettersDigits")}>
         {#snippet children(f)}<Input id={f.id} bind:value={rename} placeholder="my-agent-copy" />{/snippet}
       </Field>
     </div>
     {#snippet footer()}
-      <Button onclick={() => (importOpen = false)}>Cancel</Button>
-      <Button variant="primary" icon="check" loading={importing} disabled={!file.trim()} onclick={doImport}>Import</Button>
+      <Button onclick={() => (importOpen = false)}>{tr("common.cancel")}</Button>
+      <Button variant="primary" icon="check" loading={importing} disabled={!file.trim()} onclick={doImport}>{tr("agents.agents.import")}</Button>
     {/snippet}
   </Modal>
 {/if}

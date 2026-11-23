@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmt, t } from "../../i18n/index.ts";
   import { type AgentDetail, type AgentVersion, agentExport, agentRollback, agentVersions, errorText } from "../../api.ts";
   import { ago } from "../../format.ts";
   import { agents } from "../../stores/agents.svelte.ts";
@@ -20,7 +21,7 @@
       version: v.version,
       hash: v.hash,
       note: v.note,
-      at: `${new Date(v.created_at).toLocaleString()} · ${ago(v.created_at)}`,
+      at: `${fmt.stamp(v.created_at)} · ${ago(v.created_at)}`,
       current: v.version === detail.agent.current_version,
     })),
   );
@@ -59,7 +60,7 @@
     busy = version;
     try {
       const made = await agentRollback(slug, version);
-      toast.ok(`${slug} is now at v${made.version}, a copy of v${version}.`);
+      toast.ok(t("agents.agentVersions.isNowAtV", { slug, version: made.version, version2: version }));
       await agents.reload();
     } catch (e) {
       toast.err(errorText(e));
@@ -73,29 +74,29 @@
 
 <div class="h-full overflow-y-auto">
   <div class="mx-auto grid max-w-5xl gap-6 p-8 lg:grid-cols-[22rem_minmax(0,1fr)]">
-    {#if error}<div class="lg:col-span-2"><Callout tone="err" title="Versions could not be read">{error}</Callout></div>{/if}
+    {#if error}<div class="lg:col-span-2"><Callout tone="err" title={t("agents.agentVersions.versionsCouldNotBe")}>{error}</Callout></div>{/if}
     <section aria-labelledby="versions-title">
-      <h2 id="versions-title" class="mb-3 text-lg font-semibold">History</h2>
+      <h2 id="versions-title" class="mb-3 text-lg font-semibold">{t("agents.agentVersions.history")}</h2>
       {#if items.length}
         <VersionTimeline {items} selected={picked} onselect={(v) => (picked = v)}>
           {#snippet actions(item)}
-            {#if !item.current}<Button size="sm" icon="undo" loading={busy === item.version} onclick={() => rollback(item.version)} aria-label={`Roll back to version ${item.version}`}>Roll back</Button>{/if}
+            {#if !item.current}<Button size="sm" icon="undo" loading={busy === item.version} onclick={() => rollback(item.version)} aria-label={t("agents.agentVersions.rollBackToVersion", { version: item.version })}>{t("agents.agentVersions.rollBack")}</Button>{/if}
           {/snippet}
         </VersionTimeline>
-        <p class="mt-3 text-xs text-faint">A version is never edited. Rolling back writes a new version that copies an old one, so nothing is lost.</p>
+        <p class="mt-3 text-xs text-faint">{t("agents.agentVersions.aVersionIsNever")}</p>
       {:else}
-        <EmptyState icon="history" title="No versions" />
+        <EmptyState icon="history" title={t("agents.agentVersions.noVersions")} />
       {/if}
     </section>
     <section aria-labelledby="changes-title">
       <h2 id="changes-title" class="mb-3 text-lg font-semibold">
-        {#if pickedVersion}What changed in v{pickedVersion.version}{:else}Changes{/if}
+        {#if pickedVersion}{t("agents.agentVersions.whatChangedInV", { version: pickedVersion.version })}{:else}{t("agents.agentVersions.changes")}{/if}
       </h2>
       {#if pickedVersion}
         {#if older}
           <DiffView {before} {after} beforeLabel={`v${older.version}`} afterLabel={`v${pickedVersion.version}`} />
         {:else}
-          <Callout tone="muted" title="The first version">Everything in it is new. Pick a later version to see what changed.</Callout>
+          <Callout tone="muted" title={t("agents.agentVersions.theFirstVersion")}>{t("agents.agentVersions.everythingInItIs")}</Callout>
         {/if}
       {/if}
     </section>
