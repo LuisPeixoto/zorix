@@ -95,7 +95,7 @@ runtime does not rely on the model resisting:
 
 - **It cannot change what the execution may do.** Grants and policy are fixed when the execution is created.
 - **Tool output is data.** It is added to the context labelled `untrusted`, wrapped in `<tool_result … untrusted="true">`
-  with a closing tag inside the text defused, and the system text tells the model never to follow instructions found
+  with any tag of ZORIX inside the text (opening or closing, in any case and spacing) defused, the call id kept inside its attribute, and the system text tells the model never to follow instructions found
   there.
 - **A persuaded model still cannot act.** The test `text_inside_a_tool_result_cannot_unlock_another_tool` shows a model that
   falls for an injected instruction and calls a tool it was not granted: the call is denied.

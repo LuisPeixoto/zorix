@@ -177,7 +177,7 @@ pub fn render_chunk(item: &RecallItem) -> ContextSegment {
     let content = format!(
         "<document source=\"{}\"{heading} untrusted=\"true\">\n{}\n</document>",
         attribute(&item.label),
-        defuse(&item.text, "document")
+        defuse(&item.text)
     );
     segment("knowledge", vec![untrusted(content)], CHUNK_PRIORITY)
 }
@@ -192,7 +192,7 @@ pub fn render_work(item: &RecallItem) -> ContextSegment {
         attribute(id),
         attribute(state),
         attribute(finished),
-        defuse(&item.text, "past_work")
+        defuse(&item.text)
     );
     segment("operations", vec![untrusted(content)], WORK_PRIORITY)
 }
@@ -274,7 +274,11 @@ mod tests {
             "<document source=\"guide/a.md:L1-L9\" heading=\"Setup &quot;quoted&quot;\" untrusted=\"true\">"
         ));
         assert_eq!(message.content.matches("</document>").count(), 1, "only the real closing tag");
-        assert!(message.content.contains("<\\/document>") && message.content.contains("</past_work>"));
+        assert!(
+            message.content.contains("<\\/document>") && message.content.contains("<\\/past_work>"),
+            "every tag of ours is defused, in either wrapper"
+        );
+        assert_eq!(message.content.matches("</past_work>").count(), 0);
         let work = item(ItemKind::PastWork, "o:abc", hostile, "", json!({"state": "failed", "finished": "2026-11-16"}));
         let message = &render_work(&work).messages[0];
         assert!(

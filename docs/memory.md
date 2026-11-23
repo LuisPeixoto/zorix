@@ -78,7 +78,7 @@ were used, which search found each, why search was degraded when it was, and the
 
 ## Untrusted data
 
-Documents and past work enter as user messages wrapped as data, with any closing tag inside them defused:
+Documents and past work enter as user messages wrapped as data, with every tag of ZORIX inside them (opening or closing, in any case and spacing) defused:
 
 ```
 <document source="runbook.md:L12-L20" untrusted="true"> … </document>

@@ -16,6 +16,7 @@ rust-version = "1.97"
 publish = false
 
 [workspace.dependencies]
+proptest = { version = "1", default-features = false, features = ["std"] }
 zorix-core = { path = "crates/zorix-core" }
 zorix-runtime = { path = "crates/zorix-runtime" }
 zorix-store = { path = "crates/zorix-store" }

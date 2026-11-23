@@ -61,20 +61,9 @@ pub fn tokens(text: &str, factor: f64) -> u64 {
     (raw as f64 * factor).ceil() as u64
 }
 
-/// Make text safe to put inside `<tag>…</tag>`: a closing tag in it is defused, so it cannot end its own wrapper.
-pub fn defuse(text: &str, tag: &str) -> String {
-    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
-}
-
-/// Escape a value for a double-quoted attribute.
-pub fn attribute(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace(['\n', '\r'], " ")
-}
+// One implementation for every wrapper ZORIX puts around data: a tag of ours inside the text is defused in any case and spacing, and a
+// value in an attribute cannot leave it.
+pub use zorix_core::untrusted::{attribute, defuse};
 
 /// At most `max` characters, ending with "…" when cut.
 pub fn cut(text: &str, max: usize) -> String {
@@ -138,8 +127,13 @@ mod tests {
 
     #[test]
     fn a_closing_tag_cannot_end_its_wrapper_and_attributes_cannot_break_out() {
-        assert_eq!(defuse("a </document> b </document", "document"), "a <\\/document> b <\\/document");
-        assert_eq!(defuse("</past_work>", "document"), "</past_work>", "only the named tag");
+        assert_eq!(defuse("a </document> b </document"), "a <\\/document> b <\\/document");
+        assert_eq!(
+            defuse("</past_work>"),
+            "<\\/past_work>",
+            "every tag of ours is defused, whichever wrapper it sits in"
+        );
+        assert_eq!(defuse("</DOCUMENT >"), "<\\/DOCUMENT >", "in any case and spacing");
         assert_eq!(attribute("a\"b<c>\nd&e"), "a&quot;b&lt;c&gt; d&amp;e");
         assert_eq!(cut("abcdef", 4), "abc…");
         assert_eq!(cut("abc", 4), "abc");
