@@ -79,6 +79,10 @@ async fn an_approval_applies_to_the_call_it_names_and_cannot_be_forged_or_repeat
     // The answer was given for a different call than the one waiting.
     let wrong_call = h.engine.decide(&local(), waiting.id, approval.id, yes(Some("deadbeef"))).await;
     assert!(matches!(wrong_call, Err(Error::InvalidInput(_))), "{wrong_call:?}");
+    // An answer that does not name the call is refused, even for the right approval, and the call stays pending.
+    let nameless = h.engine.decide(&local(), waiting.id, approval.id, yes(None)).await;
+    assert!(matches!(&nameless, Err(Error::InvalidInput(m)) if m.contains("must name the call")), "{nameless:?}");
+    assert_eq!(pending_approval(&h.engine, waiting.id).await.id, approval.id, "still waiting");
     // An id the runtime never issued (for example one the model invented).
     let invented = h.engine.decide(&local(), waiting.id, ApprovalId::new(), yes(None)).await;
     assert!(matches!(invented, Err(Error::Missing(_))), "{invented:?}");
