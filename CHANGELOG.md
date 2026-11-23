@@ -12,6 +12,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- A model that **declines** to answer, or whose answer **ran out of room**, no longer ends the execution as a success: a refusal fails it with the model's own words, and a cut-off answer
+  is sent back once and then fails. Text that a cut stream had already written is forgotten before the retry, so a reader never sees it twice.
 - **Security:** a webhook delivery that carries the sender's delivery id (`X-GitHub-Delivery` and the like) starts a workflow once: a retry or a replayed request answers `200` and
   starts nothing. Database schema 9.
 - **Security:** the wrappers around data (tool results, documents, past work, task and trigger text) now defuse every tag of ZORIX in any case and spacing, opening
