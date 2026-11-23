@@ -240,6 +240,37 @@ fn a_hostile_zip_is_refused() {
     assert!(invalid(library.import_zip(&notzip, None, NOW).unwrap_err()).contains("not a readable zip"));
     // Only the zip whose absolute path was made relative was kept; every other hostile zip left nothing behind.
     assert!(std::fs::read_dir(library.root()).map(|d| d.count()).unwrap_or(0) <= 1);
+
+    // Other ways to climb or to name a place outside: none of them gets a file out of the skill's folder.
+    for (n, name) in [
+        "a/../../outside2.txt",
+        "a/./../../outside3.txt",
+        "..\\outside4.txt",
+        "C:\\outside5.txt",
+        "C:/outside6.txt",
+        "//host/share/x",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let path = dir.path().join(format!("slip{n}.zip"));
+        zip_of(&path, &[("SKILL.md", md.as_bytes(), None), (name, b"x", None)]);
+        let outcome = library.import_zip(&path, None, NOW);
+        if let Ok(record) = &outcome {
+            assert!(
+                record
+                    .files
+                    .iter()
+                    .all(|f| !f.path.starts_with('/') && !f.path.contains("..") && !f.path.contains(':')),
+                "{name}: {:?}",
+                record.files
+            );
+        }
+        for stray in ["outside2.txt", "outside3.txt", "outside4.txt", "outside5.txt", "outside6.txt"] {
+            assert!(!dir.path().parent().unwrap().join(stray).exists(), "{name} wrote {stray} outside");
+            assert!(!dir.path().join(stray).exists(), "{name} wrote {stray} beside the zip");
+        }
+    }
 }
 
 #[test]
