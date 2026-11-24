@@ -358,6 +358,9 @@ export const setProviderKey = (name: string, key: string) => invoke<void>("set_p
 export const removeProviderKey = (name: string) => invoke<boolean>("remove_provider_key", { name });
 export const testProvider = (name: string) => invoke<number>("test_provider", { name });
 export const appInfo = () => invoke<AppInfo>("app_info");
+
+/** Tell the shell the interface has loaded (it only does something when a check asked for it with ZORIX_SMOKE). */
+export const appReady = () => invoke<void>("app_ready");
 export const listTools = () => invoke<ToolSpec[]>("list_tools");
 export const listRuns = (limit = 50) => invoke<Execution[]>("list_runs", { limit });
 export const runDetail = (id: string) => invoke<RunDetail>("run_detail", { id });

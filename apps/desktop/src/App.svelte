@@ -27,11 +27,12 @@
   import Toolbar from "./lib/components/shell/Toolbar.svelte";
   import { type Command, CommandPalette, Toasts } from "./lib/ui/index.ts";
   import { shorten } from "./lib/format.ts";
-  import { workflowRuns } from "./lib/api.ts";
+  import { appReady, workflowRuns } from "./lib/api.ts";
 
   onMount(() => {
     theme.init();
     void store.init().then(() => {
+      void appReady().catch(() => undefined);
       void integrations.init();
       void agents.refresh();
       void projects.loadPeople();
