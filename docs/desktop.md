@@ -57,8 +57,8 @@ its method, address and body, and code shows its source.
 Nothing is allowed by default. The form preselects the demo tools that need only a tool permission; the file tools start
 off because they need a workspace. Tools that change things say **asks you first**.
 
-Without a provider the app uses the built-in **demo model**. With a key under **Providers & keys** the default becomes Anthropic's model; routes and extra servers come from `providers.toml` ([providers](providers.md)). The full interface (agents, workflows,
-dashboards, settings) belongs to later phases.
+Without a provider the app uses the built-in **demo model**. With a key under **Providers & keys** the default becomes Anthropic's model; routes and extra servers come from `providers.toml` ([providers](providers.md)). The rest of the interface (agents, teams, workflows,
+projects, the workforce, memory, documents, integrations and settings) is described in its own guide.
 
 The look of the app is described in the [design system](design-system.md): Light (default), Dark and System themes, bundled
 fonts and a component kit, shown on a Design system screen (<kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>D</kbd>).
