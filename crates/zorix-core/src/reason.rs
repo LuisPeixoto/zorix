@@ -186,11 +186,9 @@ mod tests {
         if std::env::var_os("UPDATE_REASONS").is_some() {
             std::fs::write(&path, &text).unwrap();
         }
-        assert_eq!(
-            std::fs::read_to_string(&path).unwrap_or_default(),
-            text,
-            "reasons.json is stale: run the tests with UPDATE_REASONS=1"
-        );
+        // A Windows checkout may turn the file's line ends into CRLF; the content is what must match.
+        let on_disk = std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n");
+        assert_eq!(on_disk, text, "reasons.json is stale: run the tests with UPDATE_REASONS=1");
     }
 
     #[test]
