@@ -18,7 +18,7 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev 
 ```bash
 git clone https://github.com/LuisPeixoto/zorix.git
 cd zorix
-cargo test --workspace --exclude zorix-desktop    # 247 tests, no network, no provider needed
+cargo test --workspace --exclude zorix-desktop    # more than 1,100 tests, no network, no provider needed
 ```
 
 ## Your first run (command line)

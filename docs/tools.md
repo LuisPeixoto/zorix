@@ -79,8 +79,8 @@ Writes go to a temporary file that is renamed over the target, so a crash never 
 the same user, replacing a folder with a link between the check and the open) could redirect one call. Closing that gap needs `openat` and `O_NOFOLLOW` all the way down, which is not
 portable to Windows; the workspace is a folder you gave the run, so this is documented rather than hidden. Do not point a run at a folder another program is writing to.
 
-This is confinement of **paths**, not a code sandbox. No built-in tool runs code. A tool that runs commands will need
-real isolation first; that is planned work, not part of this phase.
+This is confinement of **paths**, not a code sandbox. The file tools run no code. Code runs only in the [sandbox](sandbox.md)
+(`code.run`, JavaScript and Python in WebAssembly); no tool runs a command on the host, and one that did would need real isolation first.
 
 ## Writing a tool
 

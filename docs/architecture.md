@@ -175,6 +175,16 @@ starting a task's or a manager's run) and starts a manager's plan and report. Th
 `DefaultPolicy` answers `Allow`, `AllowUnattended` or `Suggest` besides `Deny` and `RequireApproval`. A `WorkforceTicker` on the host's beat reads finished plans and reports, runs due schedules and
 records budget notices. See [workforce](workforce.md) and ADR-0038 and ADR-0039.
 
+## Quality tooling (zorix-bench, fuzz, zorix-sim)
+
+Not part of the product, but part of how it is kept honest ([testing](testing.md), ADR-0042):
+
+- **`zorix-sim`** simulates models: scripted turns, streams that are cut, typed failures (`Failure::Kind`), malformed output, and seeded random faults (`Faulty`). The runtime's own tests use it for every model failure they cover.
+- **`FaultyRepository`** (in `zorix-runtime::testing`) wraps any repository and fails the Nth call of a method, before or after the write, so a crash in the middle of a commit can be replayed.
+- **`zorix-bench`** builds the scale data set (10,000 executions, about a million events, 200 agents, 5,000 facts, 50,000 pieces of documents) through the real stores and times the paths a person waits on, against `limits.json`.
+- **`fuzz/`** is its own workspace with 14 targets for every parser and for the text that wraps untrusted data, with a committed corpus.
+- **Error reasons.** A typed error is also a `Reason`: a stable code and the values of its sentence (`zorix_core::Coded`). The command line prints the English; the desktop app sends `{code, args, message}` and the interface writes the sentence from its catalogue (ADR-0040).
+
 ## What comes next
 
 | Phase | Plugs into |

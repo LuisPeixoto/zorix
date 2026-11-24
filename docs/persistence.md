@@ -189,6 +189,7 @@ Copy the data folder while ZORIX is closed. SQLite files are ordinary files.
 
 - One machine, one process at a time (enforced by the folder lock). A shared store for teams is a later backend behind
   the same trait.
-- Secrets are never stored (there are none in this phase). Prompts, tool arguments and results **are** stored, as they are
+- Secrets are never stored in the database: keys and tokens live in the system keychain, or in the environment variable you name
+  ([providers](providers.md), [integrations](integrations.md)). Prompts, tool arguments and results **are** stored, as they are
   the record of what happened: treat the data folder as sensitive.
 - Retention policies (deleting old executions automatically) are not implemented yet.

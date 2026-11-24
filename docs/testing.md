@@ -1,7 +1,7 @@
 # Testing
 
 The runtime is tested without any external service: models are simulated, and tests are deterministic. At the time of
-writing there are **913** Rust tests plus **61** for the interface helpers.
+writing there are **1,172** Rust tests (and 11 that need a real service and run only when asked) plus **154** for the interface.
 
 ```bash
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --exclude zorix-desktop
