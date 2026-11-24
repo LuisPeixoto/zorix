@@ -366,7 +366,7 @@ Where the project already enforces a section, this is where. A guideline with no
 | 8. Errors | Small error enums with human sentences, limits and timeouts on every run, recovery of interrupted executions ([persistence](persistence.md)) |
 | 9. Documentation | One guide per feature, `tools/check-docs.mjs` for links and anchors, ADRs, and the changelog |
 | 10. Compatibility | Numbered database migrations with upgrade tests, a versioned event contract ([events](events.md)) |
-| 11. Accessibility | Keyboard use, visible focus and an accessibility review for every screen. The interface has no translation catalogue yet; see [known gaps](#known-gaps) |
+| 11. Accessibility | Keyboard use, visible focus and an accessibility review for every screen. Every interface string is in the catalogue (English now, more languages in Phase 15) and a lint keeps it so; the validation errors that are still plain sentences are in [known gaps](#known-gaps) |
 | 12. Observability | The event stream, usage and cost on every run, correlation by execution and parent ([events](events.md)) |
 | 13. AI quality | Schema-validated tool arguments, limits narrowed down delegation trees, approvals bound to the exact call, [evaluations](evals.md), simulated providers with injected failures |
 | 14. Dependencies | Lockfiles are committed, Dependabot is on, and CI audits the dependencies |
@@ -389,8 +389,6 @@ These guidelines ask for things ZORIX does not have yet. Each one is tracked, an
 
 | Gap | Section | Tracked in |
 |---|---|---|
-| The interface strings are written in the components; there is no translation catalogue | 11 | [#1](https://github.com/LuisPeixoto/zorix/issues/1) |
-| No end-to-end tests drive the built desktop app | 2 | [#2](https://github.com/LuisPeixoto/zorix/issues/2) |
-| The installers have not been verified on clean machines | 2 | [#3](https://github.com/LuisPeixoto/zorix/issues/3) |
+| The end-to-end flows are driven only on Linux; macOS and Windows start the app and check that it loads | 2 | [#27](https://github.com/LuisPeixoto/zorix/issues/27) |
 | GitHub Sponsors have not been evaluated | 1 | [#4](https://github.com/LuisPeixoto/zorix/issues/4) |
 | About 170 validation errors are English sentences, not codes, so a translated interface shows them in English | 11 | [#26](https://github.com/LuisPeixoto/zorix/issues/26) |
