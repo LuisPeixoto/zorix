@@ -4,11 +4,14 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { scenarios } from "./scenarios.mjs";
 import { Session, sleep } from "./webdriver.mjs";
 
-const [application, nativeDriver] = process.argv.slice(2);
+const [appArgument, driverArgument] = process.argv.slice(2);
+// The native driver launches the app itself, from its own folder, so both paths are made absolute (a relative one with `/` failed on Windows).
+const application = appArgument && resolve(appArgument);
+const nativeDriver = driverArgument && resolve(driverArgument);
 if (!application) {
   console.error("Usage: node tools/e2e/run.mjs PATH-TO-THE-APP [PATH-TO-NATIVE-DRIVER]");
   process.exit(2);
