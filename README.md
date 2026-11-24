@@ -13,10 +13,11 @@ checkpoints and a complete record, whichever model does the thinking.</p>
 
 ![ZORIX waiting for your approval before a tool changes anything](docs/images/ui-approval.png)
 
-> **Status: early development.** Phases 1 to 9 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, **agents**,
+> **Status: early development.** Phases 1 to 10 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, **agents**,
 > **orchestration**, **workflows**, **projects** and the **workforce**. ZORIX runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local
-> Ollama models. The next phases audit all of it against the [engineering guidelines](docs/engineering-guidelines.md) and finish what was deferred, before
-> the Command Center and the Marketplace (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
+> Ollama models. Phase 10 built the quality foundation (security fixes, fault injection, fuzzing, benchmarks, one catalogue for every interface string,
+> end-to-end and installer checks). The next phases audit each area against the [engineering guidelines](docs/engineering-guidelines.md) and finish what was
+> deferred, before the Command Center and the Marketplace (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
 > `--local-only` to keep everything on your computer.
 
 A model can be powerful, but the real strength is in **integration, orchestration and control**. ZORIX is the
@@ -180,7 +181,7 @@ cargo run -p zorix-runtime --example embed
 | [Design system](docs/design-system.md) | Tokens, themes and the component kit |
 | [Architecture](docs/architecture.md) | Layers, contracts, decisions; the [ADRs](docs/adr) |
 | [Technology comparison](docs/research/runtime-landscape.md) | LangGraph, OpenAI Agents SDK, ADK, Temporal, MCP and others: what we took, what we built |
-| [Testing](docs/testing.md) | How each required case is proven |
+| [Testing](docs/testing.md) | How each required case is proven, and the benchmarks, fuzzing, coverage and end-to-end tests |
 | [Engineering guidelines](docs/engineering-guidelines.md) | The rules every change follows, and where ZORIX enforces them |
 | [Distribution](docs/distribution.md) | Installers, signing, releases |
 | [Troubleshooting](docs/troubleshooting.md) | Symptom, cause, fix |
