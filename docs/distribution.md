@@ -25,13 +25,38 @@ Every release also has a `SHA256SUMS` file.
 archives on each system, uploads them to a **draft** GitHub release, and publishes the checksums. A person reads the draft
 and publishes it.
 
+`.github/workflows/installers.yml` checks the installers themselves. On a fresh runner of each system it builds the installers (unsigned, as
+a release is), installs each one silently, starts the **installed** app with `ZORIX_SMOKE=1` (it says it has loaded and closes; see
+[testing](testing.md#end-to-end-tests)), uninstalls, and checks the program is gone:
+
+| System | What it does |
+|---|---|
+| Linux | `apt install` of the `.deb`, start `/usr/bin/zorix-desktop` under a virtual display, `apt remove` and check no file of the package is left; start the `.AppImage` (it unpacks itself, the runner has no FUSE); read the `.rpm`'s file list and metadata (it cannot be installed on Ubuntu) |
+| macOS | mount the `.dmg`, copy `ZORIX.app` to `/Applications`, start it, remove it |
+| Windows | `msiexec /qn` install of the `.msi`, start, `msiexec /x`, check the program is gone; the same with the NSIS `-setup.exe /S` and its `uninstall.exe /S` |
+
+Run it from the Actions tab (*Installers*, *Run workflow*) on `main` before tagging; it also runs on a tag. It is a launch check: it cannot see
+what only a person sees (the checklist below).
+
 Cutting a release:
 
 1. Bump the version in the workspace `Cargo.toml`, `apps/desktop/package.json` (and its lock) and `tauri.conf.json`.
 2. Move the changelog's *Unreleased* section under the new version.
 3. Wait for CI to be green **on all three systems**.
-4. Tag (`git tag -a vX.Y.Z`), push the tag, wait for the release workflow.
-5. Download one artifact per platform and start it; then publish the draft.
+4. Run the *Installers* workflow on `main` and wait for it to be green on all three systems.
+5. Tag (`git tag -a vX.Y.Z`), push the tag, wait for the release workflow.
+6. Download one artifact per platform and start it; then publish the draft.
+
+**Checklist per release, for what CI cannot see** (an unsigned build, a person at a screen):
+
+- [ ] macOS: the downloaded `.dmg` opens, and the first launch needs right-click, *Open* (Gatekeeper), as the docs say.
+- [ ] Windows: the `.msi` and the setup `.exe` show SmartScreen's "unknown publisher" and can continue with *More info*, *Run anyway*.
+- [ ] Linux: the `.AppImage` starts on a desktop session; the `.rpm` installs on a Fedora-family system.
+- [ ] After installing over the previous release, the data of the previous release is there (a run, a setting).
+- [ ] After uninstalling, the data folder (`zorix data-dir`) is still there, as the docs promise.
+- [ ] `shasum -a 256 -c SHA256SUMS --ignore-missing` passes for what was downloaded.
+- [ ] The command line of the system you are on prints the right `--version`.
+
 
 ## Signing and notarization
 
