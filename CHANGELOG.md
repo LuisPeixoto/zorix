@@ -5,6 +5,10 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-24
+
+The quality foundation: the tools every audit uses, and seven security fixes. See the [roadmap](docs/roadmap.md#-phase-10--quality-foundation--v0100).
+
 ### Changed
 
 - The [roadmap](docs/roadmap.md) now puts quality and completion phases (10 to 15) before the Command Center (16) and the
