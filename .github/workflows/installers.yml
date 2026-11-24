@@ -1,0 +1,115 @@
+name: Installers
+
+# Builds the installers the release ships, installs each one silently on a fresh runner, starts the installed app and waits for it to say it has
+# loaded (ZORIX_SMOKE), then uninstalls and checks nothing was left behind and the data folder was not touched. The builds are not signed, which
+# is what an unsigned release is. Run it from main before tagging (Actions, Installers, Run workflow); it also runs on a tag.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  installers:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+      - name: Install the frontend dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Build the installers
+        working-directory: apps/desktop
+        run: npx tauri build
+      - name: List what was built
+        shell: bash
+        run: find target/release/bundle -maxdepth 3 | sort
+
+      - name: Linux, the .deb
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y ./target/release/bundle/deb/*.deb
+          app=$(dpkg -L zorix | grep -E '/bin/zorix-desktop$' | head -1)
+          echo "installed at $app"
+          xvfb-run -a node tools/e2e/smoke.mjs "$app" 120
+          sudo apt-get remove -y zorix
+          if dpkg -L zorix 2>/dev/null | while read -r f; do [ -f "$f" ] && echo "left behind: $f"; done | grep .; then exit 1; fi
+      - name: Linux, the AppImage
+        if: runner.os == 'Linux'
+        run: |
+          image=$(ls target/release/bundle/appimage/*.AppImage)
+          chmod +x "$image"
+          # No FUSE on the runner: the image unpacks itself and runs.
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a node tools/e2e/smoke.mjs "$image" 120
+      - name: Linux, the .rpm is well formed
+        if: runner.os == 'Linux'
+        run: |
+          # An rpm cannot be installed on Ubuntu; its contents and metadata are read instead.
+          sudo apt-get install -y rpm
+          rpm -qpl target/release/bundle/rpm/*.rpm | grep -E '/bin/zorix-desktop$'
+          rpm -qpi target/release/bundle/rpm/*.rpm | grep -E '^(Name|Version|License)'
+
+      - name: macOS, the .dmg
+        if: runner.os == 'macOS'
+        run: |
+          dmg=$(ls target/release/bundle/dmg/*.dmg)
+          mount=$(hdiutil attach "$dmg" -nobrowse -readonly | grep -o '/Volumes/.*' | head -1)
+          echo "mounted at $mount"
+          cp -R "$mount"/*.app /Applications/
+          hdiutil detach "$mount" -quiet
+          node tools/e2e/smoke.mjs /Applications/ZORIX.app/Contents/MacOS/zorix-desktop 120
+          rm -rf /Applications/ZORIX.app
+
+      - name: Windows, the .msi
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem target/release/bundle/msi/*.msi).FullName
+          $install = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /norestart /l*v msi-install.log" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { Get-Content msi-install.log -Tail 40; throw "msiexec install exited with $($install.ExitCode)" }
+          $app = (Get-ChildItem "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:LOCALAPPDATA\Programs" -Recurse -Filter zorix-desktop.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $app) { throw "zorix-desktop.exe was not found after the msi install" }
+          "installed at $app"
+          node tools/e2e/smoke.mjs $app 120
+          if ($LASTEXITCODE -ne 0) { throw "the installed app did not start" }
+          $dir = Split-Path $app
+          $remove = Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
+          if ($remove.ExitCode -ne 0) { throw "msiexec uninstall exited with $($remove.ExitCode)" }
+          if (Test-Path $app) { throw "$app is still there after the uninstall" }
+      - name: Windows, the NSIS setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem target/release/bundle/nsis/*-setup.exe).FullName
+          Start-Process $setup -ArgumentList "/S" -Wait
+          $app = (Get-ChildItem "$env:LOCALAPPDATA", "$env:ProgramFiles" -Recurse -Filter zorix-desktop.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $app) { throw "zorix-desktop.exe was not found after the NSIS install" }
+          "installed at $app"
+          node tools/e2e/smoke.mjs $app 120
+          if ($LASTEXITCODE -ne 0) { throw "the installed app did not start" }
+          $uninstaller = Join-Path (Split-Path $app) "uninstall.exe"
+          Start-Process $uninstaller -ArgumentList "/S" -Wait
+          Start-Sleep -Seconds 5
+          if (Test-Path $app) { throw "$app is still there after the uninstall" }
