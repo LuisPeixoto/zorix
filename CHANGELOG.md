@@ -39,6 +39,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- A workflow that installs each installer silently on a fresh Linux, macOS and Windows runner, starts the installed app, uninstalls and checks nothing is left; and a per-release checklist for what only a person can see ([distribution](docs/distribution.md)).
 - End-to-end tests of the built app: a WebDriver client of our own and five scenarios, run on Linux in CI; macOS and Windows start the app and wait for it to load. `ZORIX_SMOKE=1` makes an app say it has loaded and close ([testing](docs/testing.md#end-to-end-tests)).
 - Errors have stable codes: a failed command in the app tells the interface a code and its values, so the sentence can be written in the person's language. The command line prints what it always did.
 - **The interface's text is in one catalogue** ([ADR-0040](docs/adr/0040-interface-text-and-error-reasons.md), [guide](docs/desktop.md#text-and-languages)): about 1,900 sentences moved out of the components, with plural forms,
