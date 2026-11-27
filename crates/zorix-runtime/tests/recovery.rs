@@ -270,3 +270,28 @@ async fn a_run_that_lost_its_lease_stops_without_running_a_tool_or_writing() {
         "the run wrote to an execution that another engine holds"
     );
 }
+
+/// Recovery queues a run and then lets go of the lease it held while it took the run over. A worker that picks the run up in between
+/// holds the same lease (the owner is the engine), so letting go must come first: otherwise the worker's lease is deleted under it, and
+/// its next commit is refused as coming from an engine without one, which left the run unfinished and `zorix recover` waiting for it.
+#[tokio::test]
+async fn a_run_that_recovery_queues_keeps_the_lease_its_worker_takes() {
+    use zorix_runtime::testing::FaultyRepository;
+
+    let (first, repo) = engine_that_will_crash(vec![Turn::Hang], registry_of(vec![]));
+    let started = first.submit(request("go", &[])).await.unwrap();
+    wait_for_state(&first, started.id, S::WaitingForModel).await;
+    first.abort();
+
+    // A store that is slow to release, so the worker is already driving when recovery lets go.
+    let slow = Arc::new(FaultyRepository::new(repo.clone()));
+    slow.delay_release(Duration::from_millis(300));
+    let model = Arc::new(ScriptedModel::new([Turn::Delay { ms: 800, then: Box::new(Turn::Say("finished".into())) }]));
+    // A long lease, so the heartbeat does not put back what recovery deleted before the model answers.
+    let config = EngineConfig { sole_owner: true, lease_ttl_ms: 30_000, ..fast_config() };
+    let second = Engine::builder(slow, model).config(config).build();
+    let report = second.recover().await.unwrap();
+    assert_eq!(report.requeued, vec![started.id]);
+    let done = settled(&second, started.id).await;
+    assert_eq!(done.state, S::Completed, "{:?}", done.failure);
+}
