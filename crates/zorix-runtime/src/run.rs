@@ -78,6 +78,8 @@ impl Extras {
 }
 
 pub(crate) struct Run {
+    /// Summarising failed once in this drive; it is not tried again until the run is picked up again.
+    summaries_failed: bool,
     engine: Engine,
     exec: Execution,
     state: LoopState,
@@ -215,7 +217,7 @@ impl Run {
         let records = repository.tool_calls(id).await?;
         let approvals = repository.approvals(id).await?;
         let tick = engine.now();
-        Ok(Some(Run { engine, exec, state, step, control, tick, records, approvals }))
+        Ok(Some(Run { summaries_failed: false, engine, exec, state, step, control, tick, records, approvals }))
     }
 
     fn event(&self, kind: EventKind, payload: Value) -> NewEvent {
@@ -347,6 +349,120 @@ impl Run {
 
     // ---- model ------------------------------------------------------------------------------------------------
 
+    /// What the model is shown of the history: the transcript, with a summary in place of the messages it stands for.
+    fn shown_transcript(&self) -> Vec<Message> {
+        match &self.state.summary {
+            Some(summary) => {
+                let mut shown = vec![crate::history_summary::summary_message(&summary.text)];
+                shown.extend(self.state.transcript.iter().skip(summary.covers).cloned());
+                shown
+            }
+            None => self.state.transcript.clone(),
+        }
+    }
+
+    /// The request for the next model call, from the sources of context.
+    async fn build_request(&self, tools: &[ToolSpec], context_budget: Option<u64>) -> zorix_core::Result<ModelRequest> {
+        let shown = self.shown_transcript();
+        let view = ExecutionView {
+            execution: &self.exec,
+            transcript: &shown,
+            tools,
+            context_budget,
+            token_factor: self.engine.inner.calibration.factor(&self.exec.request.model),
+        };
+        let mut request = self.engine.inner.context.build(&view).await?;
+        request.phase = self.phase();
+        if let Some(agent) = &self.exec.agent {
+            request.allowed_models = agent.allowed_models.clone();
+        }
+        Ok(request)
+    }
+
+    /// Ask a model to summarise the oldest turns that `request` had to leave out, and keep the summary in the loop's state. Returns whether
+    /// there is a new summary, so the request is built again. It never fails the run: when the summary cannot be made (the setting is off, a
+    /// limit is reached, the call failed or answered nothing) the turns stay left out, as before, and it is not tried again in this drive.
+    async fn summarise(&mut self, request: &ModelRequest) -> Step<bool> {
+        use crate::history_summary as hs;
+        if !self.engine.inner.settings.get().context.summaries || self.summaries_failed {
+            return Ok(false);
+        }
+        // Which turns of what was shown were left out: the history segments of the report are the turns, in order.
+        let shown = self.shown_transcript();
+        let turns = hs::turns(&shown);
+        let kept: Vec<bool> = request.context_report.iter().filter(|r| r.origin == "history").map(|r| r.kept).collect();
+        if kept.len() != turns.len() {
+            return Ok(false);
+        }
+        let from_shown = usize::from(self.state.summary.is_some());
+        let Some(end_shown) = kept
+            .iter()
+            .enumerate()
+            .filter(|(i, kept)| !**kept && *i >= from_shown)
+            .map(|(i, _)| turns[i].end)
+            .next_back()
+        else {
+            return Ok(false);
+        };
+        // In transcript terms: what the summary already covers, and where the newly left out turns end.
+        let start = self.state.summary.as_ref().map_or(0, |s| s.covers);
+        let end = start + end_shown.saturating_sub(from_shown);
+        if end <= start || end > self.state.transcript.len() {
+            return Ok(false);
+        }
+        // A run that is at its limit says so at the next boundary; do not spend more here.
+        if self.engine.inner.policy.check_limits(&self.exec).is_some() {
+            return Ok(false);
+        }
+        let previous = self.state.summary.as_ref().map(|s| s.text.clone());
+        let ask = hs::request(
+            &self.exec.request.model,
+            self.exec.id,
+            previous.as_deref(),
+            &self.state.transcript[start..end],
+        );
+        let limits = self.exec.limits;
+        let call = self.engine.inner.model.generate(ask, self.control.cancel.clone());
+        let outcome = tokio::time::timeout(Duration::from_millis(limits.model_timeout_ms), call).await;
+        let response = match outcome {
+            Ok(Ok(response)) => response,
+            Ok(Err(ModelError::Cancelled)) => return Err(self.cancelled_or_shutdown().await),
+            Ok(Err(error)) => {
+                tracing::warn!(%error, "could not summarise the earlier turns; they are left out");
+                self.summaries_failed = true;
+                return Ok(false);
+            }
+            Err(_) => {
+                tracing::warn!("summarising the earlier turns took too long; they are left out");
+                self.summaries_failed = true;
+                return Ok(false);
+            }
+        };
+        // What it cost is the run's, whatever came of it.
+        let mut usage = response.usage;
+        usage.model_calls = usage.model_calls.max(1);
+        usage.tool_calls = 0;
+        self.exec.usage.add(&usage);
+        let Some(text) = hs::finish(&response.text) else {
+            self.summaries_failed = true;
+            return Ok(false);
+        };
+        self.state.summary = Some(zorix_core::HistorySummary { covers: end, text: text.clone() });
+        let event = self.event(
+            EventKind::ContextSummarised,
+            json!({
+                "folded_messages": end - start,
+                "covers": end,
+                "summary_chars": text.chars().count(),
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "cost_micros": usage.cost_micros,
+            }),
+        );
+        self.commit(&[], vec![event], Extras::checkpoint()).await?;
+        Ok(true)
+    }
+
     /// The tools this execution may use. They are pinned the first time they are needed and never change afterwards,
     /// so every step and every resume offers the same list, and a server that changes a tool in the meantime cannot
     /// change what a running execution was shown or approved (ADR-0020).
@@ -396,30 +512,25 @@ impl Run {
                 .saturating_sub(CONTEXT_MARGIN_TOKENS)
                 .max(MIN_CONTEXT_TOKENS)
         });
-        let built = {
-            let view = ExecutionView {
-                execution: &self.exec,
-                transcript: &self.state.transcript,
-                tools: &tools,
-                context_budget,
-                token_factor: self.engine.inner.calibration.factor(&self.exec.request.model),
-            };
-            self.engine.inner.context.build(&view).await
-        };
-        let request = match built {
-            Ok(mut request) => {
-                request.phase = self.phase();
-                if let Some(agent) = &self.exec.agent {
-                    request.allowed_models = agent.allowed_models.clone();
-                }
-                request
-            }
+        let mut request = match self.build_request(&tools, context_budget).await {
+            Ok(request) => request,
             Err(error) => {
                 return Err(self
                     .fail(Failure::new(FailureKind::Internal, format!("Could not build the context: {error}")))
                     .await);
             }
         };
+        // Turns that no longer fit are summarised, when that is on, and the request is built again with the summary where they were.
+        if self.summarise(&request).await? {
+            request = match self.build_request(&tools, context_budget).await {
+                Ok(request) => request,
+                Err(error) => {
+                    return Err(self
+                        .fail(Failure::new(FailureKind::Internal, format!("Could not build the context: {error}")))
+                        .await);
+                }
+            };
+        }
         // The raw estimate (before any correction), so the ratio to the real count stays comparable across calls.
         let estimated_messages: u64 = request.messages.iter().map(Message::estimated_tokens).sum();
         let estimated_tools = request.estimated_tool_tokens();

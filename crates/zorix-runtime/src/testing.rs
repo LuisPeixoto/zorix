@@ -185,7 +185,7 @@ pub async fn records_are_replaced_by_id<R: ExecutionRepository>(repo: &R) {
     let checkpoint = |step: u64, text: &str| Checkpoint {
         execution_id: id,
         step,
-        state: LoopState { transcript: vec![Message::user(text)], pending: vec![] },
+        state: LoopState { transcript: vec![Message::user(text)], pending: vec![], summary: None },
         created_at: Timestamp(step as i64),
     };
     let call = |n: &str, status| ToolCallRecord {
