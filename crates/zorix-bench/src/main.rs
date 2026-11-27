@@ -410,6 +410,46 @@ async fn main() {
         r,
         memory.vector_search(&visible, Corpus::Knowledge, model, &probe, 10)
     );
+    // A sync counts what still needs a vector (every piece has one here, so this is the walk over all of them), and every file it
+    // writes checks the room left in the tenant's pieces.
+    time!(
+        report,
+        "documents: counting the pieces without a vector",
+        r,
+        memory.count_chunks_without_vector(root.id, model)
+    );
+    let rewritten: Vec<NewChunk> = (0..50)
+        .map(|k| {
+            let text = sentence(&mut rng, 60);
+            NewChunk {
+                text_hash: text_hash(&format!("{text} rewritten {k}")),
+                text,
+                heading: None,
+                line_start: Some(k * 5 + 1),
+                line_end: Some(k * 5 + 5),
+                page: None,
+                tokens: 80,
+            }
+        })
+        .collect();
+    time!(report, "documents: writing one file of fifty pieces", r, async {
+        memory
+            .write_document(DocumentWrite {
+                root: root.id,
+                rel_path: "notes/file-00000.md".into(),
+                kind: "markdown".into(),
+                state: DocState {
+                    size: 4_000,
+                    mtime_ns: 2,
+                    content_hash: format!("{:064x}", 1u64),
+                    status: DocStatus::Indexed,
+                },
+                error: None,
+                chunks: rewritten.clone(),
+                indexed_at: Timestamp(now),
+            })
+            .await
+    });
     time!(
         report,
         "facts: the list",

@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- Syncing a large folder no longer loads the text of every piece that needs a vector just to count them (it can be hundreds of megabytes), and writing a file no longer counts every piece of the tenant first. Both are measured by `zorix-bench` now.
+
 - A cost limit (a run's, or a worker's weekly budget) never tripped on a model with no known price, because every call counted as zero. The run is now refused before anything is sent, with the way out; models on this computer, which cost nothing, are not affected.
 
 - A document folder's sync cut a file into pieces again whenever its modification time changed, even when its content was the same (a copy, a checkout, a touch). The content hash is compared now, so such a file keeps its pieces and the next sync skips it without reading it.

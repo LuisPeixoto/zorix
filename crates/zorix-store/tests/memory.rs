@@ -456,12 +456,18 @@ async fn chunks_without_a_vector_are_listed_until_embedded() {
         .unwrap();
     let todo = f.store.chunk_hashes_without_vector(root, "m", 10).await.unwrap();
     assert_eq!(todo.len(), 2, "identical text is embedded once");
+    // Counting says the same without reading the texts (a sync of a large folder used to load every one of them to count them).
+    assert_eq!(f.store.count_chunks_without_vector(root, "m").await.unwrap(), 2);
     f.store.put_vectors("m", vec![(text_hash("alpha"), unit(&[1.0, 0.0]))]).await.unwrap();
+    assert_eq!(f.store.count_chunks_without_vector(root, "m").await.unwrap(), 1);
+    assert_eq!(f.store.count_chunks_without_vector(root, "another-model").await.unwrap(), 2, "per model");
     assert_eq!(
         f.store.chunk_hashes_without_vector(root, "m", 10).await.unwrap(),
         vec![(text_hash("beta"), "beta".to_string())]
     );
     assert_eq!(f.store.chunk_hashes_without_vector(root, "m", 0).await.unwrap().len(), 0);
+    f.store.put_vectors("m", vec![(text_hash("beta"), unit(&[0.0, 1.0]))]).await.unwrap();
+    assert_eq!(f.store.count_chunks_without_vector(root, "m").await.unwrap(), 0);
 }
 
 fn snapshot(execution: ExecutionId, t: &str, items: &[&str]) -> RecallSnapshot {

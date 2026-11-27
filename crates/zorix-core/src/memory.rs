@@ -709,6 +709,9 @@ pub trait MemoryStore: Send + Sync {
     async fn document_states(&self, root: KnowledgeRootId) -> Result<HashMap<String, DocState>>;
     /// Write one file: its row and its chunks, replacing what was there.
     async fn write_document(&self, write: DocumentWrite) -> Result<()>;
+    /// How many distinct pieces of a folder have no vector for `model` yet. The same pieces `chunk_hashes_without_vector` lists, counted
+    /// without reading their text.
+    async fn count_chunks_without_vector(&self, root: KnowledgeRootId, model: &str) -> Result<u64>;
     /// Remember a new size and modification time for a file whose content is the same, so the next sync can skip it without reading it.
     /// Its pieces are untouched.
     async fn touch_document(&self, root: KnowledgeRootId, rel_path: &str, size: u64, mtime_ns: i64) -> Result<()>;

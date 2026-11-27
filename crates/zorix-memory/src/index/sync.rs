@@ -314,7 +314,7 @@ impl Indexer {
         let settings = self.store.settings(&root.tenant).await?;
         let Some(model) = settings.embedding_model else { return Ok(()) };
         // How much there is to do, so progress can say.
-        let mut remaining = self.store.chunk_hashes_without_vector(root.id, &model, usize::MAX / 2).await?.len() as u64;
+        let mut remaining = self.store.count_chunks_without_vector(root.id, &model).await?;
         let total = remaining;
         let mut done = 0u64;
         while remaining > 0 {
