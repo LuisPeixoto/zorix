@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- **Security:** when a changed file was indexed again, its old pieces stayed in the saved context of the runs that had read them, so removing the folder later left an old version of the text behind. They are scrubbed now, as a removed file's are.
+
 - **Security:** the past work of an agent that has memory of its own was recalled by every other agent and by plain runs in the same project. It now belongs to its agent ([memory](docs/memory.md#agent-memory)); records already stored are assigned to their agents when the database is opened. Database schema 11.
 - **Security:** the record of a finished run kept the first arguments of each tool as plain text, so a value under a key like `password` or `authorization` was stored in past work and recalled into later runs. Values under secret keys are now replaced before the text is made. Records made before this release are written again from their runs when the database is opened (schema 12).
 - **Security:** text redaction now also replaces the value of `password=…`, `"client_secret": "…"` and `Authorization: Basic …` pairs, PEM private key blocks, and Google, Stripe, GitLab and other GitHub token shapes. The history of a project, the history of the organisation and the reports of a manager were stored without any redaction; they pass through it now.

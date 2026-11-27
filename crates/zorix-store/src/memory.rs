@@ -303,6 +303,12 @@ fn root_from(row: &Row<'_>) -> rusqlite::Result<KnowledgeRoot> {
 const ROOT_COLUMNS: &str = "id, tenant, scope, scope_key, path, include, exclude, max_file_bytes, enabled, auto_sync, created_at, last_sync_at, last_sync";
 
 /// The keys of every chunk of a root, for scrubbing snapshots.
+fn chunk_keys_of_document(tx: &Connection, document: &str) -> Result<Vec<String>> {
+    let mut stmt = tx.prepare("SELECT id FROM knowledge_chunks WHERE document_id = ?1").map_err(storage)?;
+    let rows = stmt.query_map(params![document], |r| r.get::<_, i64>(0)).map_err(storage)?;
+    rows.map(|r| r.map(chunk_key).map_err(storage)).collect()
+}
+
 fn chunk_keys_of_root(tx: &Connection, root: KnowledgeRootId) -> Result<Vec<String>> {
     let mut stmt = tx
         .prepare(
@@ -1038,6 +1044,9 @@ impl MemoryStore for SqliteMemoryStore {
             }
             let document = match existing {
                 Some((id, _)) => {
+                    // The old pieces go like a removed file's do: out of the frozen recall of past runs too, so removing the folder
+                    // later leaves no old version of its text behind, and no deleted id is left referenced for a new piece to reuse.
+                    scrub(&tx, &chunk_keys_of_document(&tx, &id)?)?;
                     tx.execute("DELETE FROM knowledge_chunks WHERE document_id = ?1", params![id]).map_err(storage)?;
                     id
                 }
@@ -1106,13 +1115,7 @@ impl MemoryStore for SqliteMemoryStore {
                     .optional()
                     .map_err(storage)?;
                 let Some(id) = id else { continue };
-                let keys: Vec<String> = {
-                    let mut stmt =
-                        tx.prepare("SELECT id FROM knowledge_chunks WHERE document_id = ?1").map_err(storage)?;
-                    let rows = stmt.query_map(params![id], |r| r.get::<_, i64>(0)).map_err(storage)?;
-                    rows.map(|r| r.map(chunk_key).map_err(storage)).collect::<Result<_>>()?
-                };
-                scrub(&tx, &keys)?;
+                scrub(&tx, &chunk_keys_of_document(&tx, &id)?)?;
                 tx.execute("DELETE FROM knowledge_chunks WHERE document_id = ?1", params![id]).map_err(storage)?;
                 tx.execute("DELETE FROM knowledge_documents WHERE id = ?1", params![id]).map_err(storage)?;
             }

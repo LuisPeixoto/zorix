@@ -567,6 +567,31 @@ async fn removing_a_folder_removes_its_index_but_nothing_else() {
     assert!(f.store.document_states(drop).await.unwrap().is_empty());
 }
 
+/// Writing a file again replaces its pieces, and the old ones must leave the frozen recall of past runs like a removed file's do:
+/// otherwise removing the folder later would still leave an old version of its text in them (finding F5 of the Phase 11 audit).
+#[tokio::test]
+async fn writing_a_file_again_scrubs_its_old_pieces_from_frozen_snapshots() {
+    let f = fixture();
+    let root = add_root(&f.store, "a", Scope::Global, "/docs").await;
+    f.store.write_document(doc(root, "plan.md", vec![chunk("the zebracorn launch plan", 1)])).await.unwrap();
+    let hit = f.store.text_search(&vis("a"), Corpus::Knowledge, &terms(&["zebracorn"]), 5).await.unwrap();
+    let old_key = chunk_key(hit[0].id.parse().unwrap());
+    let e = ExecutionId::new();
+    f.store.save_snapshot(snapshot(e, "a", &[&old_key, "m:other"])).await.unwrap();
+
+    // The file changes and is indexed again.
+    f.store.write_document(doc(root, "plan.md", vec![chunk("the revised plan", 1)])).await.unwrap();
+
+    assert!(f.store.text_search(&vis("a"), Corpus::Knowledge, &terms(&["zebracorn"]), 5).await.unwrap().is_empty());
+    let snap = f.store.snapshot(e).await.unwrap().unwrap();
+    assert_eq!(snap.items, vec!["m:other".to_string()], "the old piece left the snapshot");
+    assert_eq!(snap.doc["scrubbed"], json!(true));
+    assert!(
+        f.store.snapshots_using(&tenant("a"), &old_key).await.unwrap().is_empty(),
+        "and nothing refers to it any more"
+    );
+}
+
 fn record(e: ExecutionId, t: &str, project: Option<&str>, text: &str) -> OperationRecord {
     OperationRecord {
         execution_id: e,
