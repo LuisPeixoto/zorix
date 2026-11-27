@@ -16,6 +16,7 @@ mod summary;
 pub mod testing;
 mod tools;
 mod validators;
+mod watchdog;
 
 pub use context::{
     DefaultContextBuilder, HistorySource, PREAMBLE, Placement, StaticSource, SystemSource, TaskSource, wrap_untrusted,
