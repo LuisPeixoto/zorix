@@ -16,5 +16,7 @@
   "documents: counting the pieces without a vector": 250,
   "documents: writing one file of fifty pieces": 100,
   "facts: the list": 100,
-  "opening the store again": 250
+  "opening the store again": 250,
+  "retention: counting what a pass would compact": 5000,
+  "retention: compacting every run": 30000
 }
