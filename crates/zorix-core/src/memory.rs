@@ -550,6 +550,10 @@ pub struct OperationRecord {
     pub project: Option<String>,
     /// The conversation, if any.
     pub conversation: Option<ConversationId>,
+    /// The agent whose memory this belongs to: set when the run was an agent's with memory of its own (ADR-0026), so no
+    /// other agent and no plain run recalls it. `None` for every other run.
+    #[serde(default)]
+    pub agent: Option<AgentId>,
     /// `completed`, `failed` or `cancelled`.
     pub state: String,
     /// When it ended.

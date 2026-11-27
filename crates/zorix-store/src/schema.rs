@@ -497,6 +497,17 @@ const MIGRATIONS: &[&str] = &[
     DROP INDEX executions_by_agent;
     CREATE INDEX executions_by_agent ON executions (tenant, agent, created_at DESC, id DESC) WHERE agent IS NOT NULL;
     ",
+    // 11: past work belongs to the agent that did it when that agent has memory of its own (ADR-0026), so no other agent and no plain
+    // run recalls it (audit finding F1). The records already stored take the agent from their execution, by the rule the run used.
+    "
+    ALTER TABLE operations ADD COLUMN agent TEXT;
+    UPDATE operations SET agent = (
+        SELECT e.agent FROM executions e
+        WHERE e.id = operations.execution_id AND e.agent IS NOT NULL
+          AND COALESCE(json_extract(e.doc, '$.agent.agent_memory'), 1) != 0
+    );
+    CREATE INDEX operations_by_agent ON operations (tenant, agent) WHERE agent IS NOT NULL;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -737,7 +748,6 @@ mod tests {
         .unwrap();
         migrate(&mut conn).unwrap();
         assert_eq!(version(&conn), LATEST);
-        assert_eq!(LATEST, 10);
         let plan = |sql: &str| -> String {
             let mut statement = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
             let rows: Vec<String> =
@@ -765,6 +775,45 @@ mod tests {
         }
         let kept: u32 = conn.query_row("SELECT COUNT(*) FROM executions", [], |r| r.get(0)).unwrap();
         assert_eq!(kept, 1);
+    }
+
+    #[test]
+    fn a_database_of_schema_10_upgrades_to_past_work_that_belongs_to_its_agent() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(10) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        // A run of an agent with memory of its own, one of an agent without, a plain run, and a record whose run is gone.
+        for (id, agent, doc) in [
+            ("e1", Some("a1"), r#"{"agent":{"agent_memory":true}}"#),
+            ("e2", Some("a2"), r#"{"agent":{"agent_memory":false}}"#),
+            ("e3", None, "{}"),
+        ] {
+            conn.execute(
+                "INSERT INTO executions (id, tenant, conversation, state, version, created_at, doc, agent) VALUES (?1,'local',NULL,'completed',1,1,?2,?3)",
+                rusqlite::params![id, doc, agent],
+            )
+            .unwrap();
+        }
+        for id in ["e1", "e2", "e3", "gone"] {
+            conn.execute(
+                "INSERT INTO operations (execution_id, tenant, project, conversation, state, finished_at, text, text_hash, doc) VALUES (?1,'local',NULL,NULL,'completed',1,'work','h','{}')",
+                [id],
+            )
+            .unwrap();
+        }
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let agent_of = |id: &str| -> Option<String> {
+            conn.query_row("SELECT agent FROM operations WHERE execution_id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(agent_of("e1").as_deref(), Some("a1"), "an agent with memory of its own keeps its work");
+        assert_eq!(agent_of("e2"), None, "an agent without it never owned any");
+        assert_eq!(agent_of("e3"), None);
+        assert_eq!(agent_of("gone"), None);
+        let kept: u32 = conn.query_row("SELECT COUNT(*) FROM operations", [], |r| r.get(0)).unwrap();
+        assert_eq!(kept, 4);
     }
 
     #[test]

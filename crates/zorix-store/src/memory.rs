@@ -15,7 +15,7 @@ use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, Row, Transaction, TransactionBehavior, params, params_from_iter};
 use serde_json::Value;
 use zorix_core::{
-    ChunkView, ConversationId, Corpus, DocState, DocStatus, DocumentWrite, Error, ExecutionId, KnowledgeRoot,
+    AgentId, ChunkView, ConversationId, Corpus, DocState, DocStatus, DocumentWrite, Error, ExecutionId, KnowledgeRoot,
     KnowledgeRootId, MemoryFilter, MemoryId, MemoryItem, MemoryKind, MemoryPatch, MemorySettings, MemoryStatus,
     MemoryStore, NewMemory, NewRoot, OperationRecord, RecallSnapshot, Remembered, Result, Scope, TenantId, TextHit,
     Timestamp, VectorHit, Visibility, chunk_key, memory_key, operation_key, text_hash,
@@ -121,6 +121,26 @@ fn scope_sql(alias: &str, visibility: &Visibility, args: &mut Vec<Sql>) -> Strin
         parts.push(format!("({alias}.scope = 'agent' AND {alias}.scope_key = ?{})", args.len()));
     }
     format!("({})", parts.join(" OR "))
+}
+
+/// `project AND agent` for the past work a run can see. An agent with memory of its own sees the work nobody owns and its own;
+/// every other run sees only the work nobody owns (finding F1 of the Phase 11 audit).
+fn operations_sql(alias: &str, visibility: &Visibility, args: &mut Vec<Sql>) -> String {
+    let project = match &visibility.project {
+        Some(p) => {
+            args.push(Sql::Text(p.clone()));
+            format!("{alias}.project = ?{}", args.len())
+        }
+        None => format!("{alias}.project IS NULL"),
+    };
+    let agent = match &visibility.agent {
+        Some(agent) => {
+            args.push(Sql::Text(agent.to_string()));
+            format!("({alias}.agent IS NULL OR {alias}.agent = ?{})", args.len())
+        }
+        None => format!("{alias}.agent IS NULL"),
+    };
+    format!("{project} AND {agent}")
 }
 
 /// The FTS5 `MATCH` text for already-split words: each one quoted, joined with OR. Raw text never reaches `MATCH`.
@@ -641,13 +661,7 @@ impl MemoryStore for SqliteMemoryStore {
                     )
                 }
                 Corpus::Operations => {
-                    let project = match &visibility.project {
-                        Some(p) => {
-                            args.push(Sql::Text(p.clone()));
-                            format!("o.project = ?{}", args.len())
-                        }
-                        None => "o.project IS NULL".to_string(),
-                    };
+                    let project = operations_sql("o", &visibility, &mut args);
                     format!(
                         "SELECT o.execution_id, -bm25(operations_fts), o.text
                          FROM operations_fts JOIN operations o ON o.rowid = operations_fts.rowid
@@ -700,13 +714,7 @@ impl MemoryStore for SqliteMemoryStore {
                     )
                 }
                 Corpus::Operations => {
-                    let project = match &visibility.project {
-                        Some(p) => {
-                            args.push(Sql::Text(p.clone()));
-                            format!("o.project = ?{}", args.len())
-                        }
-                        None => "o.project IS NULL".to_string(),
-                    };
+                    let project = operations_sql("o", &visibility, &mut args);
                     format!(
                         "SELECT o.execution_id, v.vector FROM operations o JOIN vectors v ON v.model = ?1 AND v.text_hash = o.text_hash
                          WHERE o.tenant = ?2 AND {project}"
@@ -1204,8 +1212,8 @@ impl MemoryStore for SqliteMemoryStore {
             // Not INSERT OR REPLACE: the delete trigger must run to keep the full-text index in step.
             tx.execute("DELETE FROM operations WHERE execution_id = ?1", params![record.execution_id.to_string()]).map_err(storage)?;
             tx.execute(
-                "INSERT INTO operations (execution_id, tenant, project, conversation, state, finished_at, text, text_hash, doc)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT INTO operations (execution_id, tenant, project, conversation, state, finished_at, text, text_hash, doc, agent)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     record.execution_id.to_string(),
                     record.tenant.as_str(),
@@ -1216,6 +1224,7 @@ impl MemoryStore for SqliteMemoryStore {
                     record.text,
                     text_hash(record.text.trim()),
                     record.doc.to_string(),
+                    record.agent.as_ref().map(AgentId::to_string),
                 ],
             )
             .map_err(storage)?;
@@ -1228,16 +1237,18 @@ impl MemoryStore for SqliteMemoryStore {
         let tenant = tenant.clone();
         self.run(move |conn| {
             conn.query_row(
-                "SELECT project, conversation, state, finished_at, text, doc FROM operations WHERE execution_id = ?1 AND tenant = ?2",
+                "SELECT project, conversation, state, finished_at, text, doc, agent FROM operations WHERE execution_id = ?1 AND tenant = ?2",
                 params![id.to_string(), tenant.as_str()],
                 |r| {
                     let conversation: Option<String> = r.get(1)?;
                     let doc: String = r.get(5)?;
+                    let agent: Option<String> = r.get(6)?;
                     Ok(OperationRecord {
                         execution_id: id,
                         tenant: tenant.clone(),
                         project: r.get(0)?,
                         conversation: conversation.and_then(|c| ConversationId::new(c).ok()),
+                        agent: agent.and_then(|a| a.parse::<AgentId>().ok()),
                         state: r.get(2)?,
                         finished_at: Timestamp(r.get(3)?),
                         text: r.get(4)?,
