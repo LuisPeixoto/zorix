@@ -131,6 +131,19 @@ impl Router {
         self.catalog.read().get(provider, model).cloned()
     }
 
+    /// What `input_tokens` and `output_tokens` would cost, in millionths of a dollar, on the model a request for `model` would try first. A model on
+    /// this computer costs nothing (`Some(0)`); `None` means the price is not known, which is not the same as free.
+    pub fn price_of(&self, model: &str, input_tokens: u64, output_tokens: u64) -> Option<u64> {
+        let resolved = self.resolve(model, StepPhase::Start).ok()?;
+        let candidate = resolved.candidates.first()?;
+        let local = self.providers.get(&candidate.provider).is_some_and(|entry| entry.local);
+        let usage = zorix_core::Usage { input_tokens, output_tokens, ..zorix_core::Usage::default() };
+        match self.model_info(&candidate.provider, &candidate.model).and_then(|info| info.price) {
+            Some(price) => Some(price.cost_micros(&usage)),
+            None => local.then_some(0),
+        }
+    }
+
     /// Every model known so far.
     pub fn known_models(&self) -> Vec<ModelInfo> {
         self.catalog.read().list().cloned().collect()
