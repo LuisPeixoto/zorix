@@ -399,12 +399,19 @@ struct Plan {
 pub struct FaultyRepository {
     inner: Arc<dyn ExecutionRepository>,
     plan: Mutex<Option<Plan>>,
+    release_delay: Mutex<Option<std::time::Duration>>,
 }
 
 impl FaultyRepository {
     /// Wrap a repository. Nothing breaks until [`fail`](Self::fail) is called.
     pub fn new(inner: Arc<dyn ExecutionRepository>) -> Self {
-        Self { inner, plan: Mutex::new(None) }
+        Self { inner, plan: Mutex::new(None), release_delay: Mutex::new(None) }
+    }
+
+    /// Make every `release_lease` wait this long before it does anything: a slow store, which lets another task act between the moment
+    /// something is queued and the moment its lease is released.
+    pub fn delay_release(&self, by: std::time::Duration) {
+        *self.release_delay.lock() = Some(by);
     }
 
     /// Break the `at`-th call (from 1) of `method`, once.
@@ -508,6 +515,10 @@ impl ExecutionRepository for FaultyRepository {
     }
 
     async fn release_lease(&self, id: ExecutionId, owner: &str) -> Result<()> {
+        let delay = *self.release_delay.lock();
+        if let Some(delay) = delay {
+            tokio::time::sleep(delay).await;
+        }
         self.inner.release_lease(id, owner).await
     }
 
