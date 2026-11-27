@@ -56,7 +56,15 @@ pub async fn serve(home: &Path, tenant: TenantId, printer: Printer, args: ServeA
         }
         println!("zorix: press Ctrl-C to stop.");
     }
+    // Old runs are compacted or deleted as the settings say, once a day while this program runs.
+    let stop = tokio_util::sync::CancellationToken::new();
+    let retention =
+        zorix_store::SqliteRetention::open(&zorix_store::database_path(home)).map_err(|e| CliError(e.to_string()))?;
+    let job =
+        retention.run_daily(tenant.clone(), app.settings.clone(), Arc::new(zorix_core::SystemClock), stop.clone());
     let _ = tokio::signal::ctrl_c().await;
+    stop.cancel();
+    let _ = job.await;
     host.shutdown().await;
     app.shutdown().await;
     Ok(Exit::Done)

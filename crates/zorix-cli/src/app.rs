@@ -78,6 +78,8 @@ pub struct App {
     pub projects: Arc<zorix_projects::ProjectService>,
     /// Workers, their levels and budgets, and the manager's week. It shapes the runs that tasks start.
     pub workforce: Arc<zorix_workforce::WorkforceService>,
+    /// The settings now, for the jobs that follow them while the program runs.
+    pub settings: SettingsCell,
     _lock: DataDirLock,
 }
 
@@ -149,6 +151,7 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     hub.register_native_tools()?;
     let calibration = Arc::new(SqliteCalibration::open(&database)?);
     let settings = SettingsCell::new(SqliteSettingsStore::open(&database)?.load(tenant)?);
+    let kept_settings = settings.clone();
     let engine = stack
         .install(
             Engine::builder(repository, gateway)
@@ -175,7 +178,7 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
         projects.set_model(Some(model.clone()));
         workforce.set_model(Some(model.clone()));
     }
-    Ok(App { engine, stack, hub, model, router, projects, workforce, _lock: lock })
+    Ok(App { engine, stack, hub, model, router, projects, workforce, settings: kept_settings, _lock: lock })
 }
 
 impl App {

@@ -50,6 +50,7 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
         Command::Knowledge(command) => crate::memory::knowledge(&home, &tenant, printer, command).await,
         Command::Embeddings(command) => crate::memory::embeddings(&home, &tenant, printer, command).await,
         Command::Settings(command) => crate::settings::settings(&home, &tenant, printer, command).await,
+        Command::Retention(command) => crate::settings::retention(&home, &tenant, printer, command).await,
         Command::Mcp(McpCommand::Serve(args)) => crate::mcp_serve::serve(&home, tenant, args).await,
         Command::Mcp(command) => crate::integrations::mcp(&home, tenant, printer, command).await,
         Command::Connect(command) => crate::integrations::connect(&home, tenant, printer, command).await,
