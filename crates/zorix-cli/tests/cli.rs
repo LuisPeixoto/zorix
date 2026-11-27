@@ -926,3 +926,40 @@ fn retention_says_what_it_would_do_and_then_compacts_an_old_run_and_keeps_its_nu
     assert_eq!(after["execution"]["result"], before["execution"]["result"], "the answer is still there");
     assert_eq!(after["execution"]["usage"], before["execution"]["usage"], "and so is what it cost");
 }
+
+#[test]
+fn a_run_can_be_estimated_before_it_starts_and_the_guess_follows_what_similar_runs_took() {
+    let z = Zorix::new();
+    // Nothing has run yet: a rough guess, and nothing was started.
+    let first = z.run(&["--json", "run", "What is 17*23?", "--estimate"]);
+    assert_eq!(code(&first), 0, "{}", text(&first.stderr));
+    let rough: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(rough["estimate"]["basis"]["kind"], "rough");
+    assert!(rough["estimate"]["input_tokens"].as_u64().unwrap() > 0);
+    let listed: Value = serde_json::from_slice(&z.run(&["list", "--json"]).stdout).unwrap();
+    assert!(listed.as_array().unwrap().is_empty(), "an estimate starts nothing");
+
+    // Three runs later it is built from them, and says how many.
+    for _ in 0..3 {
+        let done = z.run(&["run", "What is 17*23?", "--allow", "math.evaluate", "--approve", "never"]);
+        assert_eq!(code(&done), 0, "{}", text(&done.stderr));
+    }
+    let learned = z.run(&["run", "What is 17*23?", "--estimate"]);
+    assert!(text(&learned.stdout).contains("last 3 similar runs"), "{}", text(&learned.stdout));
+    let json: Value =
+        serde_json::from_slice(&z.run(&["--json", "run", "What is 17*23?", "--estimate"]).stdout).unwrap();
+    assert_eq!(json["estimate"]["basis"], serde_json::json!({"kind": "history", "runs": 3}));
+}
+
+#[test]
+fn a_cost_limit_in_dollars_is_taken_and_a_nonsense_amount_is_refused() {
+    let z = Zorix::new();
+    let refused = z.run(&["run", "hi", "--max-cost", "free"]);
+    assert_ne!(code(&refused), 0);
+    assert!(text(&refused.stderr).contains("not an amount of dollars"), "{}", text(&refused.stderr));
+    let zero = z.run(&["run", "hi", "--max-cost", "0"]);
+    assert_ne!(code(&zero), 0);
+    // A real amount on the simulated model, which costs nothing, is kept without trouble.
+    let ok = z.run(&["run", "What is 17*23?", "--allow", "math.evaluate", "--approve", "never", "--max-cost", "$0.50"]);
+    assert_eq!(code(&ok), 0, "{}", text(&ok.stderr));
+}

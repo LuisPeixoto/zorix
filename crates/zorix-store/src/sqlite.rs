@@ -9,9 +9,9 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params, params_from_iter};
 use serde_json::Value;
 use zorix_core::{
-    Approval, ApprovalId, Checkpoint, Commit, Committed, CreateOutcome, EVENT_SCHEMA_VERSION, Error, Execution,
-    ExecutionEvent, ExecutionId, ExecutionRepository, ExecutionState, ListFilter, NewEvent, Result, TenantId,
-    Timestamp, ToolCallRecord,
+    AgentId, Approval, ApprovalId, Checkpoint, Commit, Committed, CreateOutcome, EVENT_SCHEMA_VERSION, Error,
+    Execution, ExecutionEvent, ExecutionId, ExecutionRepository, ExecutionState, ListFilter, NewEvent, Result,
+    RunSample, TenantId, Timestamp, ToolCallRecord,
 };
 
 use crate::schema;
@@ -31,6 +31,47 @@ fn encode<T: serde::Serialize>(value: &T) -> Result<String> {
 }
 
 impl SqliteRepository {
+    /// What the newest finished runs of this agent (or of no agent) on this model (any model when none is named) took, newest first, for an estimate before a run starts. Only top-level
+    /// runs count (their usage already includes what their children spent), and a compacted run still counts: it keeps its numbers.
+    pub async fn recent_samples(
+        &self,
+        tenant: &TenantId,
+        agent: Option<AgentId>,
+        model: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<RunSample>> {
+        let (tenant, model, agent) = (tenant.clone(), model.map(str::to_string), agent.map(|a| a.to_string()));
+        self.run(move |conn| {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT COALESCE(json_extract(doc, '$.usage.input_tokens'), 0) + COALESCE(json_extract(doc, '$.usage.cache_read_tokens'), 0)
+                            + COALESCE(json_extract(doc, '$.usage.cache_write_tokens'), 0),
+                            COALESCE(json_extract(doc, '$.usage.output_tokens'), 0),
+                            COALESCE(json_extract(doc, '$.usage.model_calls'), 0),
+                            COALESCE(json_extract(doc, '$.active_ms'), 0),
+                            COALESCE(json_extract(doc, '$.usage.cost_micros'), 0)
+                     FROM executions
+                     WHERE tenant = ?1 AND state = 'completed' AND parent IS NULL AND agent IS ?2
+                       AND (?3 IS NULL OR json_extract(doc, '$.request.model') = ?3)
+                     ORDER BY created_at DESC, id DESC LIMIT ?4",
+                )
+                .map_err(storage)?;
+            let rows = stmt
+                .query_map(params![tenant.as_str(), agent, model, limit as i64], |r| {
+                    Ok(RunSample {
+                        input_tokens: r.get::<_, i64>(0)?.max(0) as u64,
+                        output_tokens: r.get::<_, i64>(1)?.max(0) as u64,
+                        model_calls: r.get::<_, i64>(2)?.clamp(0, i64::from(u32::MAX)) as u32,
+                        active_ms: r.get::<_, i64>(3)?.max(0) as u64,
+                        cost_micros: r.get::<_, i64>(4)?.max(0) as u64,
+                    })
+                })
+                .map_err(storage)?;
+            rows.map(|row| row.map_err(storage)).collect()
+        })
+        .await
+    }
+
     /// Open (or create) the database at `path`, and bring its schema up to date.
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {

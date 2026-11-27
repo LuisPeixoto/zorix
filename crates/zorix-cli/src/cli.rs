@@ -31,7 +31,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Start an activity and follow it until it finishes, needs you, or you press Ctrl-C.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// List executions, newest first.
     List(ListArgs),
     /// Show one execution: model, tools, timings, usage and result.
@@ -669,6 +669,14 @@ pub struct RunArgs {
     /// Most seconds of work.
     #[arg(long, value_parser = clap::value_parser!(u64).range(1..=86400), value_name = "SECONDS")]
     pub max_seconds: Option<u64>,
+
+    /// Most money the execution may spend, in dollars. A model with no known price cannot keep this limit, and the run is refused.
+    #[arg(long, value_name = "USD", value_parser = parse_usd)]
+    pub max_cost: Option<u64>,
+
+    /// Say what the execution would probably cost and how long it would take, from what similar runs took, and do not start it.
+    #[arg(long)]
+    pub estimate: bool,
 
     /// Group this execution with others from the same conversation.
     #[arg(long, value_parser = parse_conversation, value_name = "ID")]
@@ -1545,6 +1553,16 @@ fn parse_prompt(text: &str) -> Result<String, String> {
         return Err("the prompt is empty".into());
     }
     Ok(text.to_string())
+}
+
+/// Dollars as millionths of a dollar.
+fn parse_usd(text: &str) -> Result<u64, String> {
+    let value: f64 =
+        text.trim().trim_start_matches('$').parse().map_err(|_| format!("“{text}” is not an amount of dollars."))?;
+    if !value.is_finite() || value <= 0.0 || value > 100_000.0 {
+        return Err("Give an amount of dollars above zero and at most 100000.".into());
+    }
+    Ok((value * 1_000_000.0).round() as u64)
 }
 
 fn parse_key(text: &str) -> Result<String, String> {

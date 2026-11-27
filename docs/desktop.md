@@ -10,7 +10,7 @@ nothing: it asks the engine and shows what comes back. Permissions, approvals an
 | Area | What you can do |
 |---|---|
 | **Runs list** | Every execution, newest first, with its state and age. Updates on its own |
-| **New run** | Describe the activity, choose the tools it may use, optionally a workspace folder with read and write patterns |
+| **New run** | Describe the activity, choose the tools it may use, optionally a workspace folder with read and write patterns, set a **budget**, a **time** and the most **steps** (an agent's limits can only be narrowed), and see what it will **probably cost and how long it will take** before you start |
 | **Run view** | State, steps, tool calls, tokens and work time; the result or the failure; the timeline of events live |
 | **Approval card** | The tool, the exact arguments, why you are asked, and a fingerprint of the call. Approve or refuse, with an optional note |
 | **Controls** | Pause, resume and cancel |

@@ -5,6 +5,7 @@
 
 pub mod agents;
 pub mod connections;
+pub mod estimate;
 pub mod grants;
 pub mod teams;
 

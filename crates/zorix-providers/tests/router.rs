@@ -537,3 +537,24 @@ async fn live_text_starts_again_when_a_fallback_takes_over() {
     );
     assert!(!recorder.0.lock().contains(&"<reset>".to_string()));
 }
+
+#[tokio::test]
+async fn the_price_of_a_run_is_known_for_a_priced_model_free_on_this_computer_and_unknown_otherwise() {
+    let w = world(ROUTES, vec![]);
+    // big/smart: $10 per million in, $40 per million out; 1M in and 1M out cost $50.
+    assert_eq!(w.router.price_of("big/smart", 1_000_000, 1_000_000), Some(50_000_000));
+    assert_eq!(w.router.price_of("big/smart", 0, 0), Some(0));
+    assert_eq!(
+        w.router.price_of("home/local", 5_000_000, 5_000_000),
+        Some(0),
+        "a model on this computer costs nothing"
+    );
+    assert_eq!(
+        w.router.price_of("other/tiny", 1_000, 1_000),
+        None,
+        "a remote model with no price is unknown, not free"
+    );
+    assert_eq!(w.router.price_of("nowhere/at-all", 1_000, 1_000), None);
+    // A route is priced as its first candidate (big/smart).
+    assert_eq!(w.router.price_of("route:main", 1_000_000, 0), Some(10_000_000));
+}

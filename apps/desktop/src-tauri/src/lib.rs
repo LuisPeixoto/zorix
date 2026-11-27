@@ -70,6 +70,7 @@ pub fn run() {
             app_settings_commands::app_settings_set,
             app_settings_commands::retention_preview,
             app_settings_commands::retention_run,
+            app_settings_commands::estimate_run,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,

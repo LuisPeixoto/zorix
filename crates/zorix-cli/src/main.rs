@@ -4,6 +4,7 @@ mod agents;
 mod app;
 mod cli;
 mod commands;
+mod estimate;
 mod follow;
 mod integrations;
 mod mcp_serve;
