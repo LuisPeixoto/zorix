@@ -437,6 +437,13 @@ async fn describe_gives_the_smallest_window_of_the_candidates_so_any_fallback_fi
     );
     assert!(w.router.describe("route:private").unwrap().tools);
     assert_eq!(w.router.describe("big/smart").unwrap().context_window, 1_000_000);
+    // A call can be priced when the model has a price or runs on this computer; a remote model without one cannot (audit finding F11).
+    assert!(w.router.describe("big/smart").unwrap().priced);
+    assert!(w.router.describe("home/local").unwrap().priced, "a model on this computer costs nothing");
+    assert!(!w.router.describe("other/tiny").unwrap().priced, "a remote model with no price is not priced");
+    assert!(w.router.describe("route:main").unwrap().priced, "every candidate of the route has a price or runs here");
+    let mixed = world("[[route]]\nname = \"mixed\"\ncandidates = [\"big/smart\", \"other/tiny\"]\n", vec![]);
+    assert!(!mixed.router.describe("route:mixed").unwrap().priced, "one unpriced candidate makes the route unpriced");
     assert!(w.router.describe("big/unknown-model").is_none());
     assert!(w.router.describe("route:missing").is_none());
 }

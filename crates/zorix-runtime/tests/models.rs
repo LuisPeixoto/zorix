@@ -29,7 +29,7 @@ async fn a_small_context_window_makes_the_request_say_its_history_was_edited() {
         (0..5).map(|_| Turn::call("echo", json!({"text": big}))).chain([Turn::Say("done".into())]).collect();
     let model = Arc::new(Profiled::new(
         ScriptedModel::new(turns),
-        ModelProfile { context_window: 3_200, max_output: 200, tools: true, vision: false },
+        ModelProfile { context_window: 3_200, max_output: 200, tools: true, vision: false, priced: true },
     ));
     let engine = engine_with(model.clone());
     let done = run(&engine, request("echo a lot", &["echo"])).await;
@@ -48,7 +48,7 @@ async fn a_known_large_window_keeps_the_whole_history() {
             Turn::call("echo", json!({"text": "b"})),
             Turn::Say("ok".into()),
         ]),
-        ModelProfile { context_window: 1_000_000, max_output: 64_000, tools: true, vision: true },
+        ModelProfile { context_window: 1_000_000, max_output: 64_000, tools: true, vision: true, priced: true },
     ));
     let engine = engine_with(model.clone());
     run(&engine, request("go", &["echo"])).await;
@@ -199,4 +199,37 @@ async fn the_cost_limit_stops_a_run_that_costs_too_much() {
     let done = run(&h.engine, new).await;
     assert_eq!(done.failure.unwrap().limit, Some(LimitKind::Cost));
     assert!(done.usage.cost_micros > 1);
+}
+
+/// A cost limit counts what each call costs, and a model with no known price costs nothing every time: it would never trip. The run is
+/// refused before anything is sent, with the way out; a limit on a priced model, and a model with no limit, are not affected
+/// (finding F11 of the Phase 11 audit).
+#[tokio::test]
+async fn a_cost_limit_on_a_model_with_no_known_price_is_refused_before_anything_is_sent() {
+    let profile =
+        |priced| ModelProfile { context_window: 100_000, max_output: 4_000, tools: true, vision: false, priced };
+    let ask = |limits: Limits| with_limits(request("go", &[]), limits);
+    let with_cost_limit = Limits { max_cost_micros: Some(5_000_000), ..Limits::default() };
+
+    let unpriced = Arc::new(Profiled::new(ScriptedModel::new([Turn::Say("never asked".into())]), profile(false)));
+    let done = run(&engine_with(unpriced.clone()), ask(with_cost_limit)).await;
+    assert_eq!(done.state, S::Failed);
+    let failure = done.failure.unwrap();
+    assert_eq!(failure.limit, Some(LimitKind::Cost));
+    assert!(
+        failure.message.contains("price of sim is not known") && failure.message.contains("providers.toml"),
+        "{}",
+        failure.message
+    );
+    assert!(unpriced.inner().requests().is_empty(), "nothing was sent to the model");
+
+    let priced = Arc::new(Profiled::new(ScriptedModel::new([Turn::Say("ok".into())]), profile(true)));
+    assert_eq!(run(&engine_with(priced), ask(with_cost_limit)).await.state, S::Completed);
+
+    let no_limit = Arc::new(Profiled::new(ScriptedModel::new([Turn::Say("ok".into())]), profile(false)));
+    assert_eq!(
+        run(&engine_with(no_limit), ask(Limits::default())).await.state,
+        S::Completed,
+        "without a cost limit nothing needs a price"
+    );
 }
