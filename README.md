@@ -33,7 +33,7 @@ everything. It is not tied to one model or provider, and the core does not know 
 - **Survives crashes.** State is saved after every step in SQLite. A stopped execution continues from its checkpoint; a
   finished tool is never run twice, and one that cannot safely be repeated asks you first.
 - **Everything is recorded.** Ordered, replayable events; a summary of model, tools, timings and usage; trace spans that
-  follow the OpenTelemetry GenAI names; secrets redacted from events and logs.
+  follow the OpenTelemetry GenAI names (and can go to your own collector, off by default); secrets redacted from events and logs.
 - **Model agnostic.** The loop talks to a small `ModelGateway` contract. [Anthropic, OpenAI, Gemini, compatible servers and
   Ollama](docs/providers.md) plug in behind it; keys stay in your system keychain; routes fall back when a provider fails.
 - **Memory you control.** Facts and preferences that a person approves (a model can only propose), the earlier runs of a

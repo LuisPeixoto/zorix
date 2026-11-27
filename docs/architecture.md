@@ -99,6 +99,8 @@ Every step emits an event and a `tracing` span named after the OpenTelemetry Gen
 iterations, tool calls, per-step durations, usage and the result. A `Secret` type and a key-based redaction filter keep
 credentials out of everything that is logged or stored.
 
+The spans can be sent to an OpenTelemetry collector you run (**Settings › General › Telemetry**, or `zorix settings set telemetry.endpoint …`): off by default, `https` or a collector on this computer only, spans of the runtime only, with the model, token counts, cost, tool names and outcomes and never a prompt, an answer or an argument; see [ADR-0046](adr/0046-opentelemetry-export.md).
+
 ## Cross-platform rules
 
 One code base. Crates other than the desktop shell have no platform code and run their tests on macOS, Windows and Linux
