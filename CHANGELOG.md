@@ -8,6 +8,7 @@ project follows [Semantic Versioning](https://semver.org).
 ### Fixed
 
 - **Security:** the past work of an agent that has memory of its own was recalled by every other agent and by plain runs in the same project. It now belongs to its agent ([memory](docs/memory.md#agent-memory)); records already stored are assigned to their agents when the database is opened. Database schema 11.
+- **Security:** the record of a finished run kept the first arguments of each tool as plain text, so a value under a key like `password` or `authorization` was stored in past work and recalled into later runs. Values under secret keys are now replaced before the text is made.
 
 ## [0.10.0] - 2026-11-24
 
