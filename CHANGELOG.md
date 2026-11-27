@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- The 60-second limit of a model call counted the whole answer, so a long answer that was still arriving was cut and paid for again. It is now the time **without progress**: an answer that keeps arriving is never cut, one that goes quiet is, and a call ends after ten minutes whatever it does ([runtime](docs/runtime.md#limits)).
+
 - A run whose lease was taken by another engine kept calling models and tools beside it; it stops now, writes nothing more and leaves the execution to the engine that holds the lease. Every commit a run makes is checked against the lease.
 
 - **Security:** when a changed file was indexed again, its old pieces stayed in the saved context of the runs that had read them, so removing the folder later left an old version of the text behind. They are scrubbed now, as a removed file's are.
