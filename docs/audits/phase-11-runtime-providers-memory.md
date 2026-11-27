@@ -30,7 +30,7 @@ A security finding is fixed first. Every finding is an issue in the milestone
 | F5 | 6 | Re-indexing a file leaves its old text in past runs' snapshots (chunk ids can be reused, which stops mattering once every deletion scrubs: no stale reference is left for a new piece to inherit) | Medium | [#40](https://github.com/LuisPeixoto/zorix/issues/40) | `fix/scrub-reindexed-chunks` |
 | F6 | 8, 13 | A lost lease only logs; the run keeps calling models and tools beside the engine that took it over | Medium | [#41](https://github.com/LuisPeixoto/zorix/issues/41) | `fix/lease-fencing` |
 | F7 | 8 | The 60 s model timeout bounds the whole call and cuts long streamed answers that the HTTP layer allows | Medium | [#42](https://github.com/LuisPeixoto/zorix/issues/42) | `fix/model-timeout` |
-| F8 | 7 | The indexer computes the file hash and never compares it | Low | [#43](https://github.com/LuisPeixoto/zorix/issues/43) | |
+| F8 | 7 | The indexer computes the file hash and never compares it | Low | [#43](https://github.com/LuisPeixoto/zorix/issues/43) | `fix/indexer-skip-by-hash` |
 | F9 | 7 | Counting by loading every row, a full-tenant count per file written, one query per past-work hit, and a vector scan that holds the store's only connection | Medium | [#44](https://github.com/LuisPeixoto/zorix/issues/44) | |
 | F11 | 8, 13 | A cost limit never trips for a model with no known price, and the screens show $0.00 | Medium | [#45](https://github.com/LuisPeixoto/zorix/issues/45) | |
 | F12 | 2 | No test covers project scope on the vector path over documents | Low | [#46](https://github.com/LuisPeixoto/zorix/issues/46) | |

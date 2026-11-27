@@ -146,6 +146,41 @@ async fn a_folder_is_indexed_with_what_belongs_in_it_and_nothing_private() {
     assert!(stored.last_sync_at.is_some());
 }
 
+/// A file that was only touched (a new modification time, the same bytes) is not read into pieces again: its hash says it is the same,
+/// so its pieces keep their identity and the next sync skips it by size and time (finding F8 of the Phase 11 audit).
+#[tokio::test]
+async fn a_touched_file_with_the_same_content_is_not_indexed_again() {
+    let env = env();
+    write(&env.folder, "notes.txt", "The quarterly review moved to Thursday.");
+    let indexer = Indexer::new(env.store.clone(), None);
+    let root = add(&env, &indexer).await;
+    sync(&indexer, &root).await;
+    let piece = |env: &Env| {
+        let store = env.store.clone();
+        async move {
+            store.text_search(&vis(), Corpus::Knowledge, &["quarterly".to_string()], 5).await.unwrap()[0].id.clone()
+        }
+    };
+    let before = piece(&env).await;
+
+    // The same bytes, a later modification time.
+    rewrite(&env.folder, "notes.txt", "The quarterly review moved to Thursday.");
+    let (touched, _) = sync(&indexer, &root).await;
+    assert_eq!((touched.indexed, touched.unchanged), (0, 1), "it was cut into pieces again: {touched:?}");
+    assert_eq!(piece(&env).await, before, "its piece was replaced by an identical one");
+
+    // And the new time was remembered, so the next sync does not even read it.
+    let state = env.store.document_states(root.id).await.unwrap().remove("notes.txt").unwrap();
+    assert!(state.mtime_ns > 0);
+    let (next, _) = sync(&indexer, &root).await;
+    assert_eq!((next.indexed, next.unchanged), (0, 1));
+
+    // A real change is still indexed.
+    rewrite(&env.folder, "notes.txt", "The review moved to the retrospective.");
+    let (changed, _) = sync(&indexer, &root).await;
+    assert_eq!(changed.indexed, 1);
+}
+
 #[tokio::test]
 async fn a_second_sync_does_nothing_until_a_file_changes_and_then_only_that_file() {
     let env = env();

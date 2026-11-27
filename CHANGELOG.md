@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- A document folder's sync cut a file into pieces again whenever its modification time changed, even when its content was the same (a copy, a checkout, a touch). The content hash is compared now, so such a file keeps its pieces and the next sync skips it without reading it.
+
 - The 60-second limit of a model call counted the whole answer, so a long answer that was still arriving was cut and paid for again. It is now the time **without progress**: an answer that keeps arriving is never cut, one that goes quiet is, and a call ends after ten minutes whatever it does ([runtime](docs/runtime.md#limits)).
 
 - A run whose lease was taken by another engine kept calling models and tools beside it; it stops now, writes nothing more and leaves the execution to the engine that holds the lease. Every commit a run makes is checked against the lease.

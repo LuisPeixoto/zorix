@@ -37,8 +37,8 @@ hostile file is reported with its reason and never stops the sync.
 
 ## Keeping it up to date
 
-There is no file watcher. **Sync** looks at every file: unchanged size and time means skip; otherwise a SHA-256 hash decides
-whether to read it again, and only changed files are re-cut and re-embedded. Files that disappeared are removed. With *check at
+There is no file watcher. **Sync** looks at every file: unchanged size and time means skip; otherwise the file is read and its SHA-256 hash decides
+whether it is cut again: a file that was only touched keeps its pieces (and costs one read), and only a file whose content changed is re-cut and re-embedded. Files that disappeared are removed. With *check at
 start* (`--auto-sync`) the desktop does that pass when it opens. A sync is cancellable, and can be repeated: it continues where it
 stopped.
 
