@@ -5,6 +5,10 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security:** the past work of an agent that has memory of its own was recalled by every other agent and by plain runs in the same project. It now belongs to its agent ([memory](docs/memory.md#agent-memory)); records already stored are assigned to their agents when the database is opened. Database schema 11.
+
 ## [0.10.0] - 2026-11-24
 
 The quality foundation: the tools every audit uses, and seven security fixes. See the [roadmap](docs/roadmap.md#-phase-10--quality-foundation--v0100).

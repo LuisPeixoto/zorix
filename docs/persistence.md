@@ -100,6 +100,10 @@ A call is delegated at most once (the children's idempotency keys), so a restart
 
 Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuses a schema-8 database. Spend is not stored: it is read from the cost of the runs.
 
+### Past work belongs to its agent (schema 11)
+
+`operations` gains an `agent` column: the agent whose memory the record belongs to, set when the run was an agent's with memory of its own and empty otherwise ([memory](memory.md#agent-memory)). Opening a schema-10 database fills it for the records already stored from the run each came from, by the same rule; a 0.10 program refuses a schema-11 database.
+
 ### List indexes (schema 10)
 
 The run list is shown newest first, and each filter now has an index that ends in that order: the agent's, the conversation's and the state's, each with the tie-break, so a filter reads only the rows it shows instead of reading and sorting every match. Opening a
