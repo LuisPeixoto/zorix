@@ -67,6 +67,9 @@ pub enum Command {
     /// The model that turns text into vectors for search by meaning.
     #[command(subcommand)]
     Embeddings(EmbeddingsCommand),
+    /// The settings of the program: long conversations, how long runs are kept, telemetry and scanned pages.
+    #[command(subcommand)]
+    Settings(SettingsCommand),
     /// Connect ZORIX to MCP servers, or serve ZORIX's memory to other tools over MCP.
     #[command(subcommand)]
     Mcp(McpCommand),
@@ -2182,6 +2185,25 @@ pub struct TaskHistoryArgs {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The workforce
+
+/// What `zorix settings` does.
+#[derive(Debug, Subcommand)]
+pub enum SettingsCommand {
+    /// Show every setting and its value.
+    Show,
+    /// Change one setting. The keys are `context.summaries` (on or off), `retention.days` (a number, or off to keep runs for ever),
+    /// `retention.mode` (compact or delete), `telemetry.endpoint` (an address, or off) and `knowledge.ocr` (on or off).
+    Set(SettingsSetArgs),
+}
+
+/// Options for `settings set`.
+#[derive(Debug, Args)]
+pub struct SettingsSetArgs {
+    /// The setting, such as `retention.days`.
+    pub key: String,
+    /// Its new value.
+    pub value: String,
+}
 
 /// What `zorix org` does.
 #[derive(Debug, Subcommand)]
