@@ -83,6 +83,7 @@ tool calls, usage and the next action. `Engine::recover()` runs at start-up:
 | `WaitingForApproval`, `Paused` | Left as they are |
 | Expired leases | Released |
 
+**A lease is checked when it matters.** A worker renews the lease of its run while it works. Every commit a run makes names the engine that makes it, and the repository refuses it unless that engine still holds the lease, so an engine that lost it cannot mark a tool as started or write anything else. When the renewal finds that another engine holds the lease, or fails for a whole lease, the run is told to stop and writes nothing more: it does not end as cancelled, because the engine that holds the lease carries on from the last checkpoint.
 ## Security model
 
 See [ADR-0006](adr/0006-permissions-approvals.md) and `SECURITY.md`. In short: deny by default, policy checked when a
