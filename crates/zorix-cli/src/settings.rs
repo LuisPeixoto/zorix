@@ -32,7 +32,10 @@ pub async fn settings(
         SettingsCommand::Set(args) => {
             let _lock = DataDirLock::acquire(home)?;
             let store = SqliteSettingsStore::open(&database_path(home))?;
-            let changed = apply(store.settings(tenant).await?, &args)?;
+            let mut changed = apply(store.settings(tenant).await?, &args)?;
+            if args.key == "telemetry.header" {
+                changed = set_header(home, changed, &args.value)?;
+            }
             store.put_settings(tenant, &changed).await?;
             let shown = lines(&changed).into_iter().find(|(key, _)| *key == args.key).map(|(_, value)| value);
             eprintln!("{} is now {}.", args.key, shown.unwrap_or_default());
@@ -105,6 +108,27 @@ fn describe(report: &RetentionReport, settings: &AppSettings, dry_run: bool) -> 
     text
 }
 
+/// `telemetry.header` takes `Name: value`, or `off`. The value goes to the system keychain, never to the database or the screen.
+fn set_header(home: &Path, mut current: AppSettings, text: &str) -> Result<AppSettings, CliError> {
+    let secrets = crate::app::secrets(&crate::app::load_config(home)?);
+    if is_off(text.trim()) {
+        let _ = secrets.remove(zorix_hub::telemetry::HEADER_SECRET);
+        current.telemetry.header = None;
+        return Ok(current);
+    }
+    let (name, value) = text
+        .split_once(':')
+        .map(|(n, v)| (n.trim(), v.trim()))
+        .ok_or_else(|| CliError("telemetry.header takes “Name: value”, or off.".into()))?;
+    zorix_hub::telemetry::check_header(name, value)?;
+    secrets
+        .set(zorix_hub::telemetry::HEADER_SECRET, &zorix_core::Secret::new(value))
+        .map_err(|e| CliError(format!("The value could not be kept in {}: {e}", secrets.describe())))?;
+    current.telemetry.header = Some(name.to_string());
+    current.validate()?;
+    Ok(current)
+}
+
 fn on_off(text: &str, key: &str) -> Result<bool, CliError> {
     match text.to_ascii_lowercase().as_str() {
         "on" | "true" | "yes" => Ok(true),
@@ -142,9 +166,11 @@ fn apply(mut current: AppSettings, args: &SettingsSetArgs) -> Result<AppSettings
         "telemetry.endpoint" => {
             current.telemetry.endpoint = if is_off(value) { None } else { Some(value.to_string()) };
         }
+        // The name goes in the settings and the value in the keychain: see `set_header`.
+        "telemetry.header" => {}
         other => {
             return Err(CliError(format!(
-                "There is no setting “{other}”. The keys are context.summaries, retention.days, retention.mode, telemetry.endpoint and knowledge.ocr."
+                "There is no setting “{other}”. The keys are context.summaries, retention.days, retention.mode, telemetry.endpoint, telemetry.header and knowledge.ocr."
             )));
         }
     }
@@ -166,6 +192,14 @@ fn lines(settings: &AppSettings) -> Vec<(&'static str, String)> {
             .to_string(),
         ),
         ("telemetry.endpoint", settings.telemetry.endpoint.clone().unwrap_or_else(|| "off".into())),
+        (
+            "telemetry.header",
+            settings
+                .telemetry
+                .header
+                .as_ref()
+                .map_or_else(|| "off".to_string(), |name| format!("{name} (the value is in the keychain)")),
+        ),
         ("knowledge.ocr", on(settings.knowledge.ocr)),
     ]
 }
