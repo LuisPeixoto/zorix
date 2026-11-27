@@ -25,6 +25,7 @@ and later modules follow executions through events, with one mechanism ([ADR-000
 | `execution.progress` | After each model answer that asks for tools | `iteration`, `tool_calls_requested`, `active_ms` |
 | `execution.model.requested` | A model call starts | `iteration`, `model`, `messages`, `tools`, `estimated_input_tokens`, `estimated_tool_tokens`, `token_factor`, `history_edited`, `segments` (each context segment: `origin`, `tokens`, `kept`) |
 | `execution.model.responded` | The model answered | `iteration`, `model`, `finish`, `text_chars`, `tool_calls`, `usage` |
+| `execution.context.summarised` | Turns that no longer fit were summarised ([ADR-0043](adr/0043-summaries-of-long-conversations.md)) | `folded_messages`, `covers`, `summary_chars`, `input_tokens`, `output_tokens`, `cost_micros` (never the text) |
 | `execution.model.retrying` | A temporary model error | `attempt`, `delay_ms`, `error` |
 | `execution.tool.requested` | The model asked for a tool | `call_id`, `tool`, `arguments` (redacted), `call_hash`, `source` (`builtin`, `memory`, `mcp:<server>`, `integration:<connection>`, `sandbox`) |
 | `execution.tool.denied` | Refused (policy, person, or unknown tool) | `call_id`, `tool`, `reason`, `by` |
