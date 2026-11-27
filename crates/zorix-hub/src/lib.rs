@@ -8,6 +8,7 @@ pub mod connections;
 pub mod estimate;
 pub mod grants;
 pub mod teams;
+pub mod telemetry;
 
 use std::path::Path;
 use std::sync::Arc;

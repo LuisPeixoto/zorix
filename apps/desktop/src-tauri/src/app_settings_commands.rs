@@ -17,6 +17,62 @@ pub async fn app_settings_get(state: State<'_, AppState>) -> Result<AppSettings,
 #[tauri::command]
 pub async fn app_settings_set(state: State<'_, AppState>, settings: AppSettings) -> Result<AppSettings, UiError> {
     let services = state.services()?;
+    settings.validate().map_err(ui)?;
+    apply_telemetry(services, &settings).await?;
+    services.settings.put_settings(&services.tenant, &settings).await.map_err(ui)?;
+    services.app_settings.set(settings.clone());
+    Ok(settings)
+}
+
+/// Start, change or stop the export of spans to match `settings`. A bad address is refused here, before anything is saved.
+async fn apply_telemetry(services: &crate::state::Services, settings: &AppSettings) -> Result<(), UiError> {
+    let Some(switch) = zorix_hub::telemetry::switch() else { return Ok(()) };
+    let header = match &settings.telemetry.header {
+        Some(name) => {
+            zorix_providers::secrets::get_async(services.secrets.clone(), zorix_hub::telemetry::HEADER_SECRET.into())
+                .await
+                .ok()
+                .flatten()
+                .map(|value| (name.clone(), value.expose().to_string()))
+        }
+        None => None,
+    };
+    switch.apply(settings.telemetry.endpoint.as_deref(), header).await.map_err(|e| UiError::message(e.to_string()))
+}
+
+/// Set (or, with no value, clear) the header the collector needs. The name is a setting; the value goes to the system keychain and is never
+/// returned or shown again.
+#[tauri::command]
+pub async fn telemetry_set_header(
+    state: State<'_, AppState>,
+    name: Option<String>,
+    value: Option<String>,
+) -> Result<AppSettings, UiError> {
+    let services = state.services()?;
+    let mut settings = services.app_settings.get();
+    let secrets = services.secrets.clone();
+    match (
+        name.as_deref().map(str::trim).filter(|n| !n.is_empty()),
+        value.as_deref().map(str::trim).filter(|v| !v.is_empty()),
+    ) {
+        (Some(name), Some(value)) => {
+            zorix_hub::telemetry::check_header(name, value).map_err(|e| UiError::message(e.to_string()))?;
+            let secret = zorix_core::Secret::new(value);
+            let store = secrets.clone();
+            tokio::task::spawn_blocking(move || store.set(zorix_hub::telemetry::HEADER_SECRET, &secret))
+                .await
+                .map_err(|e| UiError::message(e.to_string()))?
+                .map_err(|e| UiError::message(format!("The value could not be kept in {}: {e}", secrets.describe())))?;
+            settings.telemetry.header = Some(name.to_string());
+        }
+        _ => {
+            let store = secrets.clone();
+            let _ = tokio::task::spawn_blocking(move || store.remove(zorix_hub::telemetry::HEADER_SECRET)).await;
+            settings.telemetry.header = None;
+        }
+    }
+    settings.validate().map_err(ui)?;
+    apply_telemetry(services, &settings).await?;
     services.settings.put_settings(&services.tenant, &settings).await.map_err(ui)?;
     services.app_settings.set(settings.clone());
     Ok(settings)

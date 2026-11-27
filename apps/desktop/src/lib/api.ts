@@ -1023,7 +1023,8 @@ export interface AppSettings {
   /** Finished runs older than `days` are compacted or deleted; `null` keeps everything for ever. */
   retention: { days: number | null; mode: "compact" | "delete" };
   /** An OpenTelemetry collector (OTLP over HTTP); `null` sends nothing. */
-  telemetry: { endpoint: string | null };
+  /** `header` is only the name of a header the collector needs: its value is kept in the system keychain and is never returned. */
+  telemetry: { endpoint: string | null; header?: string | null };
   knowledge: { ocr: boolean };
 }
 
@@ -1042,6 +1043,8 @@ export interface RetentionReport {
 }
 
 export const appSettings = () => invoke<AppSettings>("app_settings_get");
+export const telemetrySetHeader = (name: string | null, value: string | null) =>
+  invoke<AppSettings>("telemetry_set_header", { name, value });
 export const retentionPreview = (days: number, mode: "compact" | "delete") => invoke<RetentionReport>("retention_preview", { days, mode });
 export const retentionRun = () => invoke<RetentionReport>("retention_run");
 

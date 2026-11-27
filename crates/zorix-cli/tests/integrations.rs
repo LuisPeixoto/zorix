@@ -391,3 +391,33 @@ fn grant_flags_are_checked_before_anything_starts() {
         assert_eq!(code(&out), 2, "{args:?}: {}", all(&out));
     }
 }
+
+#[test]
+fn the_value_of_a_telemetry_header_goes_to_the_keychain_and_never_to_the_database_or_the_screen() {
+    let z = Zorix::new();
+    let secret = "Bearer s3cret-telemetry-value";
+    let set = z.run(&["settings", "set", "telemetry.header", &format!("authorization: {secret}")]);
+    assert_eq!(code(&set), 0, "{}", all(&set));
+    assert!(!all(&set).contains("s3cret"), "the value was printed: {}", all(&set));
+
+    // The settings show the name only, as JSON and as text.
+    let shown = z.run(&["settings", "show"]);
+    assert!(text(&shown.stdout).contains("authorization (the value is in the keychain)"), "{}", text(&shown.stdout));
+    let json = z.run(&["settings", "show", "--json"]);
+    assert!(
+        !text(&json.stdout).contains("s3cret") && text(&json.stdout).contains("\"header\":\"authorization\""),
+        "{}",
+        text(&json.stdout)
+    );
+    // The database does not hold it; the keychain (a file in this test) does.
+    let database = std::fs::read(z.home().join("zorix.sqlite")).unwrap();
+    assert!(!database.windows(6).any(|w| w == b"s3cret"), "the value is in the database");
+    assert!(std::fs::read_to_string(z.dir.path().join("secrets.json")).unwrap().contains("s3cret-telemetry-value"));
+
+    // A header that is not one is refused, and `off` removes the value.
+    assert_ne!(code(&z.run(&["settings", "set", "telemetry.header", "bad name: x"])), 0);
+    assert_ne!(code(&z.run(&["settings", "set", "telemetry.header", "no-colon-here"])), 0);
+    assert_eq!(code(&z.run(&["settings", "set", "telemetry.header", "off"])), 0);
+    assert!(!std::fs::read_to_string(z.dir.path().join("secrets.json")).unwrap_or_default().contains("s3cret"));
+    assert!(text(&z.run(&["settings", "show"]).stdout).contains("telemetry.header     off"));
+}

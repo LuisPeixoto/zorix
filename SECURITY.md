@@ -61,9 +61,13 @@ These notes grow with each feature that handles data, files, network or permissi
   with no recognisable shape can slip through, so do not paste secrets into prompts. The arguments of a call are kept
   as they are in the local database, because the tool must receive them.
 - **Local data.** The database and the notes live in the data folder (`ZORIX_HOME`, or the platform default). They hold
-  prompts, tool arguments and results: treat the folder as sensitive. ZORIX has no telemetry. It connects only to the
-  providers you configure, and only when a run uses them; the desktop interface itself can make no network request (its
+  prompts, tool arguments and results: treat the folder as sensitive. ZORIX sends no telemetry unless you give it a collector address
+  (off by default; see below). It connects only to the providers you configure, and only when a run uses them; the desktop interface itself can make no network request (its
   content security policy allows none), so every call goes through the Rust side.
+- **Telemetry is yours to turn on, and says what leaves.** With a collector address set ([ADR-0046](docs/adr/0046-opentelemetry-export.md)), the spans of
+  each run go to it: the model, token counts, cost, tool names, how a call or run ended, and ids. A prompt, an answer, a tool's arguments or its result never do,
+  and a test checks the bytes sent. The address must be `https` (or a collector on this computer) and cannot hold a password; the header a collector needs is kept in the
+  system keychain. Export failures are not reported.
 - **MCP servers are third parties.** A server you add is added **off** and needs your confirmation; a stdio server is a program
   that runs **as you with no sandbox**, started without a shell, with a clean environment plus the variables you named. Its
   tools are pinned: nothing is offered until you approve what it says, a changed description withdraws the tool until you

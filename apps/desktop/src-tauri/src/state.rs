@@ -139,6 +139,9 @@ impl AppState {
         }
         if let Ok(services) = &self.services {
             services.stop_background.cancel();
+            if let Some(switch) = zorix_hub::telemetry::switch() {
+                switch.stop().await;
+            }
             for (_, token) in services.syncs.lock().drain() {
                 token.cancel();
             }
@@ -179,7 +182,13 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     hub.register_native_tools().map_err(ui)?;
     let calibration = Arc::new(SqliteCalibration::open(&database).map_err(ui)?);
     let app_store = Arc::new(SqliteSettingsStore::open(&database).map_err(ui)?);
-    let app_settings = SettingsCell::new(app_store.settings(&TenantId::local()).await.map_err(ui)?);
+    let saved = app_store.settings(&TenantId::local()).await.map_err(ui)?;
+    if let Some(switch) = zorix_hub::telemetry::switch()
+        && let Err(error) = switch.apply_at_start(&saved.telemetry, &*secrets)
+    {
+        tracing::warn!(%error, "telemetry stays off");
+    }
+    let app_settings = SettingsCell::new(saved);
     let retention = SqliteRetention::open(&database).map_err(ui)?;
     let stop_background = CancellationToken::new();
     retention.run_daily(

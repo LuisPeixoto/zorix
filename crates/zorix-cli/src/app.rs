@@ -150,7 +150,13 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     let hub = Arc::new(Hub::open(home, tenant.clone(), secrets(&load_config(home)?), registry.clone())?);
     hub.register_native_tools()?;
     let calibration = Arc::new(SqliteCalibration::open(&database)?);
-    let settings = SettingsCell::new(SqliteSettingsStore::open(&database)?.load(tenant)?);
+    let saved = SqliteSettingsStore::open(&database)?.load(tenant)?;
+    if let Some(switch) = zorix_hub::telemetry::switch()
+        && let Err(error) = switch.apply_at_start(&saved.telemetry, &*secrets(&load_config(home)?))
+    {
+        eprintln!("zorix: telemetry is off: {error}");
+    }
+    let settings = SettingsCell::new(saved);
     let kept_settings = settings.clone();
     let engine = stack
         .install(
@@ -187,6 +193,10 @@ impl App {
         self.hub.manager.shutdown().await;
         self.engine.shutdown().await;
         let _ = self.stack.backfill_operations().await;
+        // What is queued for the collector is sent before the program ends.
+        if let Some(switch) = zorix_hub::telemetry::switch() {
+            switch.stop().await;
+        }
     }
 }
 

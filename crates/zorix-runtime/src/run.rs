@@ -126,8 +126,18 @@ impl Engine {
 
         // Span names and attributes follow the OpenTelemetry GenAI conventions, so an OTLP exporter can be added later
         // without changing the runtime. Nothing a person or a model wrote (prompts, arguments, results) goes in them.
-        let span =
-            tracing::info_span!("invoke_agent", gen_ai.operation.name = "invoke_agent", zorix.execution.id = %id);
+        let span = tracing::info_span!(
+            "invoke_agent",
+            gen_ai.operation.name = "invoke_agent",
+            zorix.execution.id = %id,
+            zorix.execution.state = tracing::field::Empty,
+            gen_ai.usage.input_tokens = tracing::field::Empty,
+            gen_ai.usage.output_tokens = tracing::field::Empty,
+            zorix.usage.cost_micros = tracing::field::Empty,
+            zorix.usage.model_calls = tracing::field::Empty,
+            zorix.usage.tool_calls = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
         let drive = async {
             match Run::load(self.clone(), id, control).await {
                 Ok(Some(mut run)) => match run.run().await {
@@ -140,7 +150,19 @@ impl Engine {
                 Err(error) => tracing::error!(%error, "could not load the execution"),
             }
         };
-        drive.instrument(span).await;
+        drive.instrument(span.clone()).await;
+        // What the run came to, as numbers and a state, for whoever reads the spans (never what was said).
+        if let Ok(Some(done)) = inner.repository.load(id).await {
+            span.record("zorix.execution.state", done.state.as_str());
+            span.record("gen_ai.usage.input_tokens", done.usage.input_tokens);
+            span.record("gen_ai.usage.output_tokens", done.usage.output_tokens);
+            span.record("zorix.usage.cost_micros", done.usage.cost_micros);
+            span.record("zorix.usage.model_calls", u64::from(done.usage.model_calls));
+            span.record("zorix.usage.tool_calls", u64::from(done.usage.tool_calls));
+            if done.state == ExecutionState::Failed {
+                span.record("otel.status_code", "ERROR");
+            }
+        }
 
         heartbeat.cancel();
         inner.runs.lock().remove(&id);
@@ -651,7 +673,13 @@ impl Run {
                 "chat",
                 gen_ai.operation.name = "chat",
                 gen_ai.request.model = %request.model,
-                zorix.attempt = attempt
+                zorix.attempt = attempt,
+                gen_ai.response.model = tracing::field::Empty,
+                gen_ai.usage.input_tokens = tracing::field::Empty,
+                gen_ai.usage.output_tokens = tracing::field::Empty,
+                zorix.usage.cost_micros = tracing::field::Empty,
+                gen_ai.response.finish_reasons = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
             );
             let sink = self.engine.inner.live.sink(self.exec.id);
             let progress = Progress::new();
@@ -664,10 +692,20 @@ impl Run {
                     self.control.cancel.clone(),
                     Watched::new(sink.clone(), progress.clone()),
                 )
-                .instrument(span);
+                .instrument(span.clone());
             let outcome = guard(&progress, limits.model_timeout_ms, MODEL_CALL_CEILING_MS, call).await;
             let (message, retry_after) = match outcome {
-                Ok(Ok(response)) => return Ok(response),
+                Ok(Ok(response)) => {
+                    span.record("gen_ai.response.model", response.model.as_str());
+                    span.record("gen_ai.usage.input_tokens", response.usage.input_tokens);
+                    span.record("gen_ai.usage.output_tokens", response.usage.output_tokens);
+                    span.record("zorix.usage.cost_micros", response.usage.cost_micros);
+                    span.record(
+                        "gen_ai.response.finish_reasons",
+                        format!("{:?}", response.finish).to_ascii_lowercase(),
+                    );
+                    return Ok(response);
+                }
                 Ok(Err(ModelError::Cancelled)) => return Err(self.cancelled_or_shutdown().await),
                 Ok(Err(ModelError::Permanent(message))) => {
                     return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
@@ -1045,9 +1083,17 @@ impl Run {
                 gen_ai.operation.name = "execute_tool",
                 gen_ai.tool.name = %call.tool,
                 gen_ai.tool.call.id = %call.id,
-                zorix.attempt = attempt
+                zorix.attempt = attempt,
+                zorix.tool.outcome = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
             );
-            let outcome = ToolExecutor::run(tool.as_ref(), &context, call.arguments.clone()).instrument(span).await;
+            let outcome =
+                ToolExecutor::run(tool.as_ref(), &context, call.arguments.clone()).instrument(span.clone()).await;
+            match &outcome {
+                Ok(_) => span.record("zorix.tool.outcome", "ok"),
+                Err(CallError::Cancelled(_)) => span.record("zorix.tool.outcome", "cancelled"),
+                Err(_) => span.record("zorix.tool.outcome", "failed").record("otel.status_code", "ERROR"),
+            };
             let took_ms = self.engine.now().since(began);
 
             let mut done = record;

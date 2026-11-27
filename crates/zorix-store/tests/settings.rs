@@ -19,7 +19,10 @@ async fn settings_start_as_the_defaults_and_are_kept_for_the_next_program() {
         assert_eq!(store.settings(&me).await.unwrap(), AppSettings::default());
         let changed = AppSettings {
             retention: RetentionSettings { days: Some(90), mode: RetentionMode::Delete },
-            telemetry: TelemetrySettings { endpoint: Some("https://otel.example.com:4318".into()) },
+            telemetry: TelemetrySettings {
+                endpoint: Some("https://otel.example.com:4318".into()),
+                header: Some("authorization".into()),
+            },
             knowledge: KnowledgeSettings { ocr: true },
             ..AppSettings::default()
         };
@@ -44,8 +47,10 @@ async fn a_value_that_makes_no_sense_is_refused_and_changes_nothing() {
     let bad =
         AppSettings { retention: RetentionSettings { days: Some(0), ..Default::default() }, ..Default::default() };
     assert!(store.put_settings(&me, &bad).await.is_err());
-    let bad_address =
-        AppSettings { telemetry: TelemetrySettings { endpoint: Some("not an address".into()) }, ..Default::default() };
+    let bad_address = AppSettings {
+        telemetry: TelemetrySettings { endpoint: Some("not an address".into()), header: None },
+        ..Default::default()
+    };
     assert!(store.put_settings(&me, &bad_address).await.is_err());
     assert_eq!(store.settings(&me).await.unwrap(), good, "the refused ones left the saved settings as they were");
 }
