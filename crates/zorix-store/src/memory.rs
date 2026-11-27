@@ -1047,7 +1047,8 @@ impl MemoryStore for SqliteMemoryStore {
             let replaced = existing.as_ref().map(|(_, n)| *n as u64).unwrap_or(0);
             let total: i64 = tx
                 .query_row(
-                    "SELECT COUNT(*) FROM knowledge_chunks c JOIN knowledge_documents d ON d.id = c.document_id JOIN knowledge_roots r ON r.id = d.root_id WHERE r.tenant = ?1",
+                    // The documents keep their number of pieces, so this reads one row per file and not one per piece.
+                    "SELECT COALESCE(SUM(d.chunks), 0) FROM knowledge_documents d JOIN knowledge_roots r ON r.id = d.root_id WHERE r.tenant = ?1",
                     params![tenant],
                     |r| r.get(0),
                 )
@@ -1216,6 +1217,22 @@ impl MemoryStore for SqliteMemoryStore {
                 .query_map(params![root.to_string(), model, limit as i64], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
                 .map_err(storage)?;
             rows.map(|r| r.map_err(storage)).collect()
+        })
+        .await
+    }
+
+    async fn count_chunks_without_vector(&self, root: KnowledgeRootId, model: &str) -> Result<u64> {
+        let model = model.to_string();
+        self.run(move |conn| {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(DISTINCT c.text_hash) FROM knowledge_chunks c JOIN knowledge_documents d ON d.id = c.document_id
+                     WHERE d.root_id = ?1 AND NOT EXISTS (SELECT 1 FROM vectors v WHERE v.model = ?2 AND v.text_hash = c.text_hash)",
+                    params![root.to_string(), model],
+                    |r| r.get(0),
+                )
+                .map_err(storage)?;
+            Ok(count as u64)
         })
         .await
     }
