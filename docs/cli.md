@@ -136,6 +136,10 @@ stops it between files and exits with code 4; what was done stays indexed. See [
 
 `show` and `set <KEY> <VALUE>`. The keys are `context.summaries` (on or off), `retention.days` (a number of days from 1 to 3650, or `off` to keep runs for ever), `retention.mode` (`compact` or `delete`), `telemetry.endpoint` (an `https://` address, or `http://` for a collector on this computer, or `off`) and `knowledge.ocr` (on or off). A value that makes no sense is refused with a sentence and changes nothing. `--json` on `show` prints the whole record.
 
+### `zorix retention …`
+
+`show` says what a pass would do with the current settings; `run [--dry-run]` does it now (without `--dry-run` it holds the data-folder lock). Retention is off until `retention.days` is set. See [persistence](persistence.md#retention).
+
 ### `zorix workflow …`, `zorix serve`
 
 Workflows: list, show, create, edit, import, export, versions, diff, publish, rollback, enable, disable, remove, run, runs, run-show, cancel, waits, answer, webhook, templates and add.

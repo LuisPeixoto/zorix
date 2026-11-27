@@ -193,6 +193,21 @@ command line during a model call is tested too. Several connections writing at o
 - **Approvals once.** An approval can be answered once.
 - **Queues dedupe.** Asking for the same execution to run twice while it waits queues it once.
 
+## Retention
+
+Off until a number of days is set (**Settings › General › Keep runs**, or `zorix settings set retention.days 90`). A finished run older than that, whose whole
+tree has finished, is then **compacted** (the default) or **deleted** ([ADR-0044](adr/0044-retention-of-finished-runs.md)):
+
+| | Compact | Delete |
+|---|---|---|
+| Events, checkpoints, tool calls, approvals, recall | Removed | Removed |
+| The run: request, answer, usage, cost, times | **Kept**, marked `compacted` | Removed, unless a task, a workflow run, a report or an organisation event refers to it (then it is compacted) |
+| The past work recorded from it | Kept | Removed |
+
+Lists and spend figures do not change after a compaction. A pass runs ten minutes after the app or `zorix serve` starts and then once a day, and on demand
+(`zorix retention show` says what a pass would do; `zorix retention run` does it; the Settings card previews it before you save). It handles 200 runs at a
+time, so it never holds the database for long. Schema 14 adds the `compacted` flag; a 0.10 program refuses a schema-14 database.
+
 ## Backups
 
 Copy the data folder while ZORIX is closed. SQLite files are ordinary files.
@@ -204,4 +219,4 @@ Copy the data folder while ZORIX is closed. SQLite files are ordinary files.
 - Secrets are never stored in the database: keys and tokens live in the system keychain, or in the environment variable you name
   ([providers](providers.md), [integrations](integrations.md)). Prompts, tool arguments and results **are** stored, as they are
   the record of what happened: treat the data folder as sensitive.
-- Retention policies (deleting old executions automatically) are not implemented yet.
+- Nothing is removed unless you set a retention: see [Retention](#retention) below.
