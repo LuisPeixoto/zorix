@@ -74,7 +74,7 @@ that names it.
 | `max_iterations` | 12 | Model steps |
 | `max_tool_calls` | 24 | Tool calls requested |
 | `max_total_tokens` | none | Input plus output tokens (an estimate in this phase) |
-| `max_cost_micros` | none | Cost, in millionths of a dollar |
+| `max_cost_micros` | none | Cost, in millionths of a dollar. A model whose price is not known cannot keep it: the run is refused before anything is sent ([providers](providers.md#models-and-numbers)) |
 | `max_active_ms` | 300 000 | Time spent working. Waiting for a person is **not** counted |
 | `model_timeout_ms` | 60 000 | The longest one model call may go **without progress**: from the start to the first piece of text, and between pieces. An answer that keeps arriving is not cut however long it is; one that goes quiet is, after this long |
 | `max_model_attempts` | 3 | Tries for one model call that fails with a temporary error |

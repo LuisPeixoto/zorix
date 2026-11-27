@@ -106,7 +106,7 @@ long to wait) and goes last. Each switch is an `execution.model.fallback` event 
 
 `models.json` ships with context windows, output limits, capabilities and, for Anthropic, prices, with an "as of" date.
 Providers do not publish prices through their APIs, so an unknown price stays **unknown**: the run is not billed
-by guess, and cost limits do not count what is not known. Discovery fills in the models a provider reports; for Ollama it
+by guess. A **cost limit** needs a price: a run with one is refused before anything is sent when its model has none (a model on this computer costs nothing and is always priced), with a sentence that says to add the price to `providers.toml` or to run without the limit. Without that, every call would count as zero and the limit would never trip. Discovery fills in the models a provider reports; for Ollama it
 reads the real context length and capabilities, and ZORIX asks Ollama for at most 32 768 tokens of context.
 
 ## Replaying a model's own turn
