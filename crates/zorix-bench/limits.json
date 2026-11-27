@@ -13,6 +13,8 @@
   "facts: keyword search (3 words)": 50,
   "documents: keyword search (3 words)": 250,
   "documents: search by meaning": 500,
+  "documents: counting the pieces without a vector": 250,
+  "documents: writing one file of fifty pieces": 100,
   "facts: the list": 100,
   "opening the store again": 250
 }
