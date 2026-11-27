@@ -112,6 +112,12 @@ export function describeEvent(event: ExecEvent): EventView {
       return { title: t("format.modelFailedTryingAgain"), detail: `${p.error} (in ${p.delay_ms} ms)`, tone: "warn" };
     case "execution.model.fallback":
       return { title: t("format.switchedModel"), detail: `${p.from} → ${p.to} (${p.reason})`, tone: "warn" };
+    case "execution.context.summarised":
+      return {
+        title: t("format.summarisedEarlierTurns"),
+        detail: t("format.summarisedDetail", { messages: Number(p.folded_messages ?? 0), chars: Number(p.summary_chars ?? 0) }),
+        tone: "info",
+      };
     case "execution.tool.requested":
       return { title: t("format.toolRequested", { tool }), detail: shorten(JSON.stringify(p.arguments ?? {}), 140), tone: "info" };
     case "execution.tool.started":
@@ -186,6 +192,7 @@ export function keyTone(key: string): Tone {
 export function eventIcon(kind: string): string {
   if (kind.includes("waiting_children") || kind.includes(".child.")) return "branch";
   if (kind.includes("fallback")) return "route";
+  if (kind.includes(".context.")) return "layers";
   if (kind.includes("approval") || kind.includes("waiting_approval")) return "shield";
   if (kind.includes(".tool.")) return "wrench";
   if (kind.includes(".model.")) return "cpu";
