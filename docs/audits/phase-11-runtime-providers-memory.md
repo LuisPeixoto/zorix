@@ -25,7 +25,7 @@ A security finding is fixed first. Every finding is an issue in the milestone
 | # | Section | Finding | Severity | Issue | Fixed in |
 |---|---|---|---|---|---|
 | F1 | 6 | Past work has no agent column: the past work of agent A in a project is recalled by agent B and by plain runs of that project | High | [#37](https://github.com/LuisPeixoto/zorix/issues/37) | `fix/past-work-isolation` |
-| F2 | 6 | Past work stores tool arguments through the text-only redaction, so `{"password":"…"}` is kept and recalled | High | [#38](https://github.com/LuisPeixoto/zorix/issues/38) | |
+| F2 | 6 | Past work stores tool arguments through the text-only redaction, so `{"password":"…"}` is kept and recalled | High | [#38](https://github.com/LuisPeixoto/zorix/issues/38) | `fix/redact-past-work-arguments` |
 | F3 | 6 | Text redaction misses `password=` pairs, PEM keys, Google, Stripe and GitLab keys; the project, organisation and report event tables are not redacted | Medium | [#39](https://github.com/LuisPeixoto/zorix/issues/39) | |
 | F5 | 6 | Re-indexing a file leaves its old text in past runs' snapshots; chunk ids can be reused, so a later scrub can hit the wrong entries | Medium | [#40](https://github.com/LuisPeixoto/zorix/issues/40) | |
 | F6 | 8, 13 | A lost lease only logs; the run keeps calling models and tools beside the engine that took it over | Medium | [#41](https://github.com/LuisPeixoto/zorix/issues/41) | |
