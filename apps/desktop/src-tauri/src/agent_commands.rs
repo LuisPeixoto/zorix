@@ -396,6 +396,13 @@ pub struct AskAgent {
     /// Less memory than the agent has. Left out: all of it.
     #[serde(default)]
     memory: Option<AskMemory>,
+    /// Limits that can only narrow the agent's own: money (millionths of a dollar), seconds of work and steps.
+    #[serde(default)]
+    max_cost_micros: Option<u64>,
+    #[serde(default)]
+    max_seconds: Option<u64>,
+    #[serde(default)]
+    max_iterations: Option<u32>,
 }
 
 /// The switches of the New run form, when a run is made by an agent.
@@ -416,7 +423,22 @@ pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<
             zorix_core::ConversationId::new(format!("chat-{}", &ExecutionId::new().to_string()[24..])).map_err(text)?
         }
     };
+    let mut narrower = zorix_core::Limits::default();
+    let mut limited = false;
+    if let Some(micros) = request.max_cost_micros.filter(|m| *m > 0) {
+        narrower.max_cost_micros = Some(micros);
+        limited = true;
+    }
+    if let Some(seconds) = request.max_seconds.filter(|s| *s > 0) {
+        narrower.max_active_ms = seconds.saturating_mul(1_000);
+        limited = true;
+    }
+    if let Some(steps) = request.max_iterations.filter(|n| *n > 0) {
+        narrower.max_iterations = steps;
+        limited = true;
+    }
     let ask = AgentAsk {
+        limits: limited.then_some(narrower),
         prompt: request.prompt,
         input: request.input,
         model: request.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()),

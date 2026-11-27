@@ -132,6 +132,10 @@ export interface StartRun {
   allow_write: string[];
   workspace?: string;
   max_iterations?: number;
+  /** The most the run may spend, in millionths of a dollar. Left out: no limit. */
+  max_cost_micros?: number;
+  /** The most seconds of work. Left out: the default. */
+  max_seconds?: number;
   /** `provider/model`, `route:name`, an alias or `demo`. Left out: the default. */
   model?: string;
   /** Continue this conversation. Left out: a new one starts. */
@@ -709,6 +713,10 @@ export interface AskAgent {
   team?: string;
   /** What it may use from memory: each switch is on only if the agent allows it too. */
   memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
+  /** Limits that can only narrow the agent's own. */
+  max_cost_micros?: number;
+  max_seconds?: number;
+  max_iterations?: number;
 }
 
 export const agentsList = (includeArchived = false) => invoke<AgentCard[]>("agents_list", { includeArchived });
@@ -1036,6 +1044,19 @@ export interface RetentionReport {
 export const appSettings = () => invoke<AppSettings>("app_settings_get");
 export const retentionPreview = (days: number, mode: "compact" | "delete") => invoke<RetentionReport>("retention_preview", { days, mode });
 export const retentionRun = () => invoke<RetentionReport>("retention_run");
+
+/** What a run would probably cost and how long it would take. */
+export interface RunEstimate {
+  basis: { kind: "history"; runs: number } | { kind: "rough" };
+  input_tokens: number;
+  output_tokens: number;
+  active_ms: number;
+  /** Millionths of a dollar; `null` when the model has no known price. */
+  cost_micros: number | null;
+}
+
+export const estimateRun = (promptChars: number, attachedChars: number, model?: string, agent?: string) =>
+  invoke<RunEstimate>("estimate_run", { promptChars, attachedChars, model: model || null, agent: agent || null });
 export const appSettingsSet = (settings: AppSettings) => invoke<AppSettings>("app_settings_set", { settings });
 
 export const workflowHost = () => invoke<HostInfo>("workflow_host");

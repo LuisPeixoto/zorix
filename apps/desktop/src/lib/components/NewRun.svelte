@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { t as tr } from "../i18n/index.ts";
+  import { fmt, t as tr } from "../i18n/index.ts";
   import { open } from "@tauri-apps/plugin-dialog";
-  import { type AgentDetail, agentGet, workflowCreate, workflowSave, workflowStart } from "../api.ts";
+  import { type AgentDetail, type RunEstimate, agentGet, estimateRun, workflowCreate, workflowSave, workflowStart } from "../api.ts";
   import { workflows } from "../stores/workflows.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
   import { slugify } from "../workflow.ts";
@@ -10,7 +10,7 @@
   import { errorText } from "../api.ts";
   import { integrations } from "../stores/integrations.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
-  import { ago, shorten } from "../format.ts";
+  import { ago, duration, shorten } from "../format.ts";
   import { destination, grantSummary, providerName } from "../newRun.ts";
   import { Avatar, Badge, BrandLogo, Button, Callout, Card, Checkbox, Chip, Field, Icon, Input, KeyValue, Kbd, Modal, PageHeader, Segmented, Select, Switch, Textarea } from "../ui/index.ts";
   import StatusBadge from "./StatusBadge.svelte";
@@ -61,6 +61,45 @@
   let useKnowledge = $state(true);
   // Continuing a conversation from the Run view (the Continue button) or starting a new one.
   const continuing = $derived(store.continuing);
+
+  // The limits of the run. Empty means the default (or, for an agent, its own).
+  let budget = $state("");
+  let minutes = $state("");
+  let steps = $state("");
+  const num = (text: string) => (text.trim() === "" ? null : Number(text));
+  const budgetOk = $derived(num(budget) === null || (Number.isFinite(num(budget)!) && num(budget)! > 0));
+  const minutesOk = $derived(num(minutes) === null || (Number.isInteger(num(minutes)!) && num(minutes)! >= 1 && num(minutes)! <= 1440));
+  const stepsOk = $derived(num(steps) === null || (Number.isInteger(num(steps)!) && num(steps)! >= 1 && num(steps)! <= 1000));
+  const limitsOk = $derived(budgetOk && minutesOk && stepsOk);
+  const limits = $derived({
+    ...(num(budget) !== null && budgetOk ? { max_cost_micros: Math.round(num(budget)! * 1_000_000) } : {}),
+    ...(num(minutes) !== null && minutesOk ? { max_seconds: num(minutes)! * 60 } : {}),
+    ...(num(steps) !== null && stepsOk ? { max_iterations: num(steps)! } : {}),
+  });
+
+  // What the run would probably cost and how long it would take, from what similar runs took. Asked a moment after typing stops.
+  let estimate = $state<RunEstimate | null>(null);
+  $effect(() => {
+    const [chars, wanted, slug] = [prompt.length, model, agentSlug];
+    estimate = null;
+    if (mode === "workflow") return;
+    const timer = setTimeout(() => {
+      void estimateRun(chars, 0, wanted, slug).then((e) => (estimate = e)).catch(() => (estimate = null));
+    }, 300);
+    return () => clearTimeout(timer);
+  });
+  const expected = $derived(
+    estimate === null
+      ? null
+      : `${estimate.cost_micros === null ? tr("newRun.costUnknown") : `≈ ${fmt.usd2(estimate.cost_micros)}`} · ${duration(estimate.active_ms)}`,
+  );
+  const expectedBasis = $derived(
+    estimate === null
+      ? ""
+      : estimate.basis.kind === "history"
+        ? tr("newRun.fromYourLastSimilarRuns", { count: estimate.basis.runs })
+        : tr("newRun.aRoughGuessFewerThan"),
+  );
 
   // What the run may reach beyond the built-in tools: MCP servers, databases, code, and hosts, repositories and channels by name.
   let pickedServers = $state<Record<string, boolean>>({});
@@ -176,6 +215,7 @@
         model: model || undefined,
         conversation: continuing?.id,
         memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
+        ...limits,
       });
       return;
     }
@@ -197,6 +237,7 @@
       model: model || undefined,
       conversation: continuing?.id,
       memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
+      ...limits,
     });
   }
 </script>
@@ -279,6 +320,23 @@
             {#each examples as example}<Chip onclick={() => (prompt = example)}>{example}</Chip>{/each}
           </div>
         </Card>
+
+        {#if mode !== "workflow"}
+          <Card title={tr("newRun.limits")} icon="gauge">
+            <p class="mb-3 text-sm text-muted">{agentSlug ? tr("newRun.limitsOnlyNarrow") : tr("newRun.limitsStopTheRun")}</p>
+            <div class="grid gap-4 sm:grid-cols-3">
+              <Field label={tr("newRun.budget")} hint={tr("newRun.dollarsEmptyForNone")} error={budgetOk ? null : tr("newRun.anAmountAboveZero")}>
+                {#snippet children(f)}<Input id={f.id} inputmode="decimal" icon="dollar" bind:value={budget} invalid={!budgetOk} placeholder="0.60" />{/snippet}
+              </Field>
+              <Field label={tr("newRun.time")} hint={tr("newRun.minutesOfWork")} error={minutesOk ? null : tr("newRun.oneToMinutes")}>
+                {#snippet children(f)}<Input id={f.id} inputmode="numeric" icon="clock" bind:value={minutes} invalid={!minutesOk} placeholder="5" />{/snippet}
+              </Field>
+              <Field label={tr("newRun.steps")} hint={tr("newRun.modelStepsAtMost")} error={stepsOk ? null : tr("newRun.oneToSteps")}>
+                {#snippet children(f)}<Input id={f.id} inputmode="numeric" icon="list" bind:value={steps} invalid={!stepsOk} placeholder="12" />{/snippet}
+              </Field>
+            </div>
+          </Card>
+        {/if}
 
         {#if !agentSlug}
           <Card title={tr("newRun.whatItMayUse")} icon="wrench">
@@ -420,7 +478,7 @@
         <div class="sticky bottom-0 z-20 -mx-6 flex items-center justify-end gap-3 border-t border-line bg-bg/90 px-6 py-3 backdrop-blur">
           <span class="flex items-center gap-1.5 text-xs text-muted"><Kbd>{shortcut}</Kbd> {tr("newRun.toStart")}</span>
           {#if agentSlug && prompt.trim()}<Button type="button" variant="ghost" size="lg" icon="workflow" onclick={() => { workflowName = shorten(prompt.trim(), 40); savingAs = true; }}>{tr("newRun.saveAsWorkflow")}</Button>{/if}
-          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim() || (mode === "workflow" && !picked)}>{mode === "workflow" ? tr("newRun.runWorkflow") : tr("newRun.startRun")}</Button>
+          <Button variant="primary" size="lg" icon="play" type="submit" loading={store.busy} disabled={!prompt.trim() || !limitsOk || (mode === "workflow" && !picked)}>{mode === "workflow" ? tr("newRun.runWorkflow") : tr("newRun.startRun")}</Button>
         </div>
       </div>
 
@@ -433,8 +491,11 @@
               { key: "Tools", value: `${grants.granted} granted${grants.asks ? `, ${grants.asks} ask first` : ""}` },
               { key: "Model", value: where.kind === "demo" ? "demo" : model || (agentDetail ? agentDetail.version.spec.models.default : defaultName), mono: true },
               { key: "Memory", value: memoryOn },
+              { key: tr("newRun.expected"), value: expected },
+              { key: tr("newRun.budget"), value: limits.max_cost_micros ? fmt.usd2(limits.max_cost_micros) : null },
             ]}
           />
+          {#if expectedBasis}<p class="mt-2 text-xs text-faint">{expectedBasis} {tr("newRun.itIsAGuess")}</p>{/if}
           <p class="mt-3 text-xs text-muted">{tr("newRun.anythingThatChangesSomething")}</p>
         </Card>
         {#if recent.length}

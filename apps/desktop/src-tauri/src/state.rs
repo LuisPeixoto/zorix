@@ -33,6 +33,8 @@ pub struct Services {
     pub config: ProvidersConfig,
     /// Memory: tools, context sources, the recorder and the indexer.
     pub memory: Arc<MemoryStack>,
+    /// Where runs are kept, for what an estimate learns from them.
+    pub runs: Arc<SqliteRepository>,
     /// Where memory is kept.
     pub memory_store: Arc<SqliteMemoryStore>,
     /// Where the program's settings are kept, and their current value for everything that acts on them.
@@ -170,6 +172,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     let database = database_path(home);
     let memory_store = Arc::new(SqliteMemoryStore::open(&database).map_err(ui)?);
     let gateway: Arc<dyn zorix_core::ModelGateway> = router.clone();
+    let runs = repository.clone();
     let memory = Arc::new(MemoryStack::new(memory_store.clone(), repository.clone(), Some(gateway.clone())));
     memory.register_tools(&*registry).map_err(ui)?;
     let hub = Arc::new(Hub::open(home, TenantId::local(), secrets.clone(), registry.clone()).map_err(ui)?);
@@ -254,6 +257,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         secrets,
         config: providers,
         memory,
+        runs,
         memory_store,
         settings: app_store,
         app_settings,

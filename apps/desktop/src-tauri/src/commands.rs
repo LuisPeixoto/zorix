@@ -104,6 +104,12 @@ pub struct StartRun {
     workspace: Option<String>,
     #[serde(default)]
     max_iterations: Option<u32>,
+    /// The most the run may spend, in millionths of a dollar.
+    #[serde(default)]
+    max_cost_micros: Option<u64>,
+    /// The most seconds of work.
+    #[serde(default)]
+    max_seconds: Option<u64>,
     /// `provider/model`, `route:name`, an alias or `demo`. Empty means the default.
     #[serde(default)]
     model: Option<String>,
@@ -212,6 +218,10 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
     let mut limits = Limits::default();
     if let Some(n) = request.max_iterations {
         limits.max_iterations = n;
+    }
+    limits.max_cost_micros = request.max_cost_micros.filter(|micros| *micros > 0);
+    if let Some(seconds) = request.max_seconds.filter(|s| *s > 0) {
+        limits.max_active_ms = seconds.saturating_mul(1_000);
     }
     let new = NewExecution {
         tenant: Some(services.tenant.clone()),
