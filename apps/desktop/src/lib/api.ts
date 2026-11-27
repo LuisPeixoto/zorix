@@ -1009,6 +1009,19 @@ export interface WfWebhook {
   listening: boolean;
 }
 
+/** The settings of the program that are kept in the database (`AppSettings` in `zorix-core`). */
+export interface AppSettings {
+  context: { summaries: boolean };
+  /** Finished runs older than `days` are compacted or deleted; `null` keeps everything for ever. */
+  retention: { days: number | null; mode: "compact" | "delete" };
+  /** An OpenTelemetry collector (OTLP over HTTP); `null` sends nothing. */
+  telemetry: { endpoint: string | null };
+  knowledge: { ocr: boolean };
+}
+
+export const appSettings = () => invoke<AppSettings>("app_settings_get");
+export const appSettingsSet = (settings: AppSettings) => invoke<AppSettings>("app_settings_set", { settings });
+
 export const workflowHost = () => invoke<HostInfo>("workflow_host");
 export const workflowSettingsSet = (webhooks: boolean, address: string) => invoke<HostInfo>("workflow_settings_set", { webhooks, address });
 export const workflowsOverview = () => invoke<WfOverview>("workflows_overview");

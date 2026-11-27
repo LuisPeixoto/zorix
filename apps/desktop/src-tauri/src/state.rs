@@ -7,13 +7,15 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use tokio_util::sync::CancellationToken;
-use zorix_core::{ExecutionId, TenantId};
+use zorix_core::{ExecutionId, SettingsCell, SettingsStore, TenantId};
 use zorix_hub::Hub;
 use zorix_memory::MemoryStack;
 use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::DemoModel;
-use zorix_store::{DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path};
+use zorix_store::{
+    DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, SqliteSettingsStore, database_path,
+};
 use zorix_tools::{BuiltinConfig, register_builtin};
 
 /// The running engine.
@@ -32,6 +34,10 @@ pub struct Services {
     pub memory: Arc<MemoryStack>,
     /// Where memory is kept.
     pub memory_store: Arc<SqliteMemoryStore>,
+    /// Where the program's settings are kept, and their current value for everything that acts on them.
+    pub settings: Arc<SqliteSettingsStore>,
+    /// The settings now, shared with the engine and the background jobs.
+    pub app_settings: SettingsCell,
     /// Connections: MCP servers, integrations and the sandbox.
     pub hub: Arc<Hub>,
     /// Workflows: their store and the engine that runs them.
@@ -163,6 +169,8 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     let hub = Arc::new(Hub::open(home, TenantId::local(), secrets.clone(), registry.clone()).map_err(ui)?);
     hub.register_native_tools().map_err(ui)?;
     let calibration = Arc::new(SqliteCalibration::open(&database).map_err(ui)?);
+    let app_store = Arc::new(SqliteSettingsStore::open(&database).map_err(ui)?);
+    let app_settings = SettingsCell::new(app_store.settings(&TenantId::local()).await.map_err(ui)?);
     let engine = memory
         .install(
             Engine::builder(repository, gateway)
@@ -232,6 +240,8 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         config: providers,
         memory,
         memory_store,
+        settings: app_store,
+        app_settings,
         syncs: Mutex::new(HashMap::new()),
         reembed_job: Mutex::new(None),
         evals: Mutex::new(HashMap::new()),
