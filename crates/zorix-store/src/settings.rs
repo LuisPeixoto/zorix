@@ -41,9 +41,9 @@ impl SqliteSettingsStore {
     }
 }
 
-#[async_trait]
-impl SettingsStore for SqliteSettingsStore {
-    async fn settings(&self, tenant: &TenantId) -> Result<AppSettings> {
+impl SqliteSettingsStore {
+    /// The tenant's settings without waiting, for the start of a program that has no async context yet.
+    pub fn load(&self, tenant: &TenantId) -> Result<AppSettings> {
         let doc: Option<String> = self
             .conn
             .lock()
@@ -55,6 +55,13 @@ impl SettingsStore for SqliteSettingsStore {
             Some(doc) => serde_json::from_str(&doc)
                 .map_err(|e| Error::Storage(format!("the saved settings could not be read: {e}"))),
         }
+    }
+}
+
+#[async_trait]
+impl SettingsStore for SqliteSettingsStore {
+    async fn settings(&self, tenant: &TenantId) -> Result<AppSettings> {
+        self.load(tenant)
     }
 
     async fn put_settings(&self, tenant: &TenantId, settings: &AppSettings) -> Result<()> {

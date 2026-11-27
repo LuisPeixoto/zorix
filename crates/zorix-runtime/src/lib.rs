@@ -5,6 +5,7 @@
 mod context;
 mod engine;
 mod events;
+mod history_summary;
 mod live;
 mod memory;
 mod policy;

@@ -52,6 +52,12 @@ pub fn event_line(event: &ExecutionEvent) -> String {
             )
         }
         EventKind::ModelFallback => format!("{} → {} ({})", text(p, "from"), text(p, "to"), text(p, "reason")),
+        EventKind::ContextSummarised => format!(
+            "{} earlier message(s) summarised in {} characters ({} µ$)",
+            count(p, "folded_messages"),
+            count(p, "summary_chars"),
+            count(p, "cost_micros")
+        ),
         EventKind::ToolRequested => format!("{} {}", text(p, "tool"), shorten(&p["arguments"].to_string(), 100)),
         EventKind::ToolStarted => format!("{} (attempt {})", text(p, "tool"), count(p, "attempt")),
         EventKind::ToolCompleted => format!("{} in {} ms", text(p, "tool"), count(p, "duration_ms")),

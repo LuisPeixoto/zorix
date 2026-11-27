@@ -456,6 +456,8 @@ export const en = {
   "format.sAgo": "{seconds} s ago",
   "format.started": "Started",
   "format.switchedModel": "Switched model",
+  "format.summarisedEarlierTurns": "Summarised the earlier turns",
+  "format.summarisedDetail": "{messages} messages became a summary of {chars} characters, so the conversation fits the model's window",
   "format.tasksAtTheSame": { one: "{count} task at the same time", other: "{count} tasks at the same time" },
   "format.thinking": "Thinking",
   "format.toolRequested": "Tool requested: {tool}",

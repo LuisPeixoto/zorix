@@ -77,6 +77,9 @@ test("events are described for people", () => {
     describeEvent(event("execution.model.fallback", { from: "a/x", to: "b/y", reason: "rate_limited" })).detail,
     "a/x → b/y (rate_limited)",
   );
+  const summarised = describeEvent(event("execution.context.summarised", { folded_messages: 8, summary_chars: 900 }));
+  assert.equal(summarised.title, "Summarised the earlier turns");
+  assert.match(summarised.detail, /8 messages became a summary of 900 characters/);
   assert.equal(describeEvent(event("execution.future.thing")).title, "future.thing", "unknown kinds still show up");
 });
 
@@ -101,6 +104,7 @@ test("a key state has a tone and each kind of event has an icon", () => {
   assert.equal(keyTone("not_needed"), "muted");
   assert.equal(eventIcon("execution.tool.completed"), "wrench");
   assert.equal(eventIcon("execution.model.fallback"), "route");
+  assert.equal(eventIcon("execution.context.summarised"), "layers");
   assert.equal(eventIcon("execution.model.responded"), "cpu");
   assert.equal(eventIcon("execution.approval.granted"), "shield");
   assert.equal(eventIcon("execution.completed"), "check-circle");

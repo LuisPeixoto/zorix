@@ -83,29 +83,30 @@ impl ContextSource for HistorySource {
 
     async fn contribute(&self, view: &ExecutionView<'_>) -> Result<Vec<ContextSegment>> {
         // A turn is an assistant message and everything after it up to the next assistant message.
-        let mut turns: Vec<Vec<Message>> = Vec::new();
-        for message in view.transcript {
-            let message = match (message.role, &message.tool_call_id) {
-                (Role::Tool, Some(call)) => {
-                    Message { content: wrap_untrusted(&call.0, &message.content, message.is_error), ..message.clone() }
-                }
-                _ => message.clone(),
-            };
-            if message.role == Role::Assistant || turns.is_empty() {
-                turns.push(vec![message]);
-            } else if let Some(turn) = turns.last_mut() {
-                turn.push(message);
-            }
-        }
-        let last = turns.len().saturating_sub(1);
-        Ok(turns
+        let ranges = crate::history_summary::turns(view.transcript);
+        let last = ranges.len().saturating_sub(1);
+        Ok(ranges
             .into_iter()
             .enumerate()
-            .map(|(index, messages)| ContextSegment {
-                origin: "history".into(),
-                messages,
-                priority: Priority::NORMAL,
-                required: index == last,
+            .map(|(index, range)| {
+                let messages: Vec<Message> = view.transcript[range]
+                    .iter()
+                    .map(|message| match (message.role, &message.tool_call_id) {
+                        (Role::Tool, Some(call)) => Message {
+                            content: wrap_untrusted(&call.0, &message.content, message.is_error),
+                            ..message.clone()
+                        },
+                        _ => message.clone(),
+                    })
+                    .collect();
+                // The summary of the oldest turns is what is left of them: it goes after every ordinary turn has gone.
+                let summary = messages.first().is_some_and(crate::history_summary::is_summary);
+                ContextSegment {
+                    origin: "history".into(),
+                    messages,
+                    priority: if summary { Priority::HIGH } else { Priority::NORMAL },
+                    required: index == last,
+                }
             })
             .collect())
     }
@@ -336,7 +337,9 @@ impl ContextBuilder for DefaultContextBuilder {
         let fitted = fit(segments, budget, factor);
         let has_native = view.transcript.iter().any(|m| m.native.is_some());
         // Leaving anything out changes the prefix the provider has seen, so native turns cannot be replayed (ADR-0015).
-        request.history_edited = fitted.dropped_history || (fitted.dropped_any && has_native);
+        // A summary stands where turns were, so the prefix is not what the provider saw either.
+        let summarised = view.transcript.first().is_some_and(crate::history_summary::is_summary);
+        request.history_edited = fitted.dropped_history || summarised || (fitted.dropped_any && has_native);
         request.messages = fitted.segments.into_iter().flat_map(|segment| segment.messages).collect();
         request.context_report = fitted.report;
         Ok(request)

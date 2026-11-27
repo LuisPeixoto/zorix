@@ -177,6 +177,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
                 .tools(registry)
                 .delegation(hub.planner(router.clone()))
                 .calibration(calibration.clone())
+                .settings(app_settings.clone())
                 .config(config),
         )
         .build();

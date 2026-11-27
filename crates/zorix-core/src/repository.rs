@@ -24,6 +24,19 @@ pub struct LoopState {
     pub transcript: Vec<Message>,
     /// Tool calls from the last assistant message that have not been settled yet, in order.
     pub pending: Vec<ToolCallRequest>,
+    /// A summary that stands for the first `covers` messages of the transcript, once they stopped fitting the model's window. The
+    /// transcript itself is never cut: this is only what the model is shown instead of those messages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<HistorySummary>,
+}
+
+/// What stands for the oldest part of a conversation that no longer fits.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistorySummary {
+    /// How many messages of the transcript, from the start, it replaces. Always the end of a turn, so a tool call is never separated from its result.
+    pub covers: usize,
+    /// The summary, written by a model from the messages it replaces (and the summary before it). Untrusted: it comes from tool output.
+    pub text: String,
 }
 
 /// A saved [`LoopState`].

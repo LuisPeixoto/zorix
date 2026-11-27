@@ -93,8 +93,8 @@ pub use project::{
 pub use reason::{CODES, Coded, Reason};
 pub use redact::{redact, redact_text};
 pub use repository::{
-    Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, ListFilter, LoopState, ToolCallRecord,
-    ToolCallStatus,
+    Checkpoint, Commit, Committed, CreateOutcome, ExecutionRepository, HistorySummary, ListFilter, LoopState,
+    ToolCallRecord, ToolCallStatus,
 };
 pub use secret::{REDACTED, Secret};
 pub use settings::{

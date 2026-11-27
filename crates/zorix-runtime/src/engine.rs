@@ -14,12 +14,12 @@ use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Approval, ApprovalDecision, ApprovalId, ApprovalStatus, ChildResult, Clock, Commit, ContextBuilder, CreateOutcome,
-    DelegateRequest, DelegateTask, DelegationPlanner, Error, EventKind, EventPublisher, Execution, ExecutionDetail,
-    ExecutionEngine, ExecutionEvent, ExecutionId, ExecutionRepository, ExecutionScheduler, ExecutionState,
-    InvalidTransition, ListFilter, ModelGateway, NewEvent, NewExecution, NoCalibration, PolicyEngine, RecoveryReport,
-    Result, ResultValidator, SystemClock, TenantId, Timestamp, TokenCalibration, ToolCallRecord, ToolCallStatus,
-    ToolRegistry, Trigger, Usage,
+    AppSettings, Approval, ApprovalDecision, ApprovalId, ApprovalStatus, ChildResult, Clock, Commit, ContextBuilder,
+    ContextSettings, CreateOutcome, DelegateRequest, DelegateTask, DelegationPlanner, Error, EventKind, EventPublisher,
+    Execution, ExecutionDetail, ExecutionEngine, ExecutionEvent, ExecutionId, ExecutionRepository, ExecutionScheduler,
+    ExecutionState, InvalidTransition, ListFilter, ModelGateway, NewEvent, NewExecution, NoCalibration, PolicyEngine,
+    RecoveryReport, Result, ResultValidator, SettingsCell, SystemClock, TenantId, Timestamp, TokenCalibration,
+    ToolCallRecord, ToolCallStatus, ToolRegistry, Trigger, Usage,
 };
 
 use crate::context::DefaultContextBuilder;
@@ -79,6 +79,7 @@ pub(crate) struct Inner {
     pub policy: Arc<dyn PolicyEngine>,
     pub context: Arc<dyn ContextBuilder>,
     pub calibration: Arc<dyn TokenCalibration>,
+    pub settings: SettingsCell,
     pub scheduler: Arc<dyn ExecutionScheduler>,
     pub clock: Arc<dyn Clock>,
     pub bus: EventBus,
@@ -109,6 +110,7 @@ pub struct EngineBuilder {
     validators: Vec<Arc<dyn ResultValidator>>,
     planner: Option<Arc<dyn DelegationPlanner>>,
     config: EngineConfig,
+    settings: Option<SettingsCell>,
 }
 
 impl EngineBuilder {
@@ -121,6 +123,7 @@ impl EngineBuilder {
             policy: None,
             context: None,
             calibration: None,
+            settings: None,
             scheduler: None,
             clock: None,
             publishers: Vec::new(),
@@ -151,6 +154,14 @@ impl EngineBuilder {
     /// The context builder.
     pub fn context(mut self, context: Arc<dyn ContextBuilder>) -> Self {
         self.context = Some(context);
+        self
+    }
+
+    /// The settings the engine reads while it runs (whether long conversations are summarised). A host passes the cell it also saves
+    /// changes to, so they take effect at once. An engine built without one keeps the old behaviour: it leaves old turns out and does not
+    /// summarise them.
+    pub fn settings(mut self, settings: SettingsCell) -> Self {
+        self.settings = Some(settings);
         self
     }
 
@@ -202,6 +213,12 @@ impl EngineBuilder {
             policy: self.policy.unwrap_or_else(|| Arc::new(DefaultPolicy::default())),
             context: self.context.unwrap_or_else(|| Arc::new(DefaultContextBuilder::new())),
             calibration: self.calibration.unwrap_or_else(|| Arc::new(NoCalibration)),
+            settings: self.settings.unwrap_or_else(|| {
+                SettingsCell::new(AppSettings {
+                    context: ContextSettings { summaries: false },
+                    ..AppSettings::default()
+                })
+            }),
             scheduler: self.scheduler.unwrap_or_else(|| Arc::new(LocalScheduler::new())),
             clock: self.clock.unwrap_or_else(|| Arc::new(SystemClock)),
             bus: EventBus::new(),

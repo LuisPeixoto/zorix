@@ -3,12 +3,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use zorix_core::{Grants, ModelGateway, StepPhase, TenantId};
+use zorix_core::{Grants, ModelGateway, SettingsCell, StepPhase, TenantId};
 use zorix_hub::Hub;
 use zorix_memory::MemoryStack;
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::{DemoModel, ScriptedModel};
-use zorix_store::{DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path};
+use zorix_store::{
+    DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, SqliteSettingsStore, database_path,
+};
 use zorix_tools::{BuiltinConfig, register_builtin};
 
 use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config_path, secrets_with};
@@ -146,12 +148,14 @@ pub fn open_engine(home: &Path, tenant: &TenantId, args: &ModelArgs) -> Result<A
     let hub = Arc::new(Hub::open(home, tenant.clone(), secrets(&load_config(home)?), registry.clone())?);
     hub.register_native_tools()?;
     let calibration = Arc::new(SqliteCalibration::open(&database)?);
+    let settings = SettingsCell::new(SqliteSettingsStore::open(&database)?.load(tenant)?);
     let engine = stack
         .install(
             Engine::builder(repository, gateway)
                 .tools(registry)
                 .delegation(hub.planner(router.clone()))
                 .calibration(calibration.clone())
+                .settings(settings)
                 .config(config),
         )
         .build();
