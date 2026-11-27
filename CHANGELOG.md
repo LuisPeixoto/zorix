@@ -7,6 +7,7 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- **Retention of finished runs** (off until you set a number of days): old runs are **compacted** (their events, steps, approvals and recall go; the request, the answer, the cost and the time stay, so spend and budgets do not change) or **deleted**, whole trees at a time and never what is still moving. It runs ten minutes after the app starts and then daily, and on demand with a preview first: Settings › General › Keep runs, `zorix retention show` and `zorix retention run`. Database schema 14 ([ADR-0044](docs/adr/0044-retention-of-finished-runs.md)).
 - **Long conversations are summarised** instead of cut: when the history of a run no longer fits the model's window, the oldest turns become a summary that stands where they were, written by the run's model, kept in the run's checkpoint (so a resume shows the same text), shown to the model as untrusted data, and counted in the run's usage and limits. An `execution.context.summarised` event says how much was folded and what it cost. On by default; `zorix settings set context.summaries off` turns it off ([ADR-0043](docs/adr/0043-summaries-of-long-conversations.md)).
 
 - A place for the program's settings in the database (schema 13), `zorix settings show` and `zorix settings set`, and the commands the desktop app will use: long-conversation summaries, how long runs are kept, a telemetry address and reading scanned pages. All of them are off, or conservative, until a person changes them.

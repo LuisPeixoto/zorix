@@ -99,7 +99,7 @@ pub use repository::{
 pub use secret::{REDACTED, Secret};
 pub use settings::{
     AppSettings, ContextSettings, KnowledgeSettings, MAX_RETENTION_DAYS, MIN_RETENTION_DAYS, RetentionMode,
-    RetentionSettings, SettingsCell, SettingsStore, TelemetrySettings,
+    RetentionReport, RetentionSettings, SettingsCell, SettingsStore, TelemetrySettings,
 };
 pub use state::{ExecutionState, InvalidTransition, Trigger, transition};
 pub use time::{Clock, ManualClock, SystemClock, Timestamp};

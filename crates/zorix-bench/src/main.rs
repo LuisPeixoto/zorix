@@ -460,6 +460,21 @@ async fn main() {
         let again = SqliteRepository::open(&path).expect("open");
         drop(again);
     });
+    // Retention: what a pass would do, and then one pass over every run. The pass empties the events, so it comes last.
+    let retention = zorix_store::SqliteRetention::open(&path).expect("open retention");
+    let cutoff = Timestamp(now + day);
+    time!(
+        report,
+        "retention: counting what a pass would compact",
+        3,
+        retention.preview(&tenant(), cutoff, zorix_core::RetentionMode::Compact)
+    );
+    time!(
+        report,
+        "retention: compacting every run",
+        1,
+        retention.apply(&tenant(), cutoff, zorix_core::RetentionMode::Compact)
+    );
 
     if let Some(out) = &args.json {
         let value = json!({

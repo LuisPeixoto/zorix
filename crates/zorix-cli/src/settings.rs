@@ -2,11 +2,11 @@
 
 use std::path::Path;
 
-use zorix_core::{AppSettings, RetentionMode, SettingsStore, TenantId};
-use zorix_store::{DataDirLock, SqliteSettingsStore, database_path};
+use zorix_core::{AppSettings, Clock, RetentionMode, RetentionReport, SettingsStore, SystemClock, TenantId};
+use zorix_store::{DataDirLock, SqliteRetention, SqliteSettingsStore, database_path};
 
 use crate::app::CliError;
-use crate::cli::{SettingsCommand, SettingsSetArgs};
+use crate::cli::{RetentionCommand, RetentionRunArgs, SettingsCommand, SettingsSetArgs};
 use crate::follow::{Exit, Printer};
 
 /// Run one `settings` command. Changing a setting holds the data-folder lock, like every command that writes.
@@ -39,6 +39,70 @@ pub async fn settings(
             Ok(Exit::Done)
         }
     }
+}
+
+/// Run `zorix retention`.
+pub async fn retention(
+    home: &Path,
+    tenant: &TenantId,
+    printer: Printer,
+    command: RetentionCommand,
+) -> Result<Exit, CliError> {
+    let (dry_run, write) = match command {
+        RetentionCommand::Show => (true, false),
+        RetentionCommand::Run(RetentionRunArgs { dry_run }) => (dry_run, !dry_run),
+    };
+    // Changing anything holds the data-folder lock; looking does not.
+    let _lock = if write { Some(DataDirLock::acquire(home)?) } else { None };
+    let database = database_path(home);
+    let settings = SqliteSettingsStore::open(&database)?.load(tenant)?;
+    let store = SqliteRetention::open(&database)?;
+    let Some(report) = store.pass(tenant, &settings, SystemClock.now(), dry_run).await? else {
+        if printer.json {
+            println!("{}", serde_json::json!({"enabled": false}));
+        } else {
+            eprintln!(
+                "Retention is off: runs are kept for ever. Turn it on with `zorix settings set retention.days 90`."
+            );
+        }
+        return Ok(Exit::Done);
+    };
+    if printer.json {
+        println!("{}", serde_json::json!({"enabled": true, "dry_run": dry_run, "report": report}));
+    } else {
+        println!("{}", describe(&report, &settings, dry_run));
+    }
+    Ok(Exit::Done)
+}
+
+fn describe(report: &RetentionReport, settings: &AppSettings, dry_run: bool) -> String {
+    let days = settings.retention.days.unwrap_or(0);
+    let verb = match (dry_run, settings.retention.mode) {
+        (true, RetentionMode::Compact) => "would compact",
+        (true, RetentionMode::Delete) => "would delete",
+        (false, RetentionMode::Compact) => "compacted",
+        (false, RetentionMode::Delete) => "deleted",
+    };
+    if report.runs == 0 {
+        return format!("No run is older than {days} days and finished, so there is nothing to do.");
+    }
+    let mut text = format!(
+        "{} {verb} {} run(s) older than {days} days: {} event(s), {} step(s), {} approval(s) and {} recall(s), about {:.1} MB.",
+        if dry_run { "It" } else { "ZORIX" },
+        report.runs,
+        report.events,
+        report.tool_calls,
+        report.approvals,
+        report.snapshots,
+        report.bytes as f64 / 1_048_576.0
+    );
+    if report.kept_because_referenced > 0 {
+        text.push_str(&format!(
+            "\n{} run(s) are referred to by a task, a workflow run or a report, so they are compacted, not deleted.",
+            report.kept_because_referenced
+        ));
+    }
+    text
 }
 
 fn on_off(text: &str, key: &str) -> Result<bool, CliError> {

@@ -352,6 +352,9 @@ pub struct Execution {
     pub started_at: Option<Timestamp>,
     /// When it reached a terminal state.
     pub finished_at: Option<Timestamp>,
+    /// Retention dropped its events, steps, approvals and recall (it keeps the request, the answer, the usage and the time). Never set by a run.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub compacted: bool,
 }
 
 impl Execution {
@@ -386,6 +389,7 @@ impl Execution {
             updated_at: now,
             started_at: None,
             finished_at: None,
+            compacted: false,
         }
     }
 

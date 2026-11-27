@@ -4,7 +4,10 @@
   import { store } from "../stores/runs.svelte.ts";
   import { theme } from "../stores/theme.svelte.ts";
   import { type HostInfo, errorText, workflowHost, workflowSettingsSet } from "../api.ts";
+  import { settingsStore } from "../stores/appSettings.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
+  import KeepRuns from "./settings/KeepRuns.svelte";
+  import LongConversations from "./settings/LongConversations.svelte";
   import { BrandMark, Button, Callout, Card, Field, Input, KeyValue, PageHeader, Segmented, Tabs, ToggleRow } from "../ui/index.ts";
 
   let tab = $state("general");
@@ -15,6 +18,7 @@
   let saving = $state(false);
   $effect(() => {
     if (tab !== "general") return;
+    void settingsStore.load();
     void workflowHost().then((h) => {
       host = h;
       webhooks = h.webhooks;
@@ -64,6 +68,8 @@
       />
       <p class="mt-3 text-sm text-muted">{t("settings.runsMemoryAgentsAnd")}</p>
     </Card>
+    <LongConversations />
+    <KeepRuns />
     <Card title={t("settings.webhooks")} icon="webhook">
       <p class="mb-3 text-base text-muted">{t("settings.aWorkflowCanStart")} <span class="mono">{t("settings.zorixServe")}</span>.</p>
       <ToggleRow label={t("settings.receiveWebhooks")} description={webhooks ? t("settings.zorixListensForRequests") : t("settings.nothingListens")} bind:checked={webhooks} />

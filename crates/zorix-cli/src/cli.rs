@@ -70,6 +70,9 @@ pub enum Command {
     /// The settings of the program: long conversations, how long runs are kept, telemetry and scanned pages.
     #[command(subcommand)]
     Settings(SettingsCommand),
+    /// Keep finished runs for a while, then compact or delete them (see `settings set retention.days`).
+    #[command(subcommand)]
+    Retention(RetentionCommand),
     /// Connect ZORIX to MCP servers, or serve ZORIX's memory to other tools over MCP.
     #[command(subcommand)]
     Mcp(McpCommand),
@@ -2194,6 +2197,23 @@ pub enum SettingsCommand {
     /// Change one setting. The keys are `context.summaries` (on or off), `retention.days` (a number, or off to keep runs for ever),
     /// `retention.mode` (compact or delete), `telemetry.endpoint` (an address, or off) and `knowledge.ocr` (on or off).
     Set(SettingsSetArgs),
+}
+
+/// What `zorix retention` does.
+#[derive(Debug, Subcommand)]
+pub enum RetentionCommand {
+    /// Say what a pass would do with the current settings, without changing anything.
+    Show,
+    /// Do a pass now. With `--dry-run` it only says what it would do.
+    Run(RetentionRunArgs),
+}
+
+/// Options for `retention run`.
+#[derive(Debug, Args)]
+pub struct RetentionRunArgs {
+    /// Count what would be compacted or deleted and change nothing.
+    #[arg(long)]
+    pub dry_run: bool,
 }
 
 /// Options for `settings set`.

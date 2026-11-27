@@ -874,3 +874,55 @@ fn settings_start_as_the_defaults_change_one_at_a_time_and_refuse_what_makes_no_
     let kept: Value = serde_json::from_slice(&z.run(&["settings", "show", "--json"]).stdout).unwrap();
     assert_eq!(kept["retention"]["days"], 90);
 }
+
+#[test]
+fn retention_says_what_it_would_do_and_then_compacts_an_old_run_and_keeps_its_numbers() {
+    let z = Zorix::new();
+    let run = z.run(&["run", "What is 17*23?", "--allow", "math.evaluate", "--approve", "never"]);
+    assert_eq!(code(&run), 0, "{}", text(&run.stderr));
+    let id = z.newest_id();
+
+    // Off: nothing happens, and it says how to turn it on.
+    let off = z.run(&["retention", "show"]);
+    assert!(text(&off.stderr).contains("Retention is off"), "{}", text(&off.stderr));
+
+    // On, but the run is new: nothing is old enough.
+    assert_eq!(code(&z.run(&["settings", "set", "retention.days", "30"])), 0);
+    let fresh = z.run(&["retention", "show"]);
+    assert!(text(&fresh.stdout).contains("nothing to do"), "{}", text(&fresh.stdout));
+
+    // Make the run two months old, as if time had passed.
+    let database = z.home().join("zorix.sqlite");
+    let conn = rusqlite::Connection::open(&database).unwrap();
+    conn.execute(
+        "UPDATE executions SET created_at = created_at - 5184000000, doc = json_set(doc, '$.finished_at', json_extract(doc, '$.finished_at') - 5184000000)",
+        [],
+    )
+    .unwrap();
+    let events: i64 = conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get(0)).unwrap();
+    assert!(events > 3);
+    drop(conn);
+    let before: Value = serde_json::from_slice(&z.run(&["--json", "show", &id]).stdout).unwrap();
+
+    let dry = z.run(&["--json", "retention", "run", "--dry-run"]);
+    let dry: Value = serde_json::from_slice(&dry.stdout).unwrap();
+    assert_eq!((dry["dry_run"].clone(), dry["report"]["runs"].clone()), (Value::Bool(true), Value::from(1)));
+    let conn = rusqlite::Connection::open(&database).unwrap();
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get::<_, i64>(0)).unwrap(),
+        events,
+        "a dry run changed something"
+    );
+    drop(conn);
+
+    let done = z.run(&["retention", "run"]);
+    assert_eq!(code(&done), 0, "{}", text(&done.stderr));
+    assert!(text(&done.stdout).contains("compacted 1 run(s)"), "{}", text(&done.stdout));
+    let conn = rusqlite::Connection::open(&database).unwrap();
+    assert_eq!(conn.query_row("SELECT COUNT(*) FROM events", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
+    drop(conn);
+    let after: Value = serde_json::from_slice(&z.run(&["--json", "show", &id]).stdout).unwrap();
+    assert_eq!(after["execution"]["compacted"], true);
+    assert_eq!(after["execution"]["result"], before["execution"]["result"], "the answer is still there");
+    assert_eq!(after["execution"]["usage"], before["execution"]["usage"], "and so is what it cost");
+}

@@ -57,6 +57,31 @@ pub struct RetentionSettings {
     pub mode: RetentionMode,
 }
 
+/// What retention did, or would do, to the runs that are old enough. Counts of rows, and the room they take.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetentionReport {
+    /// Runs that were compacted or deleted.
+    pub runs: u64,
+    /// Of them, compacted (the run stays, without its events, steps, approvals and recall).
+    pub compacted: u64,
+    /// Of them, deleted altogether.
+    pub deleted: u64,
+    /// Runs that `Delete` would have removed but something refers to (a task, a workflow run, a report): they were compacted.
+    pub kept_because_referenced: u64,
+    /// Events removed.
+    pub events: u64,
+    /// Checkpoints removed.
+    pub checkpoints: u64,
+    /// Tool call records removed.
+    pub tool_calls: u64,
+    /// Approvals removed.
+    pub approvals: u64,
+    /// Recall snapshots removed.
+    pub snapshots: u64,
+    /// About how many bytes those rows take.
+    pub bytes: u64,
+}
+
 /// Where traces go.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
