@@ -22,6 +22,7 @@ use zorix_core::{MAX_DEPTH, MAX_DESCENDANTS, PlanContext};
 use crate::engine::{Engine, RunControl};
 use crate::tools::{CallError, ToolExecutor};
 use crate::validators::parse_structured;
+use crate::watchdog::{MODEL_CALL_CEILING_MS, Progress, Timeout, Watched, guard};
 
 /// Why a run ended without finishing the loop.
 pub(crate) enum Stop {
@@ -514,13 +515,18 @@ impl Run {
                 zorix.attempt = attempt
             );
             let sink = self.engine.inner.live.sink(self.exec.id);
+            let progress = Progress::new();
             let call = self
                 .engine
                 .inner
                 .model
-                .generate_live(request.clone(), self.control.cancel.clone(), sink.clone())
+                .generate_live(
+                    request.clone(),
+                    self.control.cancel.clone(),
+                    Watched::new(sink.clone(), progress.clone()),
+                )
                 .instrument(span);
-            let outcome = tokio::time::timeout(Duration::from_millis(limits.model_timeout_ms), call).await;
+            let outcome = guard(&progress, limits.model_timeout_ms, MODEL_CALL_CEILING_MS, call).await;
             let (message, retry_after) = match outcome {
                 Ok(Ok(response)) => return Ok(response),
                 Ok(Err(ModelError::Cancelled)) => return Err(self.cancelled_or_shutdown().await),
@@ -534,7 +540,16 @@ impl Run {
                 Ok(Err(ModelError::Provider { message, .. })) => {
                     return Err(self.fail(Failure::new(FailureKind::Model, message)).await);
                 }
-                Err(_) => (format!("The model did not answer within {} ms.", limits.model_timeout_ms), None),
+                Err(Timeout::NoProgress) => {
+                    (format!("The model did not answer within {} ms.", limits.model_timeout_ms), None)
+                }
+                Err(Timeout::Ceiling) => (
+                    format!(
+                        "The model was still answering after {} ms, the most one call may take.",
+                        MODEL_CALL_CEILING_MS
+                    ),
+                    None,
+                ),
             };
             // Whatever the failed attempt wrote is not part of the answer: readers of the live text start again.
             sink.reset();

@@ -76,11 +76,13 @@ that names it.
 | `max_total_tokens` | none | Input plus output tokens (an estimate in this phase) |
 | `max_cost_micros` | none | Cost, in millionths of a dollar |
 | `max_active_ms` | 300 000 | Time spent working. Waiting for a person is **not** counted |
-| `model_timeout_ms` | 60 000 | One model call |
+| `model_timeout_ms` | 60 000 | The longest one model call may go **without progress**: from the start to the first piece of text, and between pieces. An answer that keeps arriving is not cut however long it is; one that goes quiet is, after this long |
 | `max_model_attempts` | 3 | Tries for one model call that fails with a temporary error |
 | `max_validation_retries` | 1 | Times a rejected final answer goes back to the model |
 
 A call that crosses a token or cost limit completes; the execution stops right after it.
+
+Whatever the limit, one model call ends after 600 000 ms in all (the longest the providers' HTTP clients wait). Progress is text reaching the live sink, so a response that is only a tool call, which streams no text, has the whole `model_timeout_ms` to arrive.
 
 ## Failures and retries
 
