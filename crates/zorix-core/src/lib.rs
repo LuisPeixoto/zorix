@@ -10,6 +10,7 @@ pub mod context;
 pub mod delegation;
 pub mod engine;
 pub mod error;
+pub mod estimate;
 pub mod event;
 pub mod execution;
 pub mod ids;
@@ -49,6 +50,7 @@ pub use delegation::{
 };
 pub use engine::{ExecutionDetail, ExecutionEngine, LiveEvent, RecoveryReport, TreeApproval};
 pub use error::{Error, Result};
+pub use estimate::{EstimateBasis, EstimateInput, MAX_SAMPLES, MIN_SAMPLES, RunEstimate, RunSample, estimate_run};
 pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{
     Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
