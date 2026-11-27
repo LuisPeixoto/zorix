@@ -23,7 +23,7 @@ pub async fn dispatch(cli: Cli) -> Result<Exit, CliError> {
     let printer = Printer { json: cli.json };
     let tenant = cli.tenant.clone();
     match cli.command {
-        Command::Run(args) => run(&home, tenant, printer, args).await,
+        Command::Run(args) => run(&home, tenant, printer, *args).await,
         Command::List(args) => list(&home, &tenant, printer, args).await,
         Command::Show(arg) => show(&home, &tenant, printer, arg).await,
         Command::Events(args) => events(&home, &tenant, printer, args).await,
@@ -109,6 +109,9 @@ async fn last_seq(engine: &zorix_runtime::Engine, tenant: &TenantId, id: Executi
 }
 
 async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> Result<Exit, CliError> {
+    if args.estimate {
+        return crate::estimate::estimate(home, &tenant, printer, &args).await;
+    }
     let workspace = workspace_from(&args.workspace)?;
     let mut limits = Limits::default();
     if let Some(n) = args.max_iterations {
@@ -119,6 +122,9 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     }
     if let Some(seconds) = args.max_seconds {
         limits.max_active_ms = seconds * 1_000;
+    }
+    if let Some(micros) = args.max_cost {
+        limits.max_cost_micros = Some(micros);
     }
     let app = open_engine(home, &tenant, &args.model)?;
     let grants = grants_from(&args);
@@ -158,6 +164,10 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         }
         if let Some(seconds) = args.max_seconds {
             narrower.max_active_ms = seconds * 1_000;
+            limited = true;
+        }
+        if let Some(micros) = args.max_cost {
+            narrower.max_cost_micros = Some(micros);
             limited = true;
         }
         let ask = zorix_agents::AgentAsk {
