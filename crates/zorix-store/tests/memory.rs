@@ -573,11 +573,45 @@ fn record(e: ExecutionId, t: &str, project: Option<&str>, text: &str) -> Operati
         tenant: tenant(t),
         project: project.map(str::to_string),
         conversation: None,
+        agent: None,
         state: "completed".into(),
         finished_at: NOW,
         text: text.into(),
         doc: json!({"tools": ["math.evaluate"]}),
     }
+}
+
+#[tokio::test]
+async fn past_work_that_belongs_to_an_agent_is_seen_by_that_agent_and_by_no_one_else() {
+    let f = fixture();
+    let (mine, theirs, nobodys) = (ExecutionId::new(), ExecutionId::new(), ExecutionId::new());
+    let (me, them) = (zorix_core::AgentId::new(), zorix_core::AgentId::new());
+    for (id, agent, text) in [
+        (mine, Some(me), "billing work of my agent"),
+        (theirs, Some(them), "billing work of another agent"),
+        (nobodys, None, "billing work of a plain run"),
+    ] {
+        f.store.record_operation(OperationRecord { agent, ..record(id, "a", None, text) }).await.unwrap();
+    }
+    assert_eq!(f.store.operation(&tenant("a"), mine).await.unwrap().unwrap().agent, Some(me), "the agent is kept");
+    let ids = |hits: Vec<zorix_core::TextHit>| {
+        let mut ids: Vec<String> = hits.into_iter().map(|h| h.id).collect();
+        ids.sort();
+        ids
+    };
+    let sorted = |mut v: Vec<ExecutionId>| {
+        v.sort_by_key(ToString::to_string);
+        v.into_iter().map(|id| id.to_string()).collect::<Vec<_>>()
+    };
+    let as_agent = Visibility { agent: Some(me), ..vis("a") };
+    let search = |v: Visibility| {
+        let store = f.store.clone();
+        async move { ids(store.text_search(&v, Corpus::Operations, &terms(&["billing"]), 10).await.unwrap()) }
+    };
+    assert_eq!(search(as_agent).await, sorted(vec![mine, nobodys]), "an agent sees its own work and what nobody owns");
+    assert_eq!(search(vis("a")).await, sorted(vec![nobodys]), "a plain run sees only what nobody owns");
+    let other = Visibility { agent: Some(them), ..vis("a") };
+    assert_eq!(search(other).await, sorted(vec![theirs, nobodys]), "another agent does not see mine");
 }
 
 #[tokio::test]

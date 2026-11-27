@@ -31,6 +31,10 @@ agent, and the *Agent* filter of the Memory screen). Its runs see global, projec
 client does. `memory.remember` accepts `scope: "agent"` only inside an agent run that has memory of its own, and, as for every memory,
 **only a person approves it**. An agent that is deleted leaves its memory in place until you forget it; evaluation runs never use or write it.
 
+The agent's **past work** is part of that memory: the record of a run of an agent that has memory of its own is kept for that agent, so another agent and a
+plain run in the same project never recall it. The agent itself sees its own past work and, as for every scope, what nobody owns. An agent whose memory is off keeps
+no private past work, like a plain run. (Before 0.11 every run of a project recalled every agent's past work; opening an older database assigns the existing records to their agents.)
+
 ## Who may write memory
 
 A model can only **propose**. The tool `memory.remember` always asks, and, unlike other tools, **no automatic mode can

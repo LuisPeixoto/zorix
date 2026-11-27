@@ -603,6 +603,7 @@ async fn past_work_is_found_and_the_executions_own_conversation_is_not_repeated(
                 tenant: tenant("local"),
                 project: None,
                 conversation,
+                agent: None,
                 state: "completed".into(),
                 finished_at: Timestamp(86_400_000),
                 text: text.into(),

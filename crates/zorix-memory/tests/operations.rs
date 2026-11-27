@@ -285,6 +285,7 @@ async fn another_tenants_work_is_never_found() {
             tenant: other,
             project: None,
             conversation: None,
+            agent: None,
             state: "completed".into(),
             finished_at: Timestamp(1),
             text: "The other tenant planned a confidential acquisition.".into(),

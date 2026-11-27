@@ -97,6 +97,8 @@ pub fn build_record(
         tenant: execution.tenant.clone(),
         project: execution.workspace.as_ref().map(|p| p.to_string_lossy().into_owned()),
         conversation: execution.conversation.clone(),
+        // The same rule as `visibility_of`: only an agent with memory of its own keeps its past work for itself.
+        agent: execution.agent.as_ref().filter(|binding| binding.agent_memory).map(|binding| binding.agent),
         state: state.into(),
         finished_at,
         text,
