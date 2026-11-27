@@ -6,6 +6,9 @@ Every screen of ZORIX at version 1.0, the components it is built from, and the o
 |---|---|---|---|
 | 1 · Runtime | Runs | PageHeader, List, Badge, TreeView, Stat, ToolCallCard, ApprovalCard | Start run |
 | 1 · Runtime | New run | Field, Switch, Chip, Segmented, Callout | Start run |
+| 3 · Memory | Documents: watching, reading scans | Card, Badge, Callout, ToggleRow, Button | Add a folder |
+| 1 · Runtime | New run with attachments | Textarea, Chip, CommandPalette list, Callout, KeyValue | Start run |
+| 1 · Runtime | Settings · General: long conversations, keeping runs, telemetry | Card, ToggleRow, Field, Segmented, Callout, KeyValue | Save |
 | 2 · Providers | Providers and keys | List, BrandLogo, StatusPill, Field, Modal | Save key |
 | 3 · Memory | Memory, Documents | List, Markdown, Sparkbar, Callout, DiffView | Approve memory |
 | 4 · Tools | Integrations, MCP servers | HealthGrid, BrandLogo, StatusPill, Stepper, KeyValue, Drawer | Connect |
@@ -27,4 +30,4 @@ Every screen of ZORIX at version 1.0, the components it is built from, and the o
 
 ## Assembled screens
 
-The **Screens** group shows 29 of these surfaces fully assembled at 1440 px, inside the app shell. The shell has a glass top bar with ⌘K search, the approvals bell and theme. The sidebar holds the Work, Organisation, Connect and Operate groups, with today's spend at its foot. The screens are: Command Center, Run, New run, Providers, Memory, Integrations, Agents, Agent chat, Agent versions, Workflow editor, Workflow run, Workflows, Projects, Project board, Project list, Project timeline, Project deliverables, Project history, Task, New project, Workforce, Workforce list, Workforce activity, Worker, Hire a worker, Org settings, Logs and traces, Marketplace, and Settings › Permissions. Each one uses only the components and tokens of this system. The shell classes (`zx-app`, `zx-top`, `zx-side`, `zx-nav`, `zx-main`, `zx-panel`, `zx-table`, `zx-gantt`, `zx-wf`) live in `bundle.css`.
+The **Screens** group shows 29 of these surfaces fully assembled at 1440 px, inside the app shell. The shell has a glass top bar with ⌘K search, the approvals bell and theme. The sidebar holds the Work, Organisation, Connect and Operate groups, with today's spend at its foot. The screens are: Command Center, Run, New run, Providers, Memory, Integrations, Agents, Agent chat, Agent versions, Workflow editor, Workflow run, Workflows, Projects, Project board, Project list, Project timeline, Project deliverables, Project history, Task, New project, Workforce, Workforce list, Workforce activity, Worker, Hire a worker, Org settings, Logs and traces, Marketplace, and Settings › Permissions. Three more were added in this repository for the runtime phase (see `local-additions.md`): Settings › General, Documents and New run with attachments. Each one uses only the components and tokens of this system. The shell classes (`zx-app`, `zx-top`, `zx-side`, `zx-nav`, `zx-main`, `zx-panel`, `zx-table`, `zx-gantt`, `zx-wf`) live in `bundle.css`.
