@@ -522,6 +522,11 @@ const MIGRATIONS: &[&str] = &[
         doc TEXT NOT NULL
     );
     ",
+    // 14: retention. A run that retention compacted has lost its events, steps, approvals and recall and keeps its request, its answer, its
+    // usage and its times; the flag says so, in the column (so a pass skips it) and in the record (so the screens can say it).
+    "
+    ALTER TABLE executions ADD COLUMN compacted INTEGER NOT NULL DEFAULT 0;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -890,6 +895,25 @@ mod tests {
         let settings: u32 = conn.query_row("SELECT COUNT(*) FROM app_settings", [], |r| r.get(0)).unwrap();
         assert_eq!(settings, 0);
         conn.execute("INSERT INTO app_settings (tenant, doc) VALUES ('local', '{}')", []).unwrap();
+    }
+
+    #[test]
+    fn a_database_of_schema_13_upgrades_to_retention_and_no_run_starts_compacted() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(13) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, created_at, doc) VALUES ('e1','local',NULL,'completed',1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let compacted: i64 =
+            conn.query_row("SELECT compacted FROM executions WHERE id = 'e1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(compacted, 0, "a run that was there before is whole");
     }
 
     #[test]

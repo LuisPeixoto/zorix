@@ -236,7 +236,7 @@ fn active_count(tx: &Connection, tenant: &TenantId) -> Result<u64> {
 }
 
 /// Remove `keys` from every frozen snapshot that holds them, and forget the references.
-fn scrub(tx: &Connection, keys: &[String]) -> Result<()> {
+pub(crate) fn scrub(tx: &Connection, keys: &[String]) -> Result<()> {
     if keys.is_empty() {
         return Ok(());
     }
