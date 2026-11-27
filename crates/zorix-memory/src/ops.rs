@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, warn};
 use zorix_core::{
     ApprovalStatus, EventKind, EventPublisher, Execution, ExecutionEvent, ExecutionId, ExecutionRepository,
-    ExecutionState, MemoryStore, OperationRecord, Timestamp, ToolCallRecord, ToolCallStatus, redact_text,
+    ExecutionState, MemoryStore, OperationRecord, Timestamp, ToolCallRecord, ToolCallStatus, redact, redact_text,
 };
 
 use crate::embedder::Embedder;
@@ -27,6 +27,12 @@ pub const QUEUE: usize = 256;
 
 fn is_end(kind: EventKind) -> bool {
     matches!(kind, EventKind::Completed | EventKind::Failed | EventKind::Cancelled)
+}
+
+/// What a tool was asked, as a short text. A value under a key that names a secret (`password`, `authorization`, …) is replaced
+/// first, because the text-only redaction knows credential shapes and not key names (audit finding F2).
+fn digest_of(arguments: &Value) -> String {
+    cut(&redact_text(&redact(arguments.clone()).to_string()), DIGEST_CHARS)
 }
 
 /// The record of a finished execution. Pure, so it can be tested without a database.
@@ -57,9 +63,7 @@ pub fn build_record(
                 entry.1 += 1;
                 entry.2 += bad;
             }
-            None => {
-                tools.push((call.tool.clone(), 1, bad, cut(&redact_text(&call.arguments.to_string()), DIGEST_CHARS)))
-            }
+            None => tools.push((call.tool.clone(), 1, bad, digest_of(&call.arguments))),
         }
     }
     let answered: Vec<Value> = approvals
@@ -301,6 +305,22 @@ mod tests {
             (tools[0]["tool"].as_str(), tools[0]["calls"].as_u64(), tools[0]["failed"].as_u64()),
             (Some("sql.run"), Some(2), Some(1))
         );
+    }
+
+    #[test]
+    fn the_arguments_of_a_tool_lose_what_sits_under_a_secret_key_before_they_are_kept() {
+        let e = execution(ExecutionState::Completed);
+        let calls = vec![call(
+            "http.request",
+            ToolCallStatus::Succeeded,
+            json!({"url": "https://example.test/login", "password": "hunter2-correct-horse", "headers": {"Authorization": "Basic dXNlcjpwYXNz"}}),
+        )];
+        let record = build_record(&e, &calls, &[]);
+        let everything = format!("{} {}", record.text, record.doc);
+        for secret in ["hunter2-correct-horse", "dXNlcjpwYXNz"] {
+            assert!(!everything.contains(secret), "{secret} was kept: {everything}");
+        }
+        assert!(record.text.contains("example.test/login"), "what is not secret stays readable");
     }
 
     #[test]
