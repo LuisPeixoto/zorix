@@ -12,6 +12,7 @@ pub mod org;
 pub mod paths;
 pub mod projects;
 mod schema;
+pub mod settings;
 mod sqlite;
 pub mod workflows;
 
@@ -23,6 +24,7 @@ pub use org::SqliteOrgStore;
 pub use paths::{DataDirLock, HOME_VARIABLE, LockError, data_dir, database_path};
 pub use projects::SqliteProjectStore;
 pub use schema::LATEST as SCHEMA_VERSION;
+pub use settings::SqliteSettingsStore;
 pub use sqlite::SqliteRepository;
 pub use workflows::SqliteWorkflowStore;
 
