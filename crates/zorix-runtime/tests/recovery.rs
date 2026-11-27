@@ -237,3 +237,36 @@ async fn a_careful_recovery_waits_for_the_lease_of_a_dead_engine_to_expire() {
     assert_eq!(later.requeued, vec![started.id]);
     assert_eq!(settled(&second, started.id).await.state, S::Completed);
 }
+
+/// Another engine took the lease of a run that was still working: it must stop at once, run no tool and write nothing more, or
+/// both engines would act on the same run (finding F6 of the Phase 11 audit).
+#[tokio::test]
+async fn a_run_that_lost_its_lease_stops_without_running_a_tool_or_writing() {
+    use zorix_core::{Clock, ExecutionRepository, SystemClock};
+
+    let echo = Counting::new("echo", Behaviour::Echo);
+    let (engine, repo) = engine_that_will_crash(
+        vec![
+            Turn::Delay { ms: 700, then: Box::new(Turn::call("echo", json!({"text": "after the lease was lost"}))) },
+            Turn::Say("it went on".into()),
+        ],
+        registry_of(vec![echo.clone()]),
+    );
+    let started = engine.submit(request("go", &["echo"])).await.unwrap();
+    wait_for_state(&engine, started.id, S::WaitingForModel).await;
+
+    // The lease goes to another engine while the model call is still out.
+    repo.release_all_leases().await.unwrap();
+    assert!(repo.acquire_lease(started.id, "another-engine", SystemClock.now(), 60_000).await.unwrap());
+    let events_before = repo.events(started.id, 0, 1_000).await.unwrap().len();
+
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
+    assert_eq!(echo.count(), 0, "the run went on and ran a tool although another engine held its lease");
+    let now = engine.get(&local(), started.id).await.unwrap();
+    assert!(!now.state.is_terminal(), "the run ended ({}) although it was no longer its own", now.state);
+    assert_eq!(
+        repo.events(started.id, 0, 1_000).await.unwrap().len(),
+        events_before,
+        "the run wrote to an execution that another engine holds"
+    );
+}

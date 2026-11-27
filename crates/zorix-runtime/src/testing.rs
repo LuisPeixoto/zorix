@@ -91,6 +91,38 @@ pub async fn stale_commit_is_a_conflict_and_changes_nothing<R: ExecutionReposito
     assert_eq!(repo.get(&tenant, execution.id).await.unwrap().unwrap().version, 2);
 }
 
+/// A commit made for an engine is refused unless that engine holds the lease, and nothing of it is written; a commit from outside a
+/// run names no engine and is not affected.
+pub async fn a_commit_for_an_engine_that_lost_the_lease_is_refused<R: ExecutionRepository>(repo: &R) {
+    let mut execution = stored(repo, "acme", None).await;
+    let id = execution.id;
+    execution.apply(Trigger::Enqueue, Timestamp(2_000)).unwrap();
+    let commit = |version: u64, owner: Option<&str>| {
+        let mut commit = Commit::new(execution.clone(), version);
+        commit.events = vec![event(EventKind::Queued)];
+        commit.lease_owner = owner.map(str::to_string);
+        commit
+    };
+    let now = Timestamp(1_000);
+    assert!(repo.acquire_lease(id, "engine-a", now, 60_000).await.unwrap());
+
+    // Another engine took it over (the first one's lease ran out in the meantime).
+    assert!(repo.acquire_lease(id, "engine-b", Timestamp(1_000 + 61_000), 60_000).await.unwrap());
+    let before = repo.events(id, 0, 100).await.unwrap().len();
+    assert_eq!(
+        repo.commit(commit(1, Some("engine-a"))).await.unwrap_err(),
+        Error::Conflict(id),
+        "the old holder is refused"
+    );
+    assert_eq!(repo.events(id, 0, 100).await.unwrap().len(), before, "and nothing of its commit was written");
+    assert_eq!(repo.load(id).await.unwrap().unwrap().version, 1);
+
+    assert_eq!(repo.commit(commit(1, Some("engine-b"))).await.unwrap().execution.version, 2, "the holder is not");
+    let mut again = commit(2, None);
+    again.events = vec![event(EventKind::Progress)];
+    assert!(repo.commit(again).await.is_ok(), "a change from outside a run names no engine");
+}
+
 /// Another tenant cannot see an execution, in `get` or in `list`.
 pub async fn tenants_are_isolated<R: ExecutionRepository>(repo: &R) {
     let mine = stored(repo, "acme", None).await;
@@ -298,6 +330,7 @@ macro_rules! repository_contract_tests {
         $crate::repository_contract_tests!(@case $make, idempotency_key_returns_the_existing_execution);
         $crate::repository_contract_tests!(@case $make, commit_applies_changes_in_order);
         $crate::repository_contract_tests!(@case $make, stale_commit_is_a_conflict_and_changes_nothing);
+        $crate::repository_contract_tests!(@case $make, a_commit_for_an_engine_that_lost_the_lease_is_refused);
         $crate::repository_contract_tests!(@case $make, tenants_are_isolated);
         $crate::repository_contract_tests!(@case $make, list_filters_and_orders);
         $crate::repository_contract_tests!(@case $make, in_states_spans_tenants);

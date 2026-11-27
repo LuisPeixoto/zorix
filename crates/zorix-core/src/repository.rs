@@ -112,6 +112,10 @@ pub struct Commit {
     pub tool_calls: Vec<ToolCallRecord>,
     /// Approvals to insert or replace.
     pub approvals: Vec<Approval>,
+    /// The engine that makes this commit while it drives the execution. The commit fails with `Conflict` unless that engine still holds
+    /// the execution's lease, so an engine that lost it (another took it over) can no longer mark a tool as started or write anything
+    /// else. `None` for a change made from outside a run (a cancel, an answer to an approval).
+    pub lease_owner: Option<String>,
 }
 
 impl Commit {
@@ -124,6 +128,7 @@ impl Commit {
             checkpoint: None,
             tool_calls: Vec::new(),
             approvals: Vec::new(),
+            lease_owner: None,
         }
     }
 }

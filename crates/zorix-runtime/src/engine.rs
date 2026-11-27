@@ -68,6 +68,8 @@ pub(crate) struct RunControl {
     pub cancel: CancellationToken,
     pub reason: Mutex<Option<String>>,
     pub pause: AtomicBool,
+    /// Set when the engine lost the execution's lease: the run stops without writing, and the engine that holds it carries on.
+    pub lost: AtomicBool,
 }
 
 pub(crate) struct Inner {

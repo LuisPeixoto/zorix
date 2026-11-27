@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- A run whose lease was taken by another engine kept calling models and tools beside it; it stops now, writes nothing more and leaves the execution to the engine that holds the lease. Every commit a run makes is checked against the lease.
+
 - **Security:** when a changed file was indexed again, its old pieces stayed in the saved context of the runs that had read them, so removing the folder later left an old version of the text behind. They are scrubbed now, as a removed file's are.
 
 - **Security:** the past work of an agent that has memory of its own was recalled by every other agent and by plain runs in the same project. It now belongs to its agent ([memory](docs/memory.md#agent-memory)); records already stored are assigned to their agents when the database is opened. Database schema 11.
