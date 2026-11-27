@@ -14,7 +14,8 @@ use zorix_providers::{ProvidersConfig, Router, SecretStore, build_router, config
 use zorix_runtime::{Engine, EngineConfig, InMemoryToolRegistry};
 use zorix_sim::DemoModel;
 use zorix_store::{
-    DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, SqliteSettingsStore, database_path,
+    DataDirLock, SqliteCalibration, SqliteMemoryStore, SqliteRepository, SqliteRetention, SqliteSettingsStore,
+    database_path,
 };
 use zorix_tools::{BuiltinConfig, register_builtin};
 
@@ -38,6 +39,10 @@ pub struct Services {
     pub settings: Arc<SqliteSettingsStore>,
     /// The settings now, shared with the engine and the background jobs.
     pub app_settings: SettingsCell,
+    /// Retention: what is done to old runs.
+    pub retention: SqliteRetention,
+    /// Ends the jobs that run while the app is open (retention).
+    pub stop_background: CancellationToken,
     /// Connections: MCP servers, integrations and the sandbox.
     pub hub: Arc<Hub>,
     /// Workflows: their store and the engine that runs them.
@@ -131,6 +136,7 @@ impl AppState {
             token.cancel();
         }
         if let Ok(services) = &self.services {
+            services.stop_background.cancel();
             for (_, token) in services.syncs.lock().drain() {
                 token.cancel();
             }
@@ -171,6 +177,14 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     let calibration = Arc::new(SqliteCalibration::open(&database).map_err(ui)?);
     let app_store = Arc::new(SqliteSettingsStore::open(&database).map_err(ui)?);
     let app_settings = SettingsCell::new(app_store.settings(&TenantId::local()).await.map_err(ui)?);
+    let retention = SqliteRetention::open(&database).map_err(ui)?;
+    let stop_background = CancellationToken::new();
+    retention.run_daily(
+        TenantId::local(),
+        app_settings.clone(),
+        Arc::new(zorix_core::SystemClock),
+        stop_background.clone(),
+    );
     let engine = memory
         .install(
             Engine::builder(repository, gateway)
@@ -243,6 +257,8 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         memory_store,
         settings: app_store,
         app_settings,
+        retention,
+        stop_background,
         syncs: Mutex::new(HashMap::new()),
         reembed_job: Mutex::new(None),
         evals: Mutex::new(HashMap::new()),

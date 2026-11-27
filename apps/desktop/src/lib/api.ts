@@ -1019,7 +1019,23 @@ export interface AppSettings {
   knowledge: { ocr: boolean };
 }
 
+/** What a pass of retention did, or would do. */
+export interface RetentionReport {
+  runs: number;
+  compacted: number;
+  deleted: number;
+  kept_because_referenced: number;
+  events: number;
+  checkpoints: number;
+  tool_calls: number;
+  approvals: number;
+  snapshots: number;
+  bytes: number;
+}
+
 export const appSettings = () => invoke<AppSettings>("app_settings_get");
+export const retentionPreview = (days: number, mode: "compact" | "delete") => invoke<RetentionReport>("retention_preview", { days, mode });
+export const retentionRun = () => invoke<RetentionReport>("retention_run");
 export const appSettingsSet = (settings: AppSettings) => invoke<AppSettings>("app_settings_set", { settings });
 
 export const workflowHost = () => invoke<HostInfo>("workflow_host");

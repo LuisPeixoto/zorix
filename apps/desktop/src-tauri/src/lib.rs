@@ -68,6 +68,8 @@ pub fn run() {
             workforce_commands::worker_report,
             app_settings_commands::app_settings_get,
             app_settings_commands::app_settings_set,
+            app_settings_commands::retention_preview,
+            app_settings_commands::retention_run,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,
