@@ -244,3 +244,61 @@ async fn the_agents_memory_reaches_its_own_prompt_and_nobody_elses() {
     forgetful.agent_memory = false;
     assert!(!seen(prompt_of(Some(&forgetful))).await, "an agent whose memory is off is not");
 }
+
+/// What `history.search` returned for a run, as text.
+async fn history_result(env: &Env, id: ExecutionId) -> String {
+    let detail = env.engine.detail(&TenantId::local(), id).await.unwrap();
+    detail
+        .tool_calls
+        .iter()
+        .find(|c| c.tool == "history.search")
+        .and_then(|c| c.result.clone())
+        .map(|v| v.to_string())
+        .unwrap_or_default()
+}
+
+/// The past work of an agent that has memory of its own is part of that memory (ADR-0026): another agent and a plain run
+/// in the same project must not recall it (finding F1 of the Phase 11 audit).
+#[tokio::test]
+async fn past_work_of_an_agent_with_memory_is_recalled_by_that_agent_only() {
+    let scout = agent("scout", true);
+    let other = agent("other", true);
+    let ask = || Turn::call("history.search", json!({"query": "mauve credentials"}));
+    let env = env(vec![
+        Turn::Say("Rotated the mauve credentials.".into()),
+        ask(),
+        Turn::Say("done".into()),
+        ask(),
+        Turn::Say("done".into()),
+        ask(),
+        Turn::Say("done".into()),
+    ]);
+    let with_history = |prompt: &str, binding: Option<&AgentBinding>| {
+        let mut new = run(prompt, binding);
+        new.grants = new.grants.with(Permission::use_tool("history.search"));
+        new.conversation = None;
+        new
+    };
+
+    let first = start(&env, with_history("Rotate the mauve credentials", Some(&scout))).await;
+    for _ in 0..200 {
+        if env.store.operation(&TenantId::local(), first.id).await.unwrap().is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(env.store.operation(&TenantId::local(), first.id).await.unwrap().is_some(), "the work was recorded");
+
+    let own = start(&env, with_history("What did we do about the mauve credentials?", Some(&scout))).await;
+    let others = start(&env, with_history("What did we do about the mauve credentials?", Some(&other))).await;
+    let plain = start(&env, with_history("What did we do about the mauve credentials?", None)).await;
+    assert!(history_result(&env, own.id).await.contains("Rotated the mauve credentials"), "its own past work is found");
+    assert!(
+        !history_result(&env, others.id).await.contains("Rotated the mauve credentials"),
+        "another agent must not recall it"
+    );
+    assert!(
+        !history_result(&env, plain.id).await.contains("Rotated the mauve credentials"),
+        "a plain run must not recall it"
+    );
+}
