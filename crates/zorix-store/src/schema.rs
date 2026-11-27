@@ -514,6 +514,14 @@ const MIGRATIONS: &[&str] = &[
     "
     DELETE FROM operations;
     ",
+    // 13: the settings that do not belong to one feature's own store (long conversations, retention, telemetry, reading scanned pages):
+    // one record per tenant, written whole. A setting that is missing from a record reads with its default, so adding one needs no migration.
+    "
+    CREATE TABLE app_settings (
+        tenant TEXT PRIMARY KEY,
+        doc TEXT NOT NULL
+    );
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -860,6 +868,28 @@ mod tests {
             "SELECT COUNT(*) FROM executions e LEFT JOIN operations o ON o.execution_id = e.id WHERE e.state = 'completed' AND o.execution_id IS NULL",
         );
         assert_eq!(missing, 1);
+    }
+
+    #[test]
+    fn a_database_of_schema_12_upgrades_to_settings_and_keeps_its_data() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(12) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, created_at, doc) VALUES ('e1','local',NULL,'completed',1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let runs: u32 = conn.query_row("SELECT COUNT(*) FROM executions", [], |r| r.get(0)).unwrap();
+        assert_eq!(runs, 1);
+        // The new table is there and empty, so every setting reads its default.
+        let settings: u32 = conn.query_row("SELECT COUNT(*) FROM app_settings", [], |r| r.get(0)).unwrap();
+        assert_eq!(settings, 0);
+        conn.execute("INSERT INTO app_settings (tenant, doc) VALUES ('local', '{}')", []).unwrap();
     }
 
     #[test]

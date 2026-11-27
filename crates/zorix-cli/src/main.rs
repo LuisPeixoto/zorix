@@ -12,6 +12,7 @@ mod projects;
 mod providers;
 mod render;
 mod serve;
+mod settings;
 mod workflows;
 mod workforce;
 

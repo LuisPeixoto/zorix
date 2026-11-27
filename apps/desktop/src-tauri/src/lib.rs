@@ -1,6 +1,7 @@
 //! Tauri shell: starts the engine and exposes it to the interface as commands. It holds no rules of its own.
 
 mod agent_commands;
+mod app_settings_commands;
 mod commands;
 mod integration_commands;
 mod knowledge_commands;
@@ -65,6 +66,8 @@ pub fn run() {
             workforce_commands::workforce_mark_seen,
             workforce_commands::worker_plan,
             workforce_commands::worker_report,
+            app_settings_commands::app_settings_get,
+            app_settings_commands::app_settings_set,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,

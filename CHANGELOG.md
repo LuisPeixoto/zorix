@@ -5,6 +5,10 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- A place for the program's settings in the database (schema 13), `zorix settings show` and `zorix settings set`, and the commands the desktop app will use: long-conversation summaries, how long runs are kept, a telemetry address and reading scanned pages. All of them are off, or conservative, until a person changes them.
+
 ### Fixed
 
 - Syncing a large folder no longer loads the text of every piece that needs a vector just to count them (it can be hundreds of megabytes), and writing a file no longer counts every piece of the tenant first. Both are measured by `zorix-bench` now.

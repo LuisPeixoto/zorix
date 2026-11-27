@@ -26,6 +26,7 @@ pub mod reason;
 pub mod redact;
 pub mod repository;
 pub mod secret;
+pub mod settings;
 pub mod state;
 pub mod time;
 pub mod tokens;
@@ -96,6 +97,10 @@ pub use repository::{
     ToolCallStatus,
 };
 pub use secret::{REDACTED, Secret};
+pub use settings::{
+    AppSettings, ContextSettings, KnowledgeSettings, MAX_RETENTION_DAYS, MIN_RETENTION_DAYS, RetentionMode,
+    RetentionSettings, SettingsCell, SettingsStore, TelemetrySettings,
+};
 pub use state::{ExecutionState, InvalidTransition, Trigger, transition};
 pub use time::{Clock, ManualClock, SystemClock, Timestamp};
 pub use tokens::{Calibration, InMemoryCalibration, NoCalibration, TokenCalibration, TokenSample};

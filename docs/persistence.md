@@ -100,6 +100,10 @@ A call is delegated at most once (the children's idempotency keys), so a restart
 
 Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuses a schema-8 database. Spend is not stored: it is read from the cost of the runs.
 
+### Settings (schema 13)
+
+`app_settings` holds one record per tenant, written whole: whether long conversations are summarised, how long finished runs are kept and what retention does to them, the address of a telemetry collector, and whether scanned pages are read. A setting missing from a record reads with its default, so adding one needs no migration. Nothing in it is a secret (the headers a collector may need go to the system keychain). Both programs read it through the same store; the desktop app also keeps the current value in memory, so a change takes effect at once. Opening a schema-12 database adds the table, empty; a 0.10 program refuses a schema-13 database.
+
 ### Past work belongs to its agent (schema 11)
 
 `operations` gains an `agent` column: the agent whose memory the record belongs to, set when the run was an agent's with memory of its own and empty otherwise ([memory](memory.md#agent-memory)). Opening a schema-10 database fills it for the records already stored from the run each came from, by the same rule; a 0.10 program refuses a schema-11 database.

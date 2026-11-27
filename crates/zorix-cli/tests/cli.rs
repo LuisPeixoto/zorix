@@ -847,3 +847,30 @@ fn a_program_killed_in_the_middle_of_a_run_leaves_a_whole_database_and_the_next_
     let leases: i64 = conn.query_row("SELECT COUNT(*) FROM leases", [], |r| r.get(0)).unwrap();
     assert_eq!(leases, 0, "no lease is left behind");
 }
+
+#[test]
+fn settings_start_as_the_defaults_change_one_at_a_time_and_refuse_what_makes_no_sense() {
+    let z = Zorix::new();
+    let shown: Value = serde_json::from_slice(&z.run(&["settings", "show", "--json"]).stdout).unwrap();
+    assert_eq!(shown["retention"]["days"], Value::Null, "nothing is deleted until a person says so");
+    assert_eq!(shown["telemetry"]["endpoint"], Value::Null, "nothing is sent until a person says where");
+    assert_eq!(shown["knowledge"]["ocr"], false);
+    assert_eq!(shown["context"]["summaries"], true);
+
+    let set = z.run(&["settings", "set", "retention.days", "90"]);
+    assert_eq!(code(&set), 0, "{}", text(&set.stderr));
+    assert!(text(&set.stderr).contains("retention.days is now 90"), "{}", text(&set.stderr));
+    z.run(&["settings", "set", "retention.mode", "delete"]);
+    let again: Value = serde_json::from_slice(&z.run(&["settings", "show", "--json"]).stdout).unwrap();
+    assert_eq!((again["retention"]["days"].as_u64(), again["retention"]["mode"].as_str()), (Some(90), Some("delete")));
+
+    // What makes no sense is refused with a sentence, and changes nothing.
+    let refused = z.run(&["settings", "set", "retention.days", "0"]);
+    assert_ne!(code(&refused), 0);
+    assert!(text(&refused.stderr).contains("between 1 and 3650 days"), "{}", text(&refused.stderr));
+    let unknown = z.run(&["settings", "set", "retention.hours", "5"]);
+    assert_ne!(code(&unknown), 0);
+    assert!(text(&unknown.stderr).contains("There is no setting"), "{}", text(&unknown.stderr));
+    let kept: Value = serde_json::from_slice(&z.run(&["settings", "show", "--json"]).stdout).unwrap();
+    assert_eq!(kept["retention"]["days"], 90);
+}
