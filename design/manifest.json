@@ -104,7 +104,13 @@
     "fonts/JetBrainsMonoVariable-latin-ext.woff2",
     "fonts/JetBrainsMonoVariable-latin.woff2",
     "surfaces.md",
-    "tokens.css"
+    "tokens.css",
+    "components/ScreenSettingsGeneral/README.md",
+    "components/ScreenSettingsGeneral/preview.html",
+    "components/ScreenDocuments/README.md",
+    "components/ScreenDocuments/preview.html",
+    "components/ScreenNewRunAttachments/README.md",
+    "components/ScreenNewRunAttachments/preview.html"
   ],
   "libraries": [],
   "components": [
@@ -536,6 +542,24 @@
       "name": "WorkflowNode",
       "group": "Workflows",
       "summary": "One step of a workflow."
+    },
+    {
+      "name": "ScreenSettingsGeneral",
+      "group": "Screens",
+      "summary": "The General tab of Settings: where the data lives, whether long conversations are summarised, how long finished runs are kept and what happens to an old one, and the address of a telemetry collector.",
+      "page": true
+    },
+    {
+      "name": "ScreenDocuments",
+      "group": "Screens",
+      "summary": "Documents: each folder shows whether it is watched for changes, how many files were read by OCR and how many scans were not, and a Reading scans card turns OCR on.",
+      "page": true
+    },
+    {
+      "name": "ScreenNewRunAttachments",
+      "group": "Screens",
+      "summary": "New run with documents attached: @ opens a picker of indexed documents and workspace files, attached files are chips with their size, and the summary shows the files and the expected cost.",
+      "page": true
     }
   ],
   "assetGroups": [
