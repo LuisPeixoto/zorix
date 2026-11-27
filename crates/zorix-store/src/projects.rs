@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::errors::storage;
+use crate::errors::{encode_redacted, storage};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::{Connection as Db, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -171,7 +171,7 @@ fn insert_events(
                 i64::try_from(seq).map_err(storage)?,
                 draft.task.as_ref().map(ToString::to_string),
                 draft.at.millis(),
-                encode(&event)?
+                encode_redacted(&event)?
             ],
         )
         .map_err(storage)?;

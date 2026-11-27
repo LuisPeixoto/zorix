@@ -122,8 +122,10 @@ real accounts come later.
 
 This phase stores none. Events, logs and traces never include prompts or tool arguments in spans, and event payloads
 pass through a redaction filter: values under keys such as `api_key`, `password`, `secret`, `authorization`, `cookie`
-or a key named `token` are replaced, and words that look like credentials (`sk-…`, `ghp_…`, JWTs, `Bearer …`) are replaced
-inside text. Counts of tokens (`input_tokens`) are not secrets and stay readable. Redaction is best effort; see
+or a key named `token` are replaced, and inside text these are replaced too: words that look like credentials (`sk-…`, `ghp_…`,
+Google `AIza…`, Stripe `sk_live_…`, GitLab `glpat-…`, JWTs, `Bearer …`), the value of a pair such as `password=…`,
+`"client_secret": "…"` or `Authorization: Basic …`, and whole PEM private key blocks. The history of a project and of the organisation and
+the reports of a manager are redacted this way before they are stored. Counts of tokens (`input_tokens`) are not secrets and stay readable. Redaction is best effort; see
 [SECURITY.md](../SECURITY.md).
 
 The arguments of a call are stored as they are in the tool call record, because the tool must receive them.

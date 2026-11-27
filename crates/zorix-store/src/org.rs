@@ -4,7 +4,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::errors::storage;
+use crate::errors::{encode_redacted, storage};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::{Connection as Db, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -114,7 +114,7 @@ fn insert_events(tx: &Transaction<'_>, tenant: &TenantId, drafts: &[OrgEventDraf
                 i64::try_from(seq).map_err(storage)?,
                 draft.worker.as_ref().map(|w| w.as_str().to_string()),
                 draft.at.millis(),
-                encode(&event)?
+                encode_redacted(&event)?
             ],
         )
         .map_err(storage)?;
@@ -255,7 +255,7 @@ impl OrgStore for SqliteOrgStore {
                     report.worker.as_str(),
                     status_text(report.status),
                     report.started_at.millis(),
-                    encode(report)?
+                    encode_redacted(report)?
                 ],
             )
             .map_err(storage)?;
@@ -269,7 +269,12 @@ impl OrgStore for SqliteOrgStore {
             let changed = tx
                 .execute(
                     "UPDATE org_reports SET status = ?1, doc = ?2 WHERE id = ?3 AND tenant = ?4",
-                    params![status_text(report.status), encode(report)?, report.id.to_string(), tenant.as_str()],
+                    params![
+                        status_text(report.status),
+                        encode_redacted(report)?,
+                        report.id.to_string(),
+                        tenant.as_str()
+                    ],
                 )
                 .map_err(storage)?;
             if changed == 0 {

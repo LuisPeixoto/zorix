@@ -56,7 +56,7 @@ These notes grow with each feature that handles data, files, network or permissi
 - **Bounded everything.** Iterations, tool calls, tokens, cost, working time, model and tool time, tool output size,
   context size, note count and size, file sizes, calculator length and depth all have limits, listed in the docs.
 - **Secrets stay out.** Event payloads pass through a redaction filter (secret-looking keys, and words that look like
-  API keys, GitHub tokens, AWS keys, JWTs and `Bearer` tokens). Trace spans and logs carry identifiers and names only,
+  API keys, GitHub, GitLab, Google, Stripe and AWS keys, JWTs and `Bearer` tokens, `password=…` pairs and PEM private keys). Trace spans and logs carry identifiers and names only,
   never prompts, arguments or results, and a test fails if they do. Redaction is **best effort**: a secret in free text
   with no recognisable shape can slip through, so do not paste secrets into prompts. The arguments of a call are kept
   as they are in the local database, because the tool must receive them.

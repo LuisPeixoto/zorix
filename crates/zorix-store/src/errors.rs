@@ -17,6 +17,14 @@ pub(crate) fn storage(error: impl std::fmt::Display) -> Error {
     Error::Storage(text)
 }
 
+/// A record as stored text, with the credentials in it replaced: values under keys that name a secret, and words that look like
+/// one. For the records whose text a model or a tool wrote (a report, a history line), which are shown and recalled later and need
+/// no secret to be useful.
+pub(crate) fn encode_redacted<T: serde::Serialize>(value: &T) -> Result<String, Error> {
+    let value = serde_json::to_value(value).map_err(storage)?;
+    serde_json::to_string(&zorix_core::redact(value)).map_err(storage)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -225,3 +225,29 @@ async fn writers_on_separate_connections_wait_for_each_other_instead_of_failing(
     sorted.dedup();
     assert_eq!(sorted.len(), 17, "no number was given twice");
 }
+
+/// A task's history holds comments and failure reasons that a model or a tool wrote; a credential in them is replaced before it is
+/// stored (finding F3 of the Phase 11 audit).
+#[tokio::test]
+async fn a_credential_in_a_history_line_is_replaced_before_it_is_stored() {
+    const LEAK: &str = "sk-abcdefghijklmnopqrstuvwxyz0123456789";
+    let store = SqliteProjectStore::open_in_memory().unwrap();
+    let me = tenant("local");
+    let p = project(&store, &me, "OPS").await;
+    let a = task(&store, &me, &p, "A").await;
+    let line = |kind| ProjectEventDraft { task: Some(a.key.clone()), by: None, kind, at: Timestamp(2_000) };
+    store
+        .add_events(
+            &me,
+            p.id,
+            &[
+                line(ProjectEventKind::Comment { text: format!("use {LEAK} for the call") }),
+                line(ProjectEventKind::StartFailed { reason: format!("the key {LEAK} was refused") }),
+            ],
+        )
+        .await
+        .unwrap();
+    let history = serde_json::to_string(&store.events(&me, p.id, None, 50).await.unwrap()).unwrap();
+    assert!(!history.contains(LEAK), "{history}");
+    assert!(history.contains("for the call") && history.contains("was refused"), "what is not secret stays: {history}");
+}

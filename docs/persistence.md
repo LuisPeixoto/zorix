@@ -104,6 +104,10 @@ Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuse
 
 `operations` gains an `agent` column: the agent whose memory the record belongs to, set when the run was an agent's with memory of its own and empty otherwise ([memory](memory.md#agent-memory)). Opening a schema-10 database fills it for the records already stored from the run each came from, by the same rule; a 0.10 program refuses a schema-11 database.
 
+### Past work is written again (schema 12)
+
+Opening a schema-11 database empties `operations`; the program writes a record again for every finished run when it starts, so the records made before 0.11, which kept argument values that redaction now replaces, are made with the current rules. Nothing else is touched, and a record is made from its run, so none is lost; a run that was deleted had no record to write. A 0.10 program refuses a schema-12 database.
+
 ### List indexes (schema 10)
 
 The run list is shown newest first, and each filter now has an index that ends in that order: the agent's, the conversation's and the state's, each with the tie-break, so a filter reads only the rows it shows instead of reading and sorting every match. Opening a
