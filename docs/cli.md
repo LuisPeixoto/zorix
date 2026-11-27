@@ -128,6 +128,11 @@ These take the data-folder lock only for `eval run`; the rest work while the des
 `files <FOLDER> [--failed]`, `remove <FOLDER>` and `search <QUERY>`. A folder is named by its path or the start of its id. Ctrl-C during a sync
 stops it between files and exits with code 4; what was done stays indexed. See [knowledge](knowledge.md).
 
+### `zorix run --estimate`
+
+Say what the run would probably cost and how long it would take, without starting it: the median of your last similar runs (same agent and model), or a rough guess when there are fewer than three.
+`--json` prints the numbers. It needs no lock, so it works while the app is open. `--max-cost USD` limits what a run may spend (a model with no known price cannot keep it, and the run is refused).
+
 ### `zorix embeddings …`
 
 `show`, `models`, `set <PROVIDER/MODEL> [--dims N] [--cloud]`, `off`, `test` and `reembed`. A cloud provider needs `--cloud`: your text is sent to it.
