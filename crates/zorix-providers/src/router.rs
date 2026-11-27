@@ -413,8 +413,9 @@ impl ModelGateway for Router {
             .candidates
             .iter()
             .filter_map(|c| {
+                let local = self.providers.get(&c.provider).is_some_and(|entry| entry.local);
                 self.model_info(&c.provider, &c.model)
-                    .map(|i| i.profile())
+                    .map(|i| ModelProfile { priced: i.profile().priced || local, ..i.profile() })
                     .or_else(|| self.providers.get(&c.provider)?.gateway.describe(&c.model))
             })
             .collect();
@@ -425,6 +426,7 @@ impl ModelGateway for Router {
             max_output: profiles.iter().map(|p| p.max_output).min().unwrap_or(0),
             tools: profiles.iter().all(|p| p.tools),
             vision: profiles.iter().all(|p| p.vision),
+            priced: profiles.iter().all(|p| p.priced),
         })
     }
 }

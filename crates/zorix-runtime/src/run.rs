@@ -13,9 +13,9 @@ use tracing::Instrument;
 use zorix_core::{
     Approval, ApprovalId, ApprovalStatus, Checkpoint, Commit, DelegateRequest, Error, EventKind, Execution,
     ExecutionEngine, ExecutionId, ExecutionResult, ExecutionState, ExecutionView, Failure, FailureKind, FinishReason,
-    LoopState, Message, ModelError, ModelRequest, ModelResponse, NewEvent, Permission, PolicyDecision, PolicyRequest,
-    Role, StepPhase, Timestamp, TokenSample, Tool, ToolCallId, ToolCallRecord, ToolCallRequest, ToolCallStatus,
-    ToolContext, ToolSpec, Trigger, Validation, call_hash, child_key,
+    LimitKind, LoopState, Message, ModelError, ModelRequest, ModelResponse, NewEvent, Permission, PolicyDecision,
+    PolicyRequest, Role, StepPhase, Timestamp, TokenSample, Tool, ToolCallId, ToolCallRecord, ToolCallRequest,
+    ToolCallStatus, ToolContext, ToolSpec, Trigger, Validation, call_hash, child_key,
 };
 use zorix_core::{MAX_DEPTH, MAX_DESCENDANTS, PlanContext};
 
@@ -358,6 +358,18 @@ impl Run {
         self.exec.iteration += 1;
         if let Some(failure) = self.engine.inner.policy.check_limits(&self.exec) {
             return Err(self.fail(failure).await);
+        }
+        // A cost limit counts what each call costs, and a model with no known price costs "zero" every time: the limit would never
+        // trip. Say so before anything is sent (audit finding F11). A model that is not described is not refused: nothing says it is unpriced.
+        if self.exec.limits.max_cost_micros.is_some()
+            && let Some(profile) = self.engine.inner.model.describe(&self.exec.request.model)
+            && !profile.priced
+        {
+            let message = format!(
+                "A cost limit is set, but the price of {} is not known, so the limit could not be kept and nothing was sent. Add the model's price to the provider configuration (providers.toml), or run without a cost limit.",
+                self.exec.request.model
+            );
+            return Err(self.fail(Failure::limit(LimitKind::Cost, message)).await);
         }
         self.pin_tools();
         let tools = self.offered_tools();
