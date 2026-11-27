@@ -90,4 +90,5 @@ If the model is unavailable when a run starts, the run goes on with keyword sear
 
 - The data folder is locked by one program at a time, so `zorix knowledge sync` fails while the desktop app is open.
 - Moving or renaming an indexed folder: remove it and add it again.
-- Deleting a folder from the index deletes its pieces, search entries and vectors, and scrubs them from the saved context of past runs.
+- Deleting a folder from the index deletes its pieces, search entries and vectors, and scrubs them from the saved context of past runs. So does
+  indexing a changed file again: its old pieces leave the saved context of past runs, so no old version of a file outlives its folder.
