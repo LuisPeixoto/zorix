@@ -709,6 +709,9 @@ pub trait MemoryStore: Send + Sync {
     async fn document_states(&self, root: KnowledgeRootId) -> Result<HashMap<String, DocState>>;
     /// Write one file: its row and its chunks, replacing what was there.
     async fn write_document(&self, write: DocumentWrite) -> Result<()>;
+    /// Remember a new size and modification time for a file whose content is the same, so the next sync can skip it without reading it.
+    /// Its pieces are untouched.
+    async fn touch_document(&self, root: KnowledgeRootId, rel_path: &str, size: u64, mtime_ns: i64) -> Result<()>;
     /// Forget files that are gone.
     async fn remove_documents(&self, root: KnowledgeRootId, rel_paths: &[String]) -> Result<()>;
     /// Files of a folder that failed or were skipped, with the reason.

@@ -982,6 +982,19 @@ impl MemoryStore for SqliteMemoryStore {
         .await
     }
 
+    async fn touch_document(&self, root: KnowledgeRootId, rel_path: &str, size: u64, mtime_ns: i64) -> Result<()> {
+        let rel_path = rel_path.to_string();
+        self.run(move |conn| {
+            conn.execute(
+                "UPDATE knowledge_documents SET size = ?3, mtime_ns = ?4 WHERE root_id = ?1 AND rel_path = ?2",
+                params![root.to_string(), rel_path, size as i64, mtime_ns],
+            )
+            .map_err(storage)?;
+            Ok(())
+        })
+        .await
+    }
+
     async fn document_states(&self, root: KnowledgeRootId) -> Result<HashMap<String, DocState>> {
         self.run(move |conn| {
             let mut stmt = conn

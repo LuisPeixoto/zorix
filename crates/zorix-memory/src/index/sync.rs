@@ -197,6 +197,16 @@ impl Indexer {
                     }
                     Ok(bytes) => {
                         let hash = bytes_hash(&bytes);
+                        // The time or the size changed but the bytes did not (a copy, a checkout, a touch): nothing to cut again.
+                        // Only a file that was indexed counts; one that failed or was skipped is tried again, in case that is fixed.
+                        let same = known
+                            .get(&file.rel_path)
+                            .is_some_and(|k| k.status == DocStatus::Indexed && k.content_hash == hash);
+                        if same {
+                            self.store.touch_document(root.id, &file.rel_path, file.size, file.mtime_ns).await?;
+                            report.unchanged += 1;
+                            continue;
+                        }
                         let extracted = tokio::task::spawn_blocking(move || extract(kind, &bytes))
                             .await
                             .map_err(|e| zorix_core::Error::Internal(e.to_string()))?;
