@@ -155,3 +155,36 @@ async fn tenants_never_see_each_others_workers_or_history() {
     // The same agent may be a worker in another tenant.
     assert!(store.put_worker(&b, &worker(&b, "atlas"), None, &[]).await.unwrap());
 }
+
+const LEAK: &str = "sk-abcdefghijklmnopqrstuvwxyz0123456789";
+
+/// The history and the reports of the organisation hold text a model wrote; a credential in it is replaced before it is stored
+/// (finding F3 of the Phase 11 audit).
+#[tokio::test]
+async fn a_credential_in_an_event_or_a_report_is_replaced_before_it_is_stored() {
+    let store = SqliteOrgStore::open_in_memory().unwrap();
+    let me = tenant("local");
+    let leaked = event(OrgEventKind::ReportFailed, "atlas", &format!("it failed with key {LEAK} in the url"), 1_000);
+    store.put_worker(&me, &worker(&me, "atlas"), None, &[leaked]).await.unwrap();
+    let text = store.events(&me, None, 10).await.unwrap().remove(0).text;
+    assert!(!text.contains(LEAK) && text.contains("it failed with key"), "{text}");
+
+    let report = OrgReport {
+        id: OrgReportId::new(),
+        tenant: me.clone(),
+        worker: slug("atlas"),
+        kind: ReportKind::Report,
+        week: Date::new("2026-11-16").unwrap(),
+        run: ExecutionId::new(),
+        status: ReportStatus::Done,
+        body: format!("Used {LEAK} to read the board."),
+        error: Some(format!("retry with {LEAK}")),
+        by: "you".into(),
+        started_at: Timestamp(1_000),
+        finished_at: Some(Timestamp(2_000)),
+    };
+    store.add_report(&me, &report).await.unwrap();
+    let kept = store.report(&me, report.id).await.unwrap().unwrap();
+    assert!(!kept.body.contains(LEAK) && kept.body.contains("to read the board"), "{}", kept.body);
+    assert!(!kept.error.unwrap_or_default().contains(LEAK));
+}
