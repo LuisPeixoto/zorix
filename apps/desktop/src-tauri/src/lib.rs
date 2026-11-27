@@ -18,9 +18,7 @@ use tauri::{Manager, RunEvent};
 use crate::state::AppState;
 
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_env("ZORIX_LOG").unwrap_or_else(|_| "info".into()))
-        .init();
+    zorix_hub::telemetry::init_tracing("info", false);
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -68,6 +66,7 @@ pub fn run() {
             workforce_commands::worker_report,
             app_settings_commands::app_settings_get,
             app_settings_commands::app_settings_set,
+            app_settings_commands::telemetry_set_header,
             app_settings_commands::retention_preview,
             app_settings_commands::retention_run,
             app_settings_commands::estimate_run,
