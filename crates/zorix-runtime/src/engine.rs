@@ -88,6 +88,8 @@ pub(crate) struct Inner {
     pub planner: Option<Arc<dyn DelegationPlanner>>,
     pub config: EngineConfig,
     pub runs: Mutex<HashMap<ExecutionId, Arc<RunControl>>>,
+    /// The executions a worker of this engine is driving right now: a second worker that picks one up waits for the first to finish.
+    pub driving: Mutex<std::collections::HashSet<ExecutionId>>,
     pub shutdown: CancellationToken,
     pub workers: Mutex<Vec<JoinHandle<()>>>,
     pub owner: String,
@@ -210,6 +212,7 @@ impl EngineBuilder {
             owner: format!("engine-{}", ExecutionId::new()),
             config: self.config,
             runs: Mutex::new(HashMap::new()),
+            driving: Mutex::new(std::collections::HashSet::new()),
             shutdown: CancellationToken::new(),
             workers: Mutex::new(Vec::new()),
         });
@@ -739,9 +742,14 @@ impl ExecutionEngine for Engine {
                         continue;
                     }
                     let outcome = self.take_over(execution.state, id).await;
+                    // Let go before the run is queued: the worker that picks it up holds this same lease (the owner is the engine), and
+                    // releasing after it started would delete the lease under it.
                     repository.release_lease(id, owner).await?;
                     match outcome? {
-                        TakeOver::Requeued => report.requeued.push(id),
+                        TakeOver::Requeued => {
+                            self.inner.scheduler.enqueue(id).await?;
+                            report.requeued.push(id);
+                        }
                         TakeOver::NeedsDecision => report.needs_decision.push(id),
                     }
                 }
@@ -820,11 +828,12 @@ impl Engine {
                 return Ok(TakeOver::NeedsDecision);
             }
         }
-        self.requeue(id).await?;
+        self.mark_recovered(id).await?;
         Ok(TakeOver::Requeued)
     }
 
-    async fn requeue(&self, id: ExecutionId) -> Result<()> {
+    /// Move the execution back to `Queued` with the events that say so. The caller queues it for a worker once it has let go of the lease.
+    async fn mark_recovered(&self, id: ExecutionId) -> Result<()> {
         self.update(id, |execution, now| {
             execution.apply(Trigger::Recover, now)?;
             Ok(Change::events(vec![
@@ -833,7 +842,7 @@ impl Engine {
             ]))
         })
         .await?;
-        self.inner.scheduler.enqueue(id).await
+        Ok(())
     }
 
     /// A non-repeatable tool call was running when the process stopped. A person decides whether to run it again.

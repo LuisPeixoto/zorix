@@ -89,8 +89,24 @@ pub(crate) struct Run {
 }
 
 impl Engine {
-    /// Work on one queued execution until it finishes, fails, is cancelled, pauses or needs a person.
+    /// Work on one queued execution until it finishes, fails, is cancelled, pauses or needs a person. One worker at a time: a run that has
+    /// just stopped for a person and is answered at once can be picked up while the worker that stopped it is still cleaning up, and the
+    /// clean-up releases the lease and forgets the run's control, which the new worker would then be missing.
     pub(crate) async fn drive(&self, id: ExecutionId) {
+        if !self.inner.driving.lock().insert(id) {
+            return self.try_again_later(id);
+        }
+        struct Done<'a>(&'a Engine, ExecutionId);
+        impl Drop for Done<'_> {
+            fn drop(&mut self) {
+                self.0.inner.driving.lock().remove(&self.1);
+            }
+        }
+        let _done = Done(self, id);
+        self.drive_alone(id).await;
+    }
+
+    async fn drive_alone(&self, id: ExecutionId) {
         let inner = &self.inner;
         match inner.repository.acquire_lease(id, &inner.owner, self.now(), inner.config.lease_ttl_ms).await {
             Ok(true) => {}
@@ -1118,5 +1134,40 @@ impl Run {
             &[Trigger::StepFinished]
         };
         self.commit(triggers, vec![event], extras).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use zorix_core::{ExecutionEngine, ExecutionState, NewExecution, TaskRequest, TenantId};
+    use zorix_sim::{ScriptedModel, Turn};
+
+    use crate::{Engine, EngineConfig, MemoryRepository};
+
+    /// An execution that two workers pick up at once (a run that has just stopped for a person and is answered at once is the usual way):
+    /// the one that finishes its clean-up must not release the lease the other holds, or the other's next commit is refused as coming
+    /// from an engine without the lease and the run is left unfinished.
+    #[tokio::test]
+    async fn two_drives_of_one_execution_do_not_take_each_others_lease() {
+        let model = Arc::new(ScriptedModel::new([Turn::Delay { ms: 150, then: Box::new(Turn::Say("done".into())) }]));
+        let engine = Engine::builder(Arc::new(MemoryRepository::new()), model.clone())
+            .config(EngineConfig { workers: 2, lease_ttl_ms: 1_000, ..EngineConfig::default() })
+            .build();
+        let new = NewExecution {
+            request: TaskRequest { prompt: "go".into(), model: "sim".into(), ..TaskRequest::default() },
+            ..NewExecution::default()
+        };
+        let started = engine.submit(new).await.unwrap();
+        // The engine's own worker drives it too; two more drives by hand overlap with it and with each other.
+        tokio::join!(engine.drive(started.id), engine.drive(started.id));
+        let done = tokio::time::timeout(Duration::from_secs(10), engine.settle(&TenantId::local(), started.id))
+            .await
+            .expect("the execution settles")
+            .unwrap();
+        assert_eq!(done.state, ExecutionState::Completed, "{:?}", done.failure);
+        assert_eq!(model.requests().len(), 1, "the model was called once, not once per drive");
     }
 }
