@@ -508,6 +508,12 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX operations_by_agent ON operations (tenant, agent) WHERE agent IS NOT NULL;
     ",
+    // 12: past work is written again. A record is made from its run, so nothing is lost: both programs write the ones that are missing
+    // when they start. The records made before 0.11 kept tool arguments under key names such as `password` and credential shapes that
+    // redaction did not know (audit findings F2 and F3), and only a new record is made with the new rules.
+    "
+    DELETE FROM operations;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -779,7 +785,7 @@ mod tests {
 
     #[test]
     fn a_database_of_schema_10_upgrades_to_past_work_that_belongs_to_its_agent() {
-        let mut conn = Connection::open_in_memory().unwrap();
+        let conn = Connection::open_in_memory().unwrap();
         for (index, sql) in MIGRATIONS.iter().enumerate().take(10) {
             conn.execute_batch(sql).unwrap();
             conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
@@ -803,8 +809,10 @@ mod tests {
             )
             .unwrap();
         }
-        migrate(&mut conn).unwrap();
-        assert_eq!(version(&conn), LATEST);
+        // Only migration 11 is applied: the next one forgets these records, and this test is about what 11 did to them.
+        conn.execute_batch(MIGRATIONS[10]).unwrap();
+        conn.pragma_update(None, "user_version", 11).unwrap();
+        assert_eq!(version(&conn), 11);
         let agent_of = |id: &str| -> Option<String> {
             conn.query_row("SELECT agent FROM operations WHERE execution_id = ?1", [id], |r| r.get(0)).unwrap()
         };
@@ -814,6 +822,44 @@ mod tests {
         assert_eq!(agent_of("gone"), None);
         let kept: u32 = conn.query_row("SELECT COUNT(*) FROM operations", [], |r| r.get(0)).unwrap();
         assert_eq!(kept, 4);
+    }
+
+    #[test]
+    fn a_database_of_schema_11_forgets_its_past_work_so_it_is_written_again_with_the_current_rules() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(11) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO executions (id, tenant, conversation, state, version, created_at, doc) VALUES ('e1','local',NULL,'completed',1,1,'{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO operations (execution_id, tenant, project, conversation, state, finished_at, text, text_hash, doc) VALUES ('e1','local',NULL,NULL,'completed',1,'rotated the hunter2 key','h','{}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let count = |sql: &str| -> u32 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(count("SELECT COUNT(*) FROM operations"), 0, "the old record is gone, to be written again");
+        assert_eq!(
+            count("SELECT COUNT(*) FROM operations_fts WHERE operations_fts MATCH 'hunter2'"),
+            0,
+            "and so is its text in the index"
+        );
+        assert_eq!(
+            count("SELECT COUNT(*) FROM executions"),
+            1,
+            "the run it came from is untouched, so it can be written again"
+        );
+        // The program writes the records that are missing, so this one is found again.
+        let missing: u32 = count(
+            "SELECT COUNT(*) FROM executions e LEFT JOIN operations o ON o.execution_id = e.id WHERE e.state = 'completed' AND o.execution_id IS NULL",
+        );
+        assert_eq!(missing, 1);
     }
 
     #[test]
