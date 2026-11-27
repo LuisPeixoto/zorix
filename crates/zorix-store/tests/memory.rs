@@ -567,6 +567,50 @@ async fn removing_a_folder_removes_its_index_but_nothing_else() {
     assert!(f.store.document_states(drop).await.unwrap().is_empty());
 }
 
+/// The vector search over documents honours the scope of the folder like the text search does: a run in one project never gets the
+/// documents of another project, nor those that belong to an agent that is not its own (finding F12 of the Phase 11 audit).
+#[tokio::test]
+async fn the_vector_search_over_documents_keeps_projects_and_agents_apart() {
+    let f = fixture();
+    let (mine, theirs) = (zorix_core::AgentId::new(), zorix_core::AgentId::new());
+    let roots = [
+        ("global", Scope::Global, "The deploy guide everyone may read.", [1.0, 0.0, 0.0]),
+        ("one", Scope::Project("/work/one".into()), "The deploy notes of project one.", [0.9, 0.1, 0.0]),
+        ("two", Scope::Project("/work/two".into()), "The deploy notes of project two.", [0.8, 0.2, 0.0]),
+        ("mine", Scope::Agent(mine), "The deploy notes of my agent.", [0.7, 0.3, 0.0]),
+        ("theirs", Scope::Agent(theirs), "The deploy notes of another agent.", [0.6, 0.4, 0.0]),
+    ];
+    let mut by_text = std::collections::HashMap::new();
+    for (name, scope, text, vector) in roots {
+        let root = add_root(&f.store, "a", scope, &format!("/docs/{name}")).await;
+        f.store.write_document(doc(root, "deploy.md", vec![chunk(text, 1)])).await.unwrap();
+        f.store.put_vectors("m", vec![(text_hash(text), unit(&vector))]).await.unwrap();
+        by_text.insert(text, name);
+    }
+    let search = |visibility: Visibility| {
+        let store = f.store.clone();
+        let by_text = by_text.clone();
+        async move {
+            let hits =
+                store.vector_search(&visibility, Corpus::Knowledge, "m", &unit(&[1.0, 0.0, 0.0]), 10).await.unwrap();
+            let ids: Vec<i64> = hits.iter().map(|h| h.id.parse().unwrap()).collect();
+            let chunks = store.chunks(&visibility.tenant, &ids).await.unwrap();
+            let mut names: Vec<&str> = chunks.iter().map(|c| by_text[c.text.as_str()]).collect();
+            names.sort_unstable();
+            names
+        }
+    };
+    let project_one = Visibility { project: Some("/work/one".into()), agent: Some(mine), ..vis("a") };
+    assert_eq!(search(project_one).await, ["global", "mine", "one"], "its project, its agent, and what is global");
+    assert_eq!(search(vis("a")).await, ["global"], "a run with no project and no agent sees only what is global");
+    let project_two = Visibility { project: Some("/work/two".into()), ..vis("a") };
+    assert_eq!(search(project_two).await, ["global", "two"]);
+    assert!(
+        f.store.vector_search(&vis("b"), Corpus::Knowledge, "m", &unit(&[1.0, 0.0, 0.0]), 10).await.unwrap().is_empty(),
+        "another tenant finds nothing"
+    );
+}
+
 /// Writing a file again replaces its pieces, and the old ones must leave the frozen recall of past runs like a removed file's do:
 /// otherwise removing the folder later would still leave an old version of its text in them (finding F5 of the Phase 11 audit).
 #[tokio::test]
