@@ -432,6 +432,8 @@ impl ModelGateway for OllamaGateway {
             max_output: info.max_output.min(self.num_ctx(model) / 2),
             tools: info.tools,
             vision: info.vision,
+            // It runs on a computer of the user's: there is nothing to pay.
+            priced: true,
         })
     }
 }

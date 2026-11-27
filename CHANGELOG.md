@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org).
 
 ### Fixed
 
+- A cost limit (a run's, or a worker's weekly budget) never tripped on a model with no known price, because every call counted as zero. The run is now refused before anything is sent, with the way out; models on this computer, which cost nothing, are not affected.
+
 - A document folder's sync cut a file into pieces again whenever its modification time changed, even when its content was the same (a copy, a checkout, a touch). The content hash is compared now, so such a file keeps its pieces and the next sync skips it without reading it.
 
 - The 60-second limit of a model call counted the whole answer, so a long answer that was still arriving was cut and paid for again. It is now the time **without progress**: an answer that keeps arriving is never cut, one that goes quiet is, and a call ends after ten minutes whatever it does ([runtime](docs/runtime.md#limits)).

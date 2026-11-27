@@ -284,6 +284,14 @@ pub struct ModelProfile {
     pub tools: bool,
     /// It can read images.
     pub vision: bool,
+    /// What a call costs is known: the model has a price, or it runs on this computer and costs nothing. A cost limit cannot be kept
+    /// on a model that is not priced, because every call would count as zero.
+    #[serde(default = "priced_by_default")]
+    pub priced: bool,
+}
+
+fn priced_by_default() -> bool {
+    true
 }
 
 /// Where the text of an answer goes while it is still being written. Nothing sent here is stored: the finished

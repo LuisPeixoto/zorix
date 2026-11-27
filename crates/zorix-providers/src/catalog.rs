@@ -99,6 +99,8 @@ impl ModelInfo {
             max_output: self.max_output,
             tools: self.tools,
             vision: self.vision,
+            // A model that runs here is free whatever the catalogue says; the router knows where a model runs and says so.
+            priced: self.price.is_some(),
         }
     }
 
