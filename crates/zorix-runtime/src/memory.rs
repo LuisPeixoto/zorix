@@ -90,6 +90,11 @@ impl ExecutionRepository for MemoryRepository {
         if current.version != commit.expected_version {
             return Err(Error::Conflict(id));
         }
+        if let Some(owner) = &commit.lease_owner
+            && inner.leases.get(&id).map(|(holder, _)| holder.as_str()) != Some(owner.as_str())
+        {
+            return Err(Error::Conflict(id));
+        }
         let mut stored = commit.execution;
         stored.version = commit.expected_version + 1;
         inner.executions.insert(id, stored.clone());

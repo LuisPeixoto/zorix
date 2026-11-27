@@ -100,9 +100,10 @@ impl Engine {
             cancel: inner.shutdown.child_token(),
             reason: parking_lot::Mutex::new(None),
             pause: std::sync::atomic::AtomicBool::new(false),
+            lost: std::sync::atomic::AtomicBool::new(false),
         });
         inner.runs.lock().insert(id, control.clone());
-        let heartbeat = self.heartbeat(id);
+        let heartbeat = self.heartbeat(id, control.clone());
 
         // Span names and attributes follow the OpenTelemetry GenAI conventions, so an OTLP exporter can be added later
         // without changing the runtime. Nothing a person or a model wrote (prompts, arguments, results) goes in them.
@@ -141,12 +142,20 @@ impl Engine {
         });
     }
 
-    /// Keep the lease alive while a long model or tool call runs.
-    fn heartbeat(&self, id: ExecutionId) -> CancellationToken {
+    /// Keep the lease alive while a long model or tool call runs. When it cannot be kept (another engine holds it, or the store has not
+    /// answered for a whole lease) the run is told to stop and to write nothing more: the other engine may be driving the same run.
+    fn heartbeat(&self, id: ExecutionId, control: Arc<RunControl>) -> CancellationToken {
         let stop = CancellationToken::new();
         let (engine, token) = (self.clone(), stop.clone());
         tokio::spawn(async move {
-            let every = Duration::from_millis((engine.inner.config.lease_ttl_ms / 3).max(50));
+            let ttl = engine.inner.config.lease_ttl_ms;
+            let every = Duration::from_millis((ttl / 3).max(50));
+            let mut renewed_at = engine.now();
+            let lose = |why: &str| {
+                tracing::warn!(execution = %id, why, "the lease was lost; the run stops");
+                control.lost.store(true, Ordering::SeqCst);
+                control.cancel.cancel();
+            };
             loop {
                 tokio::select! {
                     _ = token.cancelled() => return,
@@ -159,8 +168,16 @@ impl Engine {
                     .repository
                     .acquire_lease(id, &engine.inner.owner, engine.now(), engine.inner.config.lease_ttl_ms)
                     .await;
-                if !matches!(renewed, Ok(true)) {
-                    tracing::warn!(execution = %id, "could not renew the lease");
+                match renewed {
+                    Ok(true) => renewed_at = engine.now(),
+                    Ok(false) => return lose("another engine holds it"),
+                    Err(error) => {
+                        tracing::warn!(execution = %id, %error, "could not renew the lease");
+                        // Not renewed for a whole lease: another engine may have taken it, and this one cannot tell.
+                        if engine.now().since(renewed_at) >= ttl {
+                            return lose("it could not be renewed for a whole lease");
+                        }
+                    }
                 }
             }
         });
@@ -198,6 +215,7 @@ impl Run {
         commit.events = events;
         commit.tool_calls = extras.tool_calls;
         commit.approvals = extras.approvals;
+        commit.lease_owner = Some(self.engine.inner.owner.clone());
         if extras.checkpoint {
             self.step += 1;
             commit.checkpoint = Some(Checkpoint {
@@ -278,6 +296,10 @@ impl Run {
     async fn finish_cancelled(&mut self) -> Stop {
         if self.engine.inner.shutdown.is_cancelled() {
             return Stop::Shutdown;
+        }
+        // Not a cancellation by a person: the lease went to another engine, which carries on. Nothing is written.
+        if self.control.lost.load(Ordering::SeqCst) {
+            return Stop::Abandoned;
         }
         let reason = self.control.reason.lock().clone();
         self.exec.cancel_reason = reason.clone();

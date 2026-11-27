@@ -221,6 +221,17 @@ impl ExecutionRepository for SqliteRepository {
                 Some(version) if version as u64 != commit.expected_version => return Err(Error::Conflict(id)),
                 Some(_) => {}
             }
+            if let Some(owner) = &commit.lease_owner {
+                let holder: Option<String> = tx
+                    .query_row("SELECT owner FROM leases WHERE execution_id = ?1", params![id.to_string()], |row| {
+                        row.get(0)
+                    })
+                    .optional()
+                    .map_err(storage)?;
+                if holder.as_deref() != Some(owner.as_str()) {
+                    return Err(Error::Conflict(id));
+                }
+            }
             let mut stored = commit.execution;
             stored.version = commit.expected_version + 1;
             tx.execute(
