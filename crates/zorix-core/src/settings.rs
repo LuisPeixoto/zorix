@@ -88,6 +88,9 @@ pub struct RetentionReport {
 pub struct TelemetrySettings {
     /// The address of an OpenTelemetry collector (OTLP over HTTP), such as `https://collector.example.com:4318`. `None` sends nothing.
     pub endpoint: Option<String>,
+    /// The name of a header the collector needs, such as `authorization`. Its value is a secret and lives in the system keychain, never here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header: Option<String>,
 }
 
 /// What reading documents does.
@@ -133,6 +136,12 @@ impl AppSettings {
                     "The telemetry address must start with https:// (or http:// for a collector on this computer)."
                         .into(),
                 );
+            }
+        }
+        if let Some(name) = &self.telemetry.header {
+            let token = |c: char| c.is_ascii_alphanumeric() || "!#$%&'*+-.^_`|~".contains(c);
+            if name.is_empty() || name.len() > 64 || !name.chars().all(token) {
+                return bad("A header name has letters, digits and - only, and at most 64 characters.".into());
             }
         }
         Ok(())
@@ -192,7 +201,7 @@ mod tests {
     fn retention_days_and_the_telemetry_address_are_checked() {
         let with = |days: Option<u32>, endpoint: Option<&str>| AppSettings {
             retention: RetentionSettings { days, mode: RetentionMode::Compact },
-            telemetry: TelemetrySettings { endpoint: endpoint.map(str::to_string) },
+            telemetry: TelemetrySettings { endpoint: endpoint.map(str::to_string), header: None },
             ..AppSettings::default()
         };
         assert!(with(Some(1), None).validate().is_ok());
@@ -211,6 +220,19 @@ mod tests {
             &format!("https://{}", "a".repeat(2_100)),
         ] {
             assert!(with(None, Some(bad)).validate().is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_name_of_a_collector_header_is_a_token() {
+        let with = |name: &str| AppSettings {
+            telemetry: TelemetrySettings { endpoint: None, header: Some(name.to_string()) },
+            ..AppSettings::default()
+        };
+        assert!(with("authorization").validate().is_ok());
+        assert!(with("x-honeycomb-team").validate().is_ok());
+        for bad in ["", "two words", "a:b", "line\nbreak", &"h".repeat(65)] {
+            assert!(with(bad).validate().is_err(), "{bad:?}");
         }
     }
 
