@@ -65,6 +65,13 @@ everything. It is not tied to one model or provider, and the core does not know 
 
 | | |
 |---|---|
+| ![Documents: folders that are watched, with scanned PDFs read on this computer](docs/screenshots-0.11.0/documents-light.png) | ![New run with files attached and what it is expected to cost](docs/screenshots-0.11.0/new-run-attachments-dark.png) |
+| Documents: folders kept up to date as they change, files read from scans (*2 via OCR*) and a scan that could not be read. | New run: files attached with `@` or by dropping them, and what the run is expected to cost, from your last similar runs. |
+| ![Settings: long conversations, how long runs are kept, and telemetry](docs/screenshots-0.11.0/settings-dark.png) | |
+| Settings: summaries of long conversations, how long runs are kept (with a preview), and telemetry that is off until you give an address. | |
+
+| | |
+|---|---|
 | ![The workflow editor](docs/screenshots-0.7.0/workflows-editor-light.png) | ![A workflow run waiting for an approval](docs/screenshots-0.7.0/workflows-run-dark.png) |
 | A workflow on its canvas: triggers, an agent, a condition, an approval and actions. | A run stopped for a person: the card shows exactly what is being approved. |
 | ![The org chart](docs/screenshots-0.9.0/workforce-chart-light.png) | ![A worker](docs/screenshots-0.9.0/worker-page-dark.png) |
