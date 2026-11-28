@@ -59,6 +59,8 @@ pub struct Services {
     pub host: tokio::sync::Mutex<Option<Arc<zorix_workflows::WorkflowHost>>>,
     /// Sign-ins that are waiting for the browser, so they can be cancelled.
     pub logins: Mutex<HashMap<String, CancellationToken>>,
+    /// The page of each connection's sign-in that is waiting for a code, by connection name.
+    pub sign_in_pages: Arc<Mutex<HashMap<String, String>>>,
     /// Knowledge syncs that are running, so they can be cancelled.
     pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
     /// How each folder of documents is kept up to date while the app runs: watched by the system, or checked on a timer.
@@ -278,6 +280,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         workforce,
         host: tokio::sync::Mutex::new(host),
         logins: Mutex::new(HashMap::new()),
+        sign_in_pages: Arc::default(),
         tenant: TenantId::local(),
         router,
         secrets,
