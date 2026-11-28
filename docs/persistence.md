@@ -222,6 +222,9 @@ Lists and spend figures do not change after a compaction. A pass runs ten minute
 (`zorix retention show` says what a pass would do; `zorix retention run` does it; the Settings card previews it before you save). It handles 200 runs at a
 time, so it never holds the database for long. Schema 14 adds the `compacted` flag; a 0.10 program refuses a schema-14 database.
 
+The files a person attached to a run are stored with its request, as text with the name and the size ([ADR-0049](adr/0049-files-attached-to-a-run.md)). **Compacting** a run drops that text and keeps the name, the size and the fact that the file was given
+(the preview counts those bytes); **deleting** the run removes everything. An older run has no attachments and is read as before: the field is absent from its stored request.
+
 ## Backups
 
 Copy the data folder while ZORIX is closed. SQLite files are ordinary files.

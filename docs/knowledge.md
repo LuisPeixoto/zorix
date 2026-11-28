@@ -70,6 +70,9 @@ The best pieces for the task, at most 3 per file, neighbours merged, within 8,00
 its source (`guide/deploy.md:L10-L42`, or `manual.pdf:p3`), so the answer can name the file. Runs can also ask for more with the
 `knowledge.search` tool. See [memory](memory.md#untrusted-data).
 
+A file does not have to be indexed to be read by one run: **attach** it (the button, `@` or dropping it in New run, or `zorix run --attach FILE`) and that run is given its text as data
+([ADR-0049](adr/0049-files-attached-to-a-run.md)). Indexing is for what many runs should find; attaching is for what this run should read.
+
 ## Search by meaning
 
 Keyword search always works. An **embeddings model** adds search by meaning (*"how do releases reach production"* finds *"deploys

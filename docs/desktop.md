@@ -44,6 +44,8 @@ secret you type goes straight to the keychain.
 
 ![A server's drawer, with tools to review](screenshots-0.4.0/server-self-light.png)
 
+**Files** can be given to a run (and to a message to an agent): the *Attach* button, `@` in the prompt (a menu of indexed documents and files of the workspace folder) or dropping them on the window. Each shows as a chip with its size,
+and a file outside the workspace folder says so. They are checked when chosen (a private name, a credentials folder, more than 1 MB of text or 25 MB of PDF, more than ten files) and read again when the run starts; the run gets them as data, never as instructions, and gains no permission by it ([ADR-0049](adr/0049-files-attached-to-a-run.md)).
 New run has a **Servers and services** card: pick MCP servers, databases (read-only unless you allow writes), code, and name
 hosts, repositories, Jira projects and channels. Approval cards show what each kind of call would do: an MCP tool shows its
 server and pinned definition, a database change shows highlighted SQL, a message looks like the message, a web request shows

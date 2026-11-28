@@ -109,6 +109,9 @@ These notes grow with each feature that handles data, files, network or permissi
   The two model files (about 12 MB) are downloaded once over `https` and used only when their size and SHA-256 match the values fixed in the program, at download and at every load, so a swapped or
   changed file is never given to the model parser. The pictures in a PDF are decoded with the pages, pixels, characters and time bounded before anything is allocated, on a thread whose crash
   leaves the file out and nothing else. Nothing is sent anywhere but the one download, which carries no data of yours. The text it reads is as untrusted as any document's.
+- **A file attached to a run is data the person chose, and nothing more.** It is checked before anything is read (a regular file, no private name even through a link, not under a folder of credentials, at most 1 MB of text or a 25 MB PDF, at most ten files),
+  cleaned of secret-looking text, stored with the run, and given to the model after the task as an untrusted `<document>` that cannot close its wrapper or speak as the person ([ADR-0049](docs/adr/0049-files-attached-to-a-run.md)). It adds no permission.
+  Compacting a run drops its text. A cloud model receives the text, like any other part of the conversation.
 - **A cloud embeddings model receives text.** The pieces of your documents, your facts and the questions of runs are sent to it,
   so it needs an explicit opt-in, is never used by a `--local-only` run, and never replaces another model silently.
 - **Deleting is real, with limits.** Forgetting a fact or a folder deletes its rows, search entries and vectors, scrubs saved
