@@ -61,6 +61,9 @@ They exist to prove the architecture. Use `zorix tools` to list them.
 | `workspace.list` | Lists a folder of the workspace (200 entries at most) | read-only |
 | `workspace.read` | Reads a text file (first 64 KiB) | read-only |
 | `workspace.write` | Creates or replaces a file (256 KiB at most) | **asks first** |
+| `git.status`, `git.diff`, `git.log` | The repository of the workspace: branch, changed files, diff, latest commits | read-only |
+| `git.branch`, `git.commit` | Creates or switches a branch; commits the named files | **asks first** |
+| `git.push` | Sends one commit to a configured remote, never forced | **asks a person** |
 
 ### The workspace is a sandbox for paths
 
@@ -86,6 +89,23 @@ portable to Windows; the workspace is a folder you gave the run, so this is docu
 
 This is confinement of **paths**, not a code sandbox. The file tools run no code. Code runs only in the [sandbox](sandbox.md)
 (`code.run`, JavaScript and Python in WebAssembly); no tool runs a command on the host, and one that did would need real isolation first.
+
+## Git
+
+The git tools use your installed git on the repository whose top folder is the workspace ([ADR-0054](adr/0054-git-tool.md)).
+Grant them with `--allow-git BRANCH[:write]` (look, and with `:write` branch and commit) and `--allow-git-push REMOTE/BRANCH`,
+or with the same words as agent access (`git:feat/*:write`, `git-push:origin/feat/*`); in the app, *New run › Workspace
+folder*. Files also need `--allow-read` and `--allow-write`.
+
+```bash
+zorix run "Fix the typo and push it" --workspace . --allow-read '*' --allow-write '*' \
+  --allow-git 'fix/*:write' --allow-git-push 'origin/fix/*'
+```
+
+What a run may not read it is not shown. A push names a full commit hash and sends exactly that: if the branch moved after you
+approved, nothing is sent; it is never forced. Repository hooks do not run. A repository whose own configuration could run a
+program (a filter, `core.sshCommand`, a credential helper, an include…) is not used, with the setting named: move it to your
+global configuration if it is yours. Worktrees and submodules whose git folder is outside the workspace are not used.
 
 ## Writing a tool
 

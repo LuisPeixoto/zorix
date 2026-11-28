@@ -145,6 +145,12 @@ pub struct IntegrationChoice {
     db: Vec<String>,
     #[serde(default)]
     code: Vec<String>,
+    /// Branches of the workspace's repository (`--allow-git`).
+    #[serde(default)]
+    git: Vec<String>,
+    /// Where it may push (`--allow-git-push`).
+    #[serde(default)]
+    git_push: Vec<String>,
 }
 
 type Expand = fn(&str) -> Result<Vec<zorix_core::Permission>, String>;
@@ -155,13 +161,15 @@ impl IntegrationChoice {
         for name in &self.mcp {
             grants = grants.with(tool_grant(&format!("mcp.{name}.*"))?);
         }
-        let groups: [(&Vec<String>, Expand); 6] = [
+        let groups: [(&Vec<String>, Expand); 8] = [
             (&self.http, grants::http),
             (&self.repo, grants::repo),
             (&self.jira, grants::jira),
             (&self.chat, grants::chat),
             (&self.db, grants::db),
             (&self.code, grants::code),
+            (&self.git, grants::git),
+            (&self.git_push, grants::git_push),
         ];
         for (items, expand) in groups {
             for item in items {
@@ -472,5 +480,30 @@ pub fn list_models(state: State<'_, AppState>) -> Result<ModelChoices, UiError> 
         routes: services.config.routes.iter().map(|r| r.name.clone()).collect(),
         models,
         default,
+    })
+}
+
+/// What an approval of `git.commit` or `git.push` is about, read from the repository with the run's own grants.
+#[tauri::command]
+pub async fn git_preview(
+    state: State<'_, AppState>,
+    execution_id: String,
+    approval_id: String,
+) -> Result<serde_json::Value, UiError> {
+    use zorix_core::ExecutionEngine as _;
+    let services = state.services()?;
+    let id: zorix_core::ExecutionId = execution_id.parse().map_err(ui)?;
+    let detail = services.engine.detail(&services.tenant, id).await.map_err(ui)?;
+    let approval = detail
+        .approvals
+        .iter()
+        .find(|a| a.id.to_string() == approval_id)
+        .ok_or_else(|| UiError::message("That approval is not waiting on this run."))?;
+    let root =
+        detail.execution.workspace.as_deref().ok_or_else(|| UiError::message("This run has no workspace folder."))?;
+    zorix_tools::git::preview(root, &detail.execution.grants, &approval.tool, &approval.arguments).await.map_err(|e| {
+        match e {
+            zorix_core::ToolError::Failed(m) | zorix_core::ToolError::Retryable(m) => UiError::message(m),
+        }
     })
 }

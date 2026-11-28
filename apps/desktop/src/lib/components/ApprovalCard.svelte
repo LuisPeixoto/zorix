@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { t } from "../i18n/index.ts";
-  import type { Approval } from "../api.ts";
-  import { json } from "../format.ts";
+    import { json } from "../format.ts";
   import { integrations } from "../stores/integrations.svelte.ts";
   import { store } from "../stores/runs.svelte.ts";
-  import { Badge, BrandLogo, Button, Callout, CodeBlock, Field, Icon, Input } from "../ui/index.ts";
+  import { Badge, BrandLogo, Button, Callout, CodeBlock, DiffView, Field, Icon, Input, KeyValue } from "../ui/index.ts";
+  import { type Approval, type GitPreview, errorText, gitPreview } from "../api.ts";
   import { actionWords, approvalVariant, splitMcpTool, splitService } from "./approvalVariant.ts";
 
   let { approval }: { approval: Approval } = $props();
@@ -30,6 +31,22 @@
   );
   $effect(() => {
     if (variant === "remember") void store.refreshMemory(false);
+  });
+
+  // A commit or a push is judged by what changes: asked for from the repository, once per approval.
+  let preview = $state<GitPreview | null>(null);
+  let previewError = $state<string | null>(null);
+  const previewFor = $derived(variant === "repository" ? approval.id : null);
+  $effect(() => {
+    const id = previewFor;
+    if (!id) return;
+    preview = null;
+    previewError = null;
+    void gitPreview(untrack(() => approval.execution_id), id)
+      .then((found) => {
+        if (previewFor === id) preview = found;
+      })
+      .catch((e) => (previewError = errorText(e)));
   });
 
   const mcp = $derived(splitMcpTool(approval.tool));
@@ -117,6 +134,29 @@
       {#if text("title") || text("summary")}<p class="selectable mt-3 text-md font-medium">{text("title") || text("summary")}</p>{/if}
       {#if body}<blockquote class="selectable mt-2 max-h-52 overflow-auto rounded-lg border border-line bg-panel p-3 text-base leading-relaxed whitespace-pre-wrap text-fg">{body}</blockquote>{/if}
       {#if !text("title") && !body && !text("summary")}<CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label={t("common.arguments")} class="mt-3" />{/if}
+    {:else if variant === "repository"}
+      <div class="flex flex-wrap items-center gap-2">
+        <p class="min-w-0 flex-1">{summary || approval.tool}</p>
+        {#if approval.tool === "git.push"}<Badge tone="warn">{t("approvalCard.leavesThisComputer")}</Badge>{/if}
+      </div>
+      {#if preview}
+        <div class="mt-3">
+          <KeyValue
+            items={[
+              ...(preview.url ? [{ key: t("approvalCard.remote"), value: `${text("remote")} · ${preview.url}`, mono: true }] : []),
+              { key: t("approvalCard.branch"), value: preview.new_on_remote ? t("approvalCard.newOnTheRemote", { branch: preview.branch }) : preview.branch, mono: true },
+              ...(preview.commit ? [{ key: t("approvalCard.commit"), value: `${preview.commit.slice(0, 7)} ${preview.subject ?? ""}`, mono: true }] : [{ key: t("approvalCard.message"), value: text("message") }]),
+              { key: t("approvalCard.files"), value: [...preview.files, ...(preview.new_files ?? []).map((f) => t("approvalCard.newFile", { file: f }))].join(", "), mono: true },
+            ]}
+          />
+        </div>
+        {#if preview.diff}<DiffView patch={preview.diff} class="mt-3" />{/if}
+        {#if preview.not_shown}<p class="mt-2 text-xs text-muted">{t("approvalCard.filesNotShown", { count: preview.not_shown })}</p>{/if}
+      {:else if previewError}
+        <Callout tone="err" class="mt-3">{previewError}</Callout>
+        <CodeBlock code={json(approval.arguments)} language="json" maxHeight={200} label={t("common.arguments")} class="mt-3" />
+      {/if}
+      <p class="mt-2 text-xs text-muted">{approval.tool === "git.push" ? t("approvalCard.pushNeverForces") : t("approvalCard.hooksDoNotRun")}</p>
     {:else if variant === "chat"}
       <p>{t("approvalCard.theRunWantsTo2")} <strong class="text-fg">{service.service === "slack" ? t("common.slack") : t("common.discord")}</strong> channel <span class="mono text-fg">{text("channel")}</span>.</p>
       <div class="mt-3 rounded-2xl rounded-tl-sm border border-line bg-panel p-3.5 shadow-1">

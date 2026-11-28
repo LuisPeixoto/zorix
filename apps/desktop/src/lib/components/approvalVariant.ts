@@ -1,6 +1,6 @@
 import { t } from "../i18n/index.ts";
 // Which layout an approval gets. A tool's id says what kind of thing it does; each kind shows what a person needs to decide.
-export type ApprovalVariant = "remember" | "mcp" | "http" | "webhook" | "git" | "jira" | "chat" | "db" | "code" | "generic";
+export type ApprovalVariant = "remember" | "mcp" | "http" | "webhook" | "git" | "repository" | "jira" | "chat" | "db" | "code" | "generic";
 
 export function approvalVariant(tool: string): ApprovalVariant {
   if (tool === "memory.remember") return "remember";
@@ -8,6 +8,8 @@ export function approvalVariant(tool: string): ApprovalVariant {
   if (tool === "http.request") return "http";
   if (tool === "webhook.send") return "webhook";
   if (tool.startsWith("github.") || tool.startsWith("gitlab.")) return "git";
+  // The workspace's own repository: what changes is shown as a diff.
+  if (tool === "git.commit" || tool === "git.push") return "repository";
   if (tool.startsWith("jira.")) return "jira";
   if (tool.startsWith("slack.") || tool.startsWith("discord.")) return "chat";
   if (tool === "db.execute") return "db";

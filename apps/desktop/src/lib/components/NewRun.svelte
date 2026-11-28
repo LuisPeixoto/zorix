@@ -128,6 +128,8 @@
   let repos = $state("");
   let jira = $state("");
   let chat = $state("");
+  let gitBranches = $state("");
+  let gitPush = $state("");
   const builtinTools = $derived(store.tools.filter((t) => !t.source || t.source.kind === "builtin" || t.source.kind === "memory"));
   const readyServers = $derived(integrations.servers.filter((s) => s.enabled && s.tools_ready > 0));
   const databases = $derived(integrations.connections.filter((c) => c.kind === "sqlite" || c.kind === "postgres"));
@@ -249,6 +251,9 @@
         repo: names(repos),
         jira: names(jira),
         chat: names(chat),
+        // Git works on the repository of the workspace, so without a folder there is nothing to grant.
+        git: workspace ? names(gitBranches) : [],
+        git_push: workspace ? names(gitPush) : [],
       },
       allow_read: workspace ? lines(allowRead) : [],
       allow_write: workspace ? lines(allowWrite) : [],
@@ -457,6 +462,12 @@
                 </Field>
                 <Field label={tr("newRun.mayWritePatterns")}>
                   {#snippet children(f)}<Input id={f.id} mono bind:value={allowWrite} placeholder={tr("newRun.noneOrOut")} />{/snippet}
+                </Field>
+                <Field label={tr("newRun.gitBranches")} hint={tr("newRun.gitBranchesHint")}>
+                  {#snippet children(f)}<Input id={f.id} mono bind:value={gitBranches} placeholder="none" />{/snippet}
+                </Field>
+                <Field label={tr("newRun.gitPush")} hint={tr("newRun.gitPushHint")}>
+                  {#snippet children(f)}<Input id={f.id} mono bind:value={gitPush} placeholder="none" />{/snippet}
                 </Field>
               </div>
             {/if}

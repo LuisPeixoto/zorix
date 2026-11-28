@@ -85,7 +85,9 @@ fn grants_from(args: &RunArgs) -> Grants {
         .chain(&args.allow_jira)
         .chain(&args.allow_chat)
         .chain(&args.allow_db)
-        .chain(&args.allow_code);
+        .chain(&args.allow_code)
+        .chain(&args.allow_git)
+        .chain(&args.allow_git_push);
     for flag in flags {
         for permission in &flag.0 {
             grants = grants.with(permission.clone());
@@ -152,7 +154,9 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
                 && args.allow_jira.is_empty()
                 && args.allow_chat.is_empty()
                 && args.allow_db.is_empty()
-                && args.allow_code.is_empty());
+                && args.allow_code.is_empty()
+                && args.allow_git.is_empty()
+                && args.allow_git_push.is_empty());
         let mut narrower = Limits::default();
         let mut limited = false;
         for (value, slot) in

@@ -26,7 +26,7 @@ events) holds for a run made by an agent. The design is in ADRs [0024](adr/0024-
 | `instructions` | Markdown, up to 50,000 characters. What it is told |
 | `skills` | [Skills](skills.md) it can load, pinned by content hash |
 | `tools` | Tool patterns it may use (`memory.search`, `math.*`) |
-| `access` | Resources it may reach: `http:HOST`, `repo:OWNER/REPO[:write]`, `jira:KEY`, `chat:slack:#channel`, `db:NAME[:write]`, `code:python`, `mcp:SERVER`, `read:PATTERN`, `write:PATTERN`. The same words as the `--allow-…` flags |
+| `access` | Resources it may reach: `http:HOST`, `repo:OWNER/REPO[:write]`, `jira:KEY`, `chat:slack:#channel`, `db:NAME[:write]`, `code:python`, `mcp:SERVER`, `git:BRANCH[:write]`, `git-push:REMOTE/BRANCH`, `read:PATTERN`, `write:PATTERN`. The same words as the `--allow-…` flags |
 | `models` | `default` (a model, route, alias or `demo`) and `allowed` (`provider/model`, `provider/*`, `demo` or `*`; empty means any) |
 | `limits`, `memory`, `agent_memory`, `params`, `expected_output`, `metadata` | Run limits, what memory it uses, whether it has memory of its own, output size and effort, a JSON Schema for the answer, free labels |
 
