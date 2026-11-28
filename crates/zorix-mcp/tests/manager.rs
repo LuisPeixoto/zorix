@@ -93,6 +93,7 @@ fn ctx() -> ToolContext {
         workspace_root: None,
         conversation: None,
         agent: None,
+        host: None,
     }
 }
 

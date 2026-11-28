@@ -61,6 +61,7 @@ impl Rig {
             workspace_root: None,
             conversation: None,
             agent: None,
+            host: None,
         };
         self.tools.iter().find(|t| t.spec().id == id).unwrap().call(&ctx, args).await
     }

@@ -185,6 +185,7 @@ fn context(tenant: &TenantId, grants: Grants) -> ToolContext {
         workspace_root: None,
         conversation: None,
         agent: None,
+        host: None,
     }
 }
 

@@ -341,6 +341,7 @@ pub async fn call_registered_tool(
         workspace_root: None,
         conversation: None,
         agent: None,
+        host: None,
     };
     ToolExecutor::run(&*tool, &ctx, call.arguments.clone()).await.map_err(|e| e.to_string())
 }

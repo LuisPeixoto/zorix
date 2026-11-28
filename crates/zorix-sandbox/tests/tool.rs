@@ -23,6 +23,7 @@ fn context(grants: Grants, workspace: Option<std::path::PathBuf>) -> ToolContext
         workspace_root: workspace,
         conversation: None,
         agent: None,
+        host: None,
     }
 }
 

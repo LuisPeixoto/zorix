@@ -161,10 +161,29 @@ impl ToolExecutor {
         // A child token: timing out stops the tool without cancelling the whole execution.
         let call_ctx = ToolContext { cancel: ctx.cancel.child_token(), ..ctx.clone() };
         let guard: CancellationToken = call_ctx.cancel.clone();
-        let outcome = tokio::select! {
-            result = tool.call(&call_ctx, args) => Some(result),
-            _ = tokio::time::sleep(timeout) => None,
-            _ = ctx.cancel.cancelled() => return Err(CallError::Cancelled(spec.id.clone())),
+        let call = tool.call(&call_ctx, args);
+        tokio::pin!(call);
+        let started = tokio::time::Instant::now();
+        // A person asked during the call (ADR-0051) takes their own time: it does not count against the tool's.
+        let outcome = loop {
+            let host = call_ctx.host.as_ref();
+            let asking = host.is_some_and(|host| host.waiting());
+            let deadline = if asking {
+                tokio::time::Instant::now() + Duration::from_millis(100)
+            } else {
+                started + timeout + host.map_or(Duration::ZERO, |host| host.waited())
+            };
+            tokio::select! {
+                result = &mut call => break Some(result),
+                _ = tokio::time::sleep_until(deadline) => {
+                    let still = host.is_some_and(|host| host.waiting());
+                    let used = started.elapsed().saturating_sub(host.map_or(Duration::ZERO, |host| host.waited()));
+                    if !asking && !still && used >= timeout {
+                        break None;
+                    }
+                }
+                _ = ctx.cancel.cancelled() => return Err(CallError::Cancelled(spec.id.clone())),
+            }
         };
         let Some(result) = outcome else {
             guard.cancel();
@@ -261,6 +280,7 @@ mod tests {
             workspace_root: None,
             conversation: None,
             agent: None,
+            host: None,
         }
     }
 
