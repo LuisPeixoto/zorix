@@ -81,3 +81,42 @@ async fn importing_twice_does_not_replace_what_is_there() {
     assert_eq!(second[0].as_ref().unwrap().server.name, "files-2", "the earlier one is untouched");
     assert_eq!(store.mcp_servers(&tenant).await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn two_entries_that_end_up_with_the_same_name_in_one_import_both_get_one() {
+    let store: Arc<dyn IntegrationStore> = Arc::new(SqliteIntegrationStore::open_in_memory().unwrap());
+    let secrets: Arc<dyn SecretStore> = Arc::new(MemoryStore::new());
+    let tenant = TenantId::local();
+    // Two names that are the same once written the way ZORIX writes server names.
+    let preview = parse(
+        Source::Claude,
+        r#"{"mcpServers": {"My Files": {"command": "npx"}, "my-files": {"command": "uvx"}, "MY_FILES": {"command": "x"}}}"#,
+    )
+    .unwrap();
+    let all: Vec<String> = preview.importable().map(|e| e.original_name.clone()).collect();
+    let results = apply(&preview, &all, &store, &secrets, &tenant, Timestamp(1)).await;
+    let mut names: Vec<String> =
+        results.iter().map(|r| r.as_ref().unwrap_or_else(|e| panic!("{e:?}")).server.name.clone()).collect();
+    names.sort();
+    assert_eq!(names.len(), 3, "{names:?}");
+    names.dedup();
+    assert_eq!(names.len(), 3, "each one got a name of its own: {names:?}");
+}
+
+#[tokio::test]
+async fn variables_that_differ_only_by_case_are_refused_because_they_would_share_one_secret() {
+    let store: Arc<dyn IntegrationStore> = Arc::new(SqliteIntegrationStore::open_in_memory().unwrap());
+    let secrets_impl = Arc::new(MemoryStore::new());
+    let secrets: Arc<dyn SecretStore> = secrets_impl.clone();
+    let tenant = TenantId::local();
+    let preview = parse(
+        Source::Claude,
+        r#"{"mcpServers": {"twice": {"command": "npx", "env": {"API_KEY": "sk-first-first-first-first", "api_key": "sk-second-second-second"}}}}"#,
+    )
+    .unwrap();
+    let results = apply(&preview, &["twice".to_string()], &store, &secrets, &tenant, Timestamp(1)).await;
+    let (name, why) = results[0].as_ref().unwrap_err();
+    assert_eq!(name, "twice");
+    assert!(why.contains("differ only by case"), "{why}");
+    assert!(store.mcp_server_named(&tenant, "twice").await.unwrap().is_none(), "nothing was added");
+}

@@ -35,6 +35,36 @@ pub struct EnvVar {
     pub value: EnvValue,
 }
 
+/// Check the environment variables of a stdio server: each name is an ordinary variable name, and no two differ only by case. Windows
+/// reads `FOO` and `foo` as one variable, and ZORIX keeps one secret per name written in lowercase, so two such names would share a
+/// secret and one value would silently replace the other.
+pub fn validate_env(vars: &[EnvVar]) -> Result<(), String> {
+    let mut seen: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+    for var in vars {
+        let ok = !var.name.is_empty()
+            && var.name.len() <= 128
+            && var.name.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && var.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !ok {
+            return Err(format!(
+                "“{}” is not a variable name: use letters, digits and '_', not starting with a digit.",
+                var.name
+            ));
+        }
+        if let Some(first) = seen.insert(var.name.to_ascii_lowercase(), &var.name) {
+            return Err(if first == var.name {
+                format!("The variable {first} is listed twice.")
+            } else {
+                format!(
+                    "The variables {first} and {} differ only by case, which Windows reads as one variable and ZORIX keeps one secret for. Keep one of them.",
+                    var.name
+                )
+            });
+        }
+    }
+    Ok(())
+}
+
 /// The value of an [`EnvVar`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value", rename_all = "snake_case")]

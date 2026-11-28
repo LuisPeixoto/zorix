@@ -53,6 +53,7 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
   by itself or crashes, whatever is left in the group is killed. On Windows the server is put in a Job Object right after it
   starts, so the real program behind `npx.cmd` ends with it, and so does everything when ZORIX ends. The one gap: a helper started
   in the instant before the server joins the job is not in it.
+- **A server's variables are plain names that differ by more than case.** `FOO` and `foo` are one variable to Windows and one secret to ZORIX, so a server that lists both is refused (adding, importing and changing all check it).
 - **Secrets stay in the keychain.** Environment secrets and bearer tokens are stored by name in the system keychain;
   the database holds only that a secret exists.
 

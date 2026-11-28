@@ -4,7 +4,8 @@
 use serde_json::{Value, json};
 use zorix_core::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
-    McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, TenantId, Timestamp, ToolTrust,
+    McpServer, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, TenantId, Timestamp,
+    ToolTrust,
 };
 use zorix_store::SqliteIntegrationStore;
 
@@ -386,4 +387,29 @@ async fn a_choice_not_to_ask_that_the_rule_no_longer_allows_is_taken_back() {
         .await
         .unwrap();
     assert_eq!(again.iter().find(|p| p.tool == "ok").unwrap().trust, ToolTrust::ReadOnlyNoAsk);
+}
+
+#[tokio::test]
+async fn the_variables_of_a_server_are_names_that_differ_by_more_than_case() {
+    let store = SqliteIntegrationStore::open_in_memory().unwrap();
+    let me = tenant("local");
+    let with = |names: &[&str]| McpTransport::Stdio {
+        command: "npx".into(),
+        args: vec![],
+        env: names.iter().map(|n| EnvVar { name: (*n).into(), value: EnvValue::Literal("1".into()) }).collect(),
+        cwd: None,
+    };
+    let add = |name: &str, transport: McpTransport| NewMcpServer { name: name.into(), transport };
+    // The same variable twice, and two that differ only by case (one secret would be kept for both).
+    for (names, wanted) in [(&["FOO", "FOO"][..], "listed twice"), (&["FOO", "foo"][..], "differ only by case")] {
+        let error = store.add_mcp_server(&me, add("bad", with(names)), NOW).await.unwrap_err().to_string();
+        assert!(error.contains(wanted), "{names:?}: {error}");
+    }
+    for name in ["", "1ST", "A-B", "A B", "A=B"] {
+        assert!(store.add_mcp_server(&me, add("bad", with(&[name])), NOW).await.is_err(), "{name:?}");
+    }
+    let ok = store.add_mcp_server(&me, add("fine", with(&["FOO", "BAR_2", "_x"])), NOW).await.unwrap();
+    // Changing a server later is held to the same rule.
+    let changed = McpServer { transport: with(&["FOO", "foo"]), ..ok };
+    assert!(store.update_mcp_server(&me, changed, NOW).await.is_err());
 }
