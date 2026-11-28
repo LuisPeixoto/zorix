@@ -117,8 +117,13 @@ pub async fn follow(
     let mut streams: SelectAll<BoxStream<'static, ExecutionEvent>> = SelectAll::new();
     streams.push(stream);
     let mut labels: HashMap<ExecutionId, String> = HashMap::new();
+    // Watching says that somebody can answer a server's requests (ADR-0051); without it they are refused at once.
+    let mut asks = (mode == ApproveMode::Ask).then(|| engine.asks().watch());
     loop {
         tokio::select! {
+            Some(_) = async { Some(asks.as_mut()?.recv().await) } => {
+                crate::asks::answer_waiting(engine, tenant, |ask| ask.execution_id == id || labels.contains_key(&ask.execution_id)).await;
+            }
             next = streams.next() => {
                 let Some(event) = next else { break };
                 let at = event.execution_id;
