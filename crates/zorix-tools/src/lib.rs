@@ -1,9 +1,10 @@
 //! ZORIX tools: built-in demonstration tools.
 //!
 //! They exist to prove the tool architecture end to end, and are small on purpose:
-//! `clock.now`, `math.evaluate`, `text.stats`, `notes.put`, `notes.get`, and the file tools `workspace.list`,
-//! `workspace.read` and `workspace.write`, which are confined to one folder.
+//! `clock.now`, `math.evaluate`, `text.stats`, `notes.put`, `notes.get`, the file tools `workspace.list`,
+//! `workspace.read` and `workspace.write`, which are confined to one folder, and the git tools of that folder.
 
+pub mod git;
 mod math;
 mod notes;
 mod simple;
@@ -28,7 +29,7 @@ pub struct BuiltinConfig {
 /// Every built-in tool.
 pub fn builtin_tools(config: &BuiltinConfig) -> Vec<Arc<dyn Tool>> {
     let notebook = Notebook::new(config.notes_file.clone());
-    vec![
+    let mut tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(ClockTool::new()),
         Arc::new(MathTool::new()),
         Arc::new(TextStatsTool::new()),
@@ -37,7 +38,9 @@ pub fn builtin_tools(config: &BuiltinConfig) -> Vec<Arc<dyn Tool>> {
         Arc::new(WriteTool::new()),
         Arc::new(PutNoteTool::new(notebook.clone())),
         Arc::new(GetNoteTool::new(notebook)),
-    ]
+    ];
+    tools.extend(git::git_tools());
+    tools
 }
 
 /// Register every built-in tool.
