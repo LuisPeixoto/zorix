@@ -187,7 +187,7 @@ Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.
 ### `zorix connect …`
 
 `connect add github|gitlab|jira|slack|discord|postgres|sqlite|http|webhook <NAME> …`, `connect list`, `connect test <NAME>`,
-`connect remove <NAME>`. See [integrations](integrations.md) for each kind's options. Secrets come from `--secret-env VAR`,
+`connect remove <NAME>`. See [integrations](integrations.md) for each kind's options. `github`, `gitlab` and `jira` also take `--oauth [--client-id ID] [--client-secret-env VAR]` to [sign in](integrations.md#signing-in-instead-of-pasting-a-token). Secrets come from `--secret-env VAR`,
 `--secret-stdin` or a hidden prompt, never from an argument. A webhook without a key gets one, shown once.
 
 ### `zorix sandbox status | install python`

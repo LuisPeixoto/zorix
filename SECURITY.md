@@ -78,7 +78,7 @@ These notes grow with each feature that handles data, files, network or permissi
   What a server returns is data. During a tool call a server may ask to use your model or ask you something; every such request
   waits for your answer, bound to exactly what you saw, is refused when nobody is watching, and a model call has no tools and is
   charged to the run ([ADR-0051](docs/adr/0051-sampling-and-elicitation.md)). Roots are refused. OAuth uses PKCE, a state value, the resource
-  indicator and issuer checks, only the answer that carries its `state` ends a sign-in, and a server on the internet cannot send a sign-in to a private address; tokens are in the keychain, sent only to their server, and never logged. Details in
+  indicator and issuer checks, only the answer that carries its `state` ends a sign-in, and a server on the internet cannot send a sign-in to a private address; tokens are in the keychain, sent only to their server, and never logged. GitHub, GitLab and Jira connections can be signed in to under the same rules ([ADR-0053](docs/adr/0053-sign-in-for-native-integrations.md)). Details in
   [docs/mcp.md](docs/mcp.md).
 - **Native integrations are bounded by grants.** A tool needs `use_tool` and a permission on the resource, and writes ask. Web
   requests are HTTPS-only, resolve and check every address (SSRF and DNS rebinding), follow granted redirects only, use no

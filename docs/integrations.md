@@ -36,6 +36,22 @@ sent to by a test.
 
 ![Connections and the code sandbox](screenshots-0.4.0/integrations-connections-light.png)
 
+### Signing in instead of pasting a token
+
+GitHub, GitLab and Jira connections can be signed in to ([ADR-0053](adr/0053-sign-in-for-native-integrations.md)): in the app,
+choose *Sign in* in the connect window; on the terminal, `zorix connect add github|gitlab|jira <name> --oauth`.
+
+| Service | What happens | The app |
+|---|---|---|
+| GitHub | a code to enter on `github.com/login/device` (or your Enterprise's) | an OAuth app with the device flow turned on |
+| GitLab | your browser, back to `http://127.0.0.1:53682/callback` | an application with that redirect and the scope `api` (no secret needed) |
+| Jira | your browser, back to the same address | your own OAuth 2.0 (3LO) app: that redirect, the scopes `read:jira-work write:jira-work offline_access`, its id and secret |
+
+A release build may carry ZORIX's own GitHub and GitLab app ids; otherwise give yours with `--client-id` (for Jira, also
+`--client-secret-env VAR`). Tokens go to the keychain and are renewed when they run out; if a service revokes one, the tools say
+to remove the connection and sign in again. Removing a connection revokes it at GitLab; at GitHub and Atlassian, remove the app
+in your account settings. Slack takes a pasted bot token: its app page shows it.
+
 ## What each family does and guards
 
 **Web (`http.*`).** HTTPS only (plain HTTP only to this computer). Every address is resolved, **every** resulting IP is checked,
@@ -84,6 +100,5 @@ Every API call: 30 s and 2 MB per response; a tool's result is cut to its output
 
 ## Not in this version
 
-Inbound webhooks and triggers (they belong to workflows, Phase 7), CIMD client registration, OAuth for the native
-integrations (they use tokens), and sandboxing of stdio MCP servers. The Postgres path is exercised by CI against a real
-server (the Linux job), not by the local test run.
+Inbound webhooks and triggers belong to workflows (Phase 7). CIMD client registration, and signing in to Slack or Discord. The
+Postgres path is exercised by CI against a real server (the Linux job), not by the local test run.
