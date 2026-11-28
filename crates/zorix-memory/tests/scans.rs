@@ -208,6 +208,22 @@ async fn only_the_scan_is_counted_as_read_by_the_engine_and_other_files_never_re
     assert_eq!(OCR_KIND, "pdf-ocr");
 }
 
+#[test]
+fn an_attached_scan_is_read_with_the_engine_and_refused_with_the_way_out_without_it() {
+    let env = env();
+    let path = env.folder.join("receipt.pdf");
+    std::fs::write(&path, scan(2, 120)).unwrap();
+
+    let without = zorix_memory::attach::read_attachments(std::slice::from_ref(&path), None).unwrap_err().to_string();
+    assert!(without.starts_with("“receipt.pdf” cannot be attached") && without.contains("reading scans"), "{without}");
+
+    let reader = Script::saying("Total due 42.00");
+    let engine: Arc<dyn PageReader> = reader.clone();
+    let attached = zorix_memory::attach::read_attachments(&[path], Some(engine)).unwrap();
+    assert_eq!(reader.calls(), 2);
+    assert_eq!(attached[0].text, "[page 1]\nTotal due 42.00\n\n[page 2]\nTotal due 42.00");
+}
+
 #[tokio::test]
 async fn a_scan_with_too_many_pages_is_left_out_and_counted_as_not_read() {
     let env = env();
