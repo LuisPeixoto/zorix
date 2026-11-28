@@ -8421,6 +8421,7 @@ dependencies = [
  "tracing",
  "wiremock",
  "zorix-core",
+ "zorix-net",
  "zorix-providers",
  "zorix-runtime",
  "zorix-store",
@@ -8485,6 +8486,14 @@ dependencies = [
  "zorix-tools",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "zorix-net"
+version = "0.11.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
