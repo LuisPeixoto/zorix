@@ -5,6 +5,12 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+Phase 12: the tools, integrations and sandbox audited against the engineering guidelines (thirty findings, [the audit](docs/audits/phase-12-tools-integrations-sandbox.md)) and completed.
+
+### Fixed
+
+- **A Jira search could be widened to other projects** by a query whose parentheses did not close (`x = 1) OR project = OTHER OR (x = 1`): the person's part is wrapped in a group, and a `)` ended the wrap. A query that does not balance, or a sort clause that is more than field names, is now refused before anything is sent, and the project must be a project key ([#52](https://github.com/LuisPeixoto/zorix/issues/52)).
+
 ## [0.11.0] - 2026-11-27
 
 Phase 11: the runtime, providers and memory audited against the engineering guidelines (thirteen findings, [the audit](docs/audits/phase-11-runtime-providers-memory.md)) and completed.
