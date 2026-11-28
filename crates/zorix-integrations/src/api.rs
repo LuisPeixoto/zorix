@@ -2,14 +2,17 @@
 //!
 //! The address comes from a connection a person set up (or a built-in default), so it is trusted in a way an address chosen by a
 //! model is not: system proxy settings apply and private addresses are allowed (a company's own GitHub Enterprise). It still
-//! uses HTTPS (plain HTTP only to this computer), never follows a redirect, limits what it reads and time spent, and never puts a
-//! secret in an address or in anything it returns.
+//! uses HTTPS (plain HTTP only to this computer), never follows a redirect, limits what it reads and time spent, never puts a
+//! secret in an address or in anything it returns, and never sends a token to an address where no service lives (the cloud metadata
+//! address and the other link-local, multicast and reserved ranges), whether written as an address or as a name that resolves to one.
 
+use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
 use reqwest::{Client, Method, Url};
 use serde_json::Value;
 use zorix_core::{ToolError, redact_text};
+use zorix_net::never_a_service;
 use zorix_providers::is_loopback;
 
 /// How long a call may take.
@@ -59,10 +62,25 @@ pub fn validate_base(text: &str) -> Result<Url, ToolError> {
     if !url.username().is_empty() || url.password().is_some() {
         return Err(failed("The address must not contain a user name or password."));
     }
+    if let Ok(ip) = host.trim_start_matches('[').trim_end_matches(']').parse::<IpAddr>()
+        && let Some(why) = never_a_service(ip)
+    {
+        return Err(failed(format!("{host} is {why}: no service lives there, so a connection cannot point at it.")));
+    }
     match url.scheme() {
         "https" => Ok(url),
         "http" if is_loopback(host) => Ok(url),
         _ => Err(failed(format!("{host} must be reached over HTTPS (plain HTTP is only for this computer)."))),
+    }
+}
+
+/// Refuse a name that resolves to an address where no service lives. A person's own network (private, loopback, shared) is fine.
+fn refuse_special(host: &str, addresses: &[SocketAddr], service: &str) -> Result<(), ToolError> {
+    match addresses.iter().find_map(|a| never_a_service(a.ip()).map(|why| (a.ip(), why))) {
+        Some((ip, why)) => Err(failed(format!(
+            "{service} is set to {host}, which leads to {why} ({ip}); no service lives there, so ZORIX will not send a token to it."
+        ))),
+        None => Ok(()),
     }
 }
 
@@ -103,6 +121,14 @@ impl Api {
     ) -> Result<Reply, ToolError> {
         let url = Url::parse(&format!("{}{}", self.base.as_str().trim_end_matches('/'), path))
             .map_err(|_| failed("The request address is not valid."))?;
+        // A name can lead somewhere the written address does not show. When the lookup fails here the request is left to fail (or
+        // to succeed through a proxy that resolves company names this computer cannot).
+        if let Some(host) = self.base.host_str()
+            && let Ok(addresses) =
+                zorix_net::resolve(host, self.base.port_or_known_default().unwrap_or(443), true).await
+        {
+            refuse_special(host, &addresses, &self.service)?;
+        }
         // Whatever the path was, the request stays on the service's own host.
         if url.host_str() != self.base.host_str() || url.port_or_known_default() != self.base.port_or_known_default() {
             return Err(failed("The request would have left the service's address."));
@@ -196,5 +222,55 @@ impl Api {
             500..=599 => ToolError::Retryable(format!("{service} had a problem ({}). Try again later.", reply.status)),
             other => failed(format!("{service} answered {other} for {what}: {said}")),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_address_where_no_service_lives_cannot_be_a_connection() {
+        for bad in [
+            "https://169.254.169.254",
+            "https://169.254.169.254/latest",
+            "https://[fe80::1]",
+            "https://0.0.0.0",
+            "https://224.0.0.1",
+            "https://[::ffff:169.254.169.254]",
+            "http://169.254.169.254",
+        ] {
+            let error = validate_base(bad).unwrap_err().to_string();
+            assert!(error.contains("no service lives there") || error.contains("HTTPS"), "{bad}: {error}");
+            assert!(validate_base(bad).is_err(), "{bad}");
+        }
+        for fine in [
+            "https://api.github.com",
+            "https://ghe.corp.example/api/v3",
+            "https://10.1.2.3",
+            "https://192.168.0.5:8443",
+            "http://127.0.0.1:8080",
+            "http://localhost:9000",
+            "https://[::1]:8443",
+        ] {
+            assert!(validate_base(fine).is_ok(), "{fine}");
+        }
+    }
+
+    #[test]
+    fn a_name_that_leads_to_a_special_address_is_refused_and_one_on_a_private_network_is_not() {
+        let at = |text: &str| -> Vec<SocketAddr> { vec![SocketAddr::new(text.parse().unwrap(), 443)] };
+        let error = refuse_special("jira.corp.example", &at("169.254.169.254"), "Jira").unwrap_err().to_string();
+        assert!(
+            error.contains("jira.corp.example")
+                && error.contains("169.254.169.254")
+                && error.contains("no service lives there")
+        );
+        // One bad answer among good ones refuses the name.
+        let mixed = vec![at("10.0.0.5")[0], at("169.254.169.254")[0]];
+        assert!(refuse_special("x.example", &mixed, "Jira").is_err());
+        for fine in ["10.0.0.5", "127.0.0.1", "100.64.1.2", "8.8.8.8", "fd00::1"] {
+            assert!(refuse_special("x.example", &at(fine), "Jira").is_ok(), "{fine}");
+        }
     }
 }

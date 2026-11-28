@@ -13,18 +13,34 @@ pub fn forbidden(ip: IpAddr) -> Option<&'static str> {
     }
 }
 
+const LOOPBACK: &str = "a loopback address (this computer)";
+const PRIVATE: &str = "a private network address";
+const SHARED: &str = "a shared (carrier-grade NAT) address";
+
+/// Why an address can never be the address of a service somebody set up, or `None` when it could be. Unlike [`forbidden`] this lets
+/// this computer, private networks and shared (carrier-grade NAT, as Tailscale uses) addresses through: a company's own GitHub
+/// Enterprise or Jira is a legitimate place for a connection to point at, and a person chose it. What it refuses is what no service
+/// lives at: link-local addresses (cloud metadata services), the unspecified address, multicast, broadcast, reserved and
+/// documentation ranges, and the tunnel forms that carry one of those.
+pub fn never_a_service(ip: IpAddr) -> Option<&'static str> {
+    match forbidden(ip) {
+        Some(why) if why == LOOPBACK || why == PRIVATE || why == SHARED => None,
+        other => other,
+    }
+}
+
 fn forbidden_v4(ip: Ipv4Addr) -> Option<&'static str> {
     let [a, b, ..] = ip.octets();
     if ip.is_loopback() {
-        Some("a loopback address (this computer)")
+        Some(LOOPBACK)
     } else if ip.is_unspecified() || a == 0 {
         Some("an unspecified address")
     } else if ip.is_private() {
-        Some("a private network address")
+        Some(PRIVATE)
     } else if ip.is_link_local() {
         Some("a link-local address (cloud metadata services live here)")
     } else if a == 100 && (64..=127).contains(&b) {
-        Some("a shared (carrier-grade NAT) address")
+        Some(SHARED)
     } else if ip.is_broadcast() || ip.is_multicast() || a >= 240 {
         Some("a broadcast, multicast or reserved address")
     } else if (a == 192 && b == 0 && ip.octets()[2] == 0) || (a == 198 && (b == 18 || b == 19)) || ip.is_documentation()
@@ -50,7 +66,7 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<&'static str> {
         return Some("a local NAT64 address");
     }
     if ip.is_loopback() {
-        return Some("a loopback address (this computer)");
+        return Some(LOOPBACK);
     }
     if ip.is_unspecified() {
         return Some("an unspecified address");
@@ -64,7 +80,7 @@ fn forbidden_v6(ip: Ipv6Addr) -> Option<&'static str> {
         return forbidden_v4(embedded(segments[1], segments[2])).or(Some("a 6to4 tunnel address"));
     }
     if segments[0] & 0xfe00 == 0xfc00 {
-        Some("a private network address")
+        Some(PRIVATE)
     } else if segments[0] & 0xffc0 == 0xfe80 || segments[0] & 0xffc0 == 0xfec0 {
         Some("a link-local address")
     } else if ip.is_multicast() {
@@ -133,6 +149,40 @@ mod tests {
 
     fn fine(text: &str) {
         assert!(forbidden(text.parse().unwrap()).is_none(), "{text} is an ordinary address");
+    }
+
+    #[test]
+    fn a_service_may_live_on_a_private_network_but_never_at_a_special_address() {
+        for text in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "192.168.0.9",
+            "172.20.0.1",
+            "100.64.0.7",
+            "::1",
+            "fd12::1",
+            "::ffff:10.0.0.1",
+            "8.8.8.8",
+        ] {
+            assert!(never_a_service(text.parse().unwrap()).is_none(), "{text} can be a service");
+        }
+        for text in [
+            "169.254.169.254",
+            "169.254.0.1",
+            "0.0.0.0",
+            "224.0.0.1",
+            "255.255.255.255",
+            "240.0.0.1",
+            "192.0.2.1",
+            "fe80::1",
+            "ff02::1",
+            "::",
+            "::ffff:169.254.169.254",
+            "64:ff9b::a9fe:a9fe",
+            "2002:a9fe:a9fe::1",
+        ] {
+            assert!(never_a_service(text.parse().unwrap()).is_some(), "{text} is never a service");
+        }
     }
 
     #[test]
