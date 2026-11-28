@@ -19,10 +19,31 @@ pub const MAX_WRITE_BYTES: usize = 256 * 1024;
 /// Most entries `workspace.list` returns.
 pub const MAX_LIST_ENTRIES: usize = 200;
 
+/// Names Windows keeps for devices, with or without an extension (`CON.txt` is still the console). Besides the classic ones: the
+/// zero forms, the console input and output handles and the superscript digits, which Windows reads as digits.
 const RESERVED: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
-    "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "COM¹",
+    "COM²", "COM³", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²",
+    "LPT³", "CONIN$", "CONOUT$",
 ];
+
+/// Whether a name is written like the short form Windows invents for a long one (`PROGRA~1`, `ZORIX~1`, `NOTES~2.TXT`). On a
+/// Windows volume that keeps short names, `ZORIX~1` is the same folder as `.zorix`, which would walk around the reserved-name check; a
+/// name written that way is refused on every system, so the rules do not depend on the volume.
+fn looks_like_short_name(name: &str) -> bool {
+    let (base, ext) = match name.split_once('.') {
+        Some((base, ext)) => (base, Some(ext)),
+        None => (name, None),
+    };
+    if ext.is_some_and(|e| e.len() > 3 || e.contains('.')) {
+        return false;
+    }
+    let Some((prefix, digits)) = base.rsplit_once('~') else { return false };
+    !prefix.is_empty()
+        && !digits.is_empty()
+        && prefix.len() + 1 + digits.len() <= 8
+        && digits.bytes().all(|b| b.is_ascii_digit())
+}
 
 fn failed(message: impl Into<String>) -> ToolError {
     ToolError::Failed(message.into())
@@ -41,6 +62,9 @@ impl RelativePath {
         if text.chars().any(|c| c.is_control()) {
             return Err(failed("The path contains control characters."));
         }
+        if text.contains(['<', '>', '"', '|', '?', '*']) {
+            return Err(failed("The path contains a character that Windows does not allow in names: < > \" | ? *."));
+        }
         if text.contains('\\') || text.contains(':') {
             return Err(failed(
                 "Use forward slashes and no drive letters: the path must be relative to the workspace.",
@@ -55,9 +79,15 @@ impl RelativePath {
                 "" | "." => {}
                 ".." => return Err(failed("The path may not go up with “..”.")),
                 name => {
-                    let stem = name.split('.').next().unwrap_or(name).to_ascii_uppercase();
+                    // Windows ignores spaces before the extension when it decides a name is a device: `CON .txt` is the console.
+                    let stem = name.split('.').next().unwrap_or(name).trim_end().to_ascii_uppercase();
                     if RESERVED.contains(&stem.as_str()) {
                         return Err(failed(format!("“{name}” is a reserved name on Windows.")));
+                    }
+                    if looks_like_short_name(name) {
+                        return Err(failed(format!(
+                            "“{name}” is written like a short Windows name (PROGRA~1), which can stand for another file. Use the file's own name."
+                        )));
                     }
                     if name.ends_with(' ') || name.ends_with('.') {
                         return Err(failed(format!(
@@ -467,6 +497,28 @@ mod tests {
             "\u{7f}",
             "tab\there",
             "...",
+            // The device names and forms an earlier version let through.
+            "COM0",
+            "lpt0.txt",
+            "CONIN$",
+            "conout$.log",
+            "COM\u{b9}",
+            "lpt\u{b2}.txt",
+            "CON .txt",
+            "nul  ",
+            // Characters Windows refuses in a name, and short names that stand for another file.
+            "a<b",
+            "a>b",
+            "a\"b",
+            "a|b",
+            "a?b",
+            "a*b",
+            "ZORIX~1",
+            "zorix~1",
+            "docs/ZORIX~1/state",
+            "PROGRA~1",
+            "NOTES~2.TXT",
+            "a~12345",
         ] {
             assert!(RelativePath::parse(bad).is_err(), "{bad:?} should be refused");
         }
@@ -483,6 +535,15 @@ mod tests {
             "%2e%2e/x",
             "console.txt",
             "a..b/c",
+            "COM10",
+            "com.txt",
+            "conin",
+            "report~final.md",
+            "backup~12345678.txt",
+            "a~1.tar.gz",
+            "~1",
+            "x~y",
+            "ünï~1d",
         ] {
             assert!(RelativePath::parse(good).is_ok(), "{good:?} should be accepted");
         }
