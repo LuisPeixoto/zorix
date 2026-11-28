@@ -2,7 +2,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { attachmentsCheck, errorText } from "../api.ts";
-import { type AttachedFile, MAX_ATTACHED, addChecked, estimatedChars } from "../attach.ts";
+import { type AttachedFile, MAX_ATTACHED, addChecked, estimatedChars, withOutsideFlags } from "../attach.ts";
 import { t } from "../i18n/index.ts";
 import { toast } from "./toast.svelte.ts";
 
@@ -56,8 +56,9 @@ export class AttachedFiles {
     if (this.files.length === 0) return;
     try {
       const checked = await attachmentsCheck(this.paths, this.workspaceOf());
-      const byPath = new Map(checked.map((c) => [c.path, c]));
-      this.files = this.files.map((f) => ({ ...f, outside: byPath.get(f.path)?.outside_workspace ?? f.outside }));
+      // Only stored when something changed: a form that reacts to its files must not be woken by a check that found nothing new.
+      const next = withOutsideFlags(this.files, checked);
+      if (next !== this.files) this.files = next;
     } catch {
       // The flags stay as they were; the run checks everything again when it starts.
     }

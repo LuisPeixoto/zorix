@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { type CheckedFile, MAX_ATTACHED, addChecked, estimatedChars, insertMention, mentionAt } from "./attach.ts";
+import { type CheckedFile, MAX_ATTACHED, addChecked, estimatedChars, insertMention, mentionAt, withOutsideFlags } from "./attach.ts";
 
 const ok = (name: string, bytes = 10, outside = false): CheckedFile => ({ path: `/w/${name}`, name, bytes, problem: null, outside_workspace: outside });
 
@@ -45,4 +45,14 @@ test("the text a PDF holds is guessed from its size more carefully than a text f
   const file = (name: string, bytes: number) => ({ path: `/w/${name}`, name, bytes, outside: false });
   assert.equal(estimatedChars([file("a.md", 4000), file("b.PDF", 8000)]), 5000);
   assert.equal(estimatedChars([]), 0);
+});
+
+test("a new check of the files changes only the flag, and hands back the same list when nothing changed", () => {
+  const files = addChecked([], [ok("a.md", 5, false), ok("b.md", 5, true)]).files;
+  assert.equal(withOutsideFlags(files, [ok("a.md", 5, false), ok("b.md", 5, true)]), files, "nothing changed: the very same array");
+  assert.equal(withOutsideFlags(files, []), files, "a file the check did not mention keeps its flag");
+  const moved = withOutsideFlags(files, [ok("a.md", 5, true), ok("b.md", 5, false)]);
+  assert.notEqual(moved, files);
+  assert.deepEqual(moved.map((f) => [f.name, f.outside]), [["a.md", true], ["b.md", false]]);
+  assert.deepEqual(files.map((f) => f.outside), [false, true], "the old list was not changed");
 });
