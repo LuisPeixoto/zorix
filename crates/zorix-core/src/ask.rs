@@ -242,6 +242,16 @@ pub trait CallHost: Send + Sync + std::fmt::Debug {
     fn waited(&self) -> Duration;
 }
 
+/// How long to wait before looking again at a call that has `budget` of working time and has run for `elapsed`, or `None` when
+/// the budget is used up. Time spent waiting for the person ([`CallHost::waited`]) does not count.
+pub fn time_left(host: Option<&dyn CallHost>, elapsed: Duration, budget: Duration) -> Option<Duration> {
+    if host.is_some_and(|h| h.waiting()) {
+        return Some(Duration::from_millis(100));
+    }
+    let used = elapsed.saturating_sub(host.map_or(Duration::ZERO, |h| h.waited()));
+    budget.checked_sub(used).filter(|left| !left.is_zero())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

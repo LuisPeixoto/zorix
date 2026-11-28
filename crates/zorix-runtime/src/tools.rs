@@ -166,22 +166,11 @@ impl ToolExecutor {
         let started = tokio::time::Instant::now();
         // A person asked during the call (ADR-0051) takes their own time: it does not count against the tool's.
         let outcome = loop {
-            let host = call_ctx.host.as_ref();
-            let asking = host.is_some_and(|host| host.waiting());
-            let deadline = if asking {
-                tokio::time::Instant::now() + Duration::from_millis(100)
-            } else {
-                started + timeout + host.map_or(Duration::ZERO, |host| host.waited())
-            };
+            let host = call_ctx.host.as_deref();
+            let Some(left) = zorix_core::time_left(host, started.elapsed(), timeout) else { break None };
             tokio::select! {
                 result = &mut call => break Some(result),
-                _ = tokio::time::sleep_until(deadline) => {
-                    let still = host.is_some_and(|host| host.waiting());
-                    let used = started.elapsed().saturating_sub(host.map_or(Duration::ZERO, |host| host.waited()));
-                    if !asking && !still && used >= timeout {
-                        break None;
-                    }
-                }
+                _ = tokio::time::sleep(left) => {}
                 _ = ctx.cancel.cancelled() => return Err(CallError::Cancelled(spec.id.clone())),
             }
         };

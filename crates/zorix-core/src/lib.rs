@@ -46,7 +46,7 @@ pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canoni
 pub use ask::{
     ASK_TIMEOUT, Answer, CallHost, ElicitReply, FieldKind, FormField, MAX_ASKS_PER_CALL, MAX_CHOICES, MAX_FIELDS,
     MAX_QUESTION_BYTES, MAX_SAMPLE_BYTES, MAX_SAMPLE_MESSAGES, MAX_SAMPLE_TOKENS, PendingAsk, Question, SampleMessage,
-    SampleReply, SampleRequest, SampleRole, ServerAsk,
+    SampleReply, SampleRequest, SampleRole, ServerAsk, time_left,
 };
 pub use autonomy::{Autonomy, AutonomyLevel};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
