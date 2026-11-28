@@ -52,8 +52,9 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
   mid-run cannot change what that run sees or what it may call (ADR-0020).
 - **Results are data.** What a server returns is labelled as the result of a tool and never followed as an instruction;
   size limits apply.
-- **Servers are asked for nothing and answer little.** ZORIX answers `ping` and refuses everything else a server may ask of a
-  client: sampling (spending your model tokens), elicitation, and roots. A server cannot read your workspace through ZORIX.
+- **A server asks only during a tool call, and you answer** ([below](#what-a-server-may-ask-while-its-tool-runs)). ZORIX answers
+  `ping`, passes sampling and elicitation to you, and refuses everything else (roots included). A server cannot read your
+  workspace through ZORIX.
 - **A stdio server is a program on your computer, and it starts sandboxed** ([below](#the-sandbox-of-a-local-server)). ZORIX starts
   it without a shell, with a clean
   environment plus the variables you named (secrets from the keychain), in a folder of its own (`<data folder>/mcp/<server id>`
@@ -97,6 +98,21 @@ zorix mcp doctor                                     # what is enforced on this 
 Podman: read-only, without capabilities, in an official image fixed by its digest (Node for `npx` and `node`, Python with `uv` for
 `uvx`, `uv` and `python`; other commands are refused). It is the way to confine files and the network on Windows. The first start
 downloads the image, which can take longer than ZORIX waits: `zorix mcp doctor` prints the commands that fetch the images ahead.
+
+## What a server may ask while its tool runs
+
+Some tools need something back before they finish ([ADR-0051](adr/0051-sampling-and-elicitation.md)). It shows as a card in the
+run and in the Inbox; on the terminal, `zorix run` and `zorix approve` ask you when answering approvals (`--approve ask`).
+
+| The server asks | What you see | What happens on yes |
+|---|---|---|
+| to use your model (*sampling*) | the messages, the model and the token cap | one call to the run's model, without tools; its cost is the run's |
+| a question (*elicitation*, form) | its message and the fields | the values you typed go to the server |
+| to open a page (*elicitation*, URL) | the address and its domain | the page opens in your browser; ZORIX sees nothing of it |
+
+Nothing is answered by itself. A request is refused after five minutes, or at once when nobody can answer (`zorix serve`,
+`zorix mcp serve`, runs without a terminal). One tool call may ask five things. Never type a password or a key into a
+server's form. A legacy server that has two calls running at once is refused, because it does not say which one it means.
 
 ## Both protocol eras
 

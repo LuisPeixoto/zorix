@@ -75,7 +75,9 @@ These notes grow with each feature that handles data, files, network or permissi
   running as you until you choose. Its
   tools are pinned: nothing is offered until you approve what it says, a changed description withdraws the tool until you
   review it, and a run keeps the definitions it started with. Every MCP tool asks first; the server's own hints never grant.
-  What a server returns is data. ZORIX refuses sampling, elicitation and roots. OAuth uses PKCE, a state value, the resource
+  What a server returns is data. During a tool call a server may ask to use your model or ask you something; every such request
+  waits for your answer, bound to exactly what you saw, is refused when nobody is watching, and a model call has no tools and is
+  charged to the run ([ADR-0051](docs/adr/0051-sampling-and-elicitation.md)). Roots are refused. OAuth uses PKCE, a state value, the resource
   indicator and issuer checks, only the answer that carries its `state` ends a sign-in, and a server on the internet cannot send a sign-in to a private address; tokens are in the keychain, sent only to their server, and never logged. Details in
   [docs/mcp.md](docs/mcp.md).
 - **Native integrations are bounded by grants.** A tool needs `use_tool` and a permission on the resource, and writes ask. Web
