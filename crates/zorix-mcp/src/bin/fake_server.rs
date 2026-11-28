@@ -5,7 +5,9 @@
 //! call), `--invalid-tools` (lists tools with bad names and schemas), `--many N` (lists N extra tools, 50 per page),
 //! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`),
 //! `--input-required` (modern: answers `echo` with an input request), `--noise` (writes to stderr, including a secret-looking token),
-//! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading).
+//! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading),
+//! `--child FILE` (starts a grandchild of this very program that writes a growing number into FILE ten times a second, as a server that
+//! starts helpers does; `--heartbeat FILE` is that grandchild). `env` with the name `<cwd>` answers the folder the server runs in.
 //! Tools: `echo`, `env`, `env_keys`, `cancelled`, `hang`, `crash`, `big`, `huge`.
 
 use std::io::{BufRead, Write};
@@ -56,6 +58,25 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().any(|a| a == name);
     let value = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    // The grandchild: it only proves, by a number that keeps growing, that it is still alive.
+    if let Some(file) = value("--heartbeat") {
+        let mut beat = 0u64;
+        loop {
+            let _ = std::fs::write(&file, beat.to_string());
+            beat += 1;
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+    if let Some(file) = value("--child")
+        && let Ok(me) = std::env::current_exe()
+    {
+        let _ = std::process::Command::new(me)
+            .args(["--heartbeat", &file])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
     let era = value("--era").unwrap_or_else(|| "dual".into());
     let opts = Opts {
         modern: era != "legacy",
@@ -238,7 +259,12 @@ fn main() {
                     }
                     "env" => {
                         let key = args["name"].as_str().unwrap_or("");
-                        reply(&id, text(&std::env::var(key).unwrap_or_else(|_| "<unset>".into())));
+                        if key == "<cwd>" {
+                            let here = std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default();
+                            reply(&id, text(&here));
+                        } else {
+                            reply(&id, text(&std::env::var(key).unwrap_or_else(|_| "<unset>".into())));
+                        }
                     }
                     "env_keys" => {
                         let mut keys: Vec<String> = std::env::vars().map(|(k, _)| k).collect();

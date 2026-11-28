@@ -196,17 +196,29 @@ fn resolve(command: &str) -> String {
     command.to_string()
 }
 
+/// Send `signal` to the server's process group. The server leads its own group (see `process_group(0)` below), so this reaches what
+/// it started too, and it can still be done after the leader has gone: a group lives as long as one process is in it.
 #[cfg(unix)]
-fn kill_group(pid: u32) {
-    // The server leads its own process group (see `process_group(0)` below), so this reaches what it started too.
+fn signal_group(pid: u32, signal: libc::c_int) {
     // SAFETY: `kill` takes plain integers and has no memory effects; a negative pid addresses a process group.
     unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
+        libc::kill(-(pid as i32), signal);
     }
 }
 
-#[cfg(not(unix))]
-fn kill_group(_pid: u32) {}
+#[cfg(unix)]
+fn kill_group(pid: u32) {
+    signal_group(pid, libc::SIGKILL);
+}
+
+#[cfg(unix)]
+fn terminate_group(pid: u32) {
+    signal_group(pid, libc::SIGTERM);
+}
+
+/// How long a server and what it started get to leave after they are asked to, before they are made to.
+#[cfg(unix)]
+const TERMINATE_GRACE: Duration = Duration::from_secs(2);
 
 impl StdioTransport {
     /// Start the server.
@@ -330,6 +342,23 @@ impl StdioTransport {
             }
         });
 
+        // On Windows the server and everything it starts go in one job, so ending the server ends all of it (and so does ZORIX ending).
+        #[cfg(windows)]
+        let job = match (child.raw_handle(), crate::job::Job::new()) {
+            (Some(handle), Ok(job)) => match job.add(handle) {
+                Ok(()) => Some(job),
+                Err(e) => {
+                    shared.log.lock().push(format!("[the server could not be grouped with what it starts: {e}]"));
+                    None
+                }
+            },
+            (_, Err(e)) => {
+                shared.log.lock().push(format!("[a job for the server could not be made: {e}]"));
+                None
+            }
+            (None, _) => None,
+        };
+
         // Waiter: owns the child, ends it when asked, and says when it is gone.
         let for_waiter = shared.clone();
         tokio::spawn(async move {
@@ -337,13 +366,34 @@ impl StdioTransport {
             tokio::select! {
                 _ = child.wait() => {}
                 _ = for_waiter.kill.cancelled() => {
+                    // Ask first, so a server and what it started can save what they hold; then make them.
+                    #[cfg(unix)]
                     if let Some(pid) = pid {
-                        kill_group(pid);
+                        terminate_group(pid);
+                        if tokio::time::timeout(TERMINATE_GRACE, child.wait()).await.is_err() {
+                            kill_group(pid);
+                        }
+                    }
+                    #[cfg(windows)]
+                    if let Some(job) = &job {
+                        job.terminate();
                     }
                     let _ = child.start_kill();
                     let _ = child.wait().await;
                 }
             }
+            // A server that left by itself may have left what it started behind (a grandchild keeps a group, or a job, alive). Whatever
+            // is still there goes with it.
+            #[cfg(unix)]
+            if let Some(pid) = pid {
+                kill_group(pid);
+            }
+            #[cfg(windows)]
+            if let Some(job) = &job {
+                job.terminate();
+            }
+            #[cfg(not(unix))]
+            let _ = pid;
             for_waiter.end(McpError::Closed);
             for_waiter.exited.notify_waiters();
         });

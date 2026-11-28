@@ -45,8 +45,14 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
 - **Servers are asked for nothing and answer little.** ZORIX answers `ping` and refuses everything else a server may ask of a
   client: sampling (spending your model tokens), elicitation, and roots. A server cannot read your workspace through ZORIX.
 - **A stdio server is a program running as you.** There is no sandbox around it. ZORIX starts it without a shell, with a clean
-  environment plus the variables you named (secrets from the keychain), in its own process group, and keeps the last 1 MB of
-  what it wrote on its error stream, with secrets removed. The interface says all of this before you turn one on.
+  environment plus the variables you named (secrets from the keychain), in a folder of its own (`<data folder>/mcp/<server id>`
+  unless you named one, never the folder ZORIX was started from), and keeps the last 1 MB of what it wrote on its error stream,
+  with secrets removed. The interface says all of this before you turn one on.
+- **What a server starts goes when the server goes.** On macOS and Linux the server leads its own process group; when it is stopped
+  (its input is closed, then after three seconds the group is asked to end, and after two more it is killed) or when it leaves
+  by itself or crashes, whatever is left in the group is killed. On Windows the server is put in a Job Object right after it
+  starts, so the real program behind `npx.cmd` ends with it, and so does everything when ZORIX ends. The one gap: a helper started
+  in the instant before the server joins the job is not in it.
 - **Secrets stay in the keychain.** Environment secrets and bearer tokens are stored by name in the system keychain;
   the database holds only that a secret exists.
 

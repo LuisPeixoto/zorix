@@ -47,7 +47,7 @@ definition that was shown and is refused when the server lists another one (`Pin
   server reports `readOnlyHint` for them; `destructiveHint`, `openWorldHint` or missing annotations always ask.
 - **Results are untrusted data**, wrapped like other tool results, with images and audio reduced to a placeholder, size-capped, and secret-redacted in events.
 - **Processes.** Spawned without a shell, with a clean environment plus the variables the person approved, in their own process
-  group; stderr goes to a 1 MB redacted ring log; stdin is closed first on shutdown, then terminate, then kill; a crash restarts
+  group (a Job Object on Windows, joined right after the start); stderr goes to a 1 MB redacted ring log; stdin is closed first on shutdown, then terminate, then kill; when the server has gone, by itself or not, the rest of its group or job is killed too (before Phase 12 it was not); a crash restarts
   with backoff, at most five times.
 - **Limits:** 50 servers, 200 tools per server, 4 MB per message, 60 s per call, 30 s to start.
 

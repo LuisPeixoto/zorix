@@ -8,6 +8,8 @@ pub mod error;
 pub mod headers;
 pub mod http;
 pub mod import;
+#[cfg(windows)]
+mod job;
 pub mod manager;
 pub mod oauth;
 pub mod protocol;

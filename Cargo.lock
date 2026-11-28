@@ -8450,6 +8450,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "windows-sys 0.61.2",
  "wiremock",
  "zorix-core",
  "zorix-net",
