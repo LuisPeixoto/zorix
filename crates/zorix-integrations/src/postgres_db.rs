@@ -4,12 +4,14 @@
 
 use std::time::Duration;
 
+use futures_util::TryStreamExt;
 use rustls::ClientConfig;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 use rustls_platform_verifier::ConfigVerifierExt;
 use serde_json::{Value, json};
 use tokio_postgres::config::SslMode;
+use tokio_postgres::types::ToSql;
 use tokio_postgres::{Client, Config, NoTls};
 use tokio_postgres_rustls_improved::MakeRustlsConnect;
 use zorix_core::{Connection, ToolError, redact_text};
@@ -97,6 +99,11 @@ fn db_error(e: tokio_postgres::Error) -> ToolError {
     }
 }
 
+/// No parameters for a statement that has none, in the shape `query_raw` takes.
+fn no_parameters() -> std::iter::Empty<&'static (dyn ToSql + Sync)> {
+    std::iter::empty()
+}
+
 /// The first word of a statement, in lowercase, skipping spaces and comments.
 pub fn first_word(sql: &str) -> String {
     let mut rest = sql.trim_start();
@@ -140,20 +147,39 @@ pub async fn query(
             .await
             .map_err(db_error)?;
         let statement = single(sql);
+        let stopped_early;
         let result = if matches!(word.as_str(), "show" | "explain") {
-            let rows = client.query(statement, &[]).await.map_err(db_error)?;
-            let lines: Vec<Value> =
-                rows.iter().map(|r| json!([r.try_get::<_, String>(0).unwrap_or_default()])).collect();
-            json!({"columns": ["result"], "rows": lines, "row_count": lines.len(), "truncated": false})
+            // Rows are read as they arrive and reading stops at the limits, so a plan or a setting list as long as the server
+            // likes is not held in memory first.
+            let stream = client.query_raw(statement, no_parameters()).await.map_err(db_error)?;
+            tokio::pin!(stream);
+            let mut lines: Vec<String> = Vec::new();
+            let mut bytes = 0usize;
+            let mut truncated = false;
+            while let Some(row) = stream.try_next().await.map_err(db_error)? {
+                let line = row.try_get::<_, String>(0).unwrap_or_default();
+                bytes += line.len();
+                if lines.len() >= max_rows || bytes > MAX_BYTES {
+                    truncated = true;
+                    break;
+                }
+                lines.push(line);
+            }
+            stopped_early = truncated;
+            let lines: Vec<Value> = lines.into_iter().map(|l| json!([l])).collect();
+            json!({"columns": ["result"], "rows": lines, "row_count": lines.len(), "truncated": truncated})
         } else {
             // The statement gets its own lines, so a `--` comment at its end cannot swallow the closing parenthesis.
             let wrapped = format!("SELECT to_jsonb(q) FROM (\n{statement}\n) AS q LIMIT {}", max_rows + 1);
-            let rows = client.query(&wrapped, &[]).await.map_err(db_error)?;
+            // Rows are read as they arrive and reading stops at the limits: collecting them first held up to `max_rows` whole rows in memory
+            // (a column of a few hundred megabytes each) before the byte limit was looked at.
+            let stream = client.query_raw(wrapped.as_str(), no_parameters()).await.map_err(db_error)?;
+            tokio::pin!(stream);
             let mut columns: Vec<String> = Vec::new();
             let mut out: Vec<Value> = Vec::new();
             let mut bytes = 0usize;
             let mut truncated = false;
-            for row in &rows {
+            while let Some(row) = stream.try_next().await.map_err(db_error)? {
                 let object: Value = row.try_get(0).map_err(|e| failed(format!("A row could not be read: {e}")))?;
                 if out.len() >= max_rows {
                     truncated = true;
@@ -171,9 +197,14 @@ pub async fn query(
                 }
                 out.push(Value::Array(cells));
             }
+            stopped_early = truncated;
             json!({"columns": columns, "rows": out, "row_count": out.len(), "truncated": truncated})
         };
-        let _ = client.batch_execute("ROLLBACK").await;
+        // After stopping early the rest of the answer is still on its way: the connection is simply dropped, which ends the query and
+        // rolls the transaction back, instead of waiting for what is not wanted.
+        if !stopped_early {
+            let _ = client.batch_execute("ROLLBACK").await;
+        }
         Ok::<_, ToolError>(result)
     };
     tokio::time::timeout(STATEMENT_TIMEOUT + Duration::from_secs(10), work).await.map_err(|_| {

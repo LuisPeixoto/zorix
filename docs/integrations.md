@@ -62,6 +62,12 @@ in a connection, a `:write` grant, and your approval, which shows the target and
 
 **Jira.** Search runs JQL that is **always ANDed with the project you granted**, so a query cannot escape it: a query whose parentheses or quotes do not close is refused (it is never repaired), and after `ORDER BY` only field names are accepted. Writes ask.
 
+**Databases.** `db.query` reads rows as they arrive and stops at 1,000 rows or 5 MB, so an answer is never held whole before it is cut,
+and `SHOW` and `EXPLAIN` obey the same limits. SQLite opens the file read-only; `db.execute` refuses `VACUUM`, because `VACUUM INTO`
+writes a copy of the database wherever it is told. What a read-only transaction cannot stop is a **function** the connected role
+may call that acts outside the tables (`dblink_exec`, `pg_terminate_backend`, `pg_read_file`): give a connection a role that has
+only what the model may reach.
+
 **Slack and Discord.** Reading needs a read grant on the channel; sending needs a write grant and always asks. Slack refuses
 `@channel`, `@here` and `@everyone`; Discord messages are sent with `allowed_mentions` empty, so nothing is pinged.
 

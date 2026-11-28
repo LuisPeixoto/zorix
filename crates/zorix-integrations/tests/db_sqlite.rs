@@ -181,6 +181,31 @@ async fn a_statement_that_runs_too_long_is_stopped() {
 }
 
 #[tokio::test]
+async fn vacuum_into_cannot_write_a_copy_of_the_database_anywhere() {
+    let rig = rig().await;
+    let copy = rig.dir.path().join("copy.db");
+    let sql = format!("VACUUM INTO '{}'", copy.display());
+    // Neither through the tool that changes data (with a write grant), nor through the one that only reads, in any spelling.
+    for statement in [
+        sql.clone(),
+        sql.to_ascii_lowercase(),
+        format!("  /* hi */ {sql}"),
+        format!("-- x\n{sql}"),
+        "VACUUM".to_string(),
+    ] {
+        for (tool, grants) in [("db.execute", write()), ("db.query", read())] {
+            let error =
+                message(rig.call(tool, grants, json!({"connection": "app", "sql": statement})).await.unwrap_err());
+            assert!(error.contains("VACUUM"), "{tool}: {statement}: {error}");
+        }
+    }
+    assert!(!copy.exists(), "no file was written");
+    // A word that only starts with the letters is not the statement.
+    let ok = rig.call("db.query", read(), json!({"connection": "app", "sql": "SELECT 'vacuumed'"})).await.unwrap();
+    assert_eq!(ok["rows"][0][0], "vacuumed");
+}
+
+#[tokio::test]
 async fn changing_data_needs_a_write_grant_asks_first_and_runs_one_statement() {
     let rig = rig().await;
     let execute = rig.tools.iter().find(|t| t.spec().id == "db.execute").unwrap();
