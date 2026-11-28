@@ -172,11 +172,40 @@ fn require_real(grants: &Grants, action: Action, asked: &RelativePath, real: &Re
     }
 }
 
+/// How many more times the file system is asked when its answer could be passing.
+const RETRIES: u32 = 5;
+
+/// Ask the file system, and ask again a few times (31 ms at most) while the answer is one that `settled` does not accept.
+///
+/// On Windows, replacing a file by renaming over it is not instant for others: for a moment the name can be missing or refuse
+/// access, and the file that was there is kept under `\$Extend\$Deleted` while a handle to it is open, so asking where it is can
+/// answer with a place outside the workspace although the name never left it. A moment later the new file is there.
+fn ask_again<T>(
+    settled: impl Fn(&std::io::Result<T>) -> bool,
+    mut ask: impl FnMut() -> std::io::Result<T>,
+) -> std::io::Result<T> {
+    let mut answer = ask();
+    for attempt in 0..RETRIES {
+        if settled(&answer) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1 << attempt));
+        answer = ask();
+    }
+    answer
+}
+
+/// Where a file really is. An answer outside `root` (or none) is asked for again: a link that really leads outside, or a file that
+/// is really not there, answers the same every time, and every answer that is used has passed the same check.
+fn real_place(root: &Path, ask: impl FnMut() -> std::io::Result<PathBuf>) -> std::io::Result<PathBuf> {
+    ask_again(|answer| matches!(answer, Ok(real) if real.starts_with(root)), ask)
+}
+
 /// Resolve an existing path and prove, after following links, that it is inside the root and that the place it leads to is
 /// granted and not reserved.
 fn resolve_existing(root: &Path, grants: &Grants, action: Action, path: &RelativePath) -> Result<PathBuf, ToolError> {
     let joined = path.join_onto(root);
-    let real = fs::canonicalize(&joined).map_err(|e| match e.kind() {
+    let real = real_place(root, || fs::canonicalize(&joined)).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => failed(format!("There is no such file or folder: {}.", path.display())),
         _ => failed(format!("Cannot open {}: {e}", path.display())),
     })?;
@@ -257,14 +286,15 @@ pub fn read(root: &Path, grants: &Grants, path: &str) -> Result<Value, ToolError
     let path = RelativePath::parse(path)?;
     require(grants, Action::Read, &path)?;
     let file = resolve_existing(&root, grants, Action::Read, &path)?;
-    if !file.is_file() {
+    let cannot = |e: std::io::Error| failed(format!("Cannot read {}: {e}", path.display()));
+    if !ask_again(Result::is_ok, || fs::metadata(&file)).map_err(cannot)?.is_file() {
         return Err(failed(format!("{} is not a file.", path.display())));
     }
-    let size = fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
+    // The size is the opened file's own, so it belongs to the bytes that are read even if the name is replaced meanwhile.
+    let opened = ask_again(Result::is_ok, || fs::File::open(&file)).map_err(cannot)?;
+    let size = opened.metadata().map(|m| m.len()).unwrap_or(0);
     let mut buffer = Vec::new();
-    fs::File::open(&file)
-        .and_then(|f| f.take(MAX_READ_BYTES as u64).read_to_end(&mut buffer))
-        .map_err(|e| failed(format!("Cannot read {}: {e}", path.display())))?;
+    opened.take(MAX_READ_BYTES as u64).read_to_end(&mut buffer).map_err(cannot)?;
     Ok(json!({
         "path": path.display(),
         "content": String::from_utf8_lossy(&buffer),
@@ -301,7 +331,10 @@ pub fn write(root: &Path, grants: &Grants, path: &str, content: &str) -> Result<
         return Err(failed(format!("Cannot write {}: {e}", path.display())));
     }
     drop(file);
-    fs::rename(&temporary, &target).map_err(|e| {
+    // Windows refuses to replace a file for the moment another program (a reader without delete sharing, a virus scanner) holds it.
+    let in_use =
+        |answer: &std::io::Result<()>| !matches!(answer, Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied);
+    ask_again(in_use, || fs::rename(&temporary, &target)).map_err(|e| {
         let _ = fs::remove_file(&temporary);
         failed(format!("Cannot write {}: {e}", path.display()))
     })?;
@@ -743,22 +776,56 @@ mod tests {
         let writers: Vec<_> = (0..8)
             .map(|n| {
                 let root = root.clone();
-                std::thread::spawn(move || {
+                std::thread::spawn(move || -> Result<(), String> {
                     let (name, body) = if n % 2 == 0 { ("a.txt", "text") } else { ("a.md", "markdown") };
-                    for _ in 0..40 {
-                        write(&root, &grants(), name, body).unwrap();
-                        assert_eq!(read(&root, &grants(), name).unwrap()["content"], body);
+                    for round in 0..40 {
+                        write(&root, &grants(), name, body).map_err(|e| format!("write {name} #{round}: {e:?}"))?;
+                        let got = read(&root, &grants(), name).map_err(|e| format!("read {name} #{round}: {e:?}"))?;
+                        if got["content"] != body {
+                            return Err(format!("{name} #{round} held {}", got["content"]));
+                        }
                     }
+                    Ok(())
                 })
             })
             .collect();
-        for writer in writers {
-            writer.join().unwrap();
-        }
+        // Every thread is waited for before anything is asserted, so the folder is not removed under the ones still working (which would
+        // hide the first failure behind others).
+        let failures: Vec<String> =
+            writers.into_iter().filter_map(|writer| writer.join().expect("a writer panicked").err()).collect();
+        assert!(failures.is_empty(), "{failures:#?}");
         let mut left: Vec<String> =
             fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
         left.sort();
         assert_eq!(left, ["a.md", "a.txt"], "no temporary file is left behind");
+    }
+
+    #[test]
+    fn a_files_place_is_asked_for_again_until_the_answer_is_good_and_not_for_ever() {
+        use std::io::{Error, ErrorKind};
+        let root = Path::new("/ws");
+        // The answers in order; the last one repeats.
+        let answers = |script: &[Result<&str, ErrorKind>]| {
+            let mut asked = 0;
+            let got = real_place(root, || {
+                let answer = script[asked.min(script.len() - 1)];
+                asked += 1;
+                answer.map(PathBuf::from).map_err(Error::from)
+            });
+            (got.map_err(|e| e.kind()), asked)
+        };
+        let (inside, outside) = (Ok("/ws/a.txt"), Ok("/$Extend/$Deleted/0001"));
+        let there = Ok(PathBuf::from("/ws/a.txt"));
+        let tries = 1 + RETRIES as usize;
+        // A file being replaced answers outside, refused or missing for a moment, then where it should be.
+        assert_eq!(answers(&[outside, outside, inside]), (there.clone(), 3));
+        assert_eq!(answers(&[Err(ErrorKind::PermissionDenied), inside]), (there.clone(), 2));
+        assert_eq!(answers(&[Err(ErrorKind::NotFound), inside]), (there.clone(), 2));
+        // A link that really leads outside, and a file that is really not there, are the same after the last try.
+        assert_eq!(answers(&[outside]), (Ok(PathBuf::from("/$Extend/$Deleted/0001")), tries));
+        assert_eq!(answers(&[Err(ErrorKind::NotFound)]), (Err(ErrorKind::NotFound), tries));
+        // A good answer is asked for once.
+        assert_eq!(answers(&[inside]), (there, 1));
     }
 
     #[test]

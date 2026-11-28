@@ -77,7 +77,8 @@ call:
 
 Writes go to a temporary file that is renamed over the target, so a crash never leaves half a file. The temporary file is
 created new (anything already at its name, a link included, makes the write pick another name) and its name carries a number
-nobody can guess, so two files with the same stem (`a.txt` and `a.md`) never share one.
+nobody can guess, so two files with the same stem (`a.txt` and `a.md`) never share one. On Windows, where the rename is not instant
+for others, a read that meets it asks again for a few milliseconds before it says there is a problem.
 
 **A limit, stated plainly:** the real path is checked and then the file is opened, as two steps. Somebody who can change the workspace folder *at that very moment* (another program of
 the same user, replacing a folder with a link between the check and the open) could redirect one call. Closing that gap needs `openat` and `O_NOFOLLOW` all the way down, which is not
