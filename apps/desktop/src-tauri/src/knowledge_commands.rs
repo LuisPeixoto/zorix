@@ -55,6 +55,7 @@ async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiErr
     let states = services.memory_store.document_states(root.id).await.map_err(ui)?;
     let count = |wanted: DocStatus| states.values().filter(|s| s.status == wanted).count() as u64;
     let scans = services.memory_store.scan_counts(root.id).await.map_err(ui)?;
+    let (watching, watch_note) = watch_state(&services.watches, root.id);
     Ok(RootRow {
         id: root.id.to_string(),
         path: root.path.clone(),
@@ -72,9 +73,22 @@ async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiErr
         scans_unread: scans.unread,
         syncing: services.syncs.lock().contains_key(&root.id),
         watch: root.watch,
-        watching: services.watches.lock().get(&root.id).map_or("off", |w| w.mode).to_string(),
-        watch_note: services.watches.lock().get(&root.id).and_then(|w| w.note.clone()),
+        watching,
+        watch_note,
     })
+}
+
+/// How a folder is kept up to date (`watching`, `polling` or `off`) and why it is polled. The lock is taken **once**: it is not reentrant, so asking for it
+/// twice in one expression waits for itself for ever (the Documents screen stayed empty whenever a folder existed).
+fn watch_state(
+    watches: &parking_lot::Mutex<std::collections::HashMap<KnowledgeRootId, Watching>>,
+    id: KnowledgeRootId,
+) -> (String, Option<String>) {
+    let held = watches.lock();
+    match held.get(&id) {
+        Some(watching) => (watching.mode.to_string(), watching.note.clone()),
+        None => ("off".to_string(), None),
+    }
 }
 
 /// How a folder is kept up to date while the app runs.
@@ -607,4 +621,32 @@ pub async fn reembed(app: AppHandle, state: State<'_, AppState>) -> Result<bool,
 #[tauri::command]
 pub async fn reembedding(state: State<'_, AppState>) -> Result<bool, UiError> {
     Ok(state.services()?.reembed_job.lock().is_some())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    #[test]
+    fn the_state_of_a_folder_is_read_with_one_lock_and_never_waits_for_itself() {
+        let watches = Arc::new(parking_lot::Mutex::new(HashMap::new()));
+        let (known, other) = (KnowledgeRootId::new(), KnowledgeRootId::new());
+        watches.lock().insert(
+            known,
+            Watching { mode: "polling", note: Some("the drive cannot be watched".into()), watch: None, timer: None },
+        );
+        // The call runs on a thread so that a lock taken twice (the bug: the Documents screen stayed empty) fails here instead of hanging the suite.
+        let (sender, receiver) = mpsc::channel();
+        let shared = watches.clone();
+        std::thread::spawn(move || {
+            let _ = sender.send((watch_state(&shared, known), watch_state(&shared, other)));
+        });
+        let (polled, unknown) = receiver.recv_timeout(Duration::from_secs(10)).expect("the lock was taken twice");
+        assert_eq!(polled, ("polling".to_string(), Some("the drive cannot be watched".to_string())));
+        assert_eq!(unknown, ("off".to_string(), None));
+        assert!(watches.try_lock().is_some(), "the lock is let go");
+    }
 }
