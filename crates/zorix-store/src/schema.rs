@@ -541,6 +541,11 @@ const MIGRATIONS: &[&str] = &[
     "
     ALTER TABLE knowledge_roots ADD COLUMN watch INTEGER NOT NULL DEFAULT 0;
     ",
+    // 17: a local MCP server has a sandbox (ADR-0050). Servers that were there before have none recorded and keep running as before until a
+    // person chooses; the version bump also keeps an older ZORIX, which would ignore the column and run them unconfined, from opening this data.
+    "
+    ALTER TABLE mcp_servers ADD COLUMN sandbox TEXT;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -765,6 +770,25 @@ mod tests {
         }
         let projects: u32 = conn.query_row("SELECT COUNT(*) FROM projects", [], |r| r.get(0)).unwrap();
         assert_eq!(projects, 1);
+    }
+
+    #[test]
+    fn a_database_of_schema_16_upgrades_and_its_servers_stay_unconfined_until_a_person_chooses() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(16) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO mcp_servers (id, tenant, name, enabled, era, created_at, updated_at, doc) VALUES ('s1','local','old',1,NULL,1,1,'{\"kind\":\"stdio\"}')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let sandbox: Option<String> =
+            conn.query_row("SELECT sandbox FROM mcp_servers WHERE id = 's1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(sandbox, None, "nothing is decided for a server that was there before");
     }
 
     #[test]

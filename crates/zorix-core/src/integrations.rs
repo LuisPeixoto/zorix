@@ -97,7 +97,7 @@ pub enum HttpAuth {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum McpTransport {
-    /// A program ZORIX starts and talks to over its standard streams. It runs as the user, without a sandbox.
+    /// A program ZORIX starts and talks to over its standard streams, sandboxed by default (see [`ServerSandbox`]).
     Stdio {
         /// The program.
         command: String,
@@ -117,6 +117,77 @@ pub enum McpTransport {
     },
 }
 
+/// How a local server is confined.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxMode {
+    /// Restricted with what this operating system can enforce.
+    Native,
+    /// Not restricted: the server runs as the person, as every server did before Phase 12.
+    Off,
+}
+
+/// A folder a confined server may use besides its own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SandboxFolder {
+    /// The absolute path.
+    pub path: String,
+    /// Whether the server may change what is in it.
+    #[serde(default)]
+    pub write: bool,
+}
+
+/// The sandbox of a local (stdio) MCP server.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerSandbox {
+    /// Whether and how it is confined.
+    pub mode: SandboxMode,
+    /// Whether it may open network connections.
+    pub network: bool,
+    /// Folders it may use besides its own.
+    #[serde(default)]
+    pub folders: Vec<SandboxFolder>,
+}
+
+/// The most folders a confined server may be given.
+pub const MAX_SANDBOX_FOLDERS: usize = 16;
+
+impl ServerSandbox {
+    /// The sandbox a new local server starts with: confined, and with the network only when its command has to fetch what it runs (`npx`,
+    /// `uvx` and the like download the package on first use).
+    pub fn for_new(command: &str) -> Self {
+        let name = command.rsplit(['/', '\\']).next().unwrap_or(command).to_ascii_lowercase();
+        let name = name.strip_suffix(".cmd").or_else(|| name.strip_suffix(".exe")).unwrap_or(&name).to_string();
+        let fetches = matches!(name.as_str(), "npx" | "uvx" | "bunx" | "pnpm" | "yarn" | "uv" | "pipx" | "deno");
+        Self { mode: SandboxMode::Native, network: fetches, folders: Vec::new() }
+    }
+
+    /// Check the folders: each an absolute path with no `..`, not a filesystem root, not a folder that holds credentials.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.folders.len() > MAX_SANDBOX_FOLDERS {
+            return Err(format!("A server may be given at most {MAX_SANDBOX_FOLDERS} folders."));
+        }
+        for folder in &self.folders {
+            let path = std::path::Path::new(&folder.path);
+            let text = &folder.path;
+            if !path.is_absolute() || text.chars().any(char::is_control) || text.contains('"') {
+                return Err(format!("“{text}” is not a folder ZORIX can give a server: use an absolute path."));
+            }
+            if path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                return Err(format!("“{text}” goes up with “..”; write the folder itself."));
+            }
+            if path.parent().is_none() {
+                return Err(format!("“{text}” is the whole disk. Give a server only the folder it needs."));
+            }
+            let private = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure", "gcloud", "Keychains"];
+            if path.components().any(|c| private.iter().any(|p| c.as_os_str() == *p)) {
+                return Err(format!("“{text}” holds credentials and is never given to a server."));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// An MCP server a person added.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpServer {
@@ -132,6 +203,10 @@ pub struct McpServer {
     pub enabled: bool,
     /// The protocol era found the last time (`modern` or `legacy`), cached (ADR-0018).
     pub era: Option<String>,
+    /// The sandbox of a local server. `None` for a remote one, and for a local one added before ZORIX had sandboxes, which runs
+    /// unconfined until a person chooses.
+    #[serde(default)]
+    pub sandbox: Option<ServerSandbox>,
     /// When it was added.
     pub created_at: Timestamp,
     /// When it was last changed.
@@ -413,6 +488,14 @@ pub trait IntegrationStore: Send + Sync {
     async fn add_mcp_server(&self, tenant: &TenantId, new: NewMcpServer, now: Timestamp) -> Result<McpServer>;
     /// Change a server's transport or whether it is enabled. The name does not change.
     async fn update_mcp_server(&self, tenant: &TenantId, server: McpServer, now: Timestamp) -> Result<McpServer>;
+    /// Set how a local server is confined. `None` means "never chosen".
+    async fn set_mcp_sandbox(
+        &self,
+        tenant: &TenantId,
+        id: McpServerId,
+        sandbox: Option<ServerSandbox>,
+        now: Timestamp,
+    ) -> Result<McpServer>;
     /// Remember the protocol era found for a server.
     async fn set_mcp_era(&self, tenant: &TenantId, id: McpServerId, era: Option<String>) -> Result<()>;
     /// Remove a server and what is known about its tools.
@@ -508,5 +591,45 @@ mod tests {
         let text = serde_json::to_string(&transport).unwrap();
         assert!(text.contains("TOKEN") && text.contains("secret") && !text.contains("value\":\"ghp"));
         assert_eq!(serde_json::from_str::<McpTransport>(&text).unwrap(), transport);
+    }
+
+    #[test]
+    fn a_new_server_is_confined_and_has_the_network_only_to_fetch_what_it_runs() {
+        for fetching in ["npx", "uvx", "/usr/local/bin/npx", "C:\\Program Files\\nodejs\\npx.cmd", "UVX"] {
+            let sandbox = ServerSandbox::for_new(fetching);
+            assert_eq!((sandbox.mode, sandbox.network), (SandboxMode::Native, true), "{fetching}");
+        }
+        for local in ["node", "python3", "./server", "zorix-fake-mcp", "npxish"] {
+            let sandbox = ServerSandbox::for_new(local);
+            assert_eq!((sandbox.mode, sandbox.network), (SandboxMode::Native, false), "{local}");
+        }
+    }
+
+    #[test]
+    fn a_folder_for_a_server_is_absolute_narrow_and_never_a_credential_folder() {
+        let with = |path: &str| ServerSandbox {
+            mode: SandboxMode::Native,
+            network: false,
+            folders: vec![SandboxFolder { path: path.into(), write: false }],
+        };
+        let root = if cfg!(windows) { "C:\\" } else { "/" };
+        let fine = if cfg!(windows) { "C:\\work\\notes" } else { "/work/notes" };
+        assert!(with(fine).validate().is_ok());
+        for bad in [
+            root.to_string(),
+            "notes".into(),
+            "../x".into(),
+            format!("{fine}/../.."),
+            format!("{root}home/a/.ssh"),
+            format!("{root}home/a/.config/gcloud"),
+            format!("{fine}\""),
+        ] {
+            assert!(with(&bad).validate().is_err(), "{bad}");
+        }
+        let many = ServerSandbox {
+            folders: vec![SandboxFolder { path: fine.into(), write: false }; MAX_SANDBOX_FOLDERS + 1],
+            ..with(fine)
+        };
+        assert!(many.validate().is_err());
     }
 }

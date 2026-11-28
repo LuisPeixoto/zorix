@@ -4,8 +4,8 @@
 use serde_json::{Value, json};
 use zorix_core::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
-    McpServer, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, TenantId, Timestamp,
-    ToolTrust,
+    McpServer, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, SandboxFolder,
+    SandboxMode, ServerSandbox, TenantId, Timestamp, ToolTrust,
 };
 use zorix_store::SqliteIntegrationStore;
 
@@ -412,4 +412,40 @@ async fn the_variables_of_a_server_are_names_that_differ_by_more_than_case() {
     // Changing a server later is held to the same rule.
     let changed = McpServer { transport: with(&["FOO", "foo"]), ..ok };
     assert!(store.update_mcp_server(&me, changed, NOW).await.is_err());
+}
+
+#[tokio::test]
+async fn a_new_local_server_is_confined_a_remote_one_has_no_sandbox_and_a_choice_is_kept() {
+    let store = SqliteIntegrationStore::open_in_memory().unwrap();
+    let me = tenant("local");
+    let local =
+        store.add_mcp_server(&me, NewMcpServer { name: "files".into(), transport: stdio("npx") }, NOW).await.unwrap();
+    let sandbox = local.sandbox.clone().expect("a new local server starts confined");
+    assert_eq!((sandbox.mode, sandbox.network, sandbox.folders.len()), (SandboxMode::Native, true, 0));
+    let remote = NewMcpServer {
+        name: "web".into(),
+        transport: McpTransport::Http { url: "https://mcp.example.com/mcp".into(), auth: HttpAuth::None },
+    };
+    assert_eq!(store.add_mcp_server(&me, remote, NOW).await.unwrap().sandbox, None);
+    // A choice is stored and read back; a folder that cannot be given is refused and changes nothing.
+    let folder = if cfg!(windows) { "C:\\work" } else { "/work" };
+    let chosen = ServerSandbox {
+        mode: SandboxMode::Native,
+        network: false,
+        folders: vec![SandboxFolder { path: folder.into(), write: true }],
+    };
+    store.set_mcp_sandbox(&me, local.id, Some(chosen.clone()), NOW).await.unwrap();
+    assert_eq!(store.mcp_server(&me, local.id).await.unwrap().unwrap().sandbox, Some(chosen.clone()));
+    let bad = ServerSandbox {
+        folders: vec![SandboxFolder { path: format!("{folder}/.ssh"), write: false }],
+        ..chosen.clone()
+    };
+    assert!(store.set_mcp_sandbox(&me, local.id, Some(bad), NOW).await.is_err());
+    assert_eq!(store.mcp_server(&me, local.id).await.unwrap().unwrap().sandbox, Some(chosen));
+    // Turning a server on and off, or changing it, keeps its sandbox.
+    let server = store.mcp_server(&me, local.id).await.unwrap().unwrap();
+    store.update_mcp_server(&me, McpServer { enabled: true, ..server }, NOW).await.unwrap();
+    assert!(store.mcp_server(&me, local.id).await.unwrap().unwrap().sandbox.is_some());
+    // Another tenant cannot change it.
+    assert!(store.set_mcp_sandbox(&tenant("other"), local.id, None, NOW).await.is_err());
 }

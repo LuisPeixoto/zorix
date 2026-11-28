@@ -13,7 +13,7 @@ use zorix_core::integrations::{MAX_CONNECTIONS, MAX_MCP_SERVERS, MAX_TOOLS_PER_S
 use zorix_core::{
     Connection, ConnectionId, ConnectionKind, ConnectionPatch, ConnectionTest, Error, IntegrationStore, McpServer,
     McpServerId, McpToolPin, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, Result,
-    TenantId, Timestamp, ToolTrust, valid_name,
+    ServerSandbox, TenantId, Timestamp, ToolTrust, valid_name,
 };
 
 /// Stores integrations in the same SQLite file as everything else.
@@ -66,17 +66,27 @@ impl SqliteIntegrationStore {
     }
 }
 
-const SERVER_COLUMNS: &str = "id, tenant, name, enabled, era, created_at, updated_at, doc";
+const SERVER_COLUMNS: &str = "id, tenant, name, enabled, era, created_at, updated_at, doc, sandbox";
 
-/// The columns of a server row as read: id, tenant, name, enabled, era, created, updated, transport JSON.
-type RawServer = (String, String, String, bool, Option<String>, i64, i64, String);
+/// The columns of a server row as read: id, tenant, name, enabled, era, created, updated, transport JSON, sandbox JSON.
+type RawServer = (String, String, String, bool, Option<String>, i64, i64, String, Option<String>);
 
 fn server_from(row: &Row<'_>) -> rusqlite::Result<RawServer> {
-    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?))
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+        row.get(5)?,
+        row.get(6)?,
+        row.get(7)?,
+        row.get(8)?,
+    ))
 }
 
 fn build_server(raw: RawServer) -> Result<McpServer> {
-    let (id, tenant, name, enabled, era, created, updated, doc) = raw;
+    let (id, tenant, name, enabled, era, created, updated, doc, sandbox) = raw;
     Ok(McpServer {
         id: id.parse().map_err(storage)?,
         tenant: TenantId::new(tenant).map_err(storage)?,
@@ -84,6 +94,7 @@ fn build_server(raw: RawServer) -> Result<McpServer> {
         transport: parse::<McpTransport>(&doc)?,
         enabled,
         era,
+        sandbox: sandbox.as_deref().map(parse::<ServerSandbox>).transpose()?,
         created_at: Timestamp(created),
         updated_at: Timestamp(updated),
     })
@@ -259,9 +270,14 @@ impl IntegrationStore for SqliteIntegrationStore {
                 return Err(invalid(format!("There is already an MCP server called {}.", new.name)));
             }
             let id = McpServerId::new();
+            // Every new local server starts confined, whoever added it and however: the default is decided here, once.
+            let sandbox = match &new.transport {
+                McpTransport::Stdio { command, .. } => Some(ServerSandbox::for_new(command)),
+                McpTransport::Http { .. } => None,
+            };
             conn.execute(
-                "INSERT INTO mcp_servers (id, tenant, name, enabled, era, created_at, updated_at, doc) VALUES (?1, ?2, ?3, 0, NULL, ?4, ?4, ?5)",
-                params![id.to_string(), tenant.as_str(), new.name, now.millis(), encode(&new.transport)?],
+                "INSERT INTO mcp_servers (id, tenant, name, enabled, era, created_at, updated_at, doc, sandbox) VALUES (?1, ?2, ?3, 0, NULL, ?4, ?4, ?5, ?6)",
+                params![id.to_string(), tenant.as_str(), new.name, now.millis(), encode(&new.transport)?, sandbox.as_ref().map(encode).transpose()?],
             )
             .map_err(storage)?;
             Ok(McpServer {
@@ -271,6 +287,7 @@ impl IntegrationStore for SqliteIntegrationStore {
                 transport: new.transport,
                 enabled: false,
                 era: None,
+                sandbox,
                 created_at: now,
                 updated_at: now,
             })
@@ -298,6 +315,36 @@ impl IntegrationStore for SqliteIntegrationStore {
                 return Err(Error::Missing(format!("MCP server {}", server.id)));
             }
             Ok(McpServer { updated_at: now, ..server })
+        })
+    }
+
+    async fn set_mcp_sandbox(
+        &self,
+        tenant: &TenantId,
+        id: McpServerId,
+        sandbox: Option<ServerSandbox>,
+        now: Timestamp,
+    ) -> Result<McpServer> {
+        if let Some(sandbox) = &sandbox {
+            sandbox.validate().map_err(invalid)?;
+        }
+        self.with(|conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE mcp_servers SET sandbox = ?3, updated_at = ?4 WHERE id = ?1 AND tenant = ?2",
+                    params![id.to_string(), tenant.as_str(), sandbox.as_ref().map(encode).transpose()?, now.millis()],
+                )
+                .map_err(storage)?;
+            if changed == 0 {
+                return Err(Error::Missing(format!("MCP server {id}")));
+            }
+            conn.query_row(
+                &format!("SELECT {SERVER_COLUMNS} FROM mcp_servers WHERE tenant = ?1 AND id = ?2"),
+                params![tenant.as_str(), id.to_string()],
+                server_from,
+            )
+            .map_err(storage)
+            .and_then(build_server)
         })
     }
 

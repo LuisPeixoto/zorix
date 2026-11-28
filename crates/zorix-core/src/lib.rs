@@ -62,8 +62,8 @@ pub use ids::{
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
-    McpServer, McpToolPin, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus, ToolTrust,
-    valid_name,
+    McpServer, McpToolPin, McpTransport, NewConnection, NewMcpServer, ObservedTool, PinAction, PinStatus,
+    SandboxFolder, SandboxMode, ServerSandbox, ToolTrust, valid_name,
 };
 pub use memory::{
     ChunkView, Corpus, DocState, DocStatus, DocumentWrite, KnowledgeRoot, MemoryFilter, MemoryItem, MemoryKind,
