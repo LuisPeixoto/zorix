@@ -15,6 +15,29 @@ use crate::permission::Grants;
 use crate::state::{ExecutionState, InvalidTransition, Trigger, transition};
 use crate::time::Timestamp;
 
+/// The most files a person can attach to a run.
+pub const MAX_ATTACHMENTS: usize = 10;
+/// The most characters kept from one attached file.
+pub const MAX_ATTACHMENT_CHARS: usize = 1_000_000;
+/// The most characters kept from all the attached files of a run together.
+pub const MAX_ATTACHMENTS_CHARS: usize = 3_000_000;
+
+/// A file a person attached to a run: its name and the text that was read from it when the run was made (ADR-0049). The run is given the text as data,
+/// wrapped like every document; attaching a file gives it no permission to read anything else.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attachment {
+    /// The file's name, never its path: the run is not told where on the computer the file was.
+    pub name: String,
+    /// The text, with anything that looks like a secret removed.
+    pub text: String,
+    /// The size of the file in bytes.
+    #[serde(default)]
+    pub bytes: u64,
+    /// The text was cut at the limit.
+    #[serde(default)]
+    pub truncated: bool,
+}
+
 /// The activity to carry out.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TaskRequest {
@@ -26,6 +49,9 @@ pub struct TaskRequest {
     /// Structured data that goes with the request. The model sees it as data.
     #[serde(default)]
     pub input: Option<Value>,
+    /// Files the person attached: their text, given to the run as data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
     /// Which model to use. The runtime does not interpret it: the `ModelGateway` does.
     pub model: String,
     /// A JSON Schema the final answer must satisfy, when the answer is structured.
@@ -411,6 +437,22 @@ impl Execution {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_request_stored_before_attachments_still_reads_and_writes_the_same() {
+        let old = r#"{"prompt":"hi","model":"demo","metadata":{},"params":{}}"#;
+        let request: TaskRequest = serde_json::from_str(old).unwrap();
+        assert!(request.attachments.is_empty());
+        let written = serde_json::to_value(&request).unwrap();
+        assert!(written.get("attachments").is_none(), "an empty list is not written: {written}");
+
+        let with = TaskRequest {
+            attachments: vec![Attachment { name: "a.md".into(), text: "x".into(), bytes: 1, truncated: false }],
+            ..request
+        };
+        let again: TaskRequest = serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
+        assert_eq!(again, with);
+    }
 
     fn request() -> NewExecution {
         NewExecution {
