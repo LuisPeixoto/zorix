@@ -125,7 +125,16 @@ async fn jira_reads_are_limited_to_the_granted_project_and_a_search_cannot_leave
                 .contains("no permission to read jira:ABC")
         );
     }
-    assert!(rig.call("jira.get_issue", read, json!({"key": "not-a-key"})).await.is_err());
+    assert!(rig.call("jira.get_issue", read.clone(), json!({"key": "not-a-key"})).await.is_err());
+    // A search that closes the wrapping group early to reach another project is refused before anything is sent, and so is a
+    // project that is not a key.
+    for hostile in [
+        json!({"project": "ABC", "jql": "x = 1) OR project = OTHER OR (x = 1"}),
+        json!({"project": "ABC", "jql": "x = 1 ORDER BY a) OR (project = OTHER"}),
+        json!({"project": "ABC\" OR project = \"Z", "jql": ""}),
+    ] {
+        assert!(rig.call("jira.search", read.clone(), hostile.clone()).await.is_err(), "{hostile}");
+    }
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
 }
 
