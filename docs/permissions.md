@@ -144,5 +144,5 @@ the worker's *still asks* list always ask, at every level. A manager reads who r
 ## Workflows
 
 A workflow's actions ask first by default, bound to the exact call. A step set to run without asking is confirmed by a person when publishing, and the version records who and when. It is
-refused for nothing a person must approve, and its resource grants (a channel, a host) come from the step itself. See [workflows](workflows.md#people).
+refused for nothing a person must approve, and its resource grants (a channel, a host) come from the step itself, and a host has to be written in the step, not filled in from data. Its arguments are checked against the tool's schema and the policy's standing refusals (`PolicyEngine::standing_denial`: forbidden actions, blocked tools, open-world, missing grants) apply, as they do to a run. See [workflows](workflows.md#people).
 

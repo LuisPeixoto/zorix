@@ -52,6 +52,14 @@ pub trait PolicyEngine: Send + Sync {
     /// May this call run now?
     fn evaluate_tool_call(&self, request: &PolicyRequest<'_>) -> PolicyDecision;
 
+    /// The reason a call is refused whatever else is true of it: a forbidden action, a rule that blocks the tool, a tool that
+    /// reaches outside this computer where that is not allowed, or a permission that `grants` lack. `None` when none of those hold.
+    ///
+    /// [`evaluate_tool_call`](Self::evaluate_tool_call) starts with this, and so does anything that runs a tool without an execution
+    /// (a workflow action), so that no way of running a call skips the rules. Asking a person is not part of it: whoever runs the
+    /// call decides how to ask.
+    fn standing_denial(&self, tool: &ToolSpec, grants: &crate::Grants) -> Option<String>;
+
     /// Has the execution used up a limit? `None` means it may go on.
     fn check_limits(&self, execution: &Execution) -> Option<Failure>;
 }

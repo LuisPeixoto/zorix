@@ -5,7 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 use zorix_core::{
-    AutonomyLevel, Execution, Failure, LimitKind, Permission, PolicyDecision, PolicyEngine, PolicyRequest,
+    AutonomyLevel, Execution, Failure, Grants, LimitKind, Permission, PolicyDecision, PolicyEngine, PolicyRequest,
+    ToolSpec,
 };
 
 /// What a rule does to the calls it matches.
@@ -82,23 +83,31 @@ fn deny(reason: String) -> PolicyDecision {
 }
 
 impl PolicyEngine for DefaultPolicy {
+    fn standing_denial(&self, tool: &ToolSpec, grants: &Grants) -> Option<String> {
+        let required = tool.all_required_permissions();
+        if let Some(hit) = required.iter().find(|p| self.policy.forbidden.iter().any(|f| f.covers(p))) {
+            return Some(format!("The action “{hit}” is forbidden by policy."));
+        }
+        if let Some(rule) = self.policy.rules.iter().find(|r| r.effect == Effect::Deny && r.matches(&tool.id)) {
+            return Some(rule.reason.clone().unwrap_or_else(|| format!("The tool {} is blocked by policy.", tool.id)));
+        }
+        if !self.policy.allow_open_world && tool.annotations.open_world {
+            return Some(format!("{} reaches outside this computer, which this environment does not allow.", tool.id));
+        }
+        let missing = grants.missing(&required);
+        if !missing.is_empty() {
+            let list: Vec<String> = missing.iter().map(|p| p.to_string()).collect();
+            return Some(format!("This execution has no permission for: {}.", list.join(", ")));
+        }
+        None
+    }
+
     fn evaluate_tool_call(&self, request: &PolicyRequest<'_>) -> PolicyDecision {
         let tool = request.tool;
         let required = tool.all_required_permissions();
 
-        if let Some(hit) = required.iter().find(|p| self.policy.forbidden.iter().any(|f| f.covers(p))) {
-            return deny(format!("The action “{hit}” is forbidden by policy."));
-        }
-        if let Some(rule) = self.policy.rules.iter().find(|r| r.effect == Effect::Deny && r.matches(&tool.id)) {
-            return deny(rule.reason.clone().unwrap_or_else(|| format!("The tool {} is blocked by policy.", tool.id)));
-        }
-        if !self.policy.allow_open_world && tool.annotations.open_world {
-            return deny(format!("{} reaches outside this computer, which this environment does not allow.", tool.id));
-        }
-        let missing = request.execution.grants.missing(&required);
-        if !missing.is_empty() {
-            let list: Vec<String> = missing.iter().map(|p| p.to_string()).collect();
-            return deny(format!("This execution has no permission for: {}.", list.join(", ")));
+        if let Some(reason) = self.standing_denial(tool, &request.execution.grants) {
+            return deny(reason);
         }
         let rule_asks = self.policy.rules.iter().find(|r| r.effect == Effect::RequireApproval && r.matches(&tool.id));
         // What the default policy would hold for a person, apart from an explicit rule.

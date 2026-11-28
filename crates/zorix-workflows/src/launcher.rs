@@ -11,10 +11,11 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_agents::{AgentAsk, ModelResolver};
 use zorix_core::{
-    Action, AgentSlug, ExecutionEngine, ExecutionId, ExecutionState, Grants, Limits, Permission, TenantId, Tool,
-    ToolCallId, ToolContext, ToolRegistry, network_grant,
+    Action, AgentSlug, ExecutionEngine, ExecutionId, ExecutionState, Grants, Limits, Permission, PolicyEngine,
+    TenantId, Tool, ToolCallId, ToolContext, ToolRegistry, network_grant,
 };
 use zorix_hub::Hub;
+use zorix_runtime::{DefaultPolicy, ToolExecutor};
 
 /// What to start.
 #[derive(Clone, Debug, PartialEq)]
@@ -137,6 +138,27 @@ pub fn http_call(method: &str, url: &str, body: Option<&str>) -> ToolCall {
     ToolCall { tool: "http.request".into(), arguments }
 }
 
+/// Whether the part of an authored address that decides where a request goes (the scheme and the host, with a port) is written in
+/// the step itself. Text filled in from data may only come after it: a webhook payload that could name the host would send a
+/// published, unattended step to any machine, this computer's own services and the local network included.
+pub fn authority_is_literal(authored: &str) -> Result<(), String> {
+    let authored = authored.trim();
+    let Some((scheme, rest)) = authored.split_once("://") else {
+        return Err(
+            "An HTTP step's address has to start with https:// (or http:// for this computer), written in the step."
+                .into(),
+        );
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if scheme.contains("{{") || authority.contains("{{") || authority.is_empty() {
+        return Err(
+            "The host of an HTTP step has to be written in the step, not filled in from data: `{{…}}` may only come after the host."
+                .into(),
+        );
+    }
+    Ok(())
+}
+
 /// The grants a single call needs, taken from the call itself.
 pub fn grants_for(call: &ToolCall) -> Result<Grants, String> {
     let mut permissions = vec![Permission::use_tool(&call.tool)];
@@ -188,6 +210,8 @@ pub struct HubLauncher {
     engine: Arc<dyn ExecutionEngine>,
     resolver: Arc<dyn ModelResolver>,
     tenant: TenantId,
+    /// The rules an action is held to, the same ones an execution's tool calls are held to.
+    policy: Arc<dyn PolicyEngine>,
 }
 
 impl HubLauncher {
@@ -198,7 +222,14 @@ impl HubLauncher {
         resolver: Arc<dyn ModelResolver>,
         tenant: TenantId,
     ) -> Self {
-        Self { hub, engine, resolver, tenant }
+        Self { hub, engine, resolver, tenant, policy: Arc::new(DefaultPolicy::default()) }
+    }
+
+    /// Hold actions to this policy instead of the default one. A host that runs executions under its own policy gives the same one
+    /// here, so a rule that stops a tool in a run stops it in a workflow too.
+    pub fn with_policy(mut self, policy: Arc<dyn PolicyEngine>) -> Self {
+        self.policy = policy;
+        self
     }
 }
 
@@ -276,20 +307,38 @@ impl StepLauncher for HubLauncher {
     }
 
     async fn call_tool(&self, call: &ToolCall) -> Result<Value, String> {
-        let tool: Arc<dyn Tool> =
-            self.hub.registry.get(&call.tool).ok_or_else(|| format!("The tool {} is not available.", call.tool))?;
-        let ctx = ToolContext {
-            execution_id: ExecutionId::new(),
-            tenant: self.tenant.clone(),
-            call_id: ToolCallId("workflow-action".into()),
-            grants: grants_for(call)?,
-            cancel: CancellationToken::new(),
-            workspace_root: None,
-            conversation: None,
-            agent: None,
-        };
-        zorix_runtime::ToolExecutor::run(&*tool, &ctx, call.arguments.clone()).await.map_err(|e| e.to_string())
+        call_registered_tool(&*self.hub.registry, &*self.policy, &self.tenant, call).await
     }
+}
+
+/// Run the tool an action step names, held to what a model's call is held to: the arguments are checked against the tool's schema
+/// (a value filled in from a payload is as untrusted as one a model wrote), and the policy's standing refusals apply. Asking a
+/// person is the step's own `ask`, decided before this is called.
+pub async fn call_registered_tool(
+    registry: &dyn ToolRegistry,
+    policy: &dyn PolicyEngine,
+    tenant: &TenantId,
+    call: &ToolCall,
+) -> Result<Value, String> {
+    let tool: Arc<dyn Tool> =
+        registry.get(&call.tool).ok_or_else(|| format!("The tool {} is not available.", call.tool))?;
+    let spec = tool.spec();
+    ToolExecutor::validate_arguments(spec, &call.arguments).map_err(|e| e.to_string())?;
+    let grants = grants_for(call)?;
+    if let Some(reason) = policy.standing_denial(spec, &grants) {
+        return Err(reason);
+    }
+    let ctx = ToolContext {
+        execution_id: ExecutionId::new(),
+        tenant: tenant.clone(),
+        call_id: ToolCallId("workflow-action".into()),
+        grants,
+        cancel: CancellationToken::new(),
+        workspace_root: None,
+        conversation: None,
+        agent: None,
+    };
+    ToolExecutor::run(&*tool, &ctx, call.arguments.clone()).await.map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -317,6 +366,139 @@ mod tests {
         assert!(!slack.allows(&Permission::new(Action::Write, "slack:other")));
         assert!(grants_for(&http_call("GET", "not a url", None)).is_err());
         assert!(grants_for(&ToolCall { tool: "db.execute".into(), arguments: json!({}) }).is_err());
+    }
+
+    #[test]
+    fn the_host_of_an_http_step_is_written_in_the_step() {
+        for good in [
+            "https://hooks.example.com/x",
+            "https://hooks.example.com/{{trigger.id}}",
+            "https://hooks.example.com:8443/x?y={{trigger.y}}",
+            "http://localhost:8080/a",
+            "https://hooks.example.com?q={{x}}",
+            " https://hooks.example.com/x ",
+        ] {
+            assert!(authority_is_literal(good).is_ok(), "{good}");
+        }
+        for bad in [
+            "{{trigger.url}}",
+            "https://{{trigger.host}}/x",
+            "https://hooks.example.com{{trigger.path}}",
+            "https://hooks.example.com:{{trigger.port}}/x",
+            "{{trigger.scheme}}://hooks.example.com/x",
+            "https://{{a}}.example.com/x",
+            "https:///x",
+            "hooks.example.com/x",
+            "",
+        ] {
+            assert!(authority_is_literal(bad).is_err(), "{bad}");
+        }
+    }
+
+    mod actions {
+        use async_trait::async_trait;
+        use zorix_core::{ToolAnnotations, ToolError, ToolSpec};
+        use zorix_runtime::{DefaultPolicy, InMemoryToolRegistry, Policy, Rule};
+
+        use super::*;
+
+        /// A tool that echoes what it was given, with the shape of the Discord one.
+        struct Echo(ToolSpec);
+
+        #[async_trait]
+        impl Tool for Echo {
+            fn spec(&self) -> &ToolSpec {
+                &self.0
+            }
+            async fn call(&self, _ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
+                Ok(json!({"saw": args}))
+            }
+        }
+
+        fn registry() -> InMemoryToolRegistry {
+            let registry = InMemoryToolRegistry::new();
+            let mut discord = ToolSpec::new(
+                "discord.send_message",
+                "Send",
+                "Send a message",
+                json!({"type": "object", "required": ["channel", "text"], "additionalProperties": false, "properties": {
+                    "channel": {"type": "string", "pattern": "^[0-9]{5,25}$"}, "text": {"type": "string"}}}),
+            );
+            discord.annotations = ToolAnnotations { open_world: true, ..ToolAnnotations::default() };
+            registry.register(Arc::new(Echo(discord))).unwrap();
+            registry
+        }
+
+        fn send(channel: &str) -> ToolCall {
+            ToolCall { tool: "discord.send_message".into(), arguments: json!({"channel": channel, "text": "hi"}) }
+        }
+
+        #[tokio::test]
+        async fn an_action_is_checked_against_the_schema_of_its_tool() {
+            let (registry, tenant) = (registry(), TenantId::local());
+            let policy = DefaultPolicy::default();
+            let ok = call_registered_tool(&registry, &policy, &tenant, &send("123456789")).await.unwrap();
+            assert_eq!(ok["saw"]["channel"], "123456789");
+            // A channel filled in from a payload that is not an id never reaches the tool (it would go into a request path).
+            for hostile in ["12/../../x", "abc", "1 2345", "", "123456789/../../guilds"] {
+                let error = call_registered_tool(&registry, &policy, &tenant, &send(hostile)).await.unwrap_err();
+                assert!(error.contains("discord.send_message"), "{hostile}: {error}");
+            }
+            let extra = ToolCall {
+                tool: "discord.send_message".into(),
+                arguments: json!({"channel": "123456789", "text": "x", "admin": true}),
+            };
+            assert!(call_registered_tool(&registry, &policy, &tenant, &extra).await.is_err());
+        }
+
+        #[tokio::test]
+        async fn an_action_is_held_to_the_policy_of_the_host() {
+            let (registry, tenant) = (registry(), TenantId::local());
+            let blocked = DefaultPolicy::new(Policy {
+                rules: vec![Rule {
+                    tool: "discord.*".into(),
+                    effect: zorix_runtime::Effect::Deny,
+                    reason: Some("No chat from here.".into()),
+                }],
+                ..Policy::default()
+            });
+            let error = call_registered_tool(&registry, &blocked, &tenant, &send("123456789")).await.unwrap_err();
+            assert_eq!(error, "No chat from here.");
+            let offline = DefaultPolicy::new(Policy { allow_open_world: false, ..Policy::default() });
+            let error = call_registered_tool(&registry, &offline, &tenant, &send("123456789")).await.unwrap_err();
+            assert!(error.contains("reaches outside this computer"), "{error}");
+            let forbidden = DefaultPolicy::new(Policy {
+                forbidden: vec![Permission::new(Action::Write, "discord:123456789")],
+                ..Policy::default()
+            });
+            // The permission the action needs is forbidden whatever the step says.
+            let spec_with_permission = {
+                let registry = InMemoryToolRegistry::new();
+                let mut spec = ToolSpec::new("discord.send_message", "Send", "x", json!({"type": "object"}));
+                spec.required_permissions = vec![Permission::new(Action::Write, "discord:123456789")];
+                registry.register(Arc::new(Echo(spec))).unwrap();
+                registry
+            };
+            let error =
+                call_registered_tool(&spec_with_permission, &forbidden, &tenant, &send("123456789")).await.unwrap_err();
+            assert!(error.contains("forbidden by policy"), "{error}");
+            assert!(
+                call_registered_tool(&registry, &DefaultPolicy::default(), &tenant, &send("123456789")).await.is_ok()
+            );
+        }
+
+        #[tokio::test]
+        async fn a_tool_that_is_not_registered_is_not_called() {
+            let error = call_registered_tool(
+                &InMemoryToolRegistry::new(),
+                &DefaultPolicy::default(),
+                &TenantId::local(),
+                &send("123456789"),
+            )
+            .await
+            .unwrap_err();
+            assert!(error.contains("not available"), "{error}");
+        }
     }
 
     #[test]
