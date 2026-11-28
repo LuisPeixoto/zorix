@@ -116,6 +116,14 @@ impl RelativePath {
         self.parts.join("/")
     }
 
+    /// Whether it is a `.git` folder or inside one. What is written there, git runs or obeys the next time anybody uses the
+    /// repository (hooks, `config`), so ZORIX writes nothing there. Compared as the file systems compare: without case, and
+    /// without the characters macOS ignores in a name.
+    pub fn in_git_folder(&self) -> bool {
+        let ignored = |c: &char| !matches!(c, '\u{200c}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{206a}'..='\u{206f}' | '\u{feff}');
+        self.parts.iter().any(|part| part.chars().filter(ignored).collect::<String>().eq_ignore_ascii_case(".git"))
+    }
+
     /// The permission name for this path.
     pub fn resource(&self) -> String {
         format!("workspace:{}", self.display())
@@ -235,6 +243,11 @@ fn resolve_for_write(root: &Path, grants: &Grants, path: &RelativePath) -> Resul
     // and cannot be a reserved one.
     let rest = target.strip_prefix(&ancestor).map_err(|_| failed("That path leads outside the workspace."))?;
     let real_target = real_relative(root, &real.join(rest))?;
+    if path.in_git_folder() || real_target.in_git_folder() {
+        return Err(failed(
+            "ZORIX does not write inside a .git folder: git would run or obey what is there. Use git itself for that.",
+        ));
+    }
     require_real(grants, Action::Write, path, &real_target)?;
     // Never write through a link that is already there: it could point anywhere.
     if let Ok(meta) = fs::symlink_metadata(&target) {
@@ -600,6 +613,31 @@ mod tests {
         let root = list(dir.path(), &grants(), ".").unwrap();
         assert_eq!(root["entries"], json!([{"name": "notes", "kind": "dir", "size": root["entries"][0]["size"]}]));
         assert!(fs::read_dir(dir.path().join("notes")).unwrap().count() == 1, "no temporary file is left behind");
+    }
+
+    #[test]
+    fn nothing_is_written_inside_a_git_folder_where_git_would_run_it() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".git/hooks")).unwrap();
+        fs::create_dir_all(dir.path().join("sub/.git")).unwrap();
+        for bad in
+            [".git/hooks/pre-commit", ".git/config", ".GIT/config", "sub/.git/config", ".g\u{200c}it/config", ".git"]
+        {
+            let refused = message(write(dir.path(), &grants(), bad, "#!/bin/sh\necho planted"));
+            assert!(refused.contains(".git") || refused.contains("folder"), "{bad}: {refused}");
+        }
+        assert!(fs::read_dir(dir.path().join(".git/hooks")).unwrap().next().is_none(), "nothing was written");
+        // Reading stays possible, and files that only look alike are ordinary files.
+        fs::write(dir.path().join(".git/HEAD"), "ref: refs/heads/main").unwrap();
+        assert!(read(dir.path(), &grants(), ".git/HEAD").is_ok());
+        write(dir.path(), &grants(), ".gitignore", "target").unwrap();
+        write(dir.path(), &grants(), ".github/workflows/ci.yml", "on: push").unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.path().join(".git/hooks"), dir.path().join("tools")).unwrap();
+            let through = message(write(dir.path(), &grants(), "tools/pre-commit", "planted"));
+            assert!(through.contains(".git"), "{through}");
+        }
     }
 
     #[test]
