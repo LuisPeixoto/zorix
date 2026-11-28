@@ -578,9 +578,8 @@ mod tests {
             &first[first.len() - 200..]
         );
         assert!(second.contains("[Only the first 5000 of 10000 characters of this file are shown"));
-        assert_eq!(first.matches('b').count() - "b".len() * 0, first.matches('b').count());
         let kept: usize = [first, second].iter().map(|c| c.chars().filter(|ch| *ch == 'b' || *ch == 's').count()).sum();
-        assert!(kept >= 20_000 && kept < 20_400, "about their share of the window: {kept}");
+        assert!((20_000..20_400).contains(&kept), "about their share of the window: {kept}");
 
         // With room for everything, nothing is cut.
         let whole = task_segments(&execution, Some(200_000)).await;
