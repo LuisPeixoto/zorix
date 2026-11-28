@@ -110,7 +110,19 @@
     "components/ScreenDocuments/README.md",
     "components/ScreenDocuments/preview.html",
     "components/ScreenNewRunAttachments/README.md",
-    "components/ScreenNewRunAttachments/preview.html"
+    "components/ScreenNewRunAttachments/preview.html",
+    "components/ScreenServerSandbox/README.md",
+    "components/ScreenServerSandbox/preview.html",
+    "components/ScreenServerRequests/README.md",
+    "components/ScreenServerRequests/preview.html",
+    "components/ScreenConnectSignIn/README.md",
+    "components/ScreenConnectSignIn/preview.html",
+    "components/ScreenGitApproval/README.md",
+    "components/ScreenGitApproval/preview.html",
+    "components/ScreenWorkflowTicket/README.md",
+    "components/ScreenWorkflowTicket/preview.html",
+    "components/ScreenSettingsMcp/README.md",
+    "components/ScreenSettingsMcp/preview.html"
   ],
   "libraries": [],
   "components": [
@@ -559,6 +571,42 @@
       "name": "ScreenNewRunAttachments",
       "group": "Screens",
       "summary": "New run with documents attached: @ opens a picker of indexed documents and workspace files, attached files are chips with their size, and the summary shows the files and the expected cost.",
+      "page": true
+    },
+    {
+      "name": "ScreenServerSandbox",
+      "group": "Screens",
+      "summary": "How a local MCP server is confined: the mode, the network, the folders, and what this computer can really enforce.",
+      "page": true
+    },
+    {
+      "name": "ScreenServerRequests",
+      "group": "Screens",
+      "summary": "What an MCP server may ask while its tool runs: a model answer (sampling) or something from the person (elicitation).",
+      "page": true
+    },
+    {
+      "name": "ScreenConnectSignIn",
+      "group": "Screens",
+      "summary": "Connecting GitHub, GitLab, Slack or Jira by signing in, beside pasting a token.",
+      "page": true
+    },
+    {
+      "name": "ScreenGitApproval",
+      "group": "Screens",
+      "summary": "The moment a commit leaves this computer or a pull request opens.",
+      "page": true
+    },
+    {
+      "name": "ScreenWorkflowTicket",
+      "group": "Screens",
+      "summary": "The inspector of a New ticket trigger and of a Pull request action in the workflow editor.",
+      "page": true
+    },
+    {
+      "name": "ScreenSettingsMcp",
+      "group": "Screens",
+      "summary": "A card of Settings > General that builds the command that serves ZORIX to other MCP clients.",
       "page": true
     }
   ],
