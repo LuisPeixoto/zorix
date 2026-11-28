@@ -1,0 +1,18 @@
+# Temporary: proves the Linux sandbox on this branch before it reaches main. Removed before the merge.
+name: Linux sandbox check
+on:
+  push:
+    branches: [feat/mcp-sandbox-native]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p zorix-mcp --all-targets -- -D warnings
+      - run: cargo test -p zorix-mcp --no-fail-fast
