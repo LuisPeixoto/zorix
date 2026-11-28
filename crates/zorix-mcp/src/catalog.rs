@@ -109,6 +109,34 @@ pub struct Catalog {
     pub entries: Vec<CatalogEntry>,
 }
 
+/// The package a launcher command runs, without its version: the first argument that is not a flag. `npx -y @playwright/mcp@latest`
+/// and `npx -y @playwright/mcp@0.0.86` both run `@playwright/mcp`.
+fn package_of(args: &[String]) -> Option<&str> {
+    let spec = args.iter().find(|a| !a.starts_with('-'))?;
+    // The version follows the last `@`; the `@` that starts a scoped name is part of the name.
+    match spec.rfind('@') {
+        Some(at) if at > 0 => Some(&spec[..at]),
+        _ => Some(spec),
+    }
+}
+
+impl Catalog {
+    /// The entry a server was made from, when its address, or its command and package, still say so. A version, a folder a person
+    /// chose or a flag do not change which entry it is; another package does.
+    pub fn entry_for(&self, transport: &McpTransport) -> Option<&CatalogEntry> {
+        self.entries.iter().find(|entry| match (&entry.transport, transport) {
+            (CatalogTransport::Http { url, .. }, McpTransport::Http { url: mine, .. }) => {
+                url.trim_end_matches('/') == mine.trim_end_matches('/')
+            }
+            (
+                CatalogTransport::Stdio { command, args, .. },
+                McpTransport::Stdio { command: mine, args: my_args, .. },
+            ) => command == mine && package_of(args).is_some_and(|package| package_of(my_args) == Some(package)),
+            _ => false,
+        })
+    }
+}
+
 /// The catalogue that ships with ZORIX.
 pub fn catalog() -> &'static Catalog {
     static CATALOG: OnceLock<Catalog> = OnceLock::new();
@@ -229,6 +257,53 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn stdio(command: &str, args: &[&str]) -> McpTransport {
+        McpTransport::Stdio {
+            command: command.into(),
+            args: args.iter().map(|a| a.to_string()).collect(),
+            env: vec![],
+            cwd: None,
+        }
+    }
+
+    #[test]
+    fn a_server_made_from_an_entry_is_recognised_as_that_entry_and_no_other() {
+        for entry in &catalog().entries {
+            let inputs: HashMap<String, String> = match &entry.transport {
+                CatalogTransport::Stdio { inputs, .. } => {
+                    inputs.iter().map(|i| (i.name.clone(), "/tmp/chosen".to_string())).collect()
+                }
+                CatalogTransport::Http { .. } => HashMap::new(),
+            };
+            let (server, _) = entry.to_new_server(None, &inputs).unwrap_or_else(|e| panic!("{}: {e}", entry.id));
+            assert_eq!(
+                catalog().entry_for(&server.transport).map(|e| e.id.as_str()),
+                Some(entry.id.as_str()),
+                "{}",
+                entry.id
+            );
+        }
+    }
+
+    #[test]
+    fn the_package_decides_which_entry_a_command_is_not_its_flags_or_its_version() {
+        let found = |t: McpTransport| catalog().entry_for(&t).map(|e| e.id.clone());
+        // `-y` is shared by every npx entry: it used to make any of them look like the first one.
+        assert_eq!(found(stdio("npx", &["-y", "some-other-server"])), None);
+        assert_eq!(found(stdio("npx", &["-y"])), None);
+        assert_eq!(found(stdio("npx", &["-y", "@playwright/mcp@latest"])).as_deref(), Some("playwright"));
+        assert_eq!(found(stdio("npx", &["--yes", "@playwright/mcp@9.9.9"])).as_deref(), Some("playwright"));
+        assert_eq!(
+            found(stdio("npx", &["-y", "@modelcontextprotocol/server-filesystem", "/x"])).as_deref(),
+            Some("filesystem")
+        );
+        assert_eq!(found(stdio("uvx", &["mcp-server-fetch"])).as_deref(), Some("fetch"));
+        // Another launcher running a name that looks the same is not the entry.
+        assert_eq!(found(stdio("sh", &["mcp-server-fetch"])), None);
+        let remote = McpTransport::Http { url: "https://mcp.example.com/mcp".into(), auth: HttpAuth::None };
+        assert_eq!(found(remote), None);
     }
 
     #[test]
