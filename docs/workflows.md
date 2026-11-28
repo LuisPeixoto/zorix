@@ -73,7 +73,7 @@ An agent step's own tool approvals still rise to its run, as in [orchestration](
 
 **Actions ask first by default.** A message or request step makes a wait showing the tool and its arguments, and nothing is sent until a person agrees. A step set to *runs without
 asking* (`ask: never`) needs a **confirmation when publishing**: the version records who confirmed, when, and the hash of each step. Editing a confirmed step drops its confirmation.
-A reminder in Slack on an approval counts as unattended too. Resource grants still apply: the message goes only to the channel the step names, and a request only to the host in its address.
+A reminder in Slack on an approval counts as unattended too. Resource grants still apply: the message goes only to the channel the step names, and a request only to the host in its address. **That host is written in the step**: `https://api.example.com/{{trigger.payload.id}}` is fine, but `https://{{trigger.payload.host}}/…` is refused when you save or run it, because a payload that could name the host would aim a published step at any machine, this computer's own services and your local network included. An action is also held to what a run's tool calls are held to: its arguments are checked against the tool's schema (a channel that is not an id never reaches Discord), and the policy's refusals (forbidden actions, blocked tools, tools that reach outside this computer where that is not allowed) apply.
 
 If ZORIX stops while an action is running, the action is **not repeated**: it becomes a wait that says it may already have happened and asks what to do.
 

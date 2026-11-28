@@ -10,6 +10,8 @@ Phase 12: the tools, integrations and sandbox audited against the engineering gu
 ### Fixed
 
 - **A Jira search could be widened to other projects** by a query whose parentheses did not close (`x = 1) OR project = OTHER OR (x = 1`): the person's part is wrapped in a group, and a `)` ended the wrap. A query that does not balance, or a sort clause that is more than field names, is now refused before anything is sent, and the project must be a project key ([#52](https://github.com/LuisPeixoto/zorix/issues/52)).
+- **A workflow's HTTP step could be aimed at any machine by the data that started it**: the step's grant came from its own address, which can be filled in from a webhook payload, so `https://{{trigger.payload.host}}/…` reached `localhost`, the cloud metadata address and the local network with nobody asked. The scheme and the host must now be written in the step (saving, starting and running all refuse it); text from data may only come after the host ([#53](https://github.com/LuisPeixoto/zorix/issues/53)).
+- **A workflow action skipped the checks a model's tool call gets**: its arguments were not validated against the tool's schema (a Discord channel went into the request path as it came) and the policy's refusals did not apply. Both now do, through the same code as a run's calls ([#54](https://github.com/LuisPeixoto/zorix/issues/54)).
 
 ## [0.11.0] - 2026-11-27
 
