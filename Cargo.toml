@@ -61,6 +61,12 @@ tokio-util = "0.7"
 tracing = "0.1"
 # Watching a folder of documents for changes (ADR-0048).
 notify = "9"
+# Reading the text of scanned pages on this computer (ADR-0048): the OCR engine, its runtime, a JPEG decoder and the PDF reader the text path already uses.
+ocrs = "0.14"
+rten = "0.28"
+zune-jpeg = { version = "0.5", default-features = false }
+zune-core = "0.5"
+lopdf = { version = "0.42", default-features = false }
 # OpenTelemetry export of the run spans (ADR-0046): HTTP only, no gRPC.
 opentelemetry = { version = "0.33", default-features = false, features = ["trace"] }
 opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace"] }
@@ -99,6 +105,34 @@ opt-level = 3
 [profile.dev.package.gimli]
 opt-level = 3
 [profile.dev.package.object]
+opt-level = 3
+
+# The OCR engine does its sums on millions of numbers a page; unoptimised, a page takes minutes, so its crates are optimised even in debug builds.
+[profile.dev.package.ocrs]
+opt-level = 3
+[profile.dev.package.rten]
+opt-level = 3
+[profile.dev.package.rten-base]
+opt-level = 3
+[profile.dev.package.rten-gemm]
+opt-level = 3
+[profile.dev.package.rten-imageproc]
+opt-level = 3
+[profile.dev.package.rten-parallel]
+opt-level = 3
+[profile.dev.package.rten-simd]
+opt-level = 3
+[profile.dev.package.rten-tensor]
+opt-level = 3
+[profile.dev.package.rten-vecmath]
+opt-level = 3
+[profile.dev.package.rten-onnx]
+opt-level = 3
+[profile.dev.package.rten-sequence]
+opt-level = 3
+[profile.dev.package.rten-shape-inference]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
 opt-level = 3
 
 [profile.release]
