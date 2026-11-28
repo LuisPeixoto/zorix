@@ -43,6 +43,8 @@ pub struct Services {
     pub app_settings: SettingsCell,
     /// Retention: what is done to old runs.
     pub retention: SqliteRetention,
+    /// How far the download of the OCR models has come, while one is going on.
+    pub ocr_installing: Mutex<Option<zorix_hub::ocr::Progress>>,
     /// Ends the jobs that run while the app is open (retention).
     pub stop_background: CancellationToken,
     /// Connections: MCP servers, integrations and the sandbox.
@@ -193,6 +195,16 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
     {
         tracing::warn!(%error, "telemetry stays off");
     }
+    // Scanned pages are read when the setting is on and the models are there; a missing model leaves it off and the Documents screen says so.
+    match zorix_hub::ocr::attach(&memory, home, saved.knowledge.ocr).await {
+        Ok(zorix_hub::ocr::State::Missing) => {
+            tracing::warn!(
+                "reading scans is on but its models are not there; scans stay unread until they are downloaded"
+            );
+        }
+        Ok(_) => {}
+        Err(error) => tracing::warn!(%error, "reading scans stays off"),
+    }
     let app_settings = SettingsCell::new(saved);
     let retention = SqliteRetention::open(&database).map_err(ui)?;
     let stop_background = CancellationToken::new();
@@ -276,6 +288,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         settings: app_store,
         app_settings,
         retention,
+        ocr_installing: Mutex::new(None),
         stop_background,
         syncs: Mutex::new(HashMap::new()),
         watches: Mutex::new(HashMap::new()),

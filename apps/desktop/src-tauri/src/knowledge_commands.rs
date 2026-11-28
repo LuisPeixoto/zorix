@@ -37,6 +37,10 @@ pub struct RootRow {
     indexed: u64,
     skipped: u64,
     failed: u64,
+    /// Files whose text came from reading the pictures of their pages.
+    ocr_read: u64,
+    /// Scanned PDFs that are left out: reading scans is off, or the reading failed.
+    scans_unread: u64,
     syncing: bool,
     /// Whether the folder is set to be kept up to date while the app runs.
     watch: bool,
@@ -50,6 +54,7 @@ pub struct RootRow {
 async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiError> {
     let states = services.memory_store.document_states(root.id).await.map_err(ui)?;
     let count = |wanted: DocStatus| states.values().filter(|s| s.status == wanted).count() as u64;
+    let scans = services.memory_store.scan_counts(root.id).await.map_err(ui)?;
     Ok(RootRow {
         id: root.id.to_string(),
         path: root.path.clone(),
@@ -63,6 +68,8 @@ async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiErr
         indexed: count(DocStatus::Indexed),
         skipped: count(DocStatus::Skipped),
         failed: count(DocStatus::Failed),
+        ocr_read: scans.read,
+        scans_unread: scans.unread,
         syncing: services.syncs.lock().contains_key(&root.id),
         watch: root.watch,
         watching: services.watches.lock().get(&root.id).map_or("off", |w| w.mode).to_string(),
@@ -165,7 +172,7 @@ pub async fn list_roots(state: State<'_, AppState>) -> Result<Vec<RootRow>, UiEr
 }
 
 /// Start a sync in the background, unless one is already running for this folder.
-fn spawn_sync(app: AppHandle, services: &Arc<Services>, root: KnowledgeRoot) -> bool {
+pub(crate) fn spawn_sync(app: AppHandle, services: &Arc<Services>, root: KnowledgeRoot) -> bool {
     let token = CancellationToken::new();
     {
         let mut running = services.syncs.lock();

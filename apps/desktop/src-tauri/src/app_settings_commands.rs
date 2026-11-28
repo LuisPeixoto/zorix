@@ -17,6 +17,9 @@ pub async fn app_settings_get(state: State<'_, AppState>) -> Result<AppSettings,
 #[tauri::command]
 pub async fn app_settings_set(state: State<'_, AppState>, settings: AppSettings) -> Result<AppSettings, UiError> {
     let services = state.services()?;
+    // Reading scans changes only through `ocr_set`, which downloads and loads the models first: the switch is never on without them.
+    let mut settings = settings;
+    settings.knowledge.ocr = services.app_settings.get().knowledge.ocr;
     settings.validate().map_err(ui)?;
     apply_telemetry(services, &settings).await?;
     services.settings.put_settings(&services.tenant, &settings).await.map_err(ui)?;

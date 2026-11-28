@@ -6,6 +6,7 @@ mod commands;
 mod integration_commands;
 mod knowledge_commands;
 mod memory_commands;
+mod ocr_commands;
 mod project_commands;
 mod settings;
 mod state;
@@ -73,6 +74,8 @@ pub fn run() {
             app_settings_commands::retention_preview,
             app_settings_commands::retention_run,
             app_settings_commands::estimate_run,
+            ocr_commands::ocr_status,
+            ocr_commands::ocr_set,
             workflow_commands::workflow_host,
             workflow_commands::workflow_settings_set,
             workflow_commands::workflows_overview,
