@@ -19,6 +19,8 @@ pub struct MemoryStack {
     recall: Arc<Recall>,
     embedder: Option<Arc<Embedder>>,
     recorder: parking_lot::Mutex<Option<Arc<crate::ops::OperationRecorder>>>,
+    /// What reads scanned PDFs, when reading scans is on.
+    ocr: parking_lot::Mutex<Option<Arc<dyn crate::index::PageReader>>>,
 }
 
 impl MemoryStack {
@@ -44,7 +46,15 @@ impl MemoryStack {
         let retriever =
             Retriever::new(store.clone(), repository.clone(), embedder.clone(), clock.clone()).with_shares(shares);
         let recall = Arc::new(Recall::new(store.clone(), retriever, clock.clone()));
-        Self { store, repository, clock, recall, embedder, recorder: parking_lot::Mutex::new(None) }
+        Self {
+            store,
+            repository,
+            clock,
+            recall,
+            embedder,
+            recorder: parking_lot::Mutex::new(None),
+            ocr: parking_lot::Mutex::new(None),
+        }
     }
 
     /// The store.
@@ -138,7 +148,17 @@ impl MemoryStack {
 
     /// The indexer for knowledge folders.
     pub fn indexer(&self) -> crate::index::Indexer {
-        crate::index::Indexer::new(self.store.clone(), self.embedder.clone())
+        crate::index::Indexer::new(self.store.clone(), self.embedder.clone()).with_ocr(self.ocr.lock().clone())
+    }
+
+    /// Whether scanned PDFs are read now.
+    pub fn has_ocr(&self) -> bool {
+        self.ocr.lock().is_some()
+    }
+
+    /// Read scanned PDFs with this from now on (or stop reading them, with `None`).
+    pub fn set_ocr(&self, reader: Option<Arc<dyn crate::index::PageReader>>) {
+        *self.ocr.lock() = reader;
     }
 
     /// Put memory into an engine: its context builder, and the recorder that keeps a record of every execution that ends.

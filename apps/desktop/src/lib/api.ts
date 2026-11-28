@@ -267,6 +267,10 @@ export interface RootRow {
   indexed: number;
   skipped: number;
   failed: number;
+  /** Files whose text came from reading the pictures of their pages. */
+  ocr_read: number;
+  /** Scanned PDFs that are left out: reading scans is off, or the reading failed. */
+  scans_unread: number;
   syncing: boolean;
   /** Set to be kept up to date while the app runs. */
   watch: boolean;
@@ -331,6 +335,25 @@ export interface SyncDone {
   root: string;
   report: SyncCounts | null;
   error: string | null;
+}
+
+/** Where reading scanned PDFs stands: the setting, and whether the models are loaded or being downloaded. */
+export interface OcrStatus {
+  enabled: boolean;
+  state: "off" | "ready" | "missing" | "installing";
+  /** Bytes received of the download, while there is one. */
+  done: number;
+  /** Bytes the download will have. */
+  total: number;
+}
+
+export const ocrStatus = () => invoke<OcrStatus>("ocr_status");
+/** Turn reading scans on (downloading the models the first time) or off. Resolves when it is done. */
+export const ocrSet = (enabled: boolean) => invoke<OcrStatus>("ocr_set", { enabled });
+/** Follow the download of the models. Returns a function that stops listening. */
+export async function onOcrProgress(handler: (p: { done: number; total: number }) => void): Promise<() => void> {
+  const stop = await listen<{ done: number; total: number }>("ocr://progress", (e) => handler(e.payload));
+  return () => stop();
 }
 
 export const listRoots = () => invoke<RootRow[]>("list_roots");

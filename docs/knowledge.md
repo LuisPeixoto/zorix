@@ -27,13 +27,33 @@ and a *try a question* panel that shows which search found each hit.
 | Code and data | Common source files (Rust, Python, JavaScript, TypeScript, Go, Java…) and config and data files (JSON, YAML, TOML, CSV…) | Windows of 120 lines with 10 lines of overlap, keeping line numbers |
 | HTML | `.html`, `.htm` | Text only, then by size |
 | PDF | `.pdf` with a text layer | By page |
+| Scanned PDF | `.pdf` that is pictures of pages, when [reading scans](#reading-scans) is on | By page, read by OCR on this computer |
 
 An `--include` pattern adds other extensions (`*.log`), read as text. **Not** read: files ignored by `.gitignore`, `.ignore` or `.zorixignore`; hidden files and folders; links; binaries; and anything
 that looks private (`.env*`, `*.pem`, `*.key`, `id_*`, `*.p12`, `.npmrc`, `.netrc`, `credentials*`, `secrets.*`). Text that looks
-like a secret is removed from a piece before it is stored. **No OCR**: a scanned PDF is reported as having no text.
+like a secret is removed from a piece before it is stored. A scanned PDF is left out with the reason *it is a scan, with no text to read* until [reading scans](#reading-scans) is turned on.
 
 PDFs are parsed on a thread of their own with a time limit (30 seconds), a size limit (25 MB) and a page limit (500). A damaged or
 hostile file is reported with its reason and never stops the sync.
+
+## Reading scans
+
+A PDF whose pages are pictures has no text to read. With **Reading scans** on (Documents › Reading scans, or `zorix settings set knowledge.ocr on`) ZORIX reads the text out of the pictures
+on this computer ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)). It is off by default and needs two small models (about 12 MB), which are downloaded once into
+`<home>/models/ocr/` and checked against fixed hashes; nothing leaves the computer except that one download. Turning the switch on reads the scans that were left out, and a folder shows
+*N via OCR* and *N scans not read*; *Files* says why for each one that was not.
+
+| | |
+|---|---|
+| What is read | The largest picture on each page of a PDF that has no text layer: JPEG, or raw grey, RGB or one-bit samples packed with Flate |
+| What is not | JBIG2, CCITT, JPEG 2000, CMYK pictures, stencil masks: left out with the name of what was found |
+| Limits | 100 pages, 40 million pixels in a picture, 60,000 characters a page, 300 seconds a file |
+| Speed | About a second for a full page at 150 dpi, about four at 300 dpi |
+| Language | Latin script (English and the languages that use it). Other scripts come out wrong, not empty |
+| Retried | A scan that failed is read again only when its file changes; one that was left out for lack of a reader, when the switch is turned on |
+
+The models can be put in `<home>/models/ocr/` by hand (`text-detection.onnx` and `text-recognition.onnx`) on a computer that cannot download them: they are used only when they are the exact files
+ZORIX expects. Turning the switch off unloads the engine and keeps the files, and what was read stays in the index.
 
 ## Keeping it up to date
 

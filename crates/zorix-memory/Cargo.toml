@@ -10,9 +10,10 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-default = ["html", "pdf"]
+default = ["html", "pdf", "ocr"]
 html = ["dep:html2text"]
 pdf = ["dep:pdf-extract"]
+ocr = ["pdf", "dep:ocrs", "dep:rten", "dep:zune-jpeg", "dep:zune-core", "dep:lopdf"]
 
 [dependencies]
 zorix-core.workspace = true
@@ -21,6 +22,11 @@ async-trait.workspace = true
 globset.workspace = true
 html2text = { workspace = true, optional = true }
 pdf-extract = { workspace = true, optional = true }
+ocrs = { workspace = true, optional = true }
+rten = { workspace = true, optional = true }
+zune-jpeg = { workspace = true, optional = true }
+zune-core = { workspace = true, optional = true }
+lopdf = { workspace = true, optional = true }
 ignore.workspace = true
 notify.workspace = true
 parking_lot.workspace = true

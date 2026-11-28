@@ -11,6 +11,8 @@ use std::time::Duration;
 
 use super::extract::{Extracted, Page, Unreadable};
 
+/// How the reason starts for a PDF with no text layer.
+pub use zorix_core::SCAN_NOTE as SCAN;
 /// The most pages read from one PDF.
 pub const MAX_PAGES: usize = 500;
 /// How long one PDF may take.
@@ -57,7 +59,7 @@ fn pages_to_text(pages: Vec<String>) -> Result<Extracted, Unreadable> {
         .filter(|page| !page.text.trim().is_empty())
         .collect();
     if pages.is_empty() {
-        return Err(Unreadable::Skip("no text was found (a scan needs OCR, which is not included)".into()));
+        return Err(Unreadable::Skip(format!("{SCAN} (turn on reading scans in Settings to read it)")));
     }
     Ok(Extracted { pages })
 }
@@ -79,6 +81,34 @@ fn tidy(text: &str) -> String {
         }
     }
     out.trim().to_string()
+}
+
+/// How long the pictures of one scanned PDF may take to read in all. Reading a page takes a few seconds.
+#[cfg(feature = "ocr")]
+pub const OCR_BUDGET: Duration = Duration::from_secs(300);
+
+/// Read a scanned PDF with `reader`, on a thread of its own like the text path, with the time of the whole file limited.
+#[cfg(feature = "ocr")]
+pub fn read_scan(
+    bytes: &[u8],
+    reader: std::sync::Arc<dyn super::PageReader>,
+    budget: Duration,
+) -> Result<Extracted, Unreadable> {
+    let data = bytes.to_vec();
+    let (sender, receiver) = mpsc::channel();
+    let spawned = std::thread::Builder::new().name("zorix-ocr".into()).stack_size(32 * 1024 * 1024).spawn(move || {
+        let result = catch_unwind(AssertUnwindSafe(|| super::ocr::read_scan(&data, &*reader, budget)));
+        let _ = sender.send(result);
+    });
+    if spawned.is_err() {
+        return Err(Unreadable::Fail("a thread for reading the scan could not be started".into()));
+    }
+    // A little more than the budget: the work checks it between pages, and a page that is under way is allowed to finish.
+    match receiver.recv_timeout(budget + Duration::from_secs(60)) {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err(Unreadable::Skip("the scan could not be read (the reader stopped on it)".into())),
+        Err(_) => Err(Unreadable::Skip(format!("the scan took longer than {} seconds to read", budget.as_secs()))),
+    }
 }
 
 #[cfg(test)]
@@ -134,7 +164,10 @@ mod tests {
     #[test]
     fn a_pdf_with_no_text_is_skipped_and_garbage_is_a_failure() {
         let blank = make_pdf(&[""]);
-        assert!(matches!(extract(&blank), Err(Unreadable::Skip(why)) if why.contains("OCR")), "no text layer");
+        assert!(
+            matches!(extract(&blank), Err(Unreadable::Skip(why)) if why.starts_with(SCAN) && why.contains("reading scans")),
+            "no text layer"
+        );
         assert!(
             matches!(extract(b"just some text, not a pdf at all"), Err(Unreadable::Fail(why)) if why.contains("not a PDF"))
         );

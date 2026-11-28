@@ -101,7 +101,13 @@ Intended: `memory.remember` can only be approved by a person. Approve it from th
 ## Documents are not found, or a file is "left out"
 
 `zorix knowledge files <folder> --failed` says why for each file: ignored by `.gitignore`, too big, binary, a scanned PDF with
-no text, or private (`.env`, keys). Add patterns with `--include`. Sync again after editing files; there is no file watcher.
+no text, or private (`.env`, keys). Add patterns with `--include`. A watched folder syncs by itself after its files change; otherwise sync again after editing files.
+
+### A scanned PDF is "not read"
+
+*It is a scan, with no text to read*: turn on [reading scans](knowledge.md#reading-scans) (Documents › Reading scans, or `zorix settings set knowledge.ocr on`).
+*The scan could not be read (page 3: …)*: the reason names what was found (a compression that is not supported, a colour space, a picture that is too large); the other pages were read. A scan that failed is read
+again only when the file changes. If Documents says **Models missing**, the files in `<home>/models/ocr/` are gone or are not the ones ZORIX expects: turn the switch off and on again to download them.
 
 ## Search by meaning does nothing, or "search was weaker than usual"
 

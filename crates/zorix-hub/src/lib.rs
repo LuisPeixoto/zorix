@@ -7,6 +7,7 @@ pub mod agents;
 pub mod connections;
 pub mod estimate;
 pub mod grants;
+pub mod ocr;
 pub mod teams;
 pub mod telemetry;
 

@@ -108,6 +108,11 @@ Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuse
 
 `knowledge_roots` gains `watch` (0 or 1): the folder is kept up to date while the app runs ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)). Folders that were there before are 0. Opening a schema-15 database adds it; a 0.10 program refuses a schema-16 database.
 
+### Scans and the OCR models (no schema change)
+
+A document read from the pictures of its pages has the kind `pdf-ocr` in `knowledge_documents.kind`, and a scan that is left out has the status `skipped` with a reason that starts *it is a scan* (nothing could read it) or *the scan* (reading it failed); the screens count both from those two facts, so nothing was added to the schema.
+The two OCR models are files in `models/ocr/` next to the database ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)): they are used only when their size and SHA-256 are the ones fixed in the program, and deleting the folder loses nothing (turn *Reading scans* off and on to fetch them again).
+
 ### The vector index (schema 15)
 
 `vector_generation` is a one-row counter that triggers raise whenever a piece of a document or a vector is added or removed. The index of document vectors ([ADR-0047](adr/0047-index-of-document-vectors.md)) is a cache in
