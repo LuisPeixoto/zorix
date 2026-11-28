@@ -26,6 +26,7 @@
 
   function review(item: (typeof items)[number]) {
     if (item.kind === "approval") void store.select(item.root);
+    else if (item.kind === "ask") void store.select(item.execution);
     else if (item.kind === "workflow") store.showWorkflows("run", null, item.run);
     else if (item.kind === "task") store.showProjects(item.key.slice(0, item.key.lastIndexOf("-")), "board", item.key);
     else {
@@ -54,7 +55,7 @@
         <ul class="divide-y divide-line-soft">
           {#each items as item (item.id)}
             <li class="flex items-center gap-3 px-4 py-3">
-              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-warn/40 bg-warn/8 text-warn"><Icon name={item.kind === "approval" ? "shield" : item.kind === "workflow" ? "workflow" : item.kind === "task" ? "kanban" : "plug"} size={15} /></span>
+              <span class="grid size-8 shrink-0 place-items-center rounded-lg border border-warn/40 bg-warn/8 text-warn"><Icon name={item.kind === "approval" || item.kind === "ask" ? "shield" : item.kind === "workflow" ? "workflow" : item.kind === "task" ? "kanban" : "plug"} size={15} /></span>
               {#if item.kind === "approval"}
                 <span class="min-w-0 flex-1">
                   <span class="flex items-baseline gap-2 truncate"><span class="mono text-base font-semibold">{item.tool}</span>{#if item.target}<span class="mono truncate text-sm text-muted">{item.target}</span>{/if}</span>
@@ -63,6 +64,11 @@
                   </span>
                 </span>
                 {#if item.depth > 0}<Badge tone="muted">level {item.depth}</Badge>{/if}
+              {:else if item.kind === "ask"}
+                <span class="min-w-0 flex-1">
+                  <span class="flex items-baseline gap-2 truncate"><span class="text-base font-semibold">{item.server}</span><span class="truncate text-sm text-muted">{item.what === "model" ? t("inbox.asksForYourModel") : item.what === "form" ? t("inbox.asksAQuestion") : t("inbox.asksToOpenAPage")}</span></span>
+                  <span class="mt-0.5 block truncate text-xs text-muted"><span class="mono">{item.tool}</span> · <span class="tnum">{ago(item.at, store.now).replace(" ago", "")}</span></span>
+                </span>
               {:else if item.kind === "workflow"}
                 <span class="min-w-0 flex-1">
                   <span class="flex items-baseline gap-2 truncate"><span class="text-base font-semibold">{item.title}</span><span class="truncate text-sm text-muted">{item.what === "question" ? t("inbox.asksAQuestion") : item.what === "action" ? t("inbox.wantsToAct") : t("inbox.needsApproval")}</span></span>
@@ -85,7 +91,7 @@
                   </span>
                 </span>
               {/if}
-              <Button size="sm" aria-label={item.kind === "approval" ? t("inbox.review", { tool: item.tool, value: item.target ? ` ${item.target}` : "" }) : item.kind === "workflow" ? t("inbox.review2", { title: item.title }) : item.kind === "task" ? t("inbox.open", { key: item.key }) : t("inbox.review3", { server: item.server })} onclick={() => review(item)}>{t("common.review")}</Button>
+              <Button size="sm" aria-label={item.kind === "ask" ? t("inbox.review3", { server: item.server }) : item.kind === "approval" ? t("inbox.review", { tool: item.tool, value: item.target ? ` ${item.target}` : "" }) : item.kind === "workflow" ? t("inbox.review2", { title: item.title }) : item.kind === "task" ? t("inbox.open", { key: item.key }) : t("inbox.review3", { server: item.server })} onclick={() => review(item)}>{t("common.review")}</Button>
             </li>
           {/each}
         </ul>

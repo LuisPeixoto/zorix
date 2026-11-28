@@ -28,12 +28,14 @@
   import { type Command, CommandPalette, Toasts } from "./lib/ui/index.ts";
   import { shorten } from "./lib/format.ts";
   import { appReady, workflowRuns } from "./lib/api.ts";
+  import { asks } from "./lib/stores/asks.svelte.ts";
 
   onMount(() => {
     theme.init();
     void store.init().then(() => {
       void appReady().catch(() => undefined);
       void integrations.init();
+      void asks.init();
       void agents.refresh();
       void projects.loadPeople();
       void projects.refreshIndex();

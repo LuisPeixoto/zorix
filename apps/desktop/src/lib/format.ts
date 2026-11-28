@@ -83,6 +83,12 @@ export interface EventView {
   tone: Tone;
 }
 
+/** What a tool's server asked of the person during the call, and what it was told. */
+function asked(payload: Record<string, unknown>): string {
+  const requests = Array.isArray(payload.server_requests) ? (payload.server_requests as { server: string; kind: string; outcome: string }[]) : [];
+  return requests.map((r) => t(r.kind === "model" ? "format.serverAskedModel" : "format.serverAskedQuestion", { server: r.server, outcome: r.outcome })).join(" · ");
+}
+
 /** A person-friendly line for each kind of event. */
 export function describeEvent(event: ExecEvent): EventView {
   const p = event.payload;
@@ -123,9 +129,9 @@ export function describeEvent(event: ExecEvent): EventView {
     case "execution.tool.started":
       return { title: t("format.running2", { tool }), detail: Number(p.attempt) > 1 ? `attempt ${p.attempt}` : "", tone: "info" };
     case "execution.tool.completed":
-      return { title: t("format.finished", { tool }), detail: duration(Number(p.duration_ms ?? 0)), tone: "ok" };
+      return { title: t("format.finished", { tool }), detail: [duration(Number(p.duration_ms ?? 0)), asked(p)].filter(Boolean).join(" · "), tone: "ok" };
     case "execution.tool.failed":
-      return { title: `${tool} failed`, detail: shorten(String(p.error ?? p.reason ?? ""), 160), tone: "err" };
+      return { title: `${tool} failed`, detail: [shorten(String(p.error ?? p.reason ?? ""), 160), asked(p)].filter(Boolean).join(" · "), tone: "err" };
     case "execution.tool.denied":
       return { title: t("format.wasRefused", { tool }), detail: shorten(`${p.reason ?? ""} (by ${p.by})`, 160), tone: "warn" };
     case "execution.waiting_children": {

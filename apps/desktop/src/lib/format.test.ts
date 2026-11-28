@@ -71,6 +71,8 @@ test("events are described for people", () => {
   assert.equal(view.detail, '{"expression":"17*23"}');
   assert.equal(describeEvent(event("execution.waiting_approval", { tool: "notes.put", reason: "asks every time" })).tone, "warn");
   assert.equal(describeEvent(event("execution.tool.completed", { tool: "t", duration_ms: 3 })).detail, "3 ms");
+  const withRequest = event("execution.tool.completed", { tool: "t", duration_ms: 3, server_requests: [{ server: "files", kind: "model", outcome: "answered" }] });
+  assert.equal(describeEvent(withRequest).detail, "3 ms · files asked for the model: answered");
   assert.equal(describeEvent(event("execution.model.responded", { tool_calls: 0 })).detail, "final answer");
   assert.equal(describeEvent(event("execution.model.responded", { tool_calls: 2 })).detail, "wants 2 tool calls");
   assert.equal(

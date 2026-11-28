@@ -1,6 +1,6 @@
 // What is waiting for a person, in one list: tool approvals anywhere in a tree of runs, and tools or sign-ins MCP servers want a person to review.
 // Pure functions, tested in inbox.test.ts.
-import type { Approval, Execution, NeedsYou, ServerRow, TaskNeed, TreeApproval, WfWait } from "./api.ts";
+import type { Approval, Execution, NeedsYou, PendingAsk, ServerRow, TaskNeed, TreeApproval, WfWait } from "./api.ts";
 import { shorten } from "./format.ts";
 
 export type InboxItem =
@@ -22,6 +22,16 @@ export type InboxItem =
       approval: Approval;
     }
   | { kind: "server"; id: string; server: string; why: "tools" | "login"; tools: number; at: number }
+  | {
+      /** An MCP server asks for something while a tool of a run runs. */
+      kind: "ask";
+      id: string;
+      execution: string;
+      server: string;
+      tool: string;
+      what: "model" | "form" | "link";
+      at: number;
+    }
   | {
       /** A workflow stopped for a person: an approval, a question, or an action that asks first. */
       kind: "workflow";
@@ -105,6 +115,19 @@ export function workflowItems(waits: readonly WfWait[], names: Readonly<Record<s
       what: w.kind as "approval" | "question" | "action",
       at: w.created_at,
     }));
+}
+
+/** One item per request of an MCP server that waits for you. */
+export function askItems(asks: readonly PendingAsk[]): InboxItem[] {
+  return asks.map((a): InboxItem => ({
+    kind: "ask",
+    id: a.id,
+    execution: a.execution_id,
+    server: a.server,
+    tool: a.tool,
+    what: a.ask.kind === "model" ? "model" : a.ask.mode,
+    at: a.asked_at,
+  }));
 }
 
 /** One item per task that needs a person. */
