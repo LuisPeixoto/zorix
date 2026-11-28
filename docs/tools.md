@@ -71,9 +71,13 @@ call:
 2. **The path** must be relative, with forward slashes and no `..`, no drive letter, no backslash, no control
    characters, no names Windows reserves (`CON`, `NUL`…), and not inside the reserved `.zorix` folder (in any case: `.ZORIX` is the same folder on macOS and Windows). After that the real
    path (following symbolic links) must still be inside the workspace. A link that points outside is not followed, and
-   ZORIX will not write *through* a link.
+   ZORIX will not write *through* a link. **A link inside the workspace is held to the place it leads to**: that place needs
+   its own grant (`docs/shortcut` pointing at `private/notes.txt` is read only if `workspace:private/notes.txt` is granted
+   too), and it cannot be a reserved one (a link to `.zorix` is refused).
 
-Writes go to a temporary file that is renamed over the target, so a crash never leaves half a file.
+Writes go to a temporary file that is renamed over the target, so a crash never leaves half a file. The temporary file is
+created new (anything already at its name, a link included, makes the write pick another name) and its name carries a number
+nobody can guess, so two files with the same stem (`a.txt` and `a.md`) never share one.
 
 **A limit, stated plainly:** the real path is checked and then the file is opened, as two steps. Somebody who can change the workspace folder *at that very moment* (another program of
 the same user, replacing a folder with a link between the check and the open) could redirect one call. Closing that gap needs `openat` and `O_NOFOLLOW` all the way down, which is not

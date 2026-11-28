@@ -5,7 +5,7 @@
 //! still inside the workspace root. A tool that runs without a configured workspace refuses every call.
 
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
@@ -107,18 +107,58 @@ fn require(grants: &Grants, action: Action, path: &RelativePath) -> Result<(), T
     if grants.allows(&needed) { Ok(()) } else { Err(failed(format!("This execution has no permission to {needed}."))) }
 }
 
-/// Resolve an existing path and prove, after following links, that it is inside the root.
-fn resolve_existing(root: &Path, path: &RelativePath) -> Result<PathBuf, ToolError> {
+/// Where `real` (a path under `root`, links already followed) is, written as the relative path the grants and the reserved names
+/// speak of. A link can lead somewhere the text of the request does not say: the grant and the `.zorix` reservation are about
+/// the place the bytes are, so they are checked there too.
+fn real_relative(root: &Path, real: &Path) -> Result<RelativePath, ToolError> {
+    let inside = real.strip_prefix(root).map_err(|_| failed("That path leads outside the workspace."))?;
+    let mut text = Vec::new();
+    for part in inside.components() {
+        let name = part.as_os_str().to_str().ok_or_else(|| failed("That path has a name ZORIX cannot read."))?;
+        text.push(name);
+    }
+    RelativePath::parse(&text.join("/")).map_err(|e| match e {
+        ToolError::Failed(why) => {
+            failed(format!("That path leads, through a link, to a place that is off limits: {why}"))
+        }
+        other => other,
+    })
+}
+
+/// A link inside the workspace may only lead where the same grant reaches: the place it leads to needs its own permission.
+fn require_real(grants: &Grants, action: Action, asked: &RelativePath, real: &RelativePath) -> Result<(), ToolError> {
+    if real == asked {
+        return Ok(());
+    }
+    let needed = Permission::new(action, real.resource());
+    if grants.allows(&needed) {
+        Ok(())
+    } else {
+        Err(failed(format!(
+            "{} leads, through a link, to {}, and this execution has no permission to {needed}.",
+            asked.display(),
+            real.display()
+        )))
+    }
+}
+
+/// Resolve an existing path and prove, after following links, that it is inside the root and that the place it leads to is
+/// granted and not reserved.
+fn resolve_existing(root: &Path, grants: &Grants, action: Action, path: &RelativePath) -> Result<PathBuf, ToolError> {
     let joined = path.join_onto(root);
     let real = fs::canonicalize(&joined).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => failed(format!("There is no such file or folder: {}.", path.display())),
         _ => failed(format!("Cannot open {}: {e}", path.display())),
     })?;
-    if real.starts_with(root) { Ok(real) } else { Err(failed("That path leads outside the workspace.")) }
+    if !real.starts_with(root) {
+        return Err(failed("That path leads outside the workspace."));
+    }
+    require_real(grants, action, path, &real_relative(root, &real)?)?;
+    Ok(real)
 }
 
 /// The folder a new file would go into, proven to be inside the root even if some folders do not exist yet.
-fn resolve_for_write(root: &Path, path: &RelativePath) -> Result<PathBuf, ToolError> {
+fn resolve_for_write(root: &Path, grants: &Grants, path: &RelativePath) -> Result<PathBuf, ToolError> {
     if path.is_root() {
         return Err(failed("Name a file, not the workspace folder."));
     }
@@ -132,6 +172,11 @@ fn resolve_for_write(root: &Path, path: &RelativePath) -> Result<PathBuf, ToolEr
     if !real.starts_with(root) {
         return Err(failed("That path leads outside the workspace."));
     }
+    // Where the file would really be: the folder a link leads to, then what is left of the path. That place needs its own grant
+    // and cannot be a reserved one.
+    let rest = target.strip_prefix(&ancestor).map_err(|_| failed("That path leads outside the workspace."))?;
+    let real_target = real_relative(root, &real.join(rest))?;
+    require_real(grants, Action::Write, path, &real_target)?;
     // Never write through a link that is already there: it could point anywhere.
     if let Ok(meta) = fs::symlink_metadata(&target) {
         if meta.file_type().is_symlink() {
@@ -149,14 +194,14 @@ pub fn list(root: &Path, grants: &Grants, path: &str) -> Result<Value, ToolError
     let root = fs::canonicalize(root).map_err(|e| failed(format!("The workspace folder cannot be used: {e}")))?;
     let path = RelativePath::parse(path)?;
     require(grants, Action::Read, &path)?;
-    let folder = resolve_existing(&root, &path)?;
+    let folder = resolve_existing(&root, grants, Action::Read, &path)?;
     if !folder.is_dir() {
         return Err(failed(format!("{} is not a folder.", path.display())));
     }
     let mut entries: Vec<(String, bool, u64)> = fs::read_dir(&folder)
         .map_err(|e| failed(format!("Cannot list {}: {e}", path.display())))?
         .filter_map(Result::ok)
-        .filter(|entry| entry.file_name() != ".zorix")
+        .filter(|entry| !entry.file_name().to_string_lossy().eq_ignore_ascii_case(".zorix"))
         .map(|entry| {
             let meta = entry.metadata().ok();
             (
@@ -181,7 +226,7 @@ pub fn read(root: &Path, grants: &Grants, path: &str) -> Result<Value, ToolError
     let root = fs::canonicalize(root).map_err(|e| failed(format!("The workspace folder cannot be used: {e}")))?;
     let path = RelativePath::parse(path)?;
     require(grants, Action::Read, &path)?;
-    let file = resolve_existing(&root, &path)?;
+    let file = resolve_existing(&root, grants, Action::Read, &path)?;
     if !file.is_file() {
         return Err(failed(format!("{} is not a file.", path.display())));
     }
@@ -206,7 +251,7 @@ pub fn write(root: &Path, grants: &Grants, path: &str, content: &str) -> Result<
     if content.len() > MAX_WRITE_BYTES {
         return Err(failed(format!("The content is larger than {MAX_WRITE_BYTES} bytes.")));
     }
-    let target = resolve_for_write(&root, &path)?;
+    let target = resolve_for_write(&root, grants, &path)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| failed(format!("Cannot create the folder: {e}")))?;
         // Created folders could not be links, but check again: another process may have raced us.
@@ -215,14 +260,43 @@ pub fn write(root: &Path, grants: &Grants, path: &str, content: &str) -> Result<
             return Err(failed("That path leads outside the workspace."));
         }
     }
-    // Write a temporary file next to the target and rename it, so a crash never leaves half a file.
-    let temporary = target.with_extension(format!("zorix-{}.tmp", std::process::id()));
-    fs::write(&temporary, content).map_err(|e| failed(format!("Cannot write {}: {e}", path.display())))?;
+    // Write a temporary file next to the target and rename it, so a crash never leaves half a file. The file is created, never
+    // opened: it must not exist (a link left at that name is not followed), and its name is the target's own plus a number nobody
+    // can guess, so two files with the same stem never share one.
+    let (temporary, mut file) =
+        create_temporary(&target).map_err(|e| failed(format!("Cannot write {}: {e}", path.display())))?;
+    if let Err(e) = file.write_all(content.as_bytes()).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(&temporary);
+        return Err(failed(format!("Cannot write {}: {e}", path.display())));
+    }
+    drop(file);
     fs::rename(&temporary, &target).map_err(|e| {
         let _ = fs::remove_file(&temporary);
         failed(format!("Cannot write {}: {e}", path.display()))
     })?;
     Ok(json!({ "path": path.display(), "bytes": content.len() }))
+}
+
+/// Create a new, empty file next to `target` for the content to be written to before the rename. `create_new` fails on anything
+/// already at that name, a symbolic link included, so it can never write through one.
+fn create_temporary(target: &Path) -> std::io::Result<(PathBuf, fs::File)> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut last = None;
+    for _ in 0..8 {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+        let unique =
+            (nanos as u64) ^ COUNTER.fetch_add(1, Ordering::Relaxed).rotate_left(32) ^ u64::from(std::process::id());
+        let temporary = target.with_file_name(format!(".{name}.zorix-{unique:016x}.tmp"));
+        match fs::OpenOptions::new().write(true).create_new(true).open(&temporary) {
+            Ok(file) => return Ok((temporary, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => last = Some(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| std::io::Error::other("no free name for a temporary file")))
 }
 
 macro_rules! file_tool {
@@ -519,6 +593,122 @@ mod tests {
         fs::write(dir.path().join("real.txt"), "inside").unwrap();
         symlink(dir.path().join("real.txt"), dir.path().join("alias.txt")).unwrap();
         assert_eq!(read(dir.path(), &grants(), "alias.txt").unwrap()["content"], "inside");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_inside_the_workspace_cannot_lead_past_the_grant() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("docs")).unwrap();
+        fs::create_dir_all(dir.path().join("private")).unwrap();
+        fs::write(dir.path().join("private/notes.txt"), "classified").unwrap();
+        symlink("../private/notes.txt", dir.path().join("docs/l")).unwrap();
+        symlink("../private", dir.path().join("docs/dir")).unwrap();
+
+        let docs = Grants::none()
+            .with(Permission::new(Action::Read, "workspace:docs/*"))
+            .with(Permission::new(Action::Write, "workspace:docs/*"));
+        // The grant is for docs/*; the link leads to private/notes.txt, which it does not cover.
+        let error = message(read(dir.path(), &docs, "docs/l"));
+        assert!(error.contains("leads, through a link, to private/notes.txt"), "{error}");
+        assert!(message(read(dir.path(), &docs, "docs/dir/notes.txt")).contains("through a link"));
+        assert!(message(list(dir.path(), &docs, "docs/dir")).contains("through a link"));
+        assert!(message(write(dir.path(), &docs, "docs/dir/new.txt", "x")).contains("through a link"));
+        assert!(message(write(dir.path(), &docs, "docs/dir/notes.txt", "x")).contains("through a link"));
+        assert!(!dir.path().join("private/new.txt").exists());
+        assert_eq!(fs::read_to_string(dir.path().join("private/notes.txt")).unwrap(), "classified");
+
+        // A grant for the place the link leads to is a grant for the link.
+        let both = docs
+            .clone()
+            .with(Permission::new(Action::Read, "workspace:private/*"))
+            .with(Permission::new(Action::Write, "workspace:private/*"));
+        assert_eq!(read(dir.path(), &both, "docs/l").unwrap()["content"], "classified");
+        write(dir.path(), &both, "docs/dir/new.txt", "ok").unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join("private/new.txt")).unwrap(), "ok");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_cannot_reach_the_reserved_folder() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join(".zorix")).unwrap();
+        fs::write(dir.path().join(".zorix/state"), "internal").unwrap();
+        symlink(".zorix", dir.path().join("x")).unwrap();
+        symlink(".zorix/state", dir.path().join("y")).unwrap();
+        // Even with a grant for everything: the folder is reserved wherever the request says it is.
+        for path in ["x/state", "y"] {
+            let error = message(read(dir.path(), &grants(), path));
+            assert!(error.contains("off limits") && error.contains("reserved"), "{path}: {error}");
+        }
+        assert!(message(list(dir.path(), &grants(), "x")).contains("off limits"));
+        assert!(message(write(dir.path(), &grants(), "x/new", "x")).contains("off limits"));
+        assert!(!dir.path().join(".zorix/new").exists());
+    }
+
+    #[test]
+    fn a_listing_hides_the_reserved_folder_in_any_case() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(".Zorix"), "x").unwrap();
+        fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let listed = list(dir.path(), &grants(), ".").unwrap();
+        let names: Vec<&str> =
+            listed["entries"].as_array().unwrap().iter().map(|e| e["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["a.txt"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_write_never_goes_through_a_link_left_at_the_temporary_name() {
+        use std::os::unix::fs::symlink;
+        let outside = tempfile::tempdir().unwrap();
+        let victim = outside.path().join("victim.txt");
+        fs::write(&victim, "untouched").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        // The names an older version used for its temporary file: a link there pointed the write at the victim.
+        let old_name = format!("a.zorix-{}.tmp", std::process::id());
+        symlink(&victim, dir.path().join(old_name)).unwrap();
+        write(dir.path(), &grants(), "a.txt", "mine").unwrap();
+        assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "mine");
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "untouched");
+    }
+
+    #[test]
+    fn files_that_share_a_stem_never_share_a_temporary_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = std::sync::Arc::new(dir.path().to_path_buf());
+        let writers: Vec<_> = (0..8)
+            .map(|n| {
+                let root = root.clone();
+                std::thread::spawn(move || {
+                    let (name, body) = if n % 2 == 0 { ("a.txt", "text") } else { ("a.md", "markdown") };
+                    for _ in 0..40 {
+                        write(&root, &grants(), name, body).unwrap();
+                        assert_eq!(read(&root, &grants(), name).unwrap()["content"], body);
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        let mut left: Vec<String> =
+            fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["a.md", "a.txt"], "no temporary file is left behind");
+    }
+
+    #[test]
+    fn a_temporary_file_is_new_and_has_a_name_of_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("a.txt");
+        let (first, _f1) = create_temporary(&target).unwrap();
+        let (second, _f2) = create_temporary(&target).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(first.parent(), Some(dir.path()));
+        assert!(first.file_name().unwrap().to_string_lossy().starts_with(".a.txt.zorix-"));
     }
 
     #[tokio::test]
