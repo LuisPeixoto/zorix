@@ -268,6 +268,12 @@ export interface RootRow {
   skipped: number;
   failed: number;
   syncing: boolean;
+  /** Set to be kept up to date while the app runs. */
+  watch: boolean;
+  /** How it is kept up to date now: the system says when something changes, or it is checked every ten minutes, or neither. */
+  watching: "watching" | "polling" | "off";
+  /** Why it is checked on a timer and not watched. */
+  watch_note: string | null;
 }
 
 export interface NewRoot {
@@ -276,6 +282,8 @@ export interface NewRoot {
   include?: string[];
   exclude?: string[];
   auto_sync?: boolean;
+  /** Keep the index up to date while the app runs. Left out: on. */
+  watch?: boolean;
 }
 
 export interface FileRow {
@@ -327,6 +335,7 @@ export interface SyncDone {
 
 export const listRoots = () => invoke<RootRow[]>("list_roots");
 export const addRoot = (root: NewRoot) => invoke<RootRow>("add_root", { root });
+export const setRootWatch = (id: string, on: boolean) => invoke<RootRow>("set_root_watch", { id, on });
 export const syncRoot = (id: string) => invoke<boolean>("sync_root", { id });
 export const cancelSync = (id: string) => invoke<void>("cancel_sync", { id });
 export const removeRoot = (id: string) => invoke<boolean>("remove_root", { id });

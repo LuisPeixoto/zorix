@@ -537,6 +537,10 @@ const MIGRATIONS: &[&str] = &[
     CREATE TRIGGER vector_generation_vector_added AFTER INSERT ON vectors BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
     CREATE TRIGGER vector_generation_vector_removed AFTER DELETE ON vectors BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
     ",
+    // 16: a folder of documents can be watched for changes while the app runs (ADR-0048). Folders that were there before are not: a person turns it on.
+    "
+    ALTER TABLE knowledge_roots ADD COLUMN watch INTEGER NOT NULL DEFAULT 0;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -964,6 +968,24 @@ mod tests {
         assert!(generation(&conn) > after_chunk, "a removal counts too");
         conn.execute("DELETE FROM vectors WHERE text_hash = 'a'", []).unwrap();
         assert!(generation(&conn) > after_chunk + 1);
+    }
+
+    #[test]
+    fn a_database_of_schema_15_upgrades_to_watched_folders_and_no_old_folder_starts_watched() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(15) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO knowledge_roots (id, tenant, scope, scope_key, path, include, exclude, max_file_bytes, enabled, auto_sync, created_at) VALUES ('r1','local','global','','/docs','[]','[]',1000,1,0,1)",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let watch: i64 = conn.query_row("SELECT watch FROM knowledge_roots WHERE id = 'r1'", [], |r| r.get(0)).unwrap();
+        assert_eq!(watch, 0, "a folder that was there before is not watched until a person says so");
     }
 
     #[test]

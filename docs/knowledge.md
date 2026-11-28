@@ -37,7 +37,9 @@ hostile file is reported with its reason and never stops the sync.
 
 ## Keeping it up to date
 
-There is no file watcher. **Sync** looks at every file: unchanged size and time means skip; otherwise the file is read and its SHA-256 hash decides
+A folder that is **watched** is read again by itself a few seconds after its files stop changing: the system says when something changed, the app waits two seconds of quiet, and runs one sync
+([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)). New folders are watched; mark an older one with the *Watch* button, or `zorix knowledge add --watch`. A folder the system cannot watch (a network drive) is checked every ten minutes, and the screen says why.
+`zorix knowledge watch` does the same in a terminal. **Sync** looks at every file: unchanged size and time means skip; otherwise the file is read and its SHA-256 hash decides
 whether it is cut again: a file that was only touched keeps its pieces (and costs one read), and only a file whose content changed is re-cut and re-embedded. Files that disappeared are removed. With *check at
 start* (`--auto-sync`) the desktop does that pass when it opens. A sync is cancellable, and can be repeated: it continues where it
 stopped.

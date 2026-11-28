@@ -448,10 +448,11 @@ fn root_from(row: &Row<'_>) -> rusqlite::Result<KnowledgeRoot> {
         created_at: Timestamp(row.get(10)?),
         last_sync_at: row.get::<_, Option<i64>>(11)?.map(Timestamp),
         last_sync: last_sync.map(|s| serde_json::from_str(&s)).transpose().map_err(|_| bad("last_sync"))?,
+        watch: row.get::<_, i64>(13)? != 0,
     })
 }
 
-const ROOT_COLUMNS: &str = "id, tenant, scope, scope_key, path, include, exclude, max_file_bytes, enabled, auto_sync, created_at, last_sync_at, last_sync";
+const ROOT_COLUMNS: &str = "id, tenant, scope, scope_key, path, include, exclude, max_file_bytes, enabled, auto_sync, created_at, last_sync_at, last_sync, watch";
 
 /// The keys of every chunk of a root, for scrubbing snapshots.
 fn chunk_keys_of_document(tx: &Connection, document: &str) -> Result<Vec<String>> {
@@ -1081,7 +1082,7 @@ impl MemoryStore for SqliteMemoryStore {
         self.run(move |conn| {
             let changed = conn
                 .execute(
-                    "UPDATE knowledge_roots SET include = ?1, exclude = ?2, max_file_bytes = ?3, enabled = ?4, auto_sync = ?5 WHERE id = ?6 AND tenant = ?7",
+                    "UPDATE knowledge_roots SET include = ?1, exclude = ?2, max_file_bytes = ?3, enabled = ?4, auto_sync = ?5, watch = ?8 WHERE id = ?6 AND tenant = ?7",
                     params![
                         encode(&root.include)?,
                         encode(&root.exclude)?,
@@ -1089,7 +1090,8 @@ impl MemoryStore for SqliteMemoryStore {
                         root.enabled as i64,
                         root.auto_sync as i64,
                         root.id.to_string(),
-                        tenant.as_str()
+                        tenant.as_str(),
+                        root.watch as i64
                     ],
                 )
                 .map_err(storage)?;

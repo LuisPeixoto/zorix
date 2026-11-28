@@ -125,7 +125,7 @@ These take the data-folder lock only for `eval run`; the rest work while the des
 ### `zorix knowledge …`
 
 `add <DIR> [--project <folder> | --global] [--include GLOB] [--exclude GLOB] [--auto-sync] [--no-sync]`, `list`, `sync [<FOLDER>]`,
-`files <FOLDER> [--failed]`, `remove <FOLDER>` and `search <QUERY>`. A folder is named by its path or the start of its id. Ctrl-C during a sync
+`files <FOLDER> [--failed]`, `remove <FOLDER>`, `search <QUERY>` and `watch [<FOLDER>]` (keeps the folders marked with `add --watch` up to date until Ctrl-C). A folder is named by its path or the start of its id. Ctrl-C during a sync
 stops it between files and exits with code 4; what was done stays indexed. See [knowledge](knowledge.md).
 
 ### `zorix run --estimate`

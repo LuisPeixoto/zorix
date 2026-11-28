@@ -38,6 +38,13 @@ pub struct RootRow {
     skipped: u64,
     failed: u64,
     syncing: bool,
+    /// Whether the folder is set to be kept up to date while the app runs.
+    watch: bool,
+    /// How it is kept up to date now: `watching` (the system says when something changes), `polling` (checked every ten minutes, because the system cannot
+    /// watch it) or `off`.
+    watching: String,
+    /// Why it is polled and not watched.
+    watch_note: Option<String>,
 }
 
 async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiError> {
@@ -57,7 +64,93 @@ async fn row(services: &Services, root: &KnowledgeRoot) -> Result<RootRow, UiErr
         skipped: count(DocStatus::Skipped),
         failed: count(DocStatus::Failed),
         syncing: services.syncs.lock().contains_key(&root.id),
+        watch: root.watch,
+        watching: services.watches.lock().get(&root.id).map_or("off", |w| w.mode).to_string(),
+        watch_note: services.watches.lock().get(&root.id).and_then(|w| w.note.clone()),
     })
+}
+
+/// How a folder is kept up to date while the app runs.
+pub struct Watching {
+    /// `watching` or `polling`.
+    pub mode: &'static str,
+    /// Why it is polled.
+    pub note: Option<String>,
+    watch: Option<zorix_memory::index::watch::FolderWatch>,
+    timer: Option<CancellationToken>,
+}
+
+impl Watching {
+    /// Stop watching or polling.
+    pub fn stop(self) {
+        if let Some(timer) = self.timer {
+            timer.cancel();
+        }
+        drop(self.watch);
+    }
+}
+
+/// How often a folder the system cannot watch is checked.
+const POLL: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Keep a folder up to date while the app runs: a sync after its files change, or, when the system cannot watch it, every ten minutes.
+fn start_watch(app: AppHandle, services: &Arc<Services>, root: &KnowledgeRoot) {
+    stop_watch(services, root.id);
+    if !root.watch || !root.enabled {
+        return;
+    }
+    let runtime = tokio::runtime::Handle::current();
+    let (wake_app, wake_services, id) = (app.clone(), services.clone(), root.id);
+    let wake = move || {
+        let (app, services) = (wake_app.clone(), wake_services.clone());
+        // Look at the folder as it is now: it may have been turned off or removed since the watch began.
+        runtime.spawn(async move {
+            if let Ok(roots) = services.memory_store.all_roots(&services.tenant).await
+                && let Some(root) = roots.into_iter().find(|r| r.id == id && r.enabled && r.watch)
+            {
+                spawn_sync(app, &services, root);
+            }
+        });
+    };
+    let watching = match zorix_memory::index::watch::watch(
+        std::path::Path::new(&root.path),
+        zorix_memory::index::watch::QUIET,
+        zorix_memory::index::watch::AT_MOST,
+        wake.clone(),
+    ) {
+        Ok(watch) => Watching { mode: "watching", note: None, watch: Some(watch), timer: None },
+        Err(reason) => {
+            let timer = CancellationToken::new();
+            let stop = timer.clone();
+            let ticking = wake.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        _ = tokio::time::sleep(POLL) => ticking(),
+                        _ = stop.cancelled() => return,
+                    }
+                }
+            });
+            Watching { mode: "polling", note: Some(reason), watch: None, timer: Some(timer) }
+        }
+    };
+    services.watches.lock().insert(root.id, watching);
+}
+
+fn stop_watch(services: &Services, id: KnowledgeRootId) {
+    if let Some(watching) = services.watches.lock().remove(&id) {
+        watching.stop();
+    }
+}
+
+/// Start watching every folder that is set to be. Called when the app opens.
+pub async fn start_watches(app: AppHandle) {
+    let Some(state) = tauri::Manager::try_state::<AppState>(&app) else { return };
+    let Ok(services) = state.services_arc() else { return };
+    let Ok(roots) = services.memory_store.all_roots(&services.tenant).await else { return };
+    for root in &roots {
+        start_watch(app.clone(), &services, root);
+    }
 }
 
 #[tauri::command]
@@ -123,6 +216,13 @@ pub struct NewRoot {
     exclude: Vec<String>,
     #[serde(default)]
     auto_sync: bool,
+    /// Keep the index up to date while the app runs. A folder that is added is watched unless this says not to.
+    #[serde(default = "yes")]
+    watch: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[tauri::command]
@@ -143,8 +243,38 @@ pub async fn add_root(app: AppHandle, state: State<'_, AppState>, root: NewRoot)
         .add_root(&services.tenant, scope, &PathBuf::from(root.path.trim()), root.include, root.exclude, root.auto_sync)
         .await
         .map_err(ui)?;
+    let mut added = added;
+    if root.watch {
+        added.watch = true;
+        services.memory_store.update_root(&services.tenant, added.clone()).await.map_err(ui)?;
+    }
+    start_watch(app.clone(), &services, &added);
     spawn_sync(app, &services, added.clone());
     row(&services, &added).await
+}
+
+/// Turn watching a folder on or off.
+#[tauri::command]
+pub async fn set_root_watch(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    on: bool,
+) -> Result<RootRow, UiError> {
+    let services = state.services_arc()?;
+    let id = parse_root(&id)?;
+    let mut root = services
+        .memory_store
+        .all_roots(&services.tenant)
+        .await
+        .map_err(ui)?
+        .into_iter()
+        .find(|r| r.id == id)
+        .ok_or("That folder is not in the index.")?;
+    root.watch = on;
+    services.memory_store.update_root(&services.tenant, root.clone()).await.map_err(ui)?;
+    start_watch(app, &services, &root);
+    row(&services, &root).await
 }
 
 #[tauri::command]
@@ -179,6 +309,7 @@ pub async fn remove_root(state: State<'_, AppState>, id: String) -> Result<bool,
     if let Some(token) = services.syncs.lock().get(&id) {
         token.cancel();
     }
+    stop_watch(services, id);
     let removed = services.memory_store.remove_root(&services.tenant, id).await.map_err(ui)?;
     services.memory.recall().invalidate_all();
     Ok(removed)

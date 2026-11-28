@@ -59,6 +59,8 @@ time = { version = "0.3", features = ["formatting", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "signal", "net"] }
 tokio-util = "0.7"
 tracing = "0.1"
+# Watching a folder of documents for changes (ADR-0048).
+notify = "9"
 # OpenTelemetry export of the run spans (ADR-0046): HTTP only, no gRPC.
 opentelemetry = { version = "0.33", default-features = false, features = ["trace"] }
 opentelemetry_sdk = { version = "0.33", default-features = false, features = ["trace"] }

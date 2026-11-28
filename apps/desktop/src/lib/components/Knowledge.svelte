@@ -3,7 +3,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onDestroy, onMount } from "svelte";
 
-  import { type FileRow, type Found, type RootRow, type SyncProgress, addRoot, cancelSync, errorText, listRoots, onKnowledge, removeRoot, rootFiles, syncRoot, tryQuery } from "../api.ts";
+  import { type FileRow, type Found, type RootRow, type SyncProgress, addRoot, cancelSync, errorText, listRoots, onKnowledge, removeRoot, rootFiles, setRootWatch, syncRoot, tryQuery } from "../api.ts";
   import { ago } from "../format.ts";
   import { toast } from "../stores/toast.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Field, Icon, Input, Modal, Switch } from "../ui/index.ts";
@@ -46,6 +46,15 @@
     if (tick) clearInterval(tick);
   });
 
+  async function toggleWatch(root: RootRow) {
+    try {
+      await setRootWatch(root.id, !root.watch);
+      await load();
+    } catch (e) {
+      toast.err(errorText(e));
+    }
+  }
+
   // ---- add a folder ----
   let adding = $state(false);
   let path = $state("");
@@ -53,6 +62,7 @@
   let include = $state("");
   let exclude = $state("");
   let auto = $state(false);
+  let watchIt = $state(true);
   let formError = $state<string | null>(null);
 
   const lines = (text: string) => text.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
@@ -70,7 +80,7 @@
     formError = null;
     busy = true;
     try {
-      await addRoot({ path, project: project.trim() || undefined, include: lines(include), exclude: lines(exclude), auto_sync: auto });
+      await addRoot({ path, project: project.trim() || undefined, include: lines(include), exclude: lines(exclude), auto_sync: auto, watch: watchIt });
       adding = false;
       path = project = include = exclude = "";
       auto = false;
@@ -177,10 +187,14 @@
             {#if root.skipped}<Badge tone="muted">{t("knowledge.leftOut", { skipped: root.skipped })}</Badge>{/if}
             {#if root.failed}<Badge tone="err" dot>{root.failed} failed</Badge>{/if}
             {#if root.auto_sync}<Badge tone="muted">{t("knowledge.checkedAtStart")}</Badge>{/if}
+            {#if root.watching === "watching"}<Badge tone="info" live>{t("knowledge.watching")}</Badge>
+            {:else if root.watching === "polling"}<Badge tone="muted">{t("knowledge.checkedEveryTenMinutes")}</Badge>
+            {:else}<Badge tone="muted">{t("knowledge.notWatching")}</Badge>{/if}
           </div>
           <p class="mt-1.5 text-xs text-faint">
             {root.last_sync_at ? t("knowledge.lastChecked", { value: ago(root.last_sync_at, now) }) : t("knowledge.notIndexedYet")}{root.last_sync ? t("knowledge.lastPassReadVectors", { indexed: root.last_sync.indexed, embedded: root.last_sync.embedded }) : ""}
           </p>
+          {#if root.watching === "polling" && root.watch_note}<p class="mt-1 text-xs text-muted">{t("knowledge.theSystemCannotWatch")} {root.watch_note}</p>{/if}
           {#if root.last_sync?.degraded}<p class="mt-1 text-xs text-warn">{root.last_sync.degraded}</p>{/if}
           {#if root.last_sync?.too_many_files}<p class="mt-1 text-xs text-warn">{t("knowledge.theFolderHasMore")}</p>{/if}
         </div>
@@ -190,6 +204,7 @@
           {:else}
             <Button size="sm" icon="refresh" onclick={() => sync(root.id)}>{t("knowledge.sync")}</Button>
           {/if}
+          <Button size="sm" icon={root.watch ? "stop" : "eye"} onclick={() => void toggleWatch(root)}>{root.watch ? t("knowledge.stopWatching") : t("knowledge.watch")}</Button>
           <Button size="sm" icon="list" onclick={() => showFiles(root, root.failed + root.skipped > 0)}>{t("knowledge.files")}</Button>
           <Button size="sm" variant="danger" icon="trash" onclick={() => { doomed = root; confirm = true; }}>{t("common.remove")}</Button>
         </div>
@@ -245,6 +260,7 @@
         {#snippet children(f)}<Input id={f.id} mono bind:value={exclude} placeholder="drafts/*" />{/snippet}
       </Field>
     </div>
+    <Switch bind:checked={watchIt}>{t("knowledge.keepItUpToDate")}</Switch>
     <Switch bind:checked={auto}>{t("knowledge.lookForChangesWhenever")}</Switch>
     {#if formError}<Callout tone="err">{formError}</Callout>{/if}
   </div>

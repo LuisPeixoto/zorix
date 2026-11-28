@@ -23,8 +23,9 @@ use zorix_store::{
 use crate::app::{CliError, open_router};
 use crate::cli::{
     CorpusArg, EmbeddingsCommand, EmbeddingsSetArgs, KnowledgeAddArgs, KnowledgeCommand, KnowledgeFilesArgs,
-    KnowledgeRootArg, KnowledgeSearchArgs, KnowledgeSyncArgs, MemoryAddArgs, MemoryCommand, MemoryEditArgs,
-    MemoryExportArgs, MemoryForgetArgs, MemoryIdArg, MemoryListArgs, MemorySearchArgs, ModelArgs, ScopeArg, ScopeSpec,
+    KnowledgeRootArg, KnowledgeSearchArgs, KnowledgeSyncArgs, KnowledgeWatchArgs, MemoryAddArgs, MemoryCommand,
+    MemoryEditArgs, MemoryExportArgs, MemoryForgetArgs, MemoryIdArg, MemoryListArgs, MemorySearchArgs, ModelArgs,
+    ScopeArg, ScopeSpec,
 };
 use crate::follow::{Exit, Printer, ask, decider};
 
@@ -441,6 +442,72 @@ fn print_report(
     Ok(())
 }
 
+/// `zorix knowledge watch`: sync once to catch up, then again a few seconds after the files of a watched folder change, until Ctrl-C.
+async fn watch_folders(
+    home: &Path,
+    tenant: &TenantId,
+    printer: Printer,
+    folder: Option<String>,
+) -> Result<Exit, CliError> {
+    let ctx = open(home, true)?;
+    let roots = ctx.store.all_roots(tenant).await?;
+    let chosen: Vec<KnowledgeRoot> = match folder {
+        Some(text) => vec![resolve_root(&roots, &text)?],
+        None => roots.into_iter().filter(|r| r.enabled && r.watch).collect(),
+    };
+    if chosen.is_empty() {
+        eprintln!(
+            "No folder is marked to be watched. Mark one with `zorix knowledge add <folder> --watch`, or name one here."
+        );
+        return Ok(Exit::Done);
+    }
+    let indexer = ctx.stack.indexer();
+    let cancel = cancel_on_ctrl_c();
+    // A change wakes the loop with the folder it was in; several changes to one folder are one sync.
+    let (wake, mut woken) = tokio::sync::mpsc::unbounded_channel::<usize>();
+    let mut watches = Vec::new();
+    for (position, root) in chosen.iter().enumerate() {
+        let wake = wake.clone();
+        match zorix_memory::index::watch::watch(
+            Path::new(&root.path),
+            zorix_memory::index::watch::QUIET,
+            zorix_memory::index::watch::AT_MOST,
+            move || {
+                let _ = wake.send(position);
+            },
+        ) {
+            Ok(watch) => {
+                eprintln!("Watching {}.", root.path);
+                watches.push(watch);
+            }
+            Err(reason) => return Err(CliError(format!("{reason} Run `zorix knowledge sync` on a timer instead."))),
+        }
+    }
+    for root in &chosen {
+        let report = indexer.sync(root, &progress_printer(), &cancel).await.map_err(|e| CliError(e.to_string()))?;
+        print_report(printer, root, &report)?;
+    }
+    eprintln!("Waiting for changes. Press Ctrl-C to stop.");
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => return Ok(Exit::Cancelled),
+            Some(position) = woken.recv() => {
+                let mut pending = std::collections::BTreeSet::from([position]);
+                while let Ok(more) = woken.try_recv() {
+                    pending.insert(more);
+                }
+                for position in pending {
+                    let root = &chosen[position];
+                    match indexer.sync(root, &progress_printer(), &cancel).await {
+                        Ok(report) => print_report(printer, root, &report)?,
+                        Err(error) => eprintln!("{}: {error}", root.path),
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// A Ctrl-C stops the work between files; what is done stays.
 fn cancel_on_ctrl_c() -> CancellationToken {
     let token = CancellationToken::new();
@@ -478,12 +545,13 @@ pub async fn knowledge(
                 let synced =
                     root.last_sync_at.map(|t| t.to_rfc3339()[..16].replace('T', " ")).unwrap_or_else(|| "never".into());
                 println!(
-                    "{}  {:<22} {:<8} {} files, synced {synced}{}",
+                    "{}  {:<22} {:<8} {} files, synced {synced}{}{}",
                     &root.id.to_string()[..8],
                     root.scope.label(),
                     if root.enabled { "on" } else { "off" },
                     files,
-                    if root.auto_sync { ", auto" } else { "" }
+                    if root.auto_sync { ", auto" } else { "" },
+                    if root.watch { ", watched" } else { "" }
                 );
                 println!("          {}", root.path);
             }
@@ -511,6 +579,7 @@ pub async fn knowledge(
             }
             Ok(Exit::Done)
         }
+        KnowledgeCommand::Watch(KnowledgeWatchArgs { folder }) => watch_folders(home, tenant, printer, folder).await,
         KnowledgeCommand::Files(KnowledgeFilesArgs { folder, failed }) => {
             let ctx = open(home, false)?;
             let root = resolve_root(&ctx.store.all_roots(tenant).await?, &folder)?;
@@ -584,6 +653,14 @@ async fn knowledge_add(
         .await
         .map_err(|e| CliError(e.to_string()))?;
     eprintln!("Added {} ({}).", root.path, root.scope.label());
+    let root = if args.watch {
+        let mut watched = root;
+        watched.watch = true;
+        ctx.store.update_root(tenant, watched.clone()).await?;
+        watched
+    } else {
+        root
+    };
     if !args.no_sync {
         let cancel = cancel_on_ctrl_c();
         let report = indexer.sync(&root, &progress_printer(), &cancel).await.map_err(|e| CliError(e.to_string()))?;

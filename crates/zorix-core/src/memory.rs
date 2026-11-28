@@ -388,6 +388,9 @@ pub struct KnowledgeRoot {
     pub enabled: bool,
     /// Look for changes when the app starts.
     pub auto_sync: bool,
+    /// Keep the index up to date while the app runs: a change to the folder is read again within seconds (ADR-0048).
+    #[serde(default)]
+    pub watch: bool,
     /// When it was added.
     pub created_at: Timestamp,
     /// When a sync last finished.
