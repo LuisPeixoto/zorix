@@ -153,6 +153,103 @@ async fn a_streamed_answer_is_bounded_in_one_event_and_in_total() {
     }
 }
 
+#[tokio::test]
+async fn a_legacy_session_the_server_forgot_ends_the_connection_so_a_new_one_can_start() {
+    let initializes = Arc::new(AtomicUsize::new(0));
+    let (counted, sessions) = (initializes.clone(), Arc::new(std::sync::Mutex::new(Vec::<Option<String>>::new())));
+    let seen = sessions.clone();
+    let server = serve(move |m, _, id, request| match m {
+        "server/discover" => ResponseTemplate::new(400),
+        "initialize" => {
+            counted.fetch_add(1, Ordering::SeqCst);
+            seen.lock().unwrap().push(header(request, "mcp-session-id").map(str::to_string));
+            answer(id, json!({"protocolVersion": "2025-11-25", "capabilities": {"tools": {}}, "serverInfo": {"name": "old", "version": "1"}}))
+                .insert_header("Mcp-Session-Id", "sess-1")
+        }
+        "" | "notifications/initialized" => ResponseTemplate::new(202),
+        // The session is gone at the server (it restarted): every request that carries its id gets a 404.
+        _ => ResponseTemplate::new(404),
+    })
+    .await;
+    let first = transport(&server, Arc::new(NoAuth));
+    let client = connect(first.clone()).await.unwrap();
+    let mut events = client.events();
+    let error = client.call_tool("t", json!({}), Duration::from_secs(5), &CancellationToken::new()).await.unwrap_err();
+    assert!(matches!(&error, McpError::Transport(m) if m.contains("ended the session")), "{error:?}");
+    assert!(!client.alive(), "the connection is over, so the manager starts another");
+    // The event reaches the client through a task that relays it, so it is waited for rather than read at once.
+    let mut closed = false;
+    for _ in 0..40 {
+        while let Ok(event) = events.try_recv() {
+            closed |= matches!(event, ServerEvent::Closed(why) if why.contains("ended the session"));
+        }
+        if closed {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(closed, "the manager is told");
+    // Nothing more is sent into the dead session.
+    let after = client.call_tool("t", json!({}), Duration::from_secs(5), &CancellationToken::new()).await.unwrap_err();
+    assert!(matches!(after, McpError::Closed), "{after:?}");
+    // A new connection starts over, with no session id on its initialize.
+    let again = connect(transport(&server, Arc::new(NoAuth))).await.unwrap();
+    assert!(again.alive());
+    assert_eq!(initializes.load(Ordering::SeqCst), 2);
+    assert_eq!(*sessions.lock().unwrap(), vec![None, None], "a new session asks with no session id");
+}
+
+#[tokio::test]
+async fn a_404_without_a_session_is_an_ordinary_answer_and_does_not_end_the_connection() {
+    let server = serve(|m, _, id, _| match m {
+        "server/discover" => answer(id, json!({"supportedVersions": ["2026-07-28"], "capabilities": {}})),
+        "tools/call" => error(404, id, -32601, "No such tool", Value::Null),
+        _ => error(404, id, -32601, "no", Value::Null),
+    })
+    .await;
+    let client = connect(transport(&server, Arc::new(NoAuth))).await.unwrap();
+    assert!(client.call_tool("t", json!({}), Duration::from_secs(5), &CancellationToken::new()).await.is_err());
+    assert!(client.alive(), "a modern server has no session to lose");
+}
+
+#[tokio::test]
+async fn a_legacy_request_that_is_given_up_on_is_cancelled_with_a_notification_and_initialize_is_not() {
+    let cancels = Arc::new(std::sync::Mutex::new(Vec::<Value>::new()));
+    let seen = cancels.clone();
+    let server = serve(move |m, params, id, _| match m {
+        "server/discover" => ResponseTemplate::new(400),
+        "initialize" => answer(id, json!({"protocolVersion": "2025-11-25", "capabilities": {"tools": {}}, "serverInfo": {"name": "old", "version": "1"}}))
+            .insert_header("Mcp-Session-Id", "sess-9"),
+        "notifications/cancelled" => {
+            seen.lock().unwrap().push(params.clone());
+            ResponseTemplate::new(202)
+        }
+        "notifications/initialized" | "" => ResponseTemplate::new(202),
+        "tools/call" => answer(id, json!({"content": []})).set_delay(Duration::from_secs(3)),
+        _ => ResponseTemplate::new(404),
+    })
+    .await;
+    let client = connect(transport(&server, Arc::new(NoAuth))).await.unwrap();
+    let cancel = CancellationToken::new();
+    let stopper = cancel.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        stopper.cancel();
+    });
+    let error = client.call_tool("slow", json!({}), Duration::from_secs(10), &cancel).await.unwrap_err();
+    assert!(matches!(error, McpError::Cancelled), "{error:?}");
+    for _ in 0..40 {
+        if !cancels.lock().unwrap().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let told = cancels.lock().unwrap().clone();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0]["reason"], "cancelled by ZORIX");
+    assert!(told[0]["requestId"].is_number());
+}
+
 fn legacy_server(
     calls: Arc<AtomicUsize>,
 ) -> impl Fn(&str, &Value, &Value, &Request) -> ResponseTemplate + Send + Sync + 'static {

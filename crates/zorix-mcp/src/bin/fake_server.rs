@@ -6,6 +6,7 @@
 //! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`),
 //! `--input-required` (modern: answers `echo` with an input request), `--noise` (writes to stderr, including a secret-looking token),
 //! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading),
+//! `--string-ids` (answers with each request's id written as a string, which JSON-RPC allows a server to do),
 //! `--child FILE` (starts a grandchild of this very program that writes a growing number into FILE ten times a second, as a server that
 //! starts helpers does; `--heartbeat FILE` is that grandchild). `env` with the name `<cwd>` answers the folder the server runs in.
 //! Tools: `echo`, `env`, `env_keys`, `cancelled`, `hang`, `crash`, `big`, `huge`.
@@ -27,6 +28,16 @@ struct Opts {
     silent_discover: bool,
 }
 
+/// Whether answers carry the request's id as a string.
+static STRING_IDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn wire_id(id: &Value) -> Value {
+    match (STRING_IDS.load(std::sync::atomic::Ordering::SeqCst), id.as_i64()) {
+        (true, Some(n)) => json!(n.to_string()),
+        _ => id.clone(),
+    }
+}
+
 fn out(value: &Value) {
     let mut stdout = std::io::stdout().lock();
     let _ = writeln!(stdout, "{value}");
@@ -34,11 +45,11 @@ fn out(value: &Value) {
 }
 
 fn reply(id: &Value, result: Value) {
-    out(&json!({"jsonrpc": "2.0", "id": id, "result": result}));
+    out(&json!({"jsonrpc": "2.0", "id": wire_id(id), "result": result}));
 }
 
 fn fail(id: &Value, code: i64, message: &str) {
-    out(&json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}));
+    out(&json!({"jsonrpc": "2.0", "id": wire_id(id), "error": {"code": code, "message": message}}));
 }
 
 fn text(text: &str) -> Value {
@@ -77,6 +88,7 @@ fn main() {
             .stderr(std::process::Stdio::null())
             .spawn();
     }
+    STRING_IDS.store(flag("--string-ids"), std::sync::atomic::Ordering::SeqCst);
     let era = value("--era").unwrap_or_else(|| "dual".into());
     let opts = Opts {
         modern: era != "legacy",

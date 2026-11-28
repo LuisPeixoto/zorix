@@ -49,6 +49,11 @@ pub enum Incoming {
     },
 }
 
+/// The number a response's id stands for. A server may echo the id it was sent as a string (`"7"` for `7`); both are the same request.
+pub fn id_number(id: &Value) -> Option<i64> {
+    id.as_i64().or_else(|| id.as_str().and_then(|text| text.parse().ok()))
+}
+
 /// Read one message.
 pub fn parse(text: &str) -> Result<Incoming, McpError> {
     let value: Value =

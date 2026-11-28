@@ -236,3 +236,51 @@ async fn a_server_that_announces_new_tools_is_heard() {
     assert!(heard);
     assert!(client.list_tools(&CancellationToken::new()).await.unwrap().tools.iter().any(|t| t.name == "extra"));
 }
+
+#[tokio::test]
+async fn a_server_that_writes_the_id_of_its_answers_as_a_string_is_still_understood() {
+    // JSON-RPC lets a server echo an id as a string; the answer to request 7 is still the answer to request 7.
+    let client = connect(&["--era", "modern", "--string-ids"]).await;
+    assert_eq!(text_of(&call(&client, "echo", json!({"text": "hello"})).await.unwrap()), "hello");
+    assert!(!client.list_tools(&CancellationToken::new()).await.unwrap().tools.is_empty());
+    client.close().await;
+}
+
+#[tokio::test]
+async fn a_request_for_initialize_that_is_given_up_on_is_not_cancelled() {
+    use zorix_mcp::Transport;
+    // The server only starts reading after a delay, so the first request times out before it is read. A request that is given up on
+    // is cancelled with a notification, except `initialize`, which the specification says must never be cancelled.
+    let transport = StdioTransport::spawn(config(&["--era", "modern", "--delay", "700"])).unwrap();
+    let gave_up = transport
+        .request(
+            "initialize",
+            json!({"protocolVersion": "2025-11-25"}),
+            Duration::from_millis(150),
+            &CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(gave_up, Err(McpError::Timeout(_))), "{gave_up:?}");
+    let gave_up = transport
+        .request(
+            "tools/list",
+            zorix_mcp::protocol::with_modern_meta(json!({})),
+            Duration::from_millis(100),
+            &CancellationToken::new(),
+        )
+        .await;
+    assert!(matches!(gave_up, Err(McpError::Timeout(_))), "{gave_up:?}");
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+    let counted = transport
+        .request(
+            "tools/call",
+            zorix_mcp::protocol::with_modern_meta(json!({"name": "cancelled", "arguments": {}})),
+            Duration::from_secs(5),
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    // Exactly one cancellation reached the server: the one for tools/list, not the one for initialize.
+    assert_eq!(counted["content"][0]["text"], "1", "{counted}");
+    transport.close().await;
+}
