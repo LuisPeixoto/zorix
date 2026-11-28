@@ -2,6 +2,7 @@
 
 mod agent_commands;
 mod app_settings_commands;
+mod ask_commands;
 mod attachment_commands;
 mod commands;
 mod integration_commands;
@@ -30,6 +31,7 @@ pub fn run() {
             app.manage(state);
             if let Ok(services) = app.state::<AppState>().services_arc() {
                 crate::integration_commands::forward_status(app.handle().clone(), services.hub.manager.clone());
+                crate::ask_commands::forward_asks(app.handle().clone(), services.engine.clone());
             }
             // Folders marked "check at start" are brought up to date in the background.
             let handle = app.handle().clone();
@@ -40,6 +42,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            ask_commands::server_asks,
+            ask_commands::server_ask_answer,
             project_commands::projects_overview,
             project_commands::project_create,
             project_commands::project_update,
