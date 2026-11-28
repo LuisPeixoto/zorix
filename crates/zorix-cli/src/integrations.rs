@@ -452,7 +452,8 @@ async fn tools(home: &Path, tenant: &TenantId, printer: Printer, name: &str, log
         return Ok(if matches!(status.state, ServerState::Ready) { Exit::Done } else { Exit::Failed });
     }
     if !matches!(status.state, ServerState::Ready) {
-        eprintln!("{name} is {}.", state_text(&status.state));
+        // A reason is often a sentence of its own: one full stop, not two.
+        eprintln!("{name} is {}.", state_text(&status.state).trim_end_matches('.'));
         return Ok(Exit::Failed);
     }
     let mut pending = 0;
