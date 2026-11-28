@@ -31,8 +31,14 @@ pub async fn estimate(home: &Path, tenant: &TenantId, printer: Printer, args: &R
         (None, None) if router.resolve("default", StepPhase::Start).is_ok() => Some("default".to_string()),
         (None, None) => Some("demo".to_string()),
     };
-    let planned =
-        Planned { agent, model: model.as_deref(), prompt_chars: args.prompt.chars().count(), attached_chars: 0 };
+    // Nothing is read for an estimate: the size of the files says roughly how much text they hold (a PDF holds far less text than bytes).
+    let mut attached_chars = 0usize;
+    for path in &args.attach {
+        let file = zorix_memory::attach::look(path).map_err(|e| CliError(e.to_string()))?;
+        attached_chars +=
+            if file.kind == zorix_memory::index::walk::Kind::Pdf { file.bytes / 8 } else { file.bytes } as usize;
+    }
+    let planned = Planned { agent, model: model.as_deref(), prompt_chars: args.prompt.chars().count(), attached_chars };
     let estimate = estimate_run(&repository, &router, tenant, &planned).await.map_err(|e| CliError(e.to_string()))?;
     if printer.json {
         println!("{}", serde_json::json!({"model": model, "estimate": estimate}));

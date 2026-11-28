@@ -715,6 +715,11 @@ pub struct RunArgs {
     /// With --agent or --team: data that goes with the prompt, as JSON.
     #[arg(long, value_name = "JSON", value_parser = parse_json)]
     pub input: Option<serde_json::Value>,
+
+    /// Give the run a file to read: text, code, HTML or a PDF. Repeat for more, up to ten. A file is given as data and adds no permission; one with a
+    /// private name (.env, keys), in a folder of credentials, or over 1 MB of text (25 MB for a PDF) is refused.
+    #[arg(long = "attach", value_name = "FILE")]
+    pub attach: Vec<PathBuf>,
 }
 
 /// What `zorix agent` does.
