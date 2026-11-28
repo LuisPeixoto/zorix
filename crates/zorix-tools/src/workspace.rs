@@ -141,7 +141,10 @@ fn require(grants: &Grants, action: Action, path: &RelativePath) -> Result<(), T
 /// speak of. A link can lead somewhere the text of the request does not say: the grant and the `.zorix` reservation are about
 /// the place the bytes are, so they are checked there too.
 fn real_relative(root: &Path, real: &Path) -> Result<RelativePath, ToolError> {
-    let inside = real.strip_prefix(root).map_err(|_| failed("That path leads outside the workspace."))?;
+    let inside = real.strip_prefix(root).map_err(|_| {
+        eprintln!("DIAG relative real={real:?} root={root:?}");
+        failed("That path leads outside the workspace.")
+    })?;
     let mut text = Vec::new();
     for part in inside.components() {
         let name = part.as_os_str().to_str().ok_or_else(|| failed("That path has a name ZORIX cannot read."))?;
@@ -196,10 +199,12 @@ fn resolve_for_write(root: &Path, grants: &Grants, path: &RelativePath) -> Resul
     // The deepest ancestor that exists must resolve inside the root.
     let mut ancestor = target.parent().unwrap_or(root).to_path_buf();
     while !ancestor.exists() {
+        eprintln!("DIAG missing ancestor {ancestor:?} metadata={:?} root={root:?}", fs::metadata(&ancestor).map(|m| m.is_dir()));
         ancestor = ancestor.parent().ok_or_else(|| failed("That path leads outside the workspace."))?.to_path_buf();
     }
     let real = fs::canonicalize(&ancestor).map_err(|e| failed(format!("Cannot use that location: {e}")))?;
     if !real.starts_with(root) {
+        eprintln!("DIAG resolve real={real:?} root={root:?} ancestor={ancestor:?}");
         return Err(failed("That path leads outside the workspace."));
     }
     // Where the file would really be: the folder a link leads to, then what is left of the path. That place needs its own grant
@@ -287,6 +292,7 @@ pub fn write(root: &Path, grants: &Grants, path: &str, content: &str) -> Result<
         // Created folders could not be links, but check again: another process may have raced us.
         let real = fs::canonicalize(parent).map_err(|e| failed(format!("Cannot use that location: {e}")))?;
         if !real.starts_with(&root) {
+            eprintln!("DIAG after-create real={real:?} root={root:?} parent={parent:?}");
             return Err(failed("That path leads outside the workspace."));
         }
     }
