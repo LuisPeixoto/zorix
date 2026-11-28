@@ -43,6 +43,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ask_commands::server_asks,
+            commands::git_preview,
             ask_commands::server_ask_answer,
             project_commands::projects_overview,
             project_commands::project_create,

@@ -146,7 +146,7 @@ export interface StartRun {
   /** Files the run is given to read, by path: at most ten, each checked before the run exists. */
   attachments?: string[];
   /** The servers and services the run may reach. Each entry means what the matching `--allow-…` flag means. */
-  integrations?: Partial<Record<"mcp" | "http" | "repo" | "jira" | "chat" | "db" | "code", string[]>>;
+  integrations?: Partial<Record<"mcp" | "http" | "repo" | "jira" | "chat" | "db" | "code" | "git" | "git_push", string[]>>;
 }
 
 export interface MemoryRow {
@@ -658,6 +658,20 @@ export interface PendingAsk {
   asked_at: number;
 }
 export type AskAnswer = { answer: "yes"; values: Record<string, unknown> } | { answer: "no" };
+
+/** What an approval of `git.commit` or `git.push` is about: the diff and, for a push, where it goes. */
+export interface GitPreview {
+  diff: string;
+  branch: string;
+  files: string[];
+  new_files?: string[];
+  not_shown?: number;
+  url?: string;
+  new_on_remote?: boolean;
+  commit?: string;
+  subject?: string;
+}
+export const gitPreview = (executionId: string, approvalId: string) => invoke<GitPreview>("git_preview", { executionId, approvalId });
 
 export const serverAsks = () => invoke<PendingAsk[]>("server_asks");
 export const answerServerAsk = (id: string, hash: string, answer: AskAnswer) => invoke<void>("server_ask_answer", { id, hash, answer });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { diffLines, diffWords, summarize } from "./diff.ts";
+import { diffLines, diffWords, summarize, patchLines } from "./diff.ts";
 
 const rebuild = (parts: ReturnType<typeof diffLines>, keep: "same" | "add" | "del", joiner = "\n") =>
   parts.filter((p) => p.kind === "same" || p.kind === keep).map((p) => p.text).join(joiner);
@@ -41,4 +41,16 @@ test("huge inputs fall back to replacing the text instead of freezing", () => {
   const parts = diffLines(a, b);
   assert.ok(Date.now() - started < 2000);
   assert.deepEqual(parts.map((p) => p.kind), ["del", "add"]);
+});
+
+test("a git patch shows file names, hunks and lines without the header noise", () => {
+  const patch = "diff --git a/src/a.rs b/src/a.rs\nindex 1..2 100644\n--- a/src/a.rs\n+++ b/src/a.rs\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n+++not a header\n";
+  assert.deepEqual(patchLines(patch).map((l) => `${l.kind}:${l.text}`), [
+    "file:src/a.rs",
+    "hunk:@@ -1,2 +1,2 @@",
+    "same:keep",
+    "del:old",
+    "add:new",
+    "add:++not a header",
+  ]);
 });

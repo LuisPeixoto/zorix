@@ -64,3 +64,27 @@ export function summarize(parts: Part[]): { added: number; removed: number } {
     parts.filter((p) => p.kind === kind).reduce((n, p) => n + (p.text.trim() ? p.text.split(/\n/).length : 0), 0);
   return { added: count("add"), removed: count("del") };
 }
+
+/** A unified patch (as git writes it) as lines to show: file headers, what was added and removed, and the context. */
+export function patchLines(patch: string): { kind: "file" | "hunk" | "same" | "add" | "del"; text: string }[] {
+  const lines = patch.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  let inHunk = false;
+  return lines.flatMap((line): { kind: "file" | "hunk" | "same" | "add" | "del"; text: string }[] => {
+    // Git's own header line, which is not something to translate.
+    const file = /^diff --git a\/(.*) b\/.*$/.exec(line);
+    if (file) {
+      inHunk = false;
+      return [{ kind: "file", text: file[1] }];
+    }
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      return [{ kind: "hunk", text: line }];
+    }
+    // The header lines between the file and its first hunk say nothing more than the name.
+    if (!inHunk) return [];
+    if (line.startsWith("+")) return [{ kind: "add", text: line.slice(1) }];
+    if (line.startsWith("-")) return [{ kind: "del", text: line.slice(1) }];
+    return [{ kind: "same", text: line.startsWith(" ") ? line.slice(1) : line }];
+  });
+}
