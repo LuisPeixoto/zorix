@@ -60,7 +60,12 @@ impl Permission {
 
     /// True when this grant covers `required`.
     pub fn covers(&self, required: &Permission) -> bool {
-        self.action == required.action && pattern_matches(&self.resource, &required.resource)
+        self.action == required.action
+            && if self.action == Action::Network {
+                network_pattern_matches(&self.resource, &required.resource)
+            } else {
+                pattern_matches(&self.resource, &required.resource)
+            }
     }
 }
 
@@ -73,6 +78,20 @@ impl fmt::Display for Permission {
 fn pattern_matches(pattern: &str, resource: &str) -> bool {
     match pattern.strip_suffix('*') {
         Some(prefix) => resource.starts_with(prefix),
+        None => pattern == resource,
+    }
+}
+
+/// A network grant (`http:<host>`) is matched like the others, except that a `*` at its end stands for the rest of a host only after a
+/// `.` or a `:` (`http:docs.*`, `http:localhost:*`), or for everything when it is alone (`http:*`). Anywhere else it is an ordinary
+/// character, which no real host has: `http:api.example.com*` would otherwise also cover `api.example.com.evil.net`, a host somebody
+/// else can register, because a prefix of a name says nothing about who owns the rest of it.
+fn network_pattern_matches(pattern: &str, resource: &str) -> bool {
+    match pattern.strip_suffix('*') {
+        Some(prefix) => {
+            let after_boundary = prefix == "http:" || prefix.ends_with('.') || prefix.ends_with(':');
+            if after_boundary { resource.starts_with(prefix) } else { pattern == resource }
+        }
         None => pattern == resource,
     }
 }
@@ -114,15 +133,21 @@ pub fn workspace_grant(action: Action, pattern: &str) -> Result<Permission, Stri
     Ok(Permission::new(action, format!("workspace:{pattern}")))
 }
 
-/// Check a host pattern given by a person for `--allow-http`: a name or address, with `*` only at the end.
+/// Check a host pattern given by a person for `--allow-http`: a name or address, with a `*` only alone or at the end after a `.` or a
+/// `:` (see `network_pattern_matches`: a `*` glued to the end of a name would cover hosts that somebody else can register).
 pub fn validate_host_pattern(text: &str) -> Result<(), String> {
     let body = text.strip_suffix('*').unwrap_or(text);
+    let wildcard_ok = body.len() == text.len() || body.is_empty() || body.ends_with('.') || body.ends_with(':');
     let ok = !text.is_empty()
         && text.len() <= 253
         && !body.contains('*')
         && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']' | '_' | '*'));
-    if ok {
+    if ok && wildcard_ok {
         Ok(())
+    } else if ok {
+        Err(format!(
+            "“{text}” puts a `*` right after a name, which would also match longer names that somebody else can register (`{body}.evil.net`). Name the host in full, or put the `*` after a dot, as in `docs.*`."
+        ))
     } else {
         Err(format!("“{text}” is not a host name or address (a `*` is only allowed at the end)."))
     }
@@ -293,13 +318,52 @@ mod tests {
         assert!(grants.allows(&Permission::new(Action::Network, "http:docs.rs")));
         assert!(!grants.allows(&Permission::new(Action::Network, "http:evil.example.com")));
         assert!(!grants.allows(&Permission::new(Action::Read, "http:api.example.com")), "network is its own action");
-        for bad in ["", "a b", "a*b", "*.example.com", "http://x", "x/y", "x?"] {
+        for bad in [
+            "",
+            "a b",
+            "a*b",
+            "*.example.com",
+            "http://x",
+            "x/y",
+            "x?",
+            "api.example.com*",
+            "api*",
+            "localhost*",
+            "10.0.0.1*",
+        ] {
             assert!(validate_host_pattern(bad).is_err(), "{bad}");
         }
         assert!(
             validate_host_pattern("*").is_ok()
                 && validate_host_pattern("127.0.0.1").is_ok()
                 && validate_host_pattern("[::1]").is_ok()
+        );
+    }
+
+    #[test]
+    fn a_star_glued_to_a_host_never_covers_a_longer_name() {
+        // The mistake that used to be accepted: `api.example.com*` meant "this host" and also covered `api.example.com.evil.net`.
+        assert!(network_grant("api.example.com*").unwrap_err().contains("evil.net"));
+        // A permission built by hand (not through network_grant) is held to the same rule: the star is an ordinary character there.
+        let by_hand = Permission::new(Action::Network, "http:api.example.com*");
+        for host in ["api.example.com", "api.example.com.evil.net", "api.example.community", "api.example.com*"] {
+            let covered = by_hand.covers(&Permission::new(Action::Network, format!("http:{host}")));
+            assert_eq!(covered, host == "api.example.com*", "{host}");
+        }
+        // After a dot or a colon, and alone, a star still does what it says.
+        let docs = network_grant("docs.*").unwrap();
+        assert!(docs.covers(&Permission::new(Action::Network, "http:docs.rs")));
+        assert!(!docs.covers(&Permission::new(Action::Network, "http:docsrs.com")));
+        let any_port = network_grant("localhost:*").unwrap();
+        assert!(any_port.covers(&Permission::new(Action::Network, "http:localhost:8080")));
+        assert!(!any_port.covers(&Permission::new(Action::Network, "http:localhost")));
+        assert!(!any_port.covers(&Permission::new(Action::Network, "http:localhost.evil.net:80")));
+        let all = network_grant("*").unwrap();
+        assert!(all.covers(&Permission::new(Action::Network, "http:anything.example")));
+        // Other kinds of resource keep their prefix patterns (`workspace:docs/*`, `github:acme/*`).
+        assert!(
+            Permission::new(Action::Read, "workspace:docs/*")
+                .covers(&Permission::new(Action::Read, "workspace:docs/a.md"))
         );
     }
 

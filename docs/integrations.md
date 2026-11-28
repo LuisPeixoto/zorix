@@ -18,7 +18,7 @@ card of the New run form) give both:
 
 | Flag | Meaning |
 |---|---|
-| `--allow-http HOST` | `http.get`, `http.request`, `webhook.send` to this host over HTTPS (a trailing `*` is allowed) |
+| `--allow-http HOST` | `http.get`, `http.request`, `webhook.send` to this host over HTTPS (a `*` is allowed alone, or at the end after a `.` or `:`, as in `docs.*` or `localhost:*`; `api.example.com*` is refused, because it would also cover `api.example.com.evil.net`) |
 | `--allow-repo [github:\|gitlab:]OWNER/REPO[:write]` | A repository, or `OWNER/*`. Without `:write`, read only |
 | `--allow-jira KEY[:write]` | A Jira project |
 | `--allow-chat slack:#channel[:write]` or `discord:<channel id>[:write]` | A channel. Sending needs `:write` and still asks |
