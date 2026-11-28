@@ -13,7 +13,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{Notify, broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -145,6 +145,27 @@ async fn read_line<R: AsyncBufRead + Unpin>(reader: &mut R, buf: &mut Vec<u8>, c
                     return Ok(Line::TooLarge);
                 }
                 buf.extend_from_slice(available);
+                reader.consume(n);
+            }
+        }
+    }
+}
+
+/// Throw away what is left of a line that was too long, up to and including its newline, and not a byte after it. (Reading "until a
+/// short read" instead ate whatever followed the end of the line, so the next line came out cut or missing.)
+async fn skip_line<R: AsyncBufRead + Unpin>(reader: &mut R) -> std::io::Result<()> {
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            return Ok(());
+        }
+        match available.iter().position(|b| *b == b'\n') {
+            Some(at) => {
+                reader.consume(at + 1);
+                return Ok(());
+            }
+            None => {
+                let n = available.len();
                 reader.consume(n);
             }
         }
@@ -298,9 +319,10 @@ impl StdioTransport {
                         for_log.log.lock().push(text);
                     }
                     Line::TooLarge => {
-                        // Drop the rest of the long line.
-                        let mut sink = [0u8; 4096];
-                        while matches!(reader.read(&mut sink).await, Ok(n) if n == sink.len()) {}
+                        // Drop the rest of the long line, and only that line.
+                        if skip_line(&mut reader).await.is_err() {
+                            return;
+                        }
                         for_log.log.lock().push("[a very long line was cut]".into());
                     }
                     Line::Eof => return,
@@ -429,5 +451,42 @@ impl Transport for StdioTransport {
 impl Drop for StdioTransport {
     fn drop(&mut self) {
         self.shared.kill.cancel();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::BufReader;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn a_line_that_is_too_long_is_skipped_to_its_end_and_the_next_line_is_whole() {
+        // A long line, a normal one, a long one that never ends with a newline before the next chunk, and a last one.
+        let long = "x".repeat(50_000);
+        let text = format!("{long}\nnext line\n{long}\nlast\n");
+        // A tiny buffer, so the skipping has to cross many reads.
+        let mut reader = BufReader::with_capacity(64, text.as_bytes());
+        let mut buf = Vec::new();
+        let mut seen = Vec::new();
+        loop {
+            match read_line(&mut reader, &mut buf, 1_000).await.unwrap() {
+                Line::Complete => seen.push(String::from_utf8_lossy(&buf).into_owned()),
+                Line::TooLarge => {
+                    skip_line(&mut reader).await.unwrap();
+                    seen.push("[cut]".into());
+                }
+                Line::Eof => break,
+            }
+        }
+        assert_eq!(seen, ["[cut]", "next line", "[cut]", "last"]);
+    }
+
+    #[tokio::test]
+    async fn skipping_a_line_with_no_end_stops_at_the_end_of_the_stream() {
+        let mut reader = BufReader::with_capacity(16, "y".repeat(10_000).into_bytes().leak() as &[u8]);
+        skip_line(&mut reader).await.unwrap();
+        let mut buf = Vec::new();
+        assert!(matches!(read_line(&mut reader, &mut buf, 1_000).await.unwrap(), Line::Eof));
     }
 }

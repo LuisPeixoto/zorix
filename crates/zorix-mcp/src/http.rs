@@ -19,6 +19,7 @@ use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use zorix_core::redact_text;
+use zorix_providers::sse::{MAX_EVENT, MAX_LINE, TooLong};
 use zorix_providers::{SseParser, is_loopback};
 
 use crate::auth::AuthProvider;
@@ -79,6 +80,9 @@ struct Inner {
     log: Mutex<Ring>,
     closed: AtomicBool,
 }
+
+/// The most bytes of one streamed answer (all its events together) that is read.
+const MAX_STREAM_BYTES: usize = 16 * 1024 * 1024;
 
 /// A remote MCP server.
 pub struct HttpTransport {
@@ -253,10 +257,18 @@ impl Inner {
         if kind.starts_with("text/event-stream") {
             let mut parser = SseParser::new();
             let mut stream = response.bytes_stream();
+            let mut received = 0usize;
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk.map_err(|e| McpError::Transport(redact_text(&e.without_url().to_string())))?;
-                let events =
-                    parser.feed(&chunk).map_err(|_| McpError::TooLarge { limit: zorix_providers::sse::MAX_LINE })?;
+                // However small its events, a stream that keeps going is not read for ever: the call's own timeout is not a limit on
+                // how much arrives before it.
+                received += chunk.len();
+                if received > MAX_STREAM_BYTES {
+                    return Err(McpError::TooLarge { limit: MAX_STREAM_BYTES });
+                }
+                let events = parser.feed(&chunk).map_err(|too_long| McpError::TooLarge {
+                    limit: if too_long == TooLong::Line { MAX_LINE } else { MAX_EVENT },
+                })?;
                 for event in events {
                     if event.data.trim().is_empty() {
                         continue;

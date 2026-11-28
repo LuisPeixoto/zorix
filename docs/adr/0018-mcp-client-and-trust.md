@@ -31,7 +31,7 @@ definition that was shown and is refused when the server lists another one (`Pin
   seen at the next start or on Refresh, because ZORIX does not open the legacy GET stream.
 - **`x-mcp-header`.** Parameters a server wants mirrored into `Mcp-Param-*` headers are mirrored (with the Base64 sentinel for
   unsafe values), and a tool whose annotation is invalid is left out with the reason.
-- **Messages over SSE** are limited to 1 MB (the shared parser's line limit); a JSON body or a stdio line may be 4 MB.
+- **Messages over SSE** are limited three ways (the parser's line limit alone was not a limit, found by the Phase 12 audit): a line at most 1 MiB, the data of one event at most 4 MiB however many lines it is spread over, and 16 MiB for a whole streamed answer; a JSON body or a stdio line may be 4 MB.
 - **Never answer a server's requests.** Legacy `sampling/createMessage`, `elicitation/create` and `roots/list`, and the modern
   `InputRequiredResult`, are refused: sampling would let a server spend model tokens, elicitation would let it ask a person for
   secrets outside ZORIX's consent screens. `ping` is answered. A call that needs input fails with a message that says so.

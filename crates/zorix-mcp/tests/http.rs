@@ -130,6 +130,29 @@ async fn an_answer_that_arrives_as_a_stream_delivers_its_notifications_first() {
     assert!(heard, "the progress notification was passed on");
 }
 
+#[tokio::test]
+async fn a_streamed_answer_is_bounded_in_one_event_and_in_total() {
+    // One event spread over many data lines, each far under the line limit, that never ends; and a stream of small events that
+    // never brings the answer. Neither is read for ever.
+    for (name, body, limit) in [
+        ("event", format!("data: {}\n", "a".repeat(60 * 1024)).repeat(100), 4 * 1024 * 1024),
+        ("stream", format!("data: {{\"jsonrpc\": \"2.0\", \"method\": \"notifications/progress\", \"params\": {{\"progress\": 1, \"pad\": \"{}\"}}}}\n\n", "p".repeat(60 * 1024)).repeat(300), 16 * 1024 * 1024),
+    ] {
+        let server = serve(move |m, _, id, _| match m {
+            "server/discover" => answer(id, json!({"supportedVersions": ["2026-07-28"], "capabilities": {}})),
+            "tools/call" => ResponseTemplate::new(200).set_body_raw(body.clone(), "text/event-stream"),
+            _ => error(404, id, -32601, "no", Value::Null),
+        })
+        .await;
+        let client = connect(transport(&server, Arc::new(NoAuth))).await.unwrap();
+        let error = client
+            .call_tool("t", json!({}), Duration::from_secs(20), &CancellationToken::new())
+            .await
+            .expect_err(name);
+        assert!(matches!(error, McpError::TooLarge { limit: l } if l == limit), "{name}: {error:?}");
+    }
+}
+
 fn legacy_server(
     calls: Arc<AtomicUsize>,
 ) -> impl Fn(&str, &Value, &Value, &Request) -> ResponseTemplate + Send + Sync + 'static {

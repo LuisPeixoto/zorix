@@ -86,7 +86,8 @@ wait only when it carries this sign-in's `state`: another program knocking on th
 | Servers per tenant | 50 |
 | Tools per server | 200 (more is an error, not a silent cut) |
 | Tool name | 1 to 128 characters: letters, digits, `_`, `-`, `.` |
-| A message | 4 MB (a server that writes more is cut off) |
+| A message | 4 MB (a server that writes more is cut off). Over a stream: a line 1 MiB, one event 4 MiB, and 16 MiB for the whole answer |
+| A result shown to the model | 100 content items (it says how many were left out) and 32 KiB of structured content (cut to a note; the content carries what the server wrote) |
 | A call | 60 seconds, cancellable; the server is told |
 | Waiting for a server's handshake | 30 seconds; the legacy probe waits 8 |
 | Restarts after a crash | after 1, 2, 4, 8 and 16 seconds, then it gives up and says why |

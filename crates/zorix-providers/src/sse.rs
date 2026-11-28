@@ -11,6 +11,9 @@ use zorix_core::{ModelError, ModelErrorKind};
 
 /// The longest a single line may be, in bytes.
 pub const MAX_LINE: usize = 1024 * 1024;
+/// The most data one event may hold, in bytes, whatever the number of lines it is spread over. Every line may be under [`MAX_LINE`]
+/// and an event can still grow for ever if its `data:` lines never stop; this is what ends it.
+pub const MAX_EVENT: usize = 4 * 1024 * 1024;
 
 /// One event of the stream.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -23,7 +26,12 @@ pub struct SseEvent {
 
 /// Why the stream cannot be parsed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LineTooLong;
+pub enum TooLong {
+    /// A line is longer than [`MAX_LINE`].
+    Line,
+    /// The data of one event is more than [`MAX_EVENT`].
+    Event,
+}
 
 /// Turns chunks of bytes into events. It buffers partial lines (and partial UTF-8 characters) between chunks.
 #[derive(Default)]
@@ -34,6 +42,8 @@ pub struct SseParser {
     event: Option<String>,
     data: Vec<String>,
     has_data: bool,
+    /// The bytes of data held for the event being read.
+    event_bytes: usize,
 }
 
 impl SseParser {
@@ -43,7 +53,7 @@ impl SseParser {
     }
 
     /// Feed a chunk. Returns the events that completed, in order.
-    pub fn feed(&mut self, chunk: &[u8]) -> Result<Vec<SseEvent>, LineTooLong> {
+    pub fn feed(&mut self, chunk: &[u8]) -> Result<Vec<SseEvent>, TooLong> {
         let mut events = Vec::new();
         for &byte in chunk {
             if self.pending_cr {
@@ -55,12 +65,12 @@ impl SseParser {
             match byte {
                 b'\r' => {
                     self.pending_cr = true;
-                    self.finish_line(&mut events);
+                    self.finish_line(&mut events)?;
                 }
-                b'\n' => self.finish_line(&mut events),
+                b'\n' => self.finish_line(&mut events)?,
                 other => {
                     if self.line.len() >= MAX_LINE {
-                        return Err(LineTooLong);
+                        return Err(TooLong::Line);
                     }
                     self.line.push(other);
                 }
@@ -69,7 +79,7 @@ impl SseParser {
         Ok(events)
     }
 
-    fn finish_line(&mut self, events: &mut Vec<SseEvent>) {
+    fn finish_line(&mut self, events: &mut Vec<SseEvent>) -> Result<(), TooLong> {
         let mut bytes = std::mem::take(&mut self.line);
         if self.first {
             self.first = false;
@@ -84,10 +94,11 @@ impl SseParser {
             }
             self.has_data = false;
             self.data.clear();
-            return;
+            self.event_bytes = 0;
+            return Ok(());
         }
         if line.starts_with(':') {
-            return; // a comment, often a keep-alive
+            return Ok(()); // a comment, often a keep-alive
         }
         let (field, value) = match line.split_once(':') {
             Some((field, value)) => (field, value.strip_prefix(' ').unwrap_or(value)),
@@ -96,11 +107,16 @@ impl SseParser {
         match field {
             "event" => self.event = Some(value.to_string()),
             "data" => {
+                self.event_bytes += value.len() + 1;
+                if self.event_bytes > MAX_EVENT {
+                    return Err(TooLong::Event);
+                }
                 self.data.push(value.to_string());
                 self.has_data = true;
             }
             _ => {} // id, retry and unknown fields do not matter here
         }
+        Ok(())
     }
 }
 
@@ -162,10 +178,11 @@ impl SseReader {
                     }
                     match self.parser.feed(&bytes) {
                         Ok(events) => self.ready.extend(events),
-                        Err(LineTooLong) => {
+                        Err(too_long) => {
                             return Err(unavailable(format!(
-                                "{}: the response has a line that is too long.",
-                                self.provider
+                                "{}: the response has {} that is too long.",
+                                self.provider,
+                                if too_long == TooLong::Line { "a line" } else { "an event" }
                             )));
                         }
                     }
@@ -247,7 +264,31 @@ mod tests {
     fn a_line_that_is_too_long_is_refused_instead_of_buffered_forever() {
         let mut parser = SseParser::new();
         let big = vec![b'a'; MAX_LINE + 1];
-        assert_eq!(parser.feed(&big), Err(LineTooLong));
+        assert_eq!(parser.feed(&big), Err(TooLong::Line));
+    }
+
+    #[test]
+    fn an_event_made_of_many_short_lines_is_bounded_too() {
+        // Every line is far under the line limit, and the event still never ends: the lines add up.
+        let mut parser = SseParser::new();
+        let line = format!("data: {}\n", "a".repeat(60 * 1024));
+        let mut fed = 0;
+        let outcome = loop {
+            match parser.feed(line.as_bytes()) {
+                Ok(events) => assert!(events.is_empty()),
+                Err(e) => break e,
+            }
+            fed += line.len();
+            assert!(fed <= MAX_EVENT + line.len(), "the event grew past its limit without being refused");
+        };
+        assert_eq!(outcome, TooLong::Event);
+        // Events that end are not held against each other: the same amount in separate events is fine.
+        let mut parser = SseParser::new();
+        for _ in 0..(3 * MAX_EVENT / line.len()) {
+            let mut bytes = line.clone().into_bytes();
+            bytes.push(b'\n');
+            assert_eq!(parser.feed(&bytes).unwrap().len(), 1);
+        }
     }
 
     #[test]
