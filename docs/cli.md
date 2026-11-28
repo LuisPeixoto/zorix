@@ -139,7 +139,7 @@ Say what the run would probably cost and how long it would take, without startin
 
 ### `zorix settings …`
 
-`show` and `set <KEY> <VALUE>`. The keys are `context.summaries` (on or off), `retention.days` (a number of days from 1 to 3650, or `off` to keep runs for ever), `retention.mode` (`compact` or `delete`), `telemetry.endpoint` (an `https://` address, or `http://` for a collector on this computer, or `off`), `telemetry.header` (`Name: value`, kept in the system keychain, or `off`) and `knowledge.ocr` (on or off). A value that makes no sense is refused with a sentence and changes nothing. `--json` on `show` prints the whole record.
+`show` and `set <KEY> <VALUE>`. The keys are `context.summaries` (on or off), `retention.days` (a number of days from 1 to 3650, or `off` to keep runs for ever), `retention.mode` (`compact` or `delete`), `telemetry.endpoint` (an `https://` address, or `http://` for a collector on this computer, or `off`), `telemetry.header` (`Name: value`, kept in the system keychain, or `off`) and `knowledge.ocr` (on or off; turning it on downloads the two OCR models once and checks them before the setting is saved, see [reading scans](knowledge.md#reading-scans)). A value that makes no sense is refused with a sentence and changes nothing. `--json` on `show` prints the whole record.
 
 ### `zorix retention …`
 

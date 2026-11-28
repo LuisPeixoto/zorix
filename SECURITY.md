@@ -105,6 +105,10 @@ These notes grow with each feature that handles data, files, network or permissi
   system prompt. Indexing reads files only: `.gitignore`, hidden files, links and credential-like files (`.env*`, keys,
   `credentials*`) are skipped, text that looks like a secret is removed from pieces before storage, and PDFs are parsed on an
   isolated thread with size, page and time limits.
+- **Reading scans runs on this computer, from models that are checked.** It is off until you turn it on ([ADR-0048](docs/adr/0048-watching-folders-and-reading-scans.md)).
+  The two model files (about 12 MB) are downloaded once over `https` and used only when their size and SHA-256 match the values fixed in the program, at download and at every load, so a swapped or
+  changed file is never given to the model parser. The pictures in a PDF are decoded with the pages, pixels, characters and time bounded before anything is allocated, on a thread whose crash
+  leaves the file out and nothing else. Nothing is sent anywhere but the one download, which carries no data of yours. The text it reads is as untrusted as any document's.
 - **A cloud embeddings model receives text.** The pieces of your documents, your facts and the questions of runs are sent to it,
   so it needs an explicit opt-in, is never used by a `--local-only` run, and never replaces another model silently.
 - **Deleting is real, with limits.** Forgetting a fact or a folder deletes its rows, search entries and vectors, scrubs saved
