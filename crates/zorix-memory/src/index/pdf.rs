@@ -164,7 +164,10 @@ mod tests {
     #[test]
     fn a_pdf_with_no_text_is_skipped_and_garbage_is_a_failure() {
         let blank = make_pdf(&[""]);
-        assert!(matches!(extract(&blank), Err(Unreadable::Skip(why)) if why.contains("OCR")), "no text layer");
+        assert!(
+            matches!(extract(&blank), Err(Unreadable::Skip(why)) if why.starts_with(SCAN) && why.contains("reading scans")),
+            "no text layer"
+        );
         assert!(
             matches!(extract(b"just some text, not a pdf at all"), Err(Unreadable::Fail(why)) if why.contains("not a PDF"))
         );
