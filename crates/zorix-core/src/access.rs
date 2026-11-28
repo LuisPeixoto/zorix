@@ -148,6 +148,41 @@ pub fn task(key: &str) -> Result<Vec<Permission>, String> {
     Ok(grants)
 }
 
+/// A branch name or pattern of the workspace's repository: letters, digits, `/`, `-`, `_`, `.`, and a `*` at the end.
+fn branch_pattern(text: &str) -> bool {
+    let name = text.strip_suffix('*').unwrap_or(text);
+    text == "*"
+        || (plain(name, "/") && !name.starts_with(['/', '.', '-']) && !name.contains("..") && !name.contains("//"))
+}
+
+/// `--allow-git BRANCH[:write]`: look at the workspace's repository on a branch, and with `:write` commit and switch to it.
+/// What files a run sees and commits still needs the file grants.
+pub fn git(text: &str) -> Result<Vec<Permission>, String> {
+    let (branch, write) = split_write(text);
+    if !branch_pattern(branch) {
+        return Err("use a branch such as `main`, `feat/*` or `*`, optionally `:write`".into());
+    }
+    let mut grants = with_actions("git", branch, write);
+    grants.extend(tools(&["git.status", "git.diff", "git.log"]));
+    if write {
+        grants.extend(tools(&["git.branch", "git.commit"]));
+    }
+    Ok(grants)
+}
+
+/// `--allow-git-push REMOTE/BRANCH`: push to a branch of a configured remote. Every push still asks a person.
+pub fn git_push(text: &str) -> Result<Vec<Permission>, String> {
+    let Some((remote, branch)) = text.split_once('/') else {
+        return Err("use REMOTE/BRANCH, for example `origin/feat/*`".into());
+    };
+    if !plain(remote, "") || remote.starts_with(['-', '.']) || !branch_pattern(branch) {
+        return Err("use REMOTE/BRANCH, for example `origin/feat/*`".into());
+    }
+    let mut grants = vec![Permission::new(Action::Write, format!("git-push:{remote}/{branch}"))];
+    grants.extend(tools(&["git.push"]));
+    Ok(grants)
+}
+
 /// `org:team`: read who reports to the agent, what they have open, what they spent this week and how free they are, with
 /// `org.team`. A virtual manager gets this to plan the week and write the report (ADR-0038).
 pub fn org(what: &str) -> Result<Vec<Permission>, String> {
@@ -162,12 +197,13 @@ pub fn org(what: &str) -> Result<Vec<Permission>, String> {
 /// One access entry of an agent, in the syntax of the `--allow-…` flags with a prefix naming the family:
 /// `http:HOST`, `repo:[github:|gitlab:]OWNER/REPO[:write]`, `jira:KEY[:write]`, `chat:slack:#channel[:write]`,
 /// `chat:discord:ID[:write]`, `db:NAME[:write]`, `code:LANGUAGE`, `mcp:SERVER` (every tool of an MCP server), `agent:SLUG` (ask that agent, or `*`),
-/// `project:KEY[:write]` (a project's tasks), `task:KEY` (one task), `org:team` (the workers who report to it), `read:PATTERN`
+/// `project:KEY[:write]` (a project's tasks), `task:KEY` (one task), `org:team` (the workers who report to it),
+/// `git:BRANCH[:write]`, `git-push:REMOTE/BRANCH`, `read:PATTERN`
 /// and `write:PATTERN` (workspace paths, relative).
 pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
     let (family, rest) = entry.split_once(':').ok_or_else(|| {
         format!(
-            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, project, task, org, read or write."
+            "“{entry}” needs a family before the colon: http, repo, jira, chat, db, code, mcp, agent, project, task, org, git, git-push, read or write."
         )
     })?;
     match family {
@@ -187,13 +223,15 @@ pub fn compile_entry(entry: &str) -> Result<Vec<Permission>, String> {
         "project" => project(rest),
         "task" => task(rest),
         "org" => org(rest),
+        "git" => git(rest),
+        "git-push" => git_push(rest),
         "read" | "write" => {
             validate_workspace_pattern(rest)?;
             let action = if family == "read" { Action::Read } else { Action::Write };
             Ok(vec![workspace_grant(action, rest)?])
         }
         other => Err(format!(
-            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, project, task, org, read, write)."
+            "“{other}” is not a family of access (http, repo, jira, chat, db, code, mcp, agent, project, task, org, git, git-push, read, write)."
         )),
     }
 }
@@ -227,6 +265,24 @@ mod tests {
         let any = compile_access(&["agent:*".into()]).unwrap();
         assert!(any.allows(&Permission::new(Action::Execute, "agent:writer")));
         for bad in ["agent:", "agent:Not A Slug", "agent:a/b"] {
+            assert!(compile_entry(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn git_access_covers_the_branch_named_and_pushing_is_its_own_grant() {
+        let read = compile_entry("git:main").unwrap();
+        assert!(has(&read, Action::Read, "git:main") && !has(&read, Action::Write, "git:main"));
+        assert!(has(&read, Action::UseTool, "git.diff") && !has(&read, Action::UseTool, "git.commit"));
+        let write = compile_access(&["git:feat/*:write".into()]).unwrap();
+        assert!(write.allows(&Permission::new(Action::Write, "git:feat/x")));
+        assert!(!write.allows(&Permission::new(Action::Write, "git:main")));
+        assert!(!write.allows(&Permission::new(Action::Write, "git-push:origin/feat/x")), "committing is not pushing");
+        let push = compile_access(&["git-push:origin/feat/*".into()]).unwrap();
+        assert!(push.allows(&Permission::new(Action::Write, "git-push:origin/feat/x")));
+        assert!(!push.allows(&Permission::new(Action::Write, "git-push:upstream/feat/x")));
+        assert!(!push.allows(&Permission::new(Action::Write, "git-push:origin/main")));
+        for bad in ["git:", "git:-f", "git:a b", "git:*x", "git-push:origin", "git-push:or*/x", "git-push:/x"] {
             assert!(compile_entry(bad).is_err(), "{bad}");
         }
     }
