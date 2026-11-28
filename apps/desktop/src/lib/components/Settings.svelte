@@ -8,6 +8,7 @@
   import { toast } from "../stores/toast.svelte.ts";
   import KeepRuns from "./settings/KeepRuns.svelte";
   import Telemetry from "./settings/Telemetry.svelte";
+  import OtherTools from "./settings/OtherTools.svelte";
   import LongConversations from "./settings/LongConversations.svelte";
   import { BrandMark, Button, Callout, Card, Field, Input, KeyValue, PageHeader, Segmented, Tabs, ToggleRow } from "../ui/index.ts";
 
@@ -72,6 +73,7 @@
     <LongConversations />
     <KeepRuns />
     <Telemetry />
+    <OtherTools />
     <Card title={t("settings.webhooks")} icon="webhook">
       <p class="mb-3 text-base text-muted">{t("settings.aWorkflowCanStart")} <span class="mono">{t("settings.zorixServe")}</span>.</p>
       <ToggleRow label={t("settings.receiveWebhooks")} description={webhooks ? t("settings.zorixListensForRequests") : t("settings.nothingListens")} bind:checked={webhooks} />
