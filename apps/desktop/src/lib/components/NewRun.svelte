@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fmt, t as tr } from "../i18n/index.ts";
   import { open } from "@tauri-apps/plugin-dialog";
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { type AgentDetail, type RunEstimate, agentGet, estimateRun, workflowCreate, workflowSave, workflowStart } from "../api.ts";
   import { AttachedFiles } from "../stores/attachments.svelte.ts";
   import AtMenu from "./attachments/AtMenu.svelte";
@@ -39,7 +39,8 @@
   onDestroy(() => stopDrops?.());
   $effect(() => {
     void workspace;
-    void attached.recheck();
+    // Asked without following the files it reads: this runs when the workspace changes, not whenever a file is added.
+    untrack(() => void attached.recheck());
   });
   let allowRead = $state("*");
   let allowWrite = $state("");

@@ -71,3 +71,16 @@ export function addChecked(
   }
   return { files, refused, overLimit };
 }
+
+/** The files with their "outside the workspace" flag brought up to date from a new check. The same array comes back when nothing changed, so that storing it does not wake what follows it. */
+export function withOutsideFlags(files: AttachedFile[], checked: CheckedFile[]): AttachedFile[] {
+  const byPath = new Map(checked.map((c) => [c.path, c]));
+  let changed = false;
+  const next = files.map((f) => {
+    const outside = byPath.get(f.path)?.outside_workspace ?? f.outside;
+    if (outside === f.outside) return f;
+    changed = true;
+    return { ...f, outside };
+  });
+  return changed ? next : files;
+}
