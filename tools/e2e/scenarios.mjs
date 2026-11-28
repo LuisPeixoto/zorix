@@ -76,6 +76,30 @@ export const scenarios = [
     },
   },
   {
+    name: "Settings says how long conversations, runs and traces are handled, and Documents offers reading scans",
+    async run(s) {
+      await s.clickOn(nav("Settings"));
+      await s.waitFor(title("Settings"));
+      for (const card of ["Long conversations", "Keep runs", "Telemetry"]) {
+        await s.waitFor(containingText("*", card), { label: `the “${card}” card` });
+      }
+      await s.clickOn(nav("Documents"));
+      await s.waitFor(title("Documents"));
+      await s.waitFor(containingText("*", "Reading scans"), { label: "the reading scans card" });
+    },
+  },
+  {
+    name: "New run offers limits, a way to attach files, and an estimate that says it is rough on a new data folder",
+    async run(s) {
+      await s.clickOn(newRun);
+      await s.waitFor(title("New run"));
+      await s.waitFor(containingText("*", "Limits"), { label: "the limits card" });
+      await s.waitFor(button("Attach"), { label: "the Attach button" });
+      await s.clickOn(button("What time is it?"));
+      await s.waitFor(containingText("*", "A rough guess"), { timeout: 30_000, label: "the estimate saying it is a rough guess" });
+    },
+  },
+  {
     name: "the workforce of an empty organisation invites you to hire the first worker",
     async run(s) {
       await s.clickOn(nav("Workforce"));
