@@ -17,7 +17,8 @@ use zorix_memory::retrieve::hybrid_search;
 use zorix_memory::tools::end_of_day;
 use zorix_providers::{Router, embedding_choices};
 use zorix_store::{
-    DataDirLock, SqliteAgentStore, SqliteCalibration, SqliteMemoryStore, SqliteRepository, database_path,
+    DataDirLock, SqliteAgentStore, SqliteCalibration, SqliteMemoryStore, SqliteRepository, SqliteSettingsStore,
+    database_path,
 };
 
 use crate::app::{CliError, open_router};
@@ -48,6 +49,18 @@ fn open(home: &Path, write: bool) -> Result<Ctx, CliError> {
     let stack = Arc::new(MemoryStack::new(store.clone(), repository, Some(gateway)));
     let agents = SqliteAgentStore::open(&database)?;
     Ok(Ctx { agents, store, stack, router, _lock: lock })
+}
+
+/// Read scanned PDFs when the setting is on and the models are on this computer. When they are not, scans are left out with the reason and
+/// the command goes on.
+async fn read_scans(ctx: &Ctx, home: &Path, tenant: &TenantId) -> Result<(), CliError> {
+    let on = SqliteSettingsStore::open(&database_path(home))?.load(tenant)?.knowledge.ocr;
+    if zorix_hub::ocr::attach(&ctx.stack, home, on).await? == zorix_hub::ocr::State::Missing {
+        eprintln!(
+            "zorix: reading scans is on but its models are not on this computer, so scans stay unread. Download them with `zorix settings set knowledge.ocr on`."
+        );
+    }
+    Ok(())
 }
 
 /// Agents by id and by slug, so a scope can be typed and shown with a name.
@@ -461,6 +474,7 @@ async fn watch_folders(
         );
         return Ok(Exit::Done);
     }
+    read_scans(&ctx, home, tenant).await?;
     let indexer = ctx.stack.indexer();
     let cancel = cancel_on_ctrl_c();
     // A change wakes the loop with the folder it was in; several changes to one folder are one sync.
@@ -567,6 +581,7 @@ pub async fn knowledge(
             if chosen.is_empty() {
                 eprintln!("No folders to sync.");
             }
+            read_scans(&ctx, home, tenant).await?;
             let indexer = ctx.stack.indexer();
             let cancel = cancel_on_ctrl_c();
             for root in chosen {
@@ -647,6 +662,7 @@ async fn knowledge_add(
         ),
         None => Scope::Global,
     };
+    read_scans(&ctx, home, tenant).await?;
     let indexer = ctx.stack.indexer();
     let root = indexer
         .add_root(tenant, scope, &args.dir, args.include, args.exclude, args.auto_sync)

@@ -36,6 +36,10 @@ pub async fn settings(
             if args.key == "telemetry.header" {
                 changed = set_header(home, changed, &args.value)?;
             }
+            // Turning scans on fetches and checks the models first: the setting is never on without them.
+            if args.key == "knowledge.ocr" && changed.knowledge.ocr {
+                fetch_models(home).await?;
+            }
             store.put_settings(tenant, &changed).await?;
             let shown = lines(&changed).into_iter().find(|(key, _)| *key == args.key).map(|(_, value)| value);
             eprintln!("{} is now {}.", args.key, shown.unwrap_or_default());
@@ -106,6 +110,28 @@ fn describe(report: &RetentionReport, settings: &AppSettings, dry_run: bool) -> 
         ));
     }
     text
+}
+
+/// Download the OCR models (when they are not there), check them against their fixed hashes and make sure the engine starts with them.
+async fn fetch_models(home: &Path) -> Result<(), CliError> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    eprintln!("Downloading the OCR models (about 12 MB, checked against a fixed hash)…");
+    let tenth = AtomicU64::new(0);
+    let files = zorix_hub::ocr::install(home, &|p| {
+        let now = p.done * 10 / p.total.max(1);
+        if tenth.swap(now, Ordering::Relaxed) != now {
+            eprintln!("  {}%", now * 10);
+        }
+    })
+    .await?;
+    tokio::task::spawn_blocking(move || {
+        zorix_memory::index::ocr::OcrReader::from_files(&files.detection, &files.recognition).map(|_| ())
+    })
+    .await
+    .map_err(|e| CliError(e.to_string()))?
+    .map_err(CliError)?;
+    eprintln!("The OCR models are ready in {}.", zorix_hub::ocr::folder(home).display());
+    Ok(())
 }
 
 /// `telemetry.header` takes `Name: value`, or `off`. The value goes to the system keychain, never to the database or the screen.
