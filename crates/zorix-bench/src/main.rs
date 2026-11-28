@@ -31,6 +31,9 @@ struct Args {
     /// Compare with these limits (milliseconds per measurement) and exit 1 when one is passed.
     #[arg(long)]
     check: Option<PathBuf>,
+    /// Pieces of documents, whatever the scale says (50,000 at full size): to look at a collection of another size.
+    #[arg(long)]
+    pieces: Option<u64>,
     /// How many times each measurement is made.
     #[arg(long, default_value_t = 15)]
     repeat: usize,
@@ -164,7 +167,8 @@ async fn main() {
     let args = Args::parse();
     let scale = args.scale.clamp(0.001, 10.0);
     let n = |full: f64| ((full * scale).round() as u64).max(1);
-    let (runs, events_per_run, agents, facts, pieces) = (n(10_000.0), 100u64, n(200.0), n(5_000.0), n(50_000.0));
+    let (runs, events_per_run, agents, facts, pieces) =
+        (n(10_000.0), 100u64, n(200.0), n(5_000.0), args.pieces.unwrap_or_else(|| n(50_000.0)));
 
     let dir = tempfile::tempdir().expect("a temporary folder");
     let path = dir.path().join("zorix.sqlite");
@@ -272,12 +276,24 @@ async fn main() {
     let dimensions = 128usize;
     let mut vectors: Vec<(String, Vec<f32>)> = Vec::new();
     let per_file = 50u64;
+    // Embeddings of real text are not spread evenly: pieces about one thing are close to each other. The vectors are 200 clusters, each piece a
+    // cluster's centre with noise, so the questions below have true neighbours to find.
+    let centres: Vec<Vec<f32>> = (0..200)
+        .map(|_| {
+            let mut v: Vec<f32> = (0..dimensions).map(|_| rng.below(2_000) as f32 / 1_000.0 - 1.0).collect();
+            let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-6);
+            v.iter_mut().for_each(|x| *x /= norm);
+            v
+        })
+        .collect();
     for file in 0..pieces.div_ceil(per_file) {
         let chunks: Vec<NewChunk> = (0..per_file.min(pieces - file * per_file))
             .map(|k| {
                 let text = sentence(&mut rng, 60);
                 let text_hash = text_hash(&format!("{text} {file} {k}"));
-                let mut v: Vec<f32> = (0..dimensions).map(|_| rng.below(2_000) as f32 / 1_000.0 - 1.0).collect();
+                let centre = &centres[((file * 31 + k) % 200) as usize];
+                let mut v: Vec<f32> =
+                    centre.iter().map(|x| x + 0.35 * (rng.below(2_000) as f32 / 1_000.0 - 1.0)).collect();
                 let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-6);
                 v.iter_mut().for_each(|x| *x /= norm);
                 vectors.push((text_hash.clone(), v));
@@ -334,7 +350,7 @@ async fn main() {
     let one_agent = bindings[3].agent;
     let one_conversation = &conversations[2];
     let week_ago = Timestamp(now - 7 * day);
-    let probe: Vec<f32> = (0..dimensions).map(|i| if i == 0 { 1.0 } else { 0.0 }).collect();
+    let probe: Vec<f32> = centres[17].clone();
 
     time!(
         report,
@@ -404,12 +420,32 @@ async fn main() {
         r,
         memory.text_search(&visible, Corpus::Knowledge, &terms, 10)
     );
+    // The first search makes the index (and saves it); the others use it.
+    let made = Instant::now();
+    memory.vector_search(&visible, Corpus::Knowledge, model, &probe, 10).await.unwrap();
+    println!("  (the first search, which makes the index: {:.0} ms)", made.elapsed().as_secs_f64() * 1_000.0);
     time!(
         report,
         "documents: search by meaning",
         r,
         memory.vector_search(&visible, Corpus::Knowledge, model, &probe, 10)
     );
+    // What the index loses: the share of the exact top ten that its answer still holds, over twenty questions near a cluster.
+    {
+        let (mut kept, mut total) = (0usize, 0usize);
+        for c in 0..20usize {
+            let mut q = centres[(c * 9) % 200].clone();
+            q.iter_mut().enumerate().for_each(|(i, x)| *x += 0.1 * (((i * 7 + c) % 11) as f32 / 5.0 - 1.0));
+            memory.use_index_from(usize::MAX);
+            let exact = memory.vector_search(&visible, Corpus::Knowledge, model, &q, 10).await.unwrap();
+            memory.use_index_from(1);
+            let indexed = memory.vector_search(&visible, Corpus::Knowledge, model, &q, 10).await.unwrap();
+            kept += exact.iter().filter(|h| indexed.iter().any(|i| i.id == h.id)).count();
+            total += exact.len();
+        }
+        memory.use_index_from(zorix_store::vindex::EXACT_BELOW);
+        println!("  (recall of the index: {:.3} of the exact top ten)", kept as f64 / total.max(1) as f64);
+    }
     // A sync counts what still needs a vector (every piece has one here, so this is the walk over all of them), and every file it
     // writes checks the room left in the tenant's pieces.
     time!(
