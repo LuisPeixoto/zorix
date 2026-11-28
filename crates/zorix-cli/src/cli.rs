@@ -724,6 +724,15 @@ pub struct RunArgs {
     #[arg(long, value_name = "LANGUAGE", value_parser = parse_code_grant)]
     pub allow_code: Vec<GrantFlag>,
 
+    /// Let the execution use the git repository of the workspace on a branch: `BRANCH[:write]`, such as `main` or `feat/*:write`.
+    /// The files it sees and commits still need --allow-read and --allow-write.
+    #[arg(long, value_name = "BRANCH", value_parser = parse_git_grant)]
+    pub allow_git: Vec<GrantFlag>,
+
+    /// Let the execution push to `REMOTE/BRANCH`. Every push asks you, and none is forced.
+    #[arg(long, value_name = "REMOTE/BRANCH", value_parser = parse_git_push_grant)]
+    pub allow_git_push: Vec<GrantFlag>,
+
     /// The folder file tools are confined to.
     #[arg(long, value_name = "DIR")]
     pub workspace: Option<PathBuf>,
@@ -1669,6 +1678,14 @@ pub struct GrantFlag(pub Vec<zorix_core::Permission>);
 
 fn parse_http_grant(text: &str) -> Result<GrantFlag, String> {
     zorix_hub::grants::http(text).map(GrantFlag)
+}
+
+fn parse_git_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::git(text).map(GrantFlag)
+}
+
+fn parse_git_push_grant(text: &str) -> Result<GrantFlag, String> {
+    zorix_hub::grants::git_push(text).map(GrantFlag)
 }
 
 fn parse_repo_grant(text: &str) -> Result<GrantFlag, String> {
