@@ -49,7 +49,7 @@ These notes grow with each feature that handles data, files, network or permissi
 - **File tools are confined to a workspace folder, per execution.** Paths must be relative, with forward slashes, no
   `..`, no drive letters, no control characters, no Windows reserved names and nothing in `.zorix`. The real path,
   after following links, must stay inside the root; links that point outside are not followed and files are not written
-  through a link. Writes go through a temporary file and a rename. Reads, listings and writes are size-limited. The check and the open are two steps, so a program that can change
+  through a link, and a link inside the workspace needs a grant for the place it leads to and cannot lead into `.zorix`. Writes go through a temporary file that is created new, with a name of its own, and a rename. Reads, listings and writes are size-limited. The check and the open are two steps, so a program that can change
   the workspace at that very moment could redirect one call; this is stated in the [tools guide](docs/tools.md), and a workspace should not be a
   folder another program writes to. This is
   *path* confinement. Code runs only in the [WebAssembly sandbox](docs/sandbox.md); a stdio MCP server is a separate program that runs as you.
