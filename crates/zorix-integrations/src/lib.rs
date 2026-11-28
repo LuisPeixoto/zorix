@@ -9,7 +9,8 @@ pub mod discord;
 pub mod forge;
 pub mod http_tools;
 pub mod jira;
-pub mod net;
+/// The network guard moved to `zorix-net`, which the MCP client uses too; this path keeps working.
+pub use zorix_net as net;
 pub mod postgres_db;
 pub mod slack;
 pub mod sqlite_db;
