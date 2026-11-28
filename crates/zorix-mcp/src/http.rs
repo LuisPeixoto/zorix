@@ -209,7 +209,7 @@ impl Inner {
 
     async fn handle(&self, message: Incoming, want: i64) -> Option<Result<Value, RpcError>> {
         match message {
-            Incoming::Response { id, result } => (id.as_i64() == Some(want)).then_some(result),
+            Incoming::Response { id, result } => (wire::id_number(&id) == Some(want)).then_some(result),
             Incoming::Notification { method, params } => {
                 let _ = self.events.send(ServerEvent::Notification { method, params });
                 None
@@ -301,8 +301,32 @@ impl Inner {
         Err(McpError::Protocol("the answer did not contain a response to the request".into()))
     }
 
-    async fn send(&self, method: &str, params: Value, extra: &[(String, String)]) -> Result<Value, McpError> {
-        let id = self.next.fetch_add(1, Ordering::SeqCst);
+    /// A legacy server answers 404 to a request that carries a session id it no longer knows. The session is over: this connection is
+    /// ended (so nothing else is sent into it and the manager starts a new one, with a new `initialize` and no session id, as the
+    /// specification asks) and the call that found out says so.
+    fn session_ended(&self, status: u16) -> Option<McpError> {
+        if status != 404 || self.session.lock().id.is_none() {
+            return None;
+        }
+        self.session.lock().id = None;
+        self.closed.store(true, Ordering::SeqCst);
+        let why = "the server ended the session; ZORIX connects again";
+        let _ = self.events.send(ServerEvent::Closed(why.into()));
+        Some(McpError::Transport(why.into()))
+    }
+
+    /// Tell a legacy server that a request was given up on. Best effort: the answer is not waited for, and `initialize` is never cancelled.
+    async fn cancelled(&self, id: i64, method: &str, reason: &str) {
+        if method == "initialize" || self.session.lock().id.is_none() {
+            return;
+        }
+        let line = wire::notification("notifications/cancelled", &json!({"requestId": id, "reason": reason}));
+        if let Ok(headers) = self.base_headers("", &Value::Null).await {
+            let _ = tokio::time::timeout(Duration::from_secs(2), self.post(line, headers)).await;
+        }
+    }
+
+    async fn send(&self, id: i64, method: &str, params: Value, extra: &[(String, String)]) -> Result<Value, McpError> {
         let body = wire::request(id, method, &params);
         let mut retried = false;
         loop {
@@ -324,6 +348,9 @@ impl Inner {
                 }
                 retried = true;
                 continue;
+            }
+            if let Some(ended) = self.session_ended(status.as_u16()) {
+                return Err(ended);
             }
             if !status.is_success() {
                 return Err(self.fail(response).await);
@@ -357,12 +384,21 @@ impl Transport for HttpTransport {
         if self.inner.closed.load(Ordering::SeqCst) {
             return Err(McpError::Closed);
         }
-        let work = self.inner.send(method, params, headers);
+        let id = self.inner.next.fetch_add(1, Ordering::SeqCst);
+        let work = self.inner.send(id, method, params, headers);
+        // Dropping the request closes its stream, which cancels it for a server without a session; a server with one is told as well.
+        let gave_up = |reason: &'static str| {
+            let inner = self.inner.clone();
+            let method = method.to_string();
+            tokio::spawn(async move { inner.cancelled(id, &method, reason).await });
+        };
         tokio::select! {
             result = work => result,
-            // Dropping the request closes its stream, which is how a request is cancelled over HTTP.
-            _ = cancel.cancelled() => Err(McpError::Cancelled),
-            _ = tokio::time::sleep(timeout) => Err(McpError::Timeout(format!("{method} took longer than {} seconds", timeout.as_secs().max(1)))),
+            _ = cancel.cancelled() => { gave_up("cancelled by ZORIX"); Err(McpError::Cancelled) }
+            _ = tokio::time::sleep(timeout) => {
+                gave_up("timed out");
+                Err(McpError::Timeout(format!("{method} took longer than {} seconds", timeout.as_secs().max(1))))
+            }
         }
     }
 
@@ -372,6 +408,9 @@ impl Transport for HttpTransport {
         }
         let headers = self.inner.base_headers(method, &params).await?;
         let response = self.inner.post(wire::notification(method, &params), headers).await?;
+        if let Some(ended) = self.inner.session_ended(response.status().as_u16()) {
+            return Err(ended);
+        }
         if response.status().is_success() { Ok(()) } else { Err(self.inner.fail(response).await) }
     }
 

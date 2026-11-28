@@ -404,7 +404,7 @@ impl StdioTransport {
     async fn handle(shared: &Arc<Shared>, text: &str) {
         match wire::parse(text) {
             Ok(Incoming::Response { id, result }) => {
-                if let Some(sender) = id.as_i64().and_then(|id| shared.pending.lock().remove(&id)) {
+                if let Some(sender) = wire::id_number(&id).and_then(|id| shared.pending.lock().remove(&id)) {
                     let _ = sender.send(result);
                 }
             }
@@ -445,12 +445,16 @@ impl Transport for StdioTransport {
             self.shared.pending.lock().remove(&id);
             return Err(e);
         }
+        // The specification forbids cancelling `initialize`: the request is simply given up on.
+        let cancellable = method != "initialize";
         let stop = |reason: &str| {
             let shared = self.shared.clone();
             let line = wire::notification("notifications/cancelled", &json!({"requestId": id, "reason": reason}));
             async move {
                 shared.pending.lock().remove(&id);
-                let _ = shared.send(line).await;
+                if cancellable {
+                    let _ = shared.send(line).await;
+                }
             }
         };
         tokio::select! {
