@@ -496,6 +496,11 @@ pub struct McpServeArgs {
     #[arg(long)]
     pub allow_runs: bool,
 
+    /// With --allow-runs: let `zorix.status` and `zorix.result` follow any run of this data folder, not only the ones this server
+    /// started. Off by default: other runs hold what you asked and were answered in ZORIX.
+    #[arg(long, requires = "allow_runs")]
+    pub allow_read_runs: bool,
+
     /// The project whose memories are visible and whose folder runs work in.
     #[arg(long, value_name = "DIR")]
     pub project: Option<PathBuf>,

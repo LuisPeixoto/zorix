@@ -31,6 +31,7 @@ zorix-workforce.workspace = true
 serde.workspace = true
 getrandom = "0.3"
 async-trait.workspace = true
+parking_lot.workspace = true
 tokio-util.workspace = true
 rpassword.workspace = true
 clap.workspace = true
