@@ -2,7 +2,7 @@
 
 2026-11-27 · commit `5edaca3` (v0.10.0) · audited by reading the code of Phases 1 to 3 against
 [sections 2 to 14](../engineering-guidelines.md) of the guidelines, with the questions written in the
-[template](README.md). Status: **open**. Rows are added as the fixes uncover more, and the audit closes at the end of the phase.
+[template](README.md). Status: **closed** with the release of v0.11.0, with one finding (F10, [#26](https://github.com/LuisPeixoto/zorix/issues/26)) moved to the next phases, as planned.
 
 ## Scope
 

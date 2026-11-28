@@ -36,7 +36,7 @@ HTML and PDF folders, with citations) and **past work**, found by keyword search
 model, by meaning (Ollama, OpenAI, Gemini). What was retrieved is frozen per execution. Token counts are learned per model from the
 usage providers report. Scopes: global, project, conversation. Guides: [memory](memory.md), [knowledge](knowledge.md).
 
-Later: summarising long conversations, a file watcher, OCR and an on-disk vector index for very large collections (Phase 11); memory shared between people (Phase 16).
+Phase 11 added summaries of long conversations, watched folders, OCR for scanned PDFs, an on-disk vector index and attached files; memory shared between people comes in Phase 16.
 
 ## ✅ Phase 4 — Tool & Integration Engine · v0.4.0
 
@@ -163,12 +163,23 @@ Guides: [testing](testing.md), [distribution](distribution.md), [desktop](deskto
 
 **What is left, each tracked:** driving the flows through WebDriver on Windows ([#27](https://github.com/LuisPeixoto/zorix/issues/27); macOS has no WebDriver for its web view) · about 170 validation sentences that are text, not codes ([#26](https://github.com/LuisPeixoto/zorix/issues/26), moved area by area in Phases 11 to 14) · GitHub Sponsors ([#4](https://github.com/LuisPeixoto/zorix/issues/4)).
 
-## Phase 11 — Runtime, providers and memory · v0.11.0
+## ✅ Phase 11 — Runtime, providers and memory · v0.11.0
 
-Audit and complete Phases 1 to 3.
+Phases 1 to 3 audited against the guidelines ([the audit](audits/phase-11-runtime-providers-memory.md): thirteen findings, each an issue and each fixed with a regression test that failed before the fix) and completed.
+Fixed: **past work belonged to every agent of a project** (schema 11) · **secrets kept in past work** (tool arguments), in the project, organisation and report records, and by patterns that redaction missed (`password=…`, PEM keys, Google, Stripe and GitLab keys) · **a run whose lease
+another engine took kept working beside it**, and two overlapping drives that left runs unfinished · a model call **cut at 60 seconds while its answer was still arriving** (the limit is now time without progress, ten minutes at most) · a **cost limit that never tripped on a model with no known price** ·
+syncs that **cut a file again whenever its time changed**, loaded every text to count them and counted the whole tenant for each file written.
+Completed: **long conversations are summarised** instead of cut ([ADR-0043](adr/0043-summaries-of-long-conversations.md)) · **retention** of finished runs, compacted or deleted, with a preview ([ADR-0044](adr/0044-retention-of-finished-runs.md), schema 14) ·
+an **estimate before a run**, and budget, time and steps in New run (`zorix run --estimate`, [ADR-0045](adr/0045-estimates-before-a-run.md)) · **OpenTelemetry export** over HTTP, off by default, with no prompt or answer in the bytes ([ADR-0046](adr/0046-opentelemetry-export.md)) ·
+an **on-disk vector index**: search by meaning in 7 ms over 50,000 pieces and 49 ms over 490,000, and the limit rises from 200,000 to 500,000 pieces ([ADR-0047](adr/0047-index-of-document-vectors.md), schema 15) ·
+**watched folders** that read again by themselves (schema 16) and **OCR for scanned PDFs** on this computer, from models that are checked, with *N via OCR* and *N scans not read* on each folder ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)) ·
+**files attached to a run** with a button, `@` or by dropping them, checked before anything is read, and `zorix run --attach` ([ADR-0049](adr/0049-files-attached-to-a-run.md)) · one place for the **settings** that live in the database (schema 13), `zorix settings` and `zorix retention`.
+Every new setting is off, or conservative, until you change it.
 
-- **Audit focus:** crash recovery under concurrency, lease and idempotency races, provider failure and fallback with each adapter, token and cost accounting, redaction on every path that stores text, and memory isolation between tenants and scopes.
-- **Completion:** summarising long conversations instead of dropping the oldest turns · **retention policies** for stored executions · a **cost and time estimate** before a run starts · **OpenTelemetry export** with the GenAI conventions · a **file watcher** for document folders · optional local **OCR** for scanned PDFs · an on-disk vector index for large collections · **attachments** with `@` and drag and drop in New run.
+Guides: [knowledge](knowledge.md), [memory](memory.md), [runtime](runtime.md), [persistence](persistence.md), [providers](providers.md), [testing](testing.md#benchmarks). Decisions: ADR-0043 to ADR-0049.
+
+**What is left, each tracked:** summaries fold the history of one run, and the exchanges of earlier runs of a conversation are still dropped, not summarised ([#49](https://github.com/LuisPeixoto/zorix/issues/49)) · the webhook settings still live in `settings.json`, not in the settings table ([#50](https://github.com/LuisPeixoto/zorix/issues/50)) · a failure of the telemetry exporter is not reported
+in the app ([#51](https://github.com/LuisPeixoto/zorix/issues/51)) · about 170 validation sentences that are text, not codes ([#26](https://github.com/LuisPeixoto/zorix/issues/26), moved area by area in Phases 12 to 14) · driving the flows through WebDriver on Windows ([#27](https://github.com/LuisPeixoto/zorix/issues/27)) · GitHub Sponsors ([#4](https://github.com/LuisPeixoto/zorix/issues/4)).
 
 ## Phase 12 — Tools, integrations and sandbox · v0.12.0
 

@@ -13,10 +13,12 @@ checkpoints and a complete record, whichever model does the thinking.</p>
 
 ![ZORIX waiting for your approval before a tool changes anything](docs/images/ui-approval.png)
 
-> **Status: early development.** Phases 1 to 10 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, **agents**,
+> **Status: early development.** Phases 1 to 11 are done: the **runtime**, **providers**, **memory**, **tools and integrations**, **agents**,
 > **orchestration**, **workflows**, **projects** and the **workforce**. ZORIX runs on Anthropic, OpenAI, Gemini, OpenAI-compatible servers and local
 > Ollama models. Phase 10 built the quality foundation (security fixes, fault injection, fuzzing, benchmarks, one catalogue for every interface string,
-> end-to-end and installer checks). The next phases audit each area against the [engineering guidelines](docs/engineering-guidelines.md) and finish what was
+> end-to-end and installer checks) and Phase 11 audited and completed the runtime, providers and memory (summaries of long conversations, retention,
+> an estimate before a run, attached files, watched folders, scanned PDFs read on your computer, an index for very large collections). The next phases audit
+> each remaining area against the [engineering guidelines](docs/engineering-guidelines.md) and finish what was
 > deferred, before the Command Center and the Marketplace (see the [roadmap](docs/roadmap.md)). **A cloud provider receives the conversation of a run**; use
 > `--local-only` to keep everything on your computer.
 
@@ -37,8 +39,9 @@ everything. It is not tied to one model or provider, and the core does not know 
 - **Model agnostic.** The loop talks to a small `ModelGateway` contract. [Anthropic, OpenAI, Gemini, compatible servers and
   Ollama](docs/providers.md) plug in behind it; keys stay in your system keychain; routes fall back when a provider fails.
 - **Memory you control.** Facts and preferences that a person approves (a model can only propose), the earlier runs of a
-  conversation, folders of documents that runs cite, and a record of past work, found by keyword and, if you choose a model, by
-  meaning. What a run was given is recorded and shown. See [memory](docs/memory.md).
+  conversation, folders of documents that runs cite (kept up to date as they change, scanned PDFs read on your computer), and a record of
+  past work, found by keyword and, if you choose a model, by meaning. Give a run a file with `@`, the Attach button or by dropping it.
+  What a run was given is recorded and shown. See [memory](docs/memory.md) and [knowledge](docs/knowledge.md).
 - **Connects to the outside, under your rules.** An [MCP client](docs/mcp.md) (stdio and HTTP, OAuth) whose tools are pinned and
   reviewed by you, [native integrations](docs/integrations.md) (HTTP, GitHub, GitLab, Jira, Slack, Discord, SQLite, Postgres)
   behind per-resource grants, a [WebAssembly sandbox](docs/sandbox.md) for code, and `zorix mcp serve` to share your memory with

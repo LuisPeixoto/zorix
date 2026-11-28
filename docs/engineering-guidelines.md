@@ -392,3 +392,6 @@ These guidelines ask for things ZORIX does not have yet. Each one is tracked, an
 | The end-to-end flows are driven only on Linux; macOS and Windows start the app and check that it loads | 2 | [#27](https://github.com/LuisPeixoto/zorix/issues/27) |
 | GitHub Sponsors have not been evaluated | 1 | [#4](https://github.com/LuisPeixoto/zorix/issues/4) |
 | About 170 validation errors are English sentences, not codes, so a translated interface shows them in English | 11 | [#26](https://github.com/LuisPeixoto/zorix/issues/26) |
+| Long conversations are summarised within one run; the exchanges of earlier runs of a conversation are still dropped when the window is full | 7 | [#49](https://github.com/LuisPeixoto/zorix/issues/49) |
+| The webhook settings are in `settings.json`, the rest of the program's settings in the database | 10 | [#50](https://github.com/LuisPeixoto/zorix/issues/50) |
+| A failing telemetry export is not shown to the person who turned it on | 12 | [#51](https://github.com/LuisPeixoto/zorix/issues/51) |
