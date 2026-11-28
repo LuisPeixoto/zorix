@@ -199,6 +199,8 @@ pub struct ServerDetail {
 #[derive(Serialize)]
 pub struct EnforcedHere {
     os: &'static str,
+    /// The container program found here (`docker` or `podman`), if any.
+    container: Option<String>,
     files: bool,
     network: bool,
     credentials: bool,
@@ -209,6 +211,8 @@ fn enforced_here() -> EnforcedHere {
     let here = zorix_mcp::enforced();
     EnforcedHere {
         os: std::env::consts::OS,
+        container: zorix_mcp::container_runtime()
+            .and_then(|p| p.file_stem().and_then(|n| n.to_str()).map(str::to_string)),
         files: here.files,
         network: here.network,
         credentials: here.credentials,
