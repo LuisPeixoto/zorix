@@ -1088,6 +1088,7 @@ impl Run {
                     tenant: self.exec.tenant.clone(),
                     execution_id: self.exec.id,
                     call_id: call.id.clone(),
+                    tool: call.tool.clone(),
                     model: self.exec.request.model.clone(),
                     allowed_models: self.exec.agent.as_ref().map(|a| a.allowed_models.clone()).unwrap_or_default(),
                     tokens_left: self

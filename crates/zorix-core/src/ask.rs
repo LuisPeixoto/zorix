@@ -177,6 +177,10 @@ pub struct PendingAsk {
     pub call_id: ToolCallId,
     /// The server.
     pub server: String,
+    /// The tool being called.
+    pub tool: String,
+    /// The run's model, which a model call would use.
+    pub model: String,
     /// What it asks.
     pub ask: ServerAsk,
     /// [`ServerAsk::hash`]: an answer names it, so it cannot be applied to another request.

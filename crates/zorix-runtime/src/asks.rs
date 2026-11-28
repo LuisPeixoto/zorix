@@ -122,6 +122,7 @@ pub(crate) struct CallScope {
     pub tenant: TenantId,
     pub execution_id: ExecutionId,
     pub call_id: ToolCallId,
+    pub tool: String,
     pub model: String,
     pub allowed_models: Vec<String>,
     /// Tokens left before the run's limit, when it has one.
@@ -204,6 +205,8 @@ impl RunHost {
             execution_id: self.scope.execution_id,
             call_id: self.scope.call_id.clone(),
             server: server.to_string(),
+            tool: self.scope.tool.clone(),
+            model: self.scope.model.clone(),
             hash: ask.hash(server),
             ask,
             asked_at: self.engine.clock.now(),

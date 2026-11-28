@@ -171,6 +171,8 @@ mod tests {
             execution_id: ExecutionId::new(),
             call_id: ToolCallId("c".into()),
             server: "files".into(),
+            tool: "mcp.files.t".into(),
+            model: "demo".into(),
             hash: ask.hash("files"),
             ask,
             asked_at: Timestamp(1),
