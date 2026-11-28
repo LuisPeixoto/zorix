@@ -105,7 +105,7 @@ async fn a_server_that_starts_offers_nothing_until_a_person_approves_what_it_lis
     assert_eq!((status.tools_listed, status.tools_ready, status.tools_to_review), (8, 0, 8));
     assert!(mcp_ids(&rig).is_empty(), "nothing the server lists is offered before a person says so");
 
-    rig.manager.review(server.id, "echo", PinAction::Approve, "luis").await.unwrap();
+    rig.manager.review(server.id, "echo", PinAction::approve(), "luis").await.unwrap();
     assert_eq!(mcp_ids(&rig), ["mcp.fake.echo"]);
     let spec = rig.registry.get("mcp.fake.echo").unwrap().spec().clone();
     assert_eq!(spec.source, ToolSource::Mcp { server: "fake".into() });
@@ -121,6 +121,27 @@ async fn a_server_that_starts_offers_nothing_until_a_person_approves_what_it_lis
     assert_eq!(mcp_ids(&rig).len(), 8);
     rig.manager.shutdown().await;
     assert!(mcp_ids(&rig).is_empty(), "stopping a server takes its tools away");
+}
+
+#[tokio::test]
+async fn what_a_person_approved_is_what_they_were_shown() {
+    let rig = rig();
+    let server = add(&rig, "fake", &["--era", "modern"], vec![]).await;
+    rig.manager.start(server.id).await.unwrap();
+    until(&rig, server.id, "ready", |s| s.state == ServerState::Ready).await;
+    let pins = rig.store.tool_pins(&rig.tenant, server.id).await.unwrap();
+    let hash_of = |name: &str| pins.iter().find(|p| p.tool == name).unwrap().seen_hash.clone();
+    // Two tools were on screen; one of them is not what the screen showed any more.
+    let shown =
+        vec![("echo".to_string(), hash_of("echo")), ("env".to_string(), "not-the-hash-that-was-shown".to_string())];
+    assert_eq!(rig.manager.approve_shown(server.id, "luis", &shown).await.unwrap(), 1);
+    assert_eq!(mcp_ids(&rig), ["mcp.fake.echo"], "only the tool that was shown as it is now is offered");
+    let env = rig.store.tool_pins(&rig.tenant, server.id).await.unwrap().into_iter().find(|p| p.tool == "env").unwrap();
+    assert_eq!((env.status, env.approved_hash), (PinStatus::New, None));
+    // One tool approved by its own hash, and a stale hash is an error for that one call.
+    rig.manager.review(server.id, "env", PinAction::approve_seen(hash_of("env")), "luis").await.unwrap();
+    assert!(rig.manager.review(server.id, "cancelled", PinAction::approve_seen("stale"), "luis").await.is_err());
+    rig.manager.shutdown().await;
 }
 
 #[tokio::test]
@@ -144,7 +165,7 @@ async fn a_server_that_rewrites_a_tool_loses_it_until_a_person_reviews_the_chang
     assert_eq!(rig.manager.status(server.id).await.unwrap().unwrap().tools_to_review, 1);
 
     // A person approves the new text, and it is offered again.
-    rig.manager.review(server.id, "echo", PinAction::Approve, "luis").await.unwrap();
+    rig.manager.review(server.id, "echo", PinAction::approve(), "luis").await.unwrap();
     assert!(mcp_ids(&rig).contains(&"mcp.fake.echo".to_string()));
     rig.manager.shutdown().await;
 }
@@ -284,7 +305,7 @@ async fn not_asking_is_a_persons_choice_for_one_tool_and_is_withdrawn_when_the_t
     rig.manager.set_trust(server.id, "echo", ToolTrust::ReadOnlyNoAsk).await.unwrap();
     assert!(!rig.registry.get("mcp.fake.echo").unwrap().spec().requires_approval);
     rig.manager.refresh(server.id).await.unwrap(); // echo is rewritten
-    rig.manager.review(server.id, "echo", PinAction::Approve, "luis").await.unwrap();
+    rig.manager.review(server.id, "echo", PinAction::approve(), "luis").await.unwrap();
     assert!(
         rig.registry.get("mcp.fake.echo").unwrap().spec().requires_approval,
         "a changed tool asks again, even after it is re-approved"
@@ -311,7 +332,7 @@ async fn a_run_uses_an_mcp_tool_only_after_a_person_approves_the_call() {
     let server = add(&rig, "fake", &["--era", "legacy"], vec![]).await;
     rig.manager.start(server.id).await.unwrap();
     until(&rig, server.id, "ready", |s| s.state == ServerState::Ready).await;
-    rig.manager.review(server.id, "echo", PinAction::Approve, "luis").await.unwrap();
+    rig.manager.review(server.id, "echo", PinAction::approve(), "luis").await.unwrap();
 
     let model = Arc::new(ScriptedModel::new([
         Turn::call("mcp.fake.echo", json!({"text": "from the model"})),
@@ -431,7 +452,7 @@ mod remote {
         rig.manager.start(server.id).await.unwrap();
         let status = until(&rig, server.id, "ready", |s| s.state == ServerState::Ready).await;
         assert_eq!((status.era.as_deref(), status.tools_listed, status.tools_to_review), (Some("modern"), 1, 1));
-        rig.manager.review(server.id, "search", PinAction::Approve, "luis").await.unwrap();
+        rig.manager.review(server.id, "search", PinAction::approve(), "luis").await.unwrap();
         assert_eq!(mcp_ids(&rig), ["mcp.remote.search"]);
         rig.manager.shutdown().await;
     }

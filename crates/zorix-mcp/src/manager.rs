@@ -472,9 +472,37 @@ impl McpManager {
         for pin in pins.iter().filter(|p| p.listed && matches!(p.status, PinStatus::New | PinStatus::Changed)) {
             self.inner
                 .store
-                .review_tool(&self.inner.tenant, id, &pin.tool, PinAction::Approve, by, self.inner.clock.now())
+                .review_tool(&self.inner.tenant, id, &pin.tool, PinAction::approve(), by, self.inner.clock.now())
                 .await?;
             approved += 1;
+        }
+        self.register_from_pins(id).await?;
+        Ok(approved)
+    }
+
+    /// A person approves the tools they were shown, as they were shown: `shown` is each tool's name and the hash of the definition on
+    /// screen. A tool whose definition is not that one any more (the server changed it meanwhile) is left waiting, and the count
+    /// says how many were approved.
+    pub async fn approve_shown(&self, id: McpServerId, by: &str, shown: &[(String, String)]) -> CoreResult<usize> {
+        let mut approved = 0;
+        for (tool, hash) in shown {
+            match self
+                .inner
+                .store
+                .review_tool(
+                    &self.inner.tenant,
+                    id,
+                    tool,
+                    PinAction::approve_seen(hash.clone()),
+                    by,
+                    self.inner.clock.now(),
+                )
+                .await
+            {
+                Ok(_) => approved += 1,
+                Err(zorix_core::Error::InvalidInput(_)) => {}
+                Err(other) => return Err(other),
+            }
         }
         self.register_from_pins(id).await?;
         Ok(approved)

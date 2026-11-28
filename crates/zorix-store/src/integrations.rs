@@ -150,10 +150,12 @@ fn load_pin(conn: &Db, server: McpServerId, tool: &str) -> Result<McpToolPin> {
     .ok_or_else(|| Error::Missing(format!("tool {tool}")))?
 }
 
-/// True when the definition says the tool only reads and stays inside the server.
+/// True when the definition says the tool only reads and stays inside the server. Staying inside is something a server must *say*
+/// (`openWorldHint: false`): the specification's default is a tool that reaches outside, so a definition with no such hint does not
+/// qualify, however read-only it claims to be.
 fn reports_read_only(definition: &Value) -> bool {
     let hints = &definition["annotations"];
-    hints["readOnlyHint"] == true && hints["destructiveHint"] != true && hints["openWorldHint"] != true
+    hints["readOnlyHint"] == true && hints["destructiveHint"] != true && hints["openWorldHint"] == false
 }
 
 const CONNECTION_COLUMNS: &str =
@@ -367,7 +369,14 @@ impl IntegrationStore for SqliteIntegrationStore {
                             (_, Some(_)) => PinStatus::Changed,
                             (_, None) => PinStatus::New,
                         };
-                        let trust = if status == PinStatus::Pinned { pin.trust } else { ToolTrust::Ask };
+                        // A tool is only left unasked while its approved definition still qualifies: this also takes back a choice made
+                        // before "inside the server" had to be said by the server.
+                        let qualifies = pin.approved.as_ref().is_some_and(reports_read_only);
+                        let trust = if status == PinStatus::Pinned && (pin.trust != ToolTrust::ReadOnlyNoAsk || qualifies) {
+                            pin.trust
+                        } else {
+                            ToolTrust::Ask
+                        };
                         tx.execute(
                             "UPDATE mcp_tool_pins SET listed = 1, status = ?3, trust = ?4, seen_hash = ?5, seen = ?6, updated_at = ?7 WHERE server_id = ?1 AND tool = ?2",
                             params![id, tool.name, status.as_str(), trust.as_str(), tool.hash, seen, now.millis()],
@@ -399,9 +408,16 @@ impl IntegrationStore for SqliteIntegrationStore {
             owns(conn, tenant, server)?;
             let pin = load_pin(conn, server, tool)?;
             match action {
-                PinAction::Approve => {
+                PinAction::Approve { hash } => {
                     if !pin.listed {
                         return Err(invalid(format!("The server does not list {tool} any more, so there is nothing to approve.")));
+                    }
+                    if let Some(shown) = hash
+                        && *shown != pin.seen_hash
+                    {
+                        return Err(invalid(format!(
+                            "The server changed {tool} after you looked at it, so it was not approved. Read what it says now and approve again."
+                        )));
                     }
                     conn.execute(
                         "UPDATE mcp_tool_pins SET status = 'pinned', approved_hash = seen_hash, approved = seen, approved_by = ?3, approved_at = ?4, updated_at = ?4 WHERE server_id = ?1 AND tool = ?2",

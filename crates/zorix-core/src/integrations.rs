@@ -185,12 +185,29 @@ impl ToolTrust {
 }
 
 /// What a person decides about a tool's definition.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PinAction {
-    /// Approve the definition the server lists now.
-    Approve,
+    /// Approve a definition. With a hash, it is approved only if that is still the definition the server lists: what the person looked
+    /// at is what is approved, and a server that changes the tool between the look and the click gets a refusal, not an approval. With
+    /// no hash it is whatever the server lists now, which is for a person who is deliberately approving "everything pending".
+    Approve {
+        /// The hash of the definition that was shown.
+        hash: Option<String>,
+    },
     /// Turn the tool off.
     Disable,
+}
+
+impl PinAction {
+    /// Approve whatever the server lists now.
+    pub fn approve() -> Self {
+        Self::Approve { hash: None }
+    }
+
+    /// Approve the definition with this hash, and nothing else.
+    pub fn approve_seen(hash: impl Into<String>) -> Self {
+        Self::Approve { hash: Some(hash.into()) }
+    }
 }
 
 /// A tool's definition as a server listed it, for [`IntegrationStore::observe_tools`].
