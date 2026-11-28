@@ -38,6 +38,7 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 | `--conversation ID` | The conversation this run belongs to. Earlier runs of the same conversation are given to the model ([memory](memory.md)) |
 | `--no-memory`, `--no-knowledge`, `--no-conversation` | Do not give this run facts and past work, indexed documents, or the earlier runs of the conversation |
 | `--idempotency-key KEY` | Running again with the same key returns the same execution instead of making a new one |
+| `--attach FILE` | Give the run a file to read: text, code, HTML or a PDF (a scan too, when [reading scans](knowledge.md#reading-scans) is on). Repeat for more, up to ten. The file is data, adds no permission, and is read before the run exists: a private name (`.env`, keys), a credentials folder, more than 1 MB of text (25 MB for a PDF) or a file that cannot be read stops it with the file named ([ADR-0049](adr/0049-files-attached-to-a-run.md)) |
 
 Ctrl-C **pauses** at the next step (continue with `zorix resume`). A second Ctrl-C stops at once; continue later with `zorix recover`.
 
@@ -131,7 +132,7 @@ stops it between files and exits with code 4; what was done stays indexed. See [
 ### `zorix run --estimate`
 
 Say what the run would probably cost and how long it would take, without starting it: the median of your last similar runs (same agent and model), or a rough guess when there are fewer than three.
-`--json` prints the numbers. It needs no lock, so it works while the app is open. `--max-cost USD` limits what a run may spend (a model with no known price cannot keep it, and the run is refused).
+`--json` prints the numbers. With `--attach` it counts the files too (by their size; nothing is read). It needs no lock, so it works while the app is open. `--max-cost USD` limits what a run may spend (a model with no known price cannot keep it, and the run is refused).
 
 ### `zorix embeddings …`
 

@@ -561,3 +561,21 @@ async fn pdfs_are_indexed_by_page_and_cited_with_the_page_number() {
     );
     assert!(problems.iter().any(|(f, s, _)| f == "broken.pdf" && *s == DocStatus::Failed), "{problems:?}");
 }
+
+#[test]
+fn an_attached_pdf_keeps_its_page_numbers_so_an_answer_can_cite_them() {
+    let env = env();
+    let pdf = env.folder.join("manual.pdf");
+    std::fs::write(
+        &pdf,
+        make_pdf(&["Introduction to the platform", "Deploys reach staging before production approval"]),
+    )
+    .unwrap();
+    let attached = zorix_memory::attach::read_attachments(&[pdf], None).unwrap();
+    assert_eq!(attached.len(), 1);
+    assert_eq!(attached[0].name, "manual.pdf");
+    let text = &attached[0].text;
+    assert!(text.starts_with("[page 1]\n"), "{text}");
+    assert!(text.contains("[page 2]\nDeploys reach staging"), "{text}");
+    assert!(!attached[0].truncated);
+}

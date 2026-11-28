@@ -54,7 +54,7 @@ Each iteration:
 
 1. **Check** shutdown, cancellation, pause and the limits.
 2. If tool calls from the last model answer are pending, handle the next one (below). Otherwise:
-3. **Build the context** from sources (system text, the task, history, extra sources) within a token budget. When the history no longer fits, the oldest turns are **summarised** (one extra model call, counted in the run's usage and limits, off with `zorix settings set context.summaries off`) and the summary stands where they were, as untrusted data; if that cannot be done they are left out with a note ([ADR-0043](adr/0043-summaries-of-long-conversations.md)).
+3. **Build the context** from sources (system text, the task and the files attached to it, history, extra sources) within a token budget. Attached files are untrusted `<document>`s after the task, never dropped, and cut in proportion when together they would take more than half the model's window ([ADR-0049](adr/0049-files-attached-to-a-run.md)). When the history no longer fits, the oldest turns are **summarised** (one extra model call, counted in the run's usage and limits, off with `zorix settings set context.summaries off`) and the summary stands where they were, as untrusted data; if that cannot be done they are left out with a note ([ADR-0043](adr/0043-summaries-of-long-conversations.md)).
 4. **Call the model** through `ModelGateway`, with a timeout. Temporary errors are retried with backoff.
 5. If the model answered with text only, **validate** it. If it asked for tools, remember the calls and checkpoint.
 

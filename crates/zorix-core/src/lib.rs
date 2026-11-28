@@ -53,7 +53,8 @@ pub use error::{Error, Result};
 pub use estimate::{EstimateBasis, EstimateInput, MAX_SAMPLES, MIN_SAMPLES, RunEstimate, RunSample, estimate_run};
 pub use event::{EVENT_SCHEMA_VERSION, EventKind, ExecutionEvent, NewEvent};
 pub use execution::{
-    Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, NewExecution, TaskRequest, Usage,
+    Attachment, Execution, ExecutionResult, Failure, FailureKind, LimitKind, Limits, MAX_ATTACHMENT_CHARS,
+    MAX_ATTACHMENTS, MAX_ATTACHMENTS_CHARS, NewExecution, TaskRequest, Usage,
 };
 pub use ids::{
     AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,

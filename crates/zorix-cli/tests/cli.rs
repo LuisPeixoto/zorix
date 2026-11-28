@@ -1089,3 +1089,54 @@ fn a_scan_is_left_out_with_the_reason_and_a_setting_that_is_on_without_its_model
     let quiet = z.run(&["knowledge", "sync"]);
     assert!(!text(&quiet.stderr).contains("models"), "{}", text(&quiet.stderr));
 }
+
+#[test]
+fn a_file_attached_to_a_run_is_kept_with_the_run_and_a_refused_one_stops_it_before_anything_starts() {
+    let z = Zorix::new();
+    let docs = z.dir.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    let notes = docs.join("notes.md");
+    std::fs::write(&notes, "# Launch\nShip on Thursday.\nThe key is sk-abcdefghijklmnopqrstuvwxyz0123456789\n")
+        .unwrap();
+
+    let ran = z.run(&["run", "Summarise the attached notes", "--attach", notes.to_str().unwrap()]);
+    assert_eq!(code(&ran), 0, "{}", text(&ran.stderr));
+    assert!(text(&ran.stderr).contains("attached notes.md"), "{}", text(&ran.stderr));
+    let shown: Value = serde_json::from_slice(&z.run(&["show", &z.newest_id(), "--json"]).stdout).expect("show json");
+    let attached = &shown["execution"]["request"]["attachments"][0];
+    assert_eq!(attached["name"], "notes.md", "{shown}");
+    let kept = attached["text"].as_str().unwrap();
+    assert!(kept.contains("Ship on Thursday"), "{kept}");
+    assert!(
+        !kept.contains("sk-abcdefghijklmnopqrstuvwxyz0123456789"),
+        "a secret is removed before the text is kept: {kept}"
+    );
+    assert!(!kept.contains(docs.to_str().unwrap()), "only the name, never the folder");
+
+    // A private name is refused with its name, and no run is made.
+    let secret = docs.join(".env");
+    std::fs::write(&secret, "TOKEN=1").unwrap();
+    let before = text(&z.run(&["list", "--json"]).stdout);
+    let refused = z.run(&["run", "Read it", "--attach", secret.to_str().unwrap()]);
+    assert_ne!(code(&refused), 0);
+    assert!(text(&refused.stderr).contains("“.env” cannot be attached"), "{}", text(&refused.stderr));
+    assert_eq!(text(&z.run(&["list", "--json"]).stdout), before, "nothing was started");
+
+    // More than ten.
+    let mut args: Vec<String> = vec!["run".into(), "Read them".into()];
+    for i in 0..11 {
+        let file = docs.join(format!("f{i}.txt"));
+        std::fs::write(&file, format!("file {i}")).unwrap();
+        args.push("--attach".into());
+        args.push(file.to_str().unwrap().into());
+    }
+    let many = z.run(&args.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_ne!(code(&many), 0);
+    assert!(text(&many.stderr).contains("At most 10 files"), "{}", text(&many.stderr));
+
+    // The estimate counts them and refuses the same files.
+    let estimate = z.run(&["run", "Summarise", "--estimate", "--attach", notes.to_str().unwrap()]);
+    assert_eq!(code(&estimate), 0, "{}", text(&estimate.stderr));
+    let refused = z.run(&["run", "Summarise", "--estimate", "--attach", secret.to_str().unwrap()]);
+    assert_ne!(code(&refused), 0);
+}

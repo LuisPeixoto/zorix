@@ -127,6 +127,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         limits.max_cost_micros = Some(micros);
     }
     let app = open_engine(home, &tenant, &args.model)?;
+    let attachments = attachments_from(home, &app, &args.attach).await?;
     let grants = grants_from(&args);
     app.start_servers(&grants).await;
     let memory = zorix_core::MemoryOptions {
@@ -173,6 +174,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
         let ask = zorix_agents::AgentAsk {
             prompt: args.prompt.clone(),
             input: args.input.clone(),
+            attachments,
             model: args.model.model.as_ref().map(|m| m.label()),
             conversation: args.conversation.clone(),
             workspace,
@@ -207,6 +209,7 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
                 instructions: args.instructions.clone(),
                 prompt: args.prompt.clone(),
                 model: app.model.clone(),
+                attachments,
                 ..TaskRequest::default()
             },
             limits,
@@ -228,6 +231,33 @@ async fn run(home: &Path, tenant: TenantId, printer: Printer, args: RunArgs) -> 
     let exit = follow(engine, &tenant, created.id, stream, mode, printer).await;
     app.shutdown().await;
     exit
+}
+
+/// Read the files given with `--attach`, off the async threads. Scanned PDFs are read when reading scans is on. The first file that is refused is the
+/// answer, named, and nothing starts.
+async fn attachments_from(
+    home: &Path,
+    app: &crate::app::App,
+    paths: &[std::path::PathBuf],
+) -> Result<Vec<zorix_core::Attachment>, CliError> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    zorix_hub::ocr::attach(&app.stack, home, app.settings.get().knowledge.ocr).await?;
+    let (stack, paths) = (app.stack.clone(), paths.to_vec());
+    let attached = tokio::task::spawn_blocking(move || stack.read_attachments(&paths))
+        .await
+        .map_err(|e| CliError(e.to_string()))?
+        .map_err(|e| CliError(e.to_string()))?;
+    for file in &attached {
+        eprintln!(
+            "zorix: attached {} ({} characters{})",
+            file.name,
+            file.text.chars().count(),
+            if file.truncated { ", cut" } else { "" }
+        );
+    }
+    Ok(attached)
 }
 
 async fn list(home: &Path, tenant: &TenantId, printer: Printer, args: ListArgs) -> Result<Exit, CliError> {

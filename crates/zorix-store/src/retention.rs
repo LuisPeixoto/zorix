@@ -234,6 +234,13 @@ fn add_counts(db: &Db, ids: &[String], report: &mut RetentionReport) -> Result<(
     )?;
     report.snapshots += n;
     report.bytes += b;
+    // The text of the files a person attached goes when a run is compacted; its name and size stay (ADR-0049).
+    let (_, b) = count(
+        db,
+        "SELECT 0, COALESCE(SUM(length(json_extract(a.value, '$.text'))), 0) FROM executions e, json_each(e.doc, '$.request.attachments') a WHERE e.id IN ({ids})",
+        ids,
+    )?;
+    report.bytes += b;
     Ok(())
 }
 
@@ -281,8 +288,15 @@ fn run(
                 tx.execute("DELETE FROM operations WHERE execution_id = ?1", params![id]).map_err(storage)?;
                 tx.execute("DELETE FROM executions WHERE id = ?1", params![id]).map_err(storage)?;
             } else {
+                // What was in an attached file is bulky and may be private; the run keeps that the file was given, and its name and size.
                 tx.execute(
-                    "UPDATE executions SET compacted = 1, doc = json_set(doc, '$.compacted', json('true')) WHERE id = ?1",
+                    "UPDATE executions SET compacted = 1,
+                        doc = CASE WHEN json_type(doc, '$.request.attachments') = 'array'
+                            THEN json_set(json_set(doc, '$.compacted', json('true')), '$.request.attachments',
+                                json((SELECT json_group_array(json_set(a.value, '$.text', ''))
+                                      FROM json_each(executions.doc, '$.request.attachments') a)))
+                            ELSE json_set(doc, '$.compacted', json('true')) END
+                     WHERE id = ?1",
                     params![id],
                 )
                 .map_err(storage)?;

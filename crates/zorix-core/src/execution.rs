@@ -15,6 +15,29 @@ use crate::permission::Grants;
 use crate::state::{ExecutionState, InvalidTransition, Trigger, transition};
 use crate::time::Timestamp;
 
+/// The most files a person can attach to a run.
+pub const MAX_ATTACHMENTS: usize = 10;
+/// The most characters kept from one attached file.
+pub const MAX_ATTACHMENT_CHARS: usize = 1_000_000;
+/// The most characters kept from all the attached files of a run together.
+pub const MAX_ATTACHMENTS_CHARS: usize = 3_000_000;
+
+/// A file a person attached to a run: its name and the text that was read from it when the run was made (ADR-0049). The run is given the text as data,
+/// wrapped like every document; attaching a file gives it no permission to read anything else.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attachment {
+    /// The file's name, never its path: the run is not told where on the computer the file was.
+    pub name: String,
+    /// The text, with anything that looks like a secret removed.
+    pub text: String,
+    /// The size of the file in bytes.
+    #[serde(default)]
+    pub bytes: u64,
+    /// The text was cut at the limit.
+    #[serde(default)]
+    pub truncated: bool,
+}
+
 /// The activity to carry out.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TaskRequest {
@@ -26,6 +49,9 @@ pub struct TaskRequest {
     /// Structured data that goes with the request. The model sees it as data.
     #[serde(default)]
     pub input: Option<Value>,
+    /// Files the person attached: their text, given to the run as data.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
     /// Which model to use. The runtime does not interpret it: the `ModelGateway` does.
     pub model: String,
     /// A JSON Schema the final answer must satisfy, when the answer is structured.
@@ -267,6 +293,7 @@ impl NewExecution {
         if self.request.model.trim().is_empty() {
             return bad("Choose a model.");
         }
+        validate_attachments(&self.request.attachments)?;
         if let Some(key) = &self.idempotency_key
             && (key.trim().is_empty() || key.len() > 128)
         {
@@ -284,6 +311,33 @@ impl NewExecution {
         }
         self.limits.validate()
     }
+}
+
+/// The limits on attached files, whoever made the request: how many, how long a name, how much text, and nothing but a file's name as the name.
+fn validate_attachments(files: &[Attachment]) -> Result<()> {
+    let bad = |what: String| Err(Error::InvalidInput(what));
+    if files.len() > MAX_ATTACHMENTS {
+        return bad(format!("At most {MAX_ATTACHMENTS} files can be attached to a run."));
+    }
+    let mut total = 0usize;
+    for file in files {
+        let name = file.name.trim();
+        if name.is_empty()
+            || file.name.chars().count() > 255
+            || file.name.chars().any(|c| c.is_control() || c == '/' || c == '\\')
+        {
+            return bad("An attached file needs a name of up to 255 characters, with no folders in it.".into());
+        }
+        let length = file.text.chars().count();
+        if length > MAX_ATTACHMENT_CHARS {
+            return bad(format!("“{name}” is too long to attach ({MAX_ATTACHMENT_CHARS} characters at most)."));
+        }
+        total += length;
+    }
+    if total > MAX_ATTACHMENTS_CHARS {
+        return bad(format!("The attached files are too long together ({MAX_ATTACHMENTS_CHARS} characters at most)."));
+    }
+    Ok(())
 }
 
 /// One execution, as stored.
@@ -411,6 +465,50 @@ impl Execution {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn with_files(files: Vec<Attachment>) -> NewExecution {
+        let mut new = request();
+        new.request.attachments = files;
+        new
+    }
+
+    fn file(name: &str, text: &str) -> Attachment {
+        Attachment { name: name.into(), text: text.into(), bytes: text.len() as u64, truncated: false }
+    }
+
+    #[test]
+    fn attached_files_are_limited_in_number_name_and_size_for_every_way_a_run_is_made() {
+        assert!(with_files(vec![file("a.md", "x")]).validate().is_ok());
+        let many: Vec<Attachment> = (0..=MAX_ATTACHMENTS).map(|i| file(&format!("f{i}.md"), "x")).collect();
+        assert!(with_files(many).validate().unwrap_err().to_string().contains("At most 10 files"));
+        for name in ["", "  ", "a/b.md", "a\\b.md", "line\nbreak.md", &"n".repeat(256)] {
+            let error = with_files(vec![file(name, "x")]).validate().unwrap_err().to_string();
+            assert!(error.contains("needs a name"), "{name:?}: {error}");
+        }
+        let long = "x".repeat(MAX_ATTACHMENT_CHARS + 1);
+        assert!(
+            with_files(vec![file("big.txt", &long)]).validate().unwrap_err().to_string().contains("too long to attach")
+        );
+        let each = "x".repeat(MAX_ATTACHMENT_CHARS);
+        let together = vec![file("a", &each), file("b", &each), file("c", &each), file("d", "x")];
+        assert!(with_files(together).validate().unwrap_err().to_string().contains("together"));
+    }
+
+    #[test]
+    fn a_request_stored_before_attachments_still_reads_and_writes_the_same() {
+        let old = r#"{"prompt":"hi","model":"demo","metadata":{},"params":{}}"#;
+        let request: TaskRequest = serde_json::from_str(old).unwrap();
+        assert!(request.attachments.is_empty());
+        let written = serde_json::to_value(&request).unwrap();
+        assert!(written.get("attachments").is_none(), "an empty list is not written: {written}");
+
+        let with = TaskRequest {
+            attachments: vec![Attachment { name: "a.md".into(), text: "x".into(), bytes: 1, truncated: false }],
+            ..request
+        };
+        let again: TaskRequest = serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
+        assert_eq!(again, with);
+    }
 
     fn request() -> NewExecution {
         NewExecution {

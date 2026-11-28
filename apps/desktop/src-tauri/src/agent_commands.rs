@@ -385,6 +385,9 @@ pub struct AskAgent {
     prompt: String,
     #[serde(default)]
     input: Option<serde_json::Value>,
+    /// Files the run is given to read (ADR-0049).
+    #[serde(default)]
+    attachments: Vec<String>,
     #[serde(default)]
     model: Option<String>,
     /// The conversation this continues. Left out: a new one starts.
@@ -437,10 +440,15 @@ pub async fn agent_ask(state: State<'_, AppState>, request: AskAgent) -> Result<
         narrower.max_iterations = steps;
         limited = true;
     }
+    let attachments = crate::attachment_commands::read(services, &request.attachments)
+        .await
+        .map_err(|e| e.to_string())
+        .map_err(text)?;
     let ask = AgentAsk {
         limits: limited.then_some(narrower),
         prompt: request.prompt,
         input: request.input,
+        attachments,
         model: request.model.map(|m| m.trim().to_string()).filter(|m| !m.is_empty()),
         conversation: Some(conversation),
         memory: request.memory.map(|m| zorix_core::MemoryOptions {

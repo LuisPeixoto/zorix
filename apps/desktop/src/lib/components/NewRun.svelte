@@ -1,7 +1,11 @@
 <script lang="ts">
   import { fmt, t as tr } from "../i18n/index.ts";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { onDestroy, onMount } from "svelte";
   import { type AgentDetail, type RunEstimate, agentGet, estimateRun, workflowCreate, workflowSave, workflowStart } from "../api.ts";
+  import { AttachedFiles } from "../stores/attachments.svelte.ts";
+  import AtMenu from "./attachments/AtMenu.svelte";
+  import AttachedList from "./attachments/AttachedList.svelte";
   import { workflows } from "../stores/workflows.svelte.ts";
   import { toast } from "../stores/toast.svelte.ts";
   import { slugify } from "../workflow.ts";
@@ -24,6 +28,19 @@
 
   let prompt = $state("");
   let workspace = $state("");
+  // Files the run is given to read: chosen with the button, with `@` in the prompt, or dropped on the window (ADR-0049).
+  const attached = new AttachedFiles(() => workspace.trim() || undefined);
+  let promptField = $state<HTMLTextAreaElement | undefined>();
+  let stopDrops: (() => void) | null = null;
+  onMount(async () => {
+    promptField = document.getElementById("prompt") as HTMLTextAreaElement | undefined;
+    stopDrops = await attached.listen();
+  });
+  onDestroy(() => stopDrops?.());
+  $effect(() => {
+    void workspace;
+    void attached.recheck();
+  });
   let allowRead = $state("*");
   let allowWrite = $state("");
   // "" means: whatever the default is (shown in the first option).
@@ -80,11 +97,11 @@
   // What the run would probably cost and how long it would take, from what similar runs took. Asked a moment after typing stops.
   let estimate = $state<RunEstimate | null>(null);
   $effect(() => {
-    const [chars, wanted, slug] = [prompt.length, model, agentSlug];
+    const [chars, wanted, slug, files] = [prompt.length, model, agentSlug, attached.chars];
     estimate = null;
     if (mode === "workflow") return;
     const timer = setTimeout(() => {
-      void estimateRun(chars, 0, wanted, slug).then((e) => (estimate = e)).catch(() => (estimate = null));
+      void estimateRun(chars, files, wanted, slug).then((e) => (estimate = e)).catch(() => (estimate = null));
     }, 300);
     return () => clearTimeout(timer);
   });
@@ -215,6 +232,7 @@
         model: model || undefined,
         conversation: continuing?.id,
         memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
+        attachments: attached.paths,
         ...limits,
       });
       return;
@@ -237,6 +255,7 @@
       model: model || undefined,
       conversation: continuing?.id,
       memory: { conversation: useConversation, long_term: useMemory, knowledge: useKnowledge, operations: useMemory },
+      attachments: attached.paths,
       ...limits,
     });
   }
@@ -315,10 +334,24 @@
         {/if}
 
         <Card title={tr("newRun.whatShouldItDo")} icon="sparkles">
-          <Textarea id="prompt" rows={5} bind:value={prompt} maxlength={20000} placeholder={tr("newRun.forExampleWhatIs")} aria-label={tr("newRun.whatShouldItDo")} />
+          <div class="relative">
+            <Textarea id="prompt" rows={5} bind:value={prompt} maxlength={20000} placeholder={tr("newRun.forExampleWhatIs")} aria-label={tr("newRun.whatShouldItDo")} />
+            {#if mode !== "workflow"}<AtMenu field={promptField} bind:value={prompt} workspace={workspace.trim() || undefined} onchoose={(path) => void attached.add([path])} />{/if}
+            {#if attached.dropping && mode !== "workflow"}
+              <div class="pointer-events-none absolute inset-0 grid place-items-center rounded-lg border-2 border-dashed border-accent bg-accent-soft text-base font-medium text-accent" role="status">
+                <span class="inline-flex items-center gap-2"><Icon name="paperclip" size={16} />{tr("attach.dropFilesToAttach")}</span>
+              </div>
+            {/if}
+          </div>
+          {#if mode !== "workflow"}<p class="mt-1.5 text-xs text-muted">{tr("newRun.plainWordsAttachDocuments")}</p>{/if}
           <div class="mt-3 flex flex-wrap gap-2">
             {#each examples as example}<Chip onclick={() => (prompt = example)}>{example}</Chip>{/each}
           </div>
+          {#if mode !== "workflow"}
+            <div class="mt-4">
+              <AttachedList files={attached.files} onremove={(path) => attached.remove(path)} onattach={() => void attached.choose()} />
+            </div>
+          {/if}
         </Card>
 
         {#if mode !== "workflow"}
@@ -491,6 +524,7 @@
               { key: "Tools", value: `${grants.granted} granted${grants.asks ? `, ${grants.asks} ask first` : ""}` },
               { key: "Model", value: where.kind === "demo" ? "demo" : model || (agentDetail ? agentDetail.version.spec.models.default : defaultName), mono: true },
               { key: "Memory", value: memoryOn },
+              { key: tr("newRun.attached"), value: attached.files.length ? tr("newRun.countFilesSize", { count: attached.files.length, size: fmt.bytes(attached.bytes) }) : null },
               { key: tr("newRun.expected"), value: expected },
               { key: tr("newRun.budget"), value: limits.max_cost_micros ? fmt.usd2(limits.max_cost_micros) : null },
             ]}

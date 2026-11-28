@@ -33,6 +33,8 @@ pub struct AgentAsk {
     pub prompt: String,
     /// Data that goes with it.
     pub input: Option<Value>,
+    /// Files the person attached, already read (ADR-0049). They are data for the run; they add no permission.
+    pub attachments: Vec<zorix_core::Attachment>,
     /// A model to use instead of the agent's default. Must be allowed.
     pub model: Option<String>,
     /// The conversation it belongs to.
@@ -293,6 +295,7 @@ pub async fn prepare(
             .filter(|t| !t.trim().is_empty()),
             prompt: ask.prompt,
             input: ask.input,
+            attachments: ask.attachments,
             model,
             expected_output: spec.expected_output.clone(),
             metadata,
