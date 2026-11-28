@@ -8388,6 +8388,7 @@ dependencies = [
  "zorix-core",
  "zorix-integrations",
  "zorix-mcp",
+ "zorix-memory",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sandbox",

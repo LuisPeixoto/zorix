@@ -151,6 +151,11 @@ impl MemoryStack {
         crate::index::Indexer::new(self.store.clone(), self.embedder.clone()).with_ocr(self.ocr.lock().clone())
     }
 
+    /// Whether scanned PDFs are read now.
+    pub fn has_ocr(&self) -> bool {
+        self.ocr.lock().is_some()
+    }
+
     /// Read scanned PDFs with this from now on (or stop reading them, with `None`).
     pub fn set_ocr(&self, reader: Option<Arc<dyn crate::index::PageReader>>) {
         *self.ocr.lock() = reader;

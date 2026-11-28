@@ -8,10 +8,12 @@
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use url::Url;
 use zorix_core::bytes_hash;
+use zorix_memory::MemoryStack;
 
 use crate::HubError;
 
@@ -94,6 +96,64 @@ fn is_valid(path: &Path, model: &ModelFile) -> bool {
         return false;
     }
     bytes.len() as u64 == model.size && bytes_hash(&bytes) == model.sha256
+}
+
+/// Whether reading scans is working.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum State {
+    /// Turned off.
+    Off,
+    /// On, and the engine is loaded.
+    Ready,
+    /// On, but the model files are not there (or are not the right ones): nothing is read until they are downloaded again.
+    Missing,
+}
+
+impl State {
+    /// The word the screens and the command line use.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            State::Off => "off",
+            State::Ready => "ready",
+            State::Missing => "missing",
+        }
+    }
+}
+
+/// Make the memory stack read scans, or stop it, to match `on`. With `on` it loads the engine from the models in `<home>/models/ocr/`, after
+/// checking them. Loading takes a moment and happens off the async threads.
+pub async fn attach(stack: &MemoryStack, home: &Path, on: bool) -> Result<State, HubError> {
+    if !on {
+        stack.set_ocr(None);
+        return Ok(State::Off);
+    }
+    let dir = home.to_path_buf();
+    let found = tokio::task::spawn_blocking(move || installed(&dir)).await.map_err(|e| HubError(e.to_string()))?;
+    let Some(files) = found else {
+        stack.set_ocr(None);
+        return Ok(State::Missing);
+    };
+    let reader = tokio::task::spawn_blocking(move || {
+        zorix_memory::index::ocr::OcrReader::from_files(&files.detection, &files.recognition)
+    })
+    .await
+    .map_err(|e| HubError(e.to_string()))?
+    .map_err(HubError)?;
+    stack.set_ocr(Some(Arc::new(reader)));
+    Ok(State::Ready)
+}
+
+/// Turn reading scans on: fetch the models if they are not there, check them and load the engine.
+pub async fn enable(
+    stack: &MemoryStack,
+    home: &Path,
+    progress: &(dyn Fn(Progress) + Send + Sync),
+) -> Result<(), HubError> {
+    install(home, progress).await?;
+    match attach(stack, home, true).await? {
+        State::Ready => Ok(()),
+        _ => Err(HubError("The OCR models were downloaded but could not be loaded.".into())),
+    }
 }
 
 /// Whether the address may be fetched: `https`, or `http` for a server on this computer; no name or password in it.

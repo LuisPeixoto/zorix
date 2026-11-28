@@ -291,3 +291,57 @@ async fn the_real_models_still_hash_to_the_pinned_values() {
     assert_eq!(std::fs::metadata(&files.detection).unwrap().len(), ocr::DETECTION.size);
     assert_eq!(std::fs::metadata(&files.recognition).unwrap().len(), ocr::RECOGNITION.size);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Attaching the engine to the memory stack
+
+fn stack(home: &Path) -> zorix_memory::MemoryStack {
+    let path = home.join("zorix.sqlite");
+    let store = Arc::new(zorix_store::SqliteMemoryStore::open(&path).unwrap());
+    let repository = Arc::new(zorix_store::SqliteRepository::open(&path).unwrap());
+    zorix_memory::MemoryStack::new(store, repository, None)
+}
+
+#[tokio::test]
+async fn reading_scans_is_off_missing_or_ready_and_the_stack_follows() {
+    let home = tempfile::tempdir().unwrap();
+    let stack = stack(home.path());
+    assert!(!stack.has_ocr());
+
+    assert_eq!(ocr::attach(&stack, home.path(), false).await.unwrap(), ocr::State::Off);
+    assert!(!stack.has_ocr());
+
+    // On, but the models were never downloaded: nothing is read, and the state says why.
+    assert_eq!(ocr::attach(&stack, home.path(), true).await.unwrap(), ocr::State::Missing);
+    assert!(!stack.has_ocr());
+
+    // Files that are not the models are not loaded either: the hash decides, before the model parser sees a byte.
+    let dir = ocr::folder(home.path());
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("text-detection.onnx"), b"not a model").unwrap();
+    std::fs::write(dir.join("text-recognition.onnx"), b"not a model either").unwrap();
+    assert_eq!(ocr::attach(&stack, home.path(), true).await.unwrap(), ocr::State::Missing);
+    assert!(!stack.has_ocr());
+    assert_eq!(ocr::State::Off.as_str(), "off");
+    assert_eq!(ocr::State::Ready.as_str(), "ready");
+    assert_eq!(ocr::State::Missing.as_str(), "missing");
+}
+
+/// The real engine from files put in place by hand, then turned off again. Opt-in: set `ZORIX_OCR_MODELS` to a folder that holds
+/// `text-detection.onnx` and `text-recognition.onnx`.
+#[tokio::test]
+#[ignore = "needs the OCR models: set ZORIX_OCR_MODELS to the folder that holds them"]
+async fn the_real_models_placed_by_hand_are_loaded_and_unloaded() {
+    let source = std::path::PathBuf::from(std::env::var("ZORIX_OCR_MODELS").expect("set ZORIX_OCR_MODELS"));
+    let home = tempfile::tempdir().unwrap();
+    let dir = ocr::folder(home.path());
+    std::fs::create_dir_all(&dir).unwrap();
+    for name in ["text-detection.onnx", "text-recognition.onnx"] {
+        std::fs::copy(source.join(name), dir.join(name)).unwrap();
+    }
+    let stack = stack(home.path());
+    assert_eq!(ocr::attach(&stack, home.path(), true).await.unwrap(), ocr::State::Ready);
+    assert!(stack.has_ocr());
+    assert_eq!(ocr::attach(&stack, home.path(), false).await.unwrap(), ocr::State::Off);
+    assert!(!stack.has_ocr());
+}
