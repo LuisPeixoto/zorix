@@ -121,6 +121,23 @@ fn package_of(args: &[String]) -> Option<&str> {
 }
 
 impl Catalog {
+    /// The folders a person named to a server made from an entry that asks for one (the folder of *Filesystem*, the repository of
+    /// *Git*): every argument that is an existing folder by its absolute path. A confined server has to be given them.
+    pub fn folders_named(&self, transport: &McpTransport) -> Vec<String> {
+        let asks = self.entry_for(transport).is_some_and(|entry| match &entry.transport {
+            CatalogTransport::Stdio { inputs, .. } => inputs.iter().any(|i| i.kind == "folder"),
+            CatalogTransport::Http { .. } => false,
+        });
+        match transport {
+            McpTransport::Stdio { args, .. } if asks => args
+                .iter()
+                .filter(|a| std::path::Path::new(a).is_absolute() && std::path::Path::new(a).is_dir())
+                .cloned()
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// The entry a server was made from, when its address, or its command and package, still say so. A version, a folder a person
     /// chose or a flag do not change which entry it is; another package does.
     pub fn entry_for(&self, transport: &McpTransport) -> Option<&CatalogEntry> {

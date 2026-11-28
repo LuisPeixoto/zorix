@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Clock, EnvValue, Grants, IntegrationStore, McpServer, McpTransport, NewMcpServer, Permission, Secret, SystemClock,
-    TenantId, Timestamp,
+    Clock, EnvValue, Grants, IntegrationStore, McpServer, McpTransport, NewMcpServer, Permission, SandboxFolder,
+    Secret, ServerSandbox, SystemClock, TenantId, Timestamp,
 };
 use zorix_integrations::{Services, db_tools, discord_tools, forge_tools, http_tools, jira_tools, slack_tools};
 use zorix_mcp::catalog::SecretNeeded;
@@ -99,7 +99,11 @@ impl Hub {
             tenant.clone(),
             Arc::new(zorix_mcp::DefaultConnector),
             Arc::new(zorix_core::SystemClock),
-            zorix_mcp::ManagerOptions { work_dir: Some(home.join("mcp")), ..zorix_mcp::ManagerOptions::default() },
+            zorix_mcp::ManagerOptions {
+                work_dir: Some(home.join("mcp")),
+                data_home: Some(home.to_path_buf()),
+                ..zorix_mcp::ManagerOptions::default()
+            },
         );
         let sandbox = Arc::new(Sandbox::new(home)?);
         let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone() });
@@ -176,7 +180,21 @@ impl Hub {
         new: NewMcpServer,
         secrets: Vec<(Option<String>, Secret)>,
     ) -> Result<McpServer, HubError> {
-        let server = self.store.add_mcp_server(&self.tenant, new, self.now()).await?;
+        let mut server = self.store.add_mcp_server(&self.tenant, new, self.now()).await?;
+        // A folder named to the server as one of its arguments is a folder the person gave it: its sandbox lets it in. A folder that
+        // may not be given (the whole disk, a folder of credentials) is left out, and the server's sandbox shows what it has.
+        if let Some(mut sandbox) = server.sandbox.clone() {
+            for path in catalog().folders_named(&server.transport) {
+                let one = SandboxFolder { path, write: true };
+                let tried = ServerSandbox { folders: vec![one.clone()], ..sandbox.clone() };
+                if tried.validate().is_ok() {
+                    sandbox.folders.push(one);
+                }
+            }
+            if !sandbox.folders.is_empty() {
+                server = self.store.set_mcp_sandbox(&self.tenant, server.id, Some(sandbox), self.now()).await?;
+            }
+        }
         for (variable, value) in secrets {
             let name = match &variable {
                 Some(variable) => env_secret_name(server.id, variable),
@@ -203,6 +221,31 @@ impl Hub {
         let (new, needed) = entry.to_new_server(name, inputs).map_err(HubError)?;
         let server = self.add_server(new, Vec::new()).await?;
         Ok((server, needed))
+    }
+
+    /// Choose how a local server is confined (ADR-0050). The server is stopped if it runs, so it starts again confined as chosen.
+    pub async fn set_sandbox(&self, name: &str, sandbox: ServerSandbox) -> Result<McpServer, HubError> {
+        let server = self.server(name).await?;
+        if matches!(server.transport, McpTransport::Http { .. }) {
+            return Err(HubError(format!(
+                "{name} is a remote server: it runs elsewhere, so there is nothing here to confine."
+            )));
+        }
+        let changed = self.store.set_mcp_sandbox(&self.tenant, server.id, Some(sandbox), self.now()).await?;
+        // A running server keeps the confinement it started with, so it is stopped and, if it is on, started again.
+        let running = self
+            .manager
+            .status(changed.id)
+            .await
+            .map_err(|e| HubError(e.to_string()))?
+            .is_some_and(|s| !matches!(s.state, zorix_mcp::ServerState::Stopped));
+        if running {
+            self.manager.stop(changed.id).await;
+            if changed.enabled {
+                self.manager.start(changed.id).await.map_err(|e| HubError(e.to_string()))?;
+            }
+        }
+        Ok(changed)
     }
 
     /// Keep one secret of a server: an environment variable (`Some`) or the bearer token (`None`).

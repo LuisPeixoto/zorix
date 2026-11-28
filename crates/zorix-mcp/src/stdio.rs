@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 use zorix_core::redact_text;
 
 use crate::error::{METHOD_NOT_FOUND, McpError};
+use crate::sandbox::Confinement;
 use crate::transport::{LOG_BYTES, MAX_MESSAGE_BYTES, ServerEvent, Transport};
 use crate::wire::{self, Incoming, RpcError};
 
@@ -225,24 +226,49 @@ const TERMINATE_GRACE: Duration = Duration::from_secs(2);
 impl StdioTransport {
     /// Start the server.
     pub fn spawn(config: StdioConfig) -> Result<Self, McpError> {
-        let mut command = Command::new(resolve(&config.command));
-        command
-            .args(&config.args)
-            .env_clear()
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+        Self::spawn_confined(config, None)
+    }
+
+    /// Start the server, restricted to what `confinement` allows (ADR-0050).
+    pub fn spawn_confined(config: StdioConfig, mut confinement: Option<Confinement>) -> Result<Self, McpError> {
+        let mut command = match &mut confinement {
+            Some(confinement) => {
+                confinement.prepare()?;
+                // The program is found before it is confined: the sandbox must know where it sits to let it be read, and a name that
+                // is not there is reported as such instead of as whatever the wrapper would say.
+                let name = resolve(&config.command);
+                let program = crate::sandbox::find_program(&name, config.cwd.as_deref())
+                    .ok_or_else(|| McpError::Spawn(format!("“{}” was not found on the PATH.", config.command)))?;
+                confinement.command(&program, &config.args)?
+            }
+            None => {
+                let mut command = Command::new(resolve(&config.command));
+                command.args(&config.args);
+                command
+            }
+        };
+        command.env_clear().stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
         for name in PASSED_THROUGH {
             if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
+        if let Some(confinement) = &confinement {
+            for (name, value) in confinement.environment() {
                 command.env(name, value);
             }
         }
         for (name, value) in &config.env {
             command.env(name, value);
         }
-        if let Some(cwd) = &config.cwd {
-            command.current_dir(cwd);
+        match (&config.cwd, &confinement) {
+            (Some(cwd), _) => {
+                command.current_dir(cwd);
+            }
+            (None, Some(confinement)) => {
+                command.current_dir(&confinement.server_dir);
+            }
+            (None, None) => {}
         }
         #[cfg(unix)]
         command.process_group(0);
@@ -350,7 +376,7 @@ impl StdioTransport {
 
         // On Windows the server and everything it starts go in one job, so ending the server ends all of it (and so does ZORIX ending).
         #[cfg(windows)]
-        let job = match (child.raw_handle(), crate::job::Job::new()) {
+        let job = match (child.raw_handle(), crate::job::Job::new(confinement.is_some())) {
             (Some(handle), Ok(job)) => match job.add(handle) {
                 Ok(()) => Some(job),
                 Err(e) => {

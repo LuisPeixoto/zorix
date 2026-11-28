@@ -10,9 +10,9 @@ use std::os::windows::io::RawHandle;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
-    TerminateJobObject,
+    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_ACTIVE_PROCESS, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOB_OBJECT_LIMIT_PROCESS_MEMORY, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, TerminateJobObject,
 };
 
 /// A job whose processes end when it is closed.
@@ -23,8 +23,9 @@ unsafe impl Send for Job {}
 unsafe impl Sync for Job {}
 
 impl Job {
-    /// A new job that kills what is in it when its last handle closes.
-    pub fn new() -> io::Result<Job> {
+    /// A new job that kills what is in it when its last handle closes. A confined server's job also limits how many processes it may
+    /// have at once and how much memory each may hold: Windows confines no more than that natively (ADR-0050).
+    pub fn new(confined: bool) -> io::Result<Job> {
         // SAFETY: both arguments may be null; the result is checked before use.
         let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if handle.is_null() {
@@ -33,6 +34,11 @@ impl Job {
         // SAFETY: the structure is plain data, and all-zero is a valid "no limits" value.
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
         info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if confined {
+            info.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+            info.BasicLimitInformation.ActiveProcessLimit = 64;
+            info.ProcessMemoryLimit = 2 * 1024 * 1024 * 1024;
+        }
         // SAFETY: `info` is a live, correctly sized structure of the class named, and `handle` is the job just made.
         let set = unsafe {
             SetInformationJobObject(
