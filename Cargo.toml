@@ -46,7 +46,7 @@ dirs = "6"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 keyring = "4"
 jsonschema = { version = "0.61", default-features = false }
-parking_lot = "0.12"
+parking_lot = "0.13"
 pdf-extract = "0.12"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2", "system-proxy", "stream", "json"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
