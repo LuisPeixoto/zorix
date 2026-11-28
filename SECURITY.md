@@ -52,7 +52,7 @@ These notes grow with each feature that handles data, files, network or permissi
   through a link, and a link inside the workspace needs a grant for the place it leads to and cannot lead into `.zorix`. Writes go through a temporary file that is created new, with a name of its own, and a rename. Reads, listings and writes are size-limited. The check and the open are two steps, so a program that can change
   the workspace at that very moment could redirect one call; this is stated in the [tools guide](docs/tools.md), and a workspace should not be a
   folder another program writes to. This is
-  *path* confinement. Code runs only in the [WebAssembly sandbox](docs/sandbox.md); a stdio MCP server is a separate program that runs as you.
+  *path* confinement. Code runs only in the [WebAssembly sandbox](docs/sandbox.md); a stdio MCP server is a separate program, sandboxed by default (below).
 - **Bounded everything.** Iterations, tool calls, tokens, cost, working time, model and tool time, tool output size,
   context size, note count and size, file sizes, calculator length and depth all have limits, listed in the docs.
 - **Secrets stay out.** Event payloads pass through a redaction filter (secret-looking keys, and words that look like
@@ -69,7 +69,10 @@ These notes grow with each feature that handles data, files, network or permissi
   and a test checks the bytes sent. The address must be `https` (or a collector on this computer) and cannot hold a password; the header a collector needs is kept in the
   system keychain. Export failures are not reported.
 - **MCP servers are third parties.** A server you add is added **off** and needs your confirmation; a stdio server is a program
-  that runs **as you with no sandbox**, started without a shell, with a clean environment plus the variables you named. Its
+  started without a shell, with a clean environment plus the variables you named, and **sandboxed by default** on macOS and Linux
+  (its own folder and the folders you give it, no credential folders, no other programs' services, network only where chosen; Windows
+  confines processes and memory only; [ADR-0050](docs/adr/0050-sandbox-of-local-mcp-servers.md)). A server added before sandboxes keeps
+  running as you until you choose. Its
   tools are pinned: nothing is offered until you approve what it says, a changed description withdraws the tool until you
   review it, and a run keeps the definitions it started with. Every MCP tool asks first; the server's own hints never grant.
   What a server returns is data. ZORIX refuses sampling, elicitation and roots. OAuth uses PKCE, a state value, the resource
