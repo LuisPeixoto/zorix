@@ -15,6 +15,7 @@ pub mod retention;
 mod schema;
 pub mod settings;
 mod sqlite;
+pub mod vindex;
 pub mod workflows;
 
 pub use agents::SqliteAgentStore;

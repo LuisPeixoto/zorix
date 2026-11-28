@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::errors::storage;
+use crate::vindex::KnowledgeIndex;
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use rusqlite::types::Value as Sql;
@@ -28,7 +29,7 @@ pub const MAX_ROOTS: u64 = 50;
 /// Most chunks of one file.
 pub const MAX_CHUNKS_PER_FILE: usize = 2_000;
 /// Most chunks per tenant.
-pub const MAX_CHUNKS_PER_TENANT: u64 = 200_000;
+pub const MAX_CHUNKS_PER_TENANT: u64 = 500_000;
 /// Most query terms in one keyword search.
 pub const MAX_QUERY_TERMS: usize = 32;
 /// Longest query term, in characters.
@@ -40,6 +41,18 @@ const DEFAULT_LIMIT: usize = 200;
 #[derive(Clone)]
 pub struct SqliteMemoryStore {
     conn: Arc<Mutex<Connection>>,
+    /// The index of document vectors (ADR-0047): where its files go, the ones made so far, and how many visible pieces a collection needs before
+    /// it is used.
+    vindex: Arc<VectorIndexes>,
+}
+
+/// The indexes of document vectors, by tenant and model.
+struct VectorIndexes {
+    dir: Option<std::path::PathBuf>,
+    made: Mutex<std::collections::HashMap<(String, String), Arc<KnowledgeIndex>>>,
+    /// Held while one is made, so a search that comes meanwhile is answered exactly instead of waiting for it.
+    making: Mutex<()>,
+    exact_below: std::sync::atomic::AtomicUsize,
 }
 
 fn invalid(what: &str) -> Error {
@@ -61,15 +74,15 @@ impl SqliteMemoryStore {
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::Storage(format!("could not create {}: {e}", parent.display())))?;
         }
-        Self::prepare(Connection::open(path).map_err(storage)?, true)
+        Self::prepare(Connection::open(path).map_err(storage)?, true, path.parent().map(|dir| dir.join("index")))
     }
 
     /// A database in memory, for tests that do not need the executions tables to be shared.
     pub fn open_in_memory() -> Result<Self> {
-        Self::prepare(Connection::open_in_memory().map_err(storage)?, false)
+        Self::prepare(Connection::open_in_memory().map_err(storage)?, false, None)
     }
 
-    fn prepare(mut conn: Connection, file: bool) -> Result<Self> {
+    fn prepare(mut conn: Connection, file: bool, index_dir: Option<std::path::PathBuf>) -> Result<Self> {
         conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(storage)?;
         if file {
             conn.pragma_update(None, "journal_mode", "WAL").map_err(storage)?;
@@ -78,7 +91,145 @@ impl SqliteMemoryStore {
         // Deleted text is overwritten, not just unlinked: forgetting must mean forgetting.
         conn.pragma_update(None, "secure_delete", "ON").map_err(storage)?;
         crate::schema::migrate(&mut conn).map_err(Error::Storage)?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        let vindex = Arc::new(VectorIndexes {
+            dir: index_dir,
+            made: Mutex::new(std::collections::HashMap::new()),
+            making: Mutex::new(()),
+            exact_below: std::sync::atomic::AtomicUsize::new(crate::vindex::EXACT_BELOW),
+        });
+        Ok(Self { conn: Arc::new(Mutex::new(conn)), vindex })
+    }
+
+    /// How many visible pieces a collection needs before searches by meaning use the index. Below it they are exact. For tests and benchmarks.
+    pub fn use_index_from(&self, pieces: usize) {
+        self.vindex.exact_below.store(pieces, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// The best pieces of documents for a question, from the index: its candidates by one-bit codes, then the exact order among them. `None` when
+    /// the collection is too small to need it, or the index is being made by someone else: the caller then searches exactly.
+    async fn knowledge_by_index(
+        &self,
+        visibility: &Visibility,
+        model: &str,
+        query: &[f32],
+        limit: usize,
+    ) -> Result<Option<Vec<VectorHit>>> {
+        let key = (visibility.tenant.to_string(), model.to_string());
+        // The counter and the folders this question may see, in one short use of the connection.
+        let (tenant, scope_visibility) = (visibility.tenant.to_string(), visibility.clone());
+        let (generation, visible): (i64, Vec<String>) = self
+            .run(move |conn| {
+                let generation: i64 = conn
+                    .query_row("SELECT n FROM vector_generation WHERE id = 1", [], |r| r.get(0))
+                    .map_err(storage)?;
+                let mut args: Vec<Sql> = vec![Sql::Text(tenant)];
+                let scope = scope_sql("r", &scope_visibility, &mut args);
+                let sql =
+                    format!("SELECT r.id FROM knowledge_roots r WHERE r.tenant = ?1 AND r.enabled = 1 AND {scope}");
+                let mut stmt = conn.prepare(&sql).map_err(storage)?;
+                let rows = stmt.query_map(params_from_iter(args), |r| r.get::<_, String>(0)).map_err(storage)?;
+                Ok((generation, rows.collect::<std::result::Result<Vec<_>, _>>().map_err(storage)?))
+            })
+            .await?;
+        let Some(index) = self.index_for(&key, generation, query.len()).await? else { return Ok(None) };
+        let mask = index.mask(&visible);
+        let exact_below = self.vindex.exact_below.load(std::sync::atomic::Ordering::Relaxed);
+        if index.count_in(&mask) < exact_below {
+            return Ok(None);
+        }
+        let wanted = crate::vindex::MIN_CANDIDATES
+            .max(limit.saturating_mul(crate::vindex::CANDIDATES_PER_RESULT))
+            .max(index.count_in(&mask) / crate::vindex::ONE_CANDIDATE_IN);
+        let question = query.to_vec();
+        let candidates = tokio::task::spawn_blocking({
+            let (index, question) = (index.clone(), question.clone());
+            move || index.candidates(&mask, &question, wanted)
+        })
+        .await
+        .map_err(|e| Error::Internal(format!("a search task failed: {e}")))?;
+        // The exact order among the candidates, from the vectors in the database.
+        let model = model.to_string();
+        let hits = self
+            .run(move |conn| {
+                let mut heap: BinaryHeap<Reverse<Scored>> = BinaryHeap::new();
+                for batch in candidates.chunks(500) {
+                    // CROSS JOIN fixes the order: the pieces by their ids first, then each one's vector by key. Left to itself the planner may walk
+                    // every vector instead, which is the scan the index is there to avoid.
+                    let marks = vec!["?"; batch.len()].join(",");
+                    let sql = format!(
+                        "SELECT CAST(c.id AS TEXT), v.vector FROM knowledge_chunks c CROSS JOIN vectors v ON v.model = ? AND v.text_hash = c.text_hash WHERE c.id IN ({marks})"
+                    );
+                    let mut args: Vec<Sql> = vec![Sql::Text(model.clone())];
+                    args.extend(batch.iter().map(|id| Sql::Integer(*id)));
+                    let mut stmt = conn.prepare(&sql).map_err(storage)?;
+                    let mut rows = stmt.query(params_from_iter(args)).map_err(storage)?;
+                    while let Some(row) = rows.next().map_err(storage)? {
+                        let id: String = row.get(0).map_err(storage)?;
+                        let bytes: Vec<u8> = row.get(1).map_err(storage)?;
+                        if bytes.len() != question.len() * 4 {
+                            continue;
+                        }
+                        let score: f32 =
+                            bytes.as_chunks::<4>().0.iter().zip(&question).map(|(b, q)| f32::from_le_bytes(*b) * q).sum();
+                        heap.push(Reverse(Scored(score, id)));
+                        if heap.len() > limit {
+                            heap.pop();
+                        }
+                    }
+                }
+                let mut best: Vec<Scored> = heap.into_iter().map(|Reverse(s)| s).collect();
+                best.sort_by(|a, b| b.cmp(a));
+                Ok(best
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, Scored(cosine, id))| VectorHit { corpus: Corpus::Knowledge, id, rank: i as u32 + 1, cosine })
+                    .collect::<Vec<_>>())
+            })
+            .await?;
+        Ok(Some(hits))
+    }
+
+    /// The index for this tenant and model as it is now: the one made earlier, or the one in the file, or a new one read from the vectors. `None`
+    /// when another search is making it, or the vectors are not of the question's size.
+    async fn index_for(
+        &self,
+        key: &(String, String),
+        generation: i64,
+        dims: usize,
+    ) -> Result<Option<Arc<KnowledgeIndex>>> {
+        if let Some(index) = self.vindex.made.lock().get(key).filter(|i| i.generation == generation) {
+            return Ok((index.dims() == dims).then(|| index.clone()));
+        }
+        let (store, key, vindex) = (self.clone(), key.clone(), self.vindex.clone());
+        tokio::task::spawn_blocking(move || {
+            let Some(_making) = vindex.making.try_lock() else { return Ok(None) };
+            let path = vindex.dir.as_ref().map(|dir| dir.join(crate::vindex::file_name(&key.0, &key.1)));
+            let from_file = path.as_ref().and_then(|p| KnowledgeIndex::load(p)).filter(|i| i.generation == generation);
+            let index = match from_file {
+                Some(index) => index,
+                None => {
+                    // Reading every vector once, with the connection held, like the search over all of them used to on every question.
+                    let conn = store.conn.lock();
+                    let generation: i64 = conn
+                        .query_row("SELECT n FROM vector_generation WHERE id = 1", [], |r| r.get(0))
+                        .map_err(storage)?;
+                    let built = KnowledgeIndex::build(&conn, &key.0, &key.1, generation)?;
+                    drop(conn);
+                    if let Some(path) = &path
+                        && let Err(error) = built.save(path)
+                    {
+                        // A cache that cannot be written is only slower to start next time.
+                        tracing::warn!(%error, "could not save the index of document vectors");
+                    }
+                    built
+                }
+            };
+            let index = Arc::new(index);
+            vindex.made.lock().insert(key, index.clone());
+            Ok((index.dims() == dims).then_some(index))
+        })
+        .await
+        .map_err(|e| Error::Internal(format!("an index task failed: {e}")))?
     }
 
     async fn run<T, F>(&self, work: F) -> Result<T>
@@ -698,6 +849,12 @@ impl MemoryStore for SqliteMemoryStore {
         query: &[f32],
         limit: usize,
     ) -> Result<Vec<VectorHit>> {
+        // A large collection of documents is searched through the index of one-bit codes (ADR-0047); everything else, exactly.
+        if corpus == Corpus::Knowledge
+            && let Some(hits) = self.knowledge_by_index(visibility, model, query, limit).await?
+        {
+            return Ok(hits);
+        }
         let (visibility, model, query) = (visibility.clone(), model.to_string(), query.to_vec());
         self.run(move |conn| {
             let mut args: Vec<Sql> = vec![Sql::Text(model), Sql::Text(visibility.tenant.to_string())];
@@ -1054,7 +1211,7 @@ impl MemoryStore for SqliteMemoryStore {
                 )
                 .map_err(storage)?;
             if (total as u64).saturating_sub(replaced) + write.chunks.len() as u64 > MAX_CHUNKS_PER_TENANT {
-                return Err(invalid("There are too many indexed pieces (200000). Remove a folder first."));
+                return Err(invalid("There are too many indexed pieces (500000). Remove a folder first."));
             }
             let document = match existing {
                 Some((id, _)) => {
