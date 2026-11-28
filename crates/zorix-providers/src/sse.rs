@@ -284,10 +284,9 @@ mod tests {
         assert_eq!(outcome, TooLong::Event);
         // Events that end are not held against each other: the same amount in separate events is fine.
         let mut parser = SseParser::new();
+        let ended = format!("{line}\n");
         for _ in 0..(3 * MAX_EVENT / line.len()) {
-            let mut bytes = line.clone().into_bytes();
-            bytes.push(b'\n');
-            assert_eq!(parser.feed(&bytes).unwrap().len(), 1);
+            assert_eq!(parser.feed(ended.as_bytes()).unwrap().len(), 1);
         }
     }
 
