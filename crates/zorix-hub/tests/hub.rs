@@ -148,3 +148,47 @@ async fn servers_start_disabled_and_every_secret_leaves_with_them() {
     assert!(secrets.get(&key).unwrap().is_none() && secrets.get(&token).unwrap().is_none());
     assert!(hub.server("tools").await.is_err());
 }
+
+/// Never reached: every request here is refused before a sign-in starts.
+struct Unused;
+
+impl zorix_integrations::signin::SignInUi for Unused {
+    fn device_code(&self, _: &str, _: &str) {
+        panic!("no sign-in should start");
+    }
+
+    fn open(&self, _: &str) -> Result<(), String> {
+        panic!("no sign-in should start");
+    }
+}
+
+#[tokio::test]
+async fn a_sign_in_is_refused_before_anything_opens_when_it_cannot_work() {
+    use zorix_hub::connections::SignInApp;
+    let (hub, _, _dir) = hub();
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let app = |id: Option<&str>| SignInApp { client_id: id.map(str::to_string), client_secret: None };
+    // Settings cannot claim a sign-in that did not happen.
+    let claimed = hub.add_connection(request(ConnectionKind::Github, "gh", json!({"auth": "oauth"}), None)).await;
+    assert!(claimed.unwrap_err().to_string().contains("by signing in"));
+    for (bad, with, why) in [
+        (request(ConnectionKind::Slack, "s", json!({}), None), app(Some("a")), "not signed in to"),
+        (request(ConnectionKind::Github, "g", json!({}), Some("ghp_x")), app(Some("a")), "not both"),
+        (request(ConnectionKind::Jira, "j", json!({}), None), app(Some("a")), "site address"),
+        (
+            request(ConnectionKind::Github, "g", json!({"base_url": "http://ghe.corp.example"}), None),
+            app(Some("a")),
+            "HTTPS",
+        ),
+    ] {
+        let error = hub.sign_in(bad, with, &Unused, &cancel).await.unwrap_err().to_string();
+        assert!(error.contains(why), "{why}: {error}");
+    }
+    // A build without its own app asks for one; this test build has none.
+    if option_env!("ZORIX_GITHUB_CLIENT_ID").is_none() {
+        let none =
+            hub.sign_in(request(ConnectionKind::Github, "g", json!({}), None), app(None), &Unused, &cancel).await;
+        assert!(none.unwrap_err().to_string().contains("client id"));
+    }
+    assert!(hub.connections().await.unwrap().is_empty());
+}

@@ -3,9 +3,11 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Clock, Connection, ConnectionKind, ConnectionTest, IntegrationStore, NewConnection, Secret, SystemClock,
 };
+use zorix_integrations::signin::{self, App, Endpoints, SignInUi};
 use zorix_integrations::{secret_name, test_connection};
 
 use crate::{Hub, HubError};
@@ -21,6 +23,15 @@ pub struct ConnectRequest {
     pub settings: Value,
     /// The token, password or signing key.
     pub secret: Option<Secret>,
+}
+
+/// The app a person signs in with: their own, or ZORIX's when it was built with one.
+#[derive(Clone, Debug, Default)]
+pub struct SignInApp {
+    /// The client id; `None` uses ZORIX's.
+    pub client_id: Option<String>,
+    /// The client secret, for services that need one.
+    pub client_secret: Option<Secret>,
 }
 
 fn text<'a>(settings: &'a Value, key: &str) -> Option<&'a str> {
@@ -44,15 +55,22 @@ pub fn validate(request: &ConnectRequest) -> Result<Value, HubError> {
         if request.secret.is_none() { Err(HubError(format!("{what} is needed."))) } else { Ok(()) }
     };
     let mut out = s.clone();
+    // A connection signed in to gets its credential from the sign-in, so none is asked for here.
+    let oauth = text(s, "auth") == Some("oauth");
+    if oauth && !signin::can_sign_in(request.kind) {
+        return Err(HubError(format!("{} connections are not signed in to; give a token.", request.kind.as_str())));
+    }
     match request.kind {
         ConnectionKind::Github | ConnectionKind::Gitlab => base(s, "base_url")?,
         ConnectionKind::Jira => {
             need(s, "base_url", "The site address (for example https://acme.atlassian.net)")?;
             base(s, "base_url")?;
-            if text(s, "auth") != Some("bearer") {
-                need(s, "email", "The account email")?;
+            if !oauth {
+                if text(s, "auth") != Some("bearer") {
+                    need(s, "email", "The account email")?;
+                }
+                secret_needed("An API token")?;
             }
-            secret_needed("An API token")?;
         }
         ConnectionKind::Slack => {
             base(s, "base_url")?;
@@ -135,8 +153,58 @@ pub fn validate(request: &ConnectRequest) -> Result<Value, HubError> {
 }
 
 impl Hub {
+    /// Sign in to a service and add the connection with what came of it. Nothing is added unless the sign-in succeeds.
+    pub async fn sign_in(
+        &self,
+        mut request: ConnectRequest,
+        app: SignInApp,
+        ui: &dyn SignInUi,
+        cancel: &CancellationToken,
+    ) -> Result<Connection, HubError> {
+        if request.secret.is_some() {
+            return Err(HubError("A connection takes a token or a sign-in, not both.".into()));
+        }
+        request.settings["auth"] = json!("oauth");
+        let settings = validate(&request)?;
+        if self.store.connection_named(&self.tenant, &request.name).await?.is_some() {
+            return Err(HubError(format!("There is already a connection called {}.", request.name)));
+        }
+        let client_id = app
+            .client_id
+            .filter(|id| !id.trim().is_empty())
+            .or_else(|| signin::builtin_client_id(request.kind).map(str::to_string))
+            .ok_or_else(|| {
+                HubError(format!(
+                    "This build of ZORIX has no {} app of its own: register one and give its client id.",
+                    request.kind.as_str()
+                ))
+            })?;
+        let endpoints =
+            Endpoints::of(request.kind, text(&settings, "base_url")).map_err(|e| HubError(e.to_string()))?;
+        let app = App { client_id, client_secret: app.client_secret };
+        let signed = signin::sign_in(request.kind, &endpoints, &app, text(&settings, "base_url"), ui, cancel)
+            .await
+            .map_err(|e| HubError(e.to_string()))?;
+        let connection = self
+            .store
+            .add_connection(
+                &self.tenant,
+                NewConnection { kind: request.kind, name: request.name.clone(), settings, has_secret: true },
+                SystemClock.now(),
+            )
+            .await?;
+        if let Err(e) = signin::keep(&signin::vault(self.secrets.clone(), connection.id), &signed).await {
+            let _ = self.store.remove_connection(&self.tenant, connection.id).await;
+            return Err(HubError(e.to_string()));
+        }
+        Ok(connection)
+    }
+
     /// Add a connection and keep its secret. If the secret cannot be kept, nothing is added.
     pub async fn add_connection(&self, request: ConnectRequest) -> Result<Connection, HubError> {
+        if text(&request.settings, "auth") == Some("oauth") {
+            return Err(HubError("A connection is signed in to by signing in, not by giving settings.".into()));
+        }
         let settings = validate(&request)?;
         let connection = self
             .store
@@ -176,6 +244,10 @@ impl Hub {
     /// Remove a connection and its secret.
     pub async fn remove_connection(&self, name: &str) -> Result<(), HubError> {
         let connection = self.connection(name).await?;
+        if zorix_integrations::connections::signed_in(&connection) {
+            signin::revoke(&signin::vault(self.secrets.clone(), connection.id)).await;
+            self.services.signins.forget(connection.id);
+        }
         self.store.remove_connection(&self.tenant, connection.id).await?;
         let secrets = self.secrets.clone();
         let key = secret_name(connection.id);
