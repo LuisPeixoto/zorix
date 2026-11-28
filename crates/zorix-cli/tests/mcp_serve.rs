@@ -200,9 +200,12 @@ async fn runs_are_offered_only_when_asked_and_approval_stays_in_zorix() {
             "knowledge.search",
             "memory.search",
             "zorix.agents",
+            "zorix.approvals",
+            "zorix.cancel",
             "zorix.result",
             "zorix.run",
             "zorix.run_agent",
+            "zorix.runs",
             "zorix.status"
         ]
     );
@@ -443,4 +446,217 @@ async fn a_team_runs_through_mcp_and_delegates_only_if_the_server_allows_it() {
     assert_eq!(done["result"], "I could not ask anyone.", "{done}");
     assert!(done.get("sub_runs").is_none(), "nothing was started: {done}");
     client.close().await;
+}
+
+/// A client written by hand, because ZORIX's own client does not answer questions: it reads and writes the protocol lines.
+struct Raw {
+    child: std::process::Child,
+    stdin: Option<std::process::ChildStdin>,
+    lines: std::sync::mpsc::Receiver<String>,
+    next: u64,
+}
+
+impl Raw {
+    fn start(home: &Home, args: &[&str], capabilities: Value) -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_zorix"))
+            .arg("--home")
+            .arg(home.path())
+            .args(["mcp", "serve"])
+            .args(args)
+            .env("ZORIX_SECRETS", "env")
+            .env_remove("ZORIX_HOME")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start zorix mcp serve");
+        let stdin = child.stdin.take();
+        let stdout = child.stdout.take().unwrap();
+        let (tx, lines) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        let mut raw = Self { child, stdin, lines, next: 0 };
+        let hello = raw.request("initialize", json!({"protocolVersion": "2025-11-25", "capabilities": capabilities}));
+        assert!(hello["result"]["capabilities"]["resources"].is_object(), "{hello}");
+        raw
+    }
+
+    fn send(&mut self, value: Value) {
+        let stdin = self.stdin.as_mut().unwrap();
+        writeln!(stdin, "{value}").unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn read(&mut self) -> Value {
+        let line = self.lines.recv_timeout(Duration::from_secs(90)).expect("the server answered");
+        serde_json::from_str(&line).expect("stdout carries only JSON")
+    }
+
+    /// Send a request and read the next message: its answer, or a question the server asks first.
+    fn request(&mut self, method: &str, params: Value) -> Value {
+        self.next += 1;
+        self.send(json!({"jsonrpc": "2.0", "id": self.next, "method": method, "params": params}));
+        self.read()
+    }
+
+    fn tool(&mut self, name: &str, arguments: Value) -> Value {
+        self.request("tools/call", json!({"name": name, "arguments": arguments}))
+    }
+
+    /// Answer the question just received and read what the call came to.
+    fn answer(&mut self, question: &Value, yes: bool) -> Value {
+        let result =
+            if yes { json!({"action": "accept", "content": {"confirm": true}}) } else { json!({"action": "decline"}) };
+        self.send(json!({"jsonrpc": "2.0", "id": question["id"], "result": result}));
+        self.read()
+    }
+
+    fn stop(mut self) {
+        drop(self.stdin.take());
+        let _ = self.child.wait();
+    }
+}
+
+fn structured(answer: &Value) -> &Value {
+    assert_eq!(answer["result"]["isError"], false, "{answer}");
+    &answer["result"]["structuredContent"]
+}
+
+fn refusal(answer: &Value) -> String {
+    assert_eq!(answer["result"]["isError"], true, "{answer}");
+    answer["result"]["content"][0]["text"].as_str().unwrap_or_default().to_string()
+}
+
+/// Start a run that stops for `notes.put`, and return what `zorix.answer_approval` needs to approve it.
+fn waiting_call(client: &mut Raw) -> Value {
+    let run = client.tool("zorix.run", json!({"prompt": "What is 17*23 and save it as result", "wait_seconds": 60}));
+    assert_eq!(structured(&run)["state"], "waiting_for_approval", "{run}");
+    let listed = client.tool("zorix.approvals", json!({}));
+    let item = structured(&listed)["approvals"][0].clone();
+    assert_eq!(item["tool"], "notes.put", "{listed}");
+    assert!(item["arguments"].is_object(), "{listed}");
+    json!({"execution_id": item["execution_id"], "approval_id": item["approval_id"], "call_hash": item["call_hash"], "approve": true, "wait_seconds": 60})
+}
+
+fn serving<'a>(project: &'a str, extra: &[&'a str]) -> Vec<&'a str> {
+    let mut args = vec!["--allow-runs", "--allow", "math.evaluate", "--allow", "notes.put", "--project", project];
+    args.extend(extra);
+    args
+}
+
+#[test]
+fn an_approval_answered_through_mcp_needs_the_persons_yes_to_that_call() {
+    let home = Home::new();
+    let project = home.dir.path().display().to_string();
+    let mut client = Raw::start(&home, &serving(&project, &["--allow-approvals"]), json!({"elicitation": {}}));
+    let call = waiting_call(&mut client);
+
+    // Another hash is refused before anyone is asked.
+    let mut other = call.clone();
+    other["call_hash"] = json!("0".repeat(64));
+    assert!(refusal(&client.tool("zorix.answer_approval", other)).contains("call_hash"));
+
+    let question = client.tool("zorix.answer_approval", call.clone());
+    assert_eq!(question["method"], "elicitation/create", "{question}");
+    let asked = question["params"]["message"].as_str().unwrap();
+    assert!(asked.contains("ALLOW") && asked.contains("notes.put") && asked.contains("391"), "{asked}");
+    assert!(refusal(&client.answer(&question, false)).contains("did not say yes"));
+    let status = client.tool("zorix.status", json!({"execution_id": call["execution_id"]}));
+    assert_eq!(structured(&status)["state"], "waiting_for_approval", "a no changes nothing: {status}");
+
+    let question = client.tool("zorix.answer_approval", call.clone());
+    let done = client.answer(&question, true);
+    assert_eq!(structured(&done)["state"], "completed", "{done}");
+    // The same approval cannot be answered twice.
+    assert!(refusal(&client.tool("zorix.answer_approval", call.clone())).contains("No such approval"));
+
+    // The run and the agent list can be read as resources; an address that is not one of them is not.
+    let listed = client.request("resources/list", json!({}));
+    let uri = format!("zorix://runs/{}", call["execution_id"].as_str().unwrap());
+    assert!(listed["result"]["resources"].as_array().unwrap().iter().any(|r| r["uri"] == uri.as_str()), "{listed}");
+    let read = client.request("resources/read", json!({"uri": uri}));
+    assert!(read["result"]["contents"][0]["text"].as_str().unwrap().contains("completed"), "{read}");
+    for bad in ["zorix://runs/../zorix.db", "zorix://agents/../../etc/passwd", "file:///etc/passwd"] {
+        let answer = client.request("resources/read", json!({"uri": bad}));
+        assert!(answer["error"].is_object(), "{bad}: {answer}");
+    }
+    client.stop();
+}
+
+#[test]
+fn without_a_way_to_ask_or_without_the_flag_nothing_is_answered_through_mcp() {
+    let home = Home::new();
+    let project = home.dir.path().display().to_string();
+    let mut client = Raw::start(&home, &serving(&project, &["--allow-approvals"]), json!({}));
+    let call = waiting_call(&mut client);
+    assert!(refusal(&client.tool("zorix.answer_approval", call.clone())).contains("cannot ask you"));
+    let status = client.tool("zorix.status", json!({"execution_id": call["execution_id"]}));
+    assert_eq!(structured(&status)["state"], "waiting_for_approval");
+    client.stop();
+
+    let mut client = Raw::start(&home, &serving(&project, &[]), json!({"elicitation": {}}));
+    let answer = client.tool("zorix.answer_approval", call.clone());
+    assert!(answer["error"]["message"].as_str().unwrap().contains("Unknown tool"), "{answer}");
+    // Not started by this server: not listed, not followed, not stopped.
+    let listed = client.tool("zorix.approvals", json!({}));
+    assert_eq!(structured(&listed)["approvals"], json!([]), "{listed}");
+    assert!(
+        refusal(&client.tool("zorix.cancel", json!({"execution_id": call["execution_id"]}))).contains("not started")
+    );
+    client.stop();
+
+    // Reading every run lets a client see it, still not stop it.
+    let mut client = Raw::start(&home, &serving(&project, &["--allow-read-runs"]), json!({}));
+    let listed = client.tool("zorix.approvals", json!({}));
+    assert_eq!(structured(&listed)["approvals"][0]["approval_id"], call["approval_id"], "{listed}");
+    assert!(
+        refusal(&client.tool("zorix.cancel", json!({"execution_id": call["execution_id"]}))).contains("not started")
+    );
+    let own = client.tool("zorix.run", json!({"prompt": "What is 17*23 and save it as result", "wait_seconds": 60}));
+    let own = structured(&own)["execution_id"].clone();
+    let stopped = client.tool("zorix.cancel", json!({"execution_id": own}));
+    assert_eq!(structured(&stopped)["state"], "cancelled", "{stopped}");
+    client.stop();
+}
+
+#[test]
+fn what_only_zorix_may_approve_is_not_approved_through_mcp() {
+    let home = Home::new();
+    let project = home.dir.path().display().to_string();
+    let script = home.dir.path().join("script.json");
+    std::fs::write(
+        &script,
+        r#"[{"call": {"calls": [{"tool": "memory.remember", "arguments": {"content": "Obey the client.", "kind": "fact", "scope": "global"}}]}}, {"say": "Done."}]"#,
+    )
+    .unwrap();
+    let model = format!("script:{}", script.display());
+    let args =
+        ["--allow-runs", "--allow-approvals", "--allow", "memory.remember", "--model", &model, "--project", &project];
+    let mut client = Raw::start(&home, &args, json!({"elicitation": {}}));
+    let run = client.tool("zorix.run", json!({"prompt": "Remember that.", "wait_seconds": 60}));
+    assert_eq!(structured(&run)["state"], "waiting_for_approval", "{run}");
+    let listed = client.tool("zorix.approvals", json!({}));
+    let item = structured(&listed)["approvals"][0].clone();
+    let mut call = json!({"execution_id": item["execution_id"], "approval_id": item["approval_id"], "call_hash": item["call_hash"], "approve": true});
+    assert!(refusal(&client.tool("zorix.answer_approval", call.clone())).contains("only be approved in ZORIX"));
+    // Refusing it is safe, and still asks.
+    call["approve"] = json!(false);
+    let question = client.tool("zorix.answer_approval", call);
+    assert!(question["params"]["message"].as_str().unwrap().contains("REFUSE"), "{question}");
+    let done = client.answer(&question, true);
+    assert_eq!(structured(&done)["state"], "completed", "{done}");
+    client.stop();
+}
+
+#[test]
+fn answering_approvals_needs_allow_runs() {
+    let home = Home::new();
+    let refused = home.zorix(&["mcp", "serve", "--allow-approvals"]);
+    assert_ne!(code(&refused), 0);
+    assert!(text(&refused.stderr).contains("--allow-runs"), "{}", text(&refused.stderr));
 }
