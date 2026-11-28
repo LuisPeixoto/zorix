@@ -4,6 +4,7 @@
 //! **long-term** facts a person approved, **knowledge** from indexed documents and **operational** records of past work.
 //! They are retrieved once per execution and frozen (ADR-0015), so every turn and every resume sends the same bytes.
 
+pub mod attach;
 pub mod doc;
 pub mod embedder;
 pub mod fusion;

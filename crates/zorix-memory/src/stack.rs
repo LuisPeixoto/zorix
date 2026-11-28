@@ -151,6 +151,14 @@ impl MemoryStack {
         crate::index::Indexer::new(self.store.clone(), self.embedder.clone()).with_ocr(self.ocr.lock().clone())
     }
 
+    /// Read the files a person attached to a run, with scanned PDFs read too when reading scans is on (ADR-0049). Blocking: run it off the async threads.
+    pub fn read_attachments(
+        &self,
+        paths: &[std::path::PathBuf],
+    ) -> Result<Vec<zorix_core::Attachment>, crate::attach::AttachError> {
+        crate::attach::read_attachments(paths, self.ocr.lock().clone())
+    }
+
     /// Whether scanned PDFs are read now.
     pub fn has_ocr(&self) -> bool {
         self.ocr.lock().is_some()

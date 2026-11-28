@@ -91,7 +91,7 @@ pub struct Indexer {
 pub use zorix_core::OCR_KIND;
 
 /// Read a file's text; for a PDF that is a scan, read its pictures when there is something to read them with. The second answer says it was read that way.
-fn extract_or_scan(
+pub(crate) fn extract_or_scan(
     kind: super::walk::Kind,
     bytes: &[u8],
     #[allow(unused_variables)] ocr: Option<Arc<dyn super::PageReader>>,
