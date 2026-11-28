@@ -30,6 +30,12 @@ run. `code.run_in_workspace` also mounts the run's workspace folder **read-only*
 `workspace:*` as well as the language grant, and **asks first**, because the program can read your files. It can never write
 them.
 
+**What is tested.** Every system, in CI, runs escape tests (`crates/zorix-sandbox/tests/escapes.rs`): paths that could name the host (`..`,
+backslashes, drive letters, `\\?\` and UNC forms, `/proc`, `/etc`), a mount that tries to take the place of `/work` or `/workspace`,
+writes and removals where only reading was allowed, and, on macOS and Linux, links inside a folder the program was shown and links the
+program makes itself. A sandbox escape on Windows was fixed in a dependency in 0.9.x; those paths are what such an escape uses, so the
+same list runs on the Windows runner.
+
 ## What it is for, and not
 
 Calculations, parsing, reshaping text and data the model would otherwise get wrong. It is not a place for long-running work,

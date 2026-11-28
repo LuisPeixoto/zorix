@@ -7,6 +7,10 @@ project follows [Semantic Versioning](https://semver.org).
 
 Phase 12: the tools, integrations and sandbox audited against the engineering guidelines (thirty findings, [the audit](docs/audits/phase-12-tools-integrations-sandbox.md)) and completed.
 
+### Added
+
+- **Sandbox escape tests on every system**: paths that name the host, links that lead out of a folder the program was shown, mounts that try to take another's place and writes where only reading was allowed are tried by a program inside the sandbox, on macOS, Linux and Windows ([#79](https://github.com/LuisPeixoto/zorix/issues/79)). None found a way out.
+
 ### Fixed
 
 - **A Jira search could be widened to other projects** by a query whose parentheses did not close (`x = 1) OR project = OTHER OR (x = 1`): the person's part is wrapped in a group, and a `)` ended the wrap. A query that does not balance, or a sort clause that is more than field names, is now refused before anything is sent, and the project must be a project key ([#52](https://github.com/LuisPeixoto/zorix/issues/52)).

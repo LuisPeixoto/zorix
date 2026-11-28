@@ -10,11 +10,11 @@ guarantees on each system; a container needs Docker.
 ## Decision
 
 - `code.run` executes JavaScript or Python inside **wasmtime** with WASI. The same module behaves the same on all three systems.
-- **JavaScript** is `qjs-wasi.wasm` from quickjs-ng v0.18.0, embedded in the binary, checked against its SHA-256 at build time.
+- **JavaScript** is `qjs-wasi.wasm` from quickjs-ng v0.18.0, embedded in the binary, checked against its SHA-256 every time it is loaded (not only at build time: the same check as Python's).
   **Python** is CPython 3.12 as a WASI build (`python-3.12.0.wasm`), **downloaded on demand** into the data folder by
   `zorix sandbox install python`, only from the pinned URL, accepted only if the SHA-256 matches.
-- Limits per call: 256 MB memory (`StoreLimits`), 10 s of CPU through epoch interruption plus a wall-clock watchdog, 1 MB of
-  combined output, 50 MB of scratch disk. No network, no environment variables, no clock beyond WASI's, no host paths except
+- Limits per call: 256 MB memory (`StoreLimits`), 10 s of wall-clock time (epoch interruption makes a program that never yields stop being run, and a race against a timer ends it; it is not a CPU budget), 1 MB each of
+  standard output and standard error, 50 MB of scratch disk. No network, no environment variables, no clock beyond WASI's, no host paths except
   a fresh scratch directory (and, only if the run has `read` workspace grants and asks for it, the workspace mounted read-only).
 - Grants: `execute code:javascript` / `code:python`; approval only when a workspace is mounted.
 - The module is instantiated fresh for every call; nothing persists between calls.
