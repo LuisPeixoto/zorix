@@ -18,6 +18,7 @@
     label = t("ui.composer.message"),
     maxRows = 8,
     tools,
+    field = $bindable(),
     class: klass = "",
   }: {
     value?: string;
@@ -29,11 +30,12 @@
     label?: string;
     maxRows?: number;
     tools?: Snippet;
+    /** The text box, for what needs to follow it (the `@` menu). */
+    field?: HTMLTextAreaElement;
     class?: string;
   } = $props();
 
   const uid = $props.id();
-  let field: HTMLTextAreaElement | undefined = $state();
   const ready = $derived(value.trim().length > 0 && !disabled && !busy);
 
   $effect(() => {

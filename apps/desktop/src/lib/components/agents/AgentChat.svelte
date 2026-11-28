@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t as tr } from "../../i18n/index.ts";
-  import { onDestroy, tick, untrack } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
 
   import {
     type AgentConversation,
@@ -29,11 +29,22 @@
   import { Avatar, Badge, Button, Card, ChatBubble, Chip, Composer, DelegationCard, Icon, KeyValue, Markdown, ToolCallCard } from "../../ui/index.ts";
   import { usd } from "../../shell.ts";
   import TreeApprovals from "./TreeApprovals.svelte";
+  import { AttachedFiles } from "../../stores/attachments.svelte.ts";
+  import AtMenu from "../attachments/AtMenu.svelte";
+  import AttachedList from "../attachments/AttachedList.svelte";
   import type { ToolStatus } from "../../ui/ToolCallCard.svelte";
 
   import { store as runs_store } from "../../stores/runs.svelte.ts";
 
   let { detail }: { detail: AgentDetail } = $props();
+  // Files given to the next message (ADR-0049): chosen with the paperclip, with `@`, or dropped on the window. A chat has no workspace folder.
+  const attached = new AttachedFiles(() => undefined);
+  let composerField = $state<HTMLTextAreaElement | undefined>();
+  let stopDrops: (() => void) | null = null;
+  onMount(async () => {
+    stopDrops = await attached.listen();
+  });
+  onDestroy(() => stopDrops?.());
   const slug = $derived(detail.agent.slug);
   const spec = $derived(detail.version.spec);
 
@@ -169,7 +180,8 @@
   async function send(text: string) {
     sending = true;
     try {
-      const run = await agentAsk({ slug, prompt: text, conversation: active ?? undefined, team: agents.chatTeam ?? undefined });
+      const run = await agentAsk({ slug, prompt: text, conversation: active ?? undefined, team: agents.chatTeam ?? undefined, attachments: attached.paths });
+      attached.clear();
       active = run.conversation ?? active;
       stick = true;
       await loadRuns();
@@ -312,9 +324,19 @@
     </div>
 
     <div class="shrink-0 border-t border-line-soft bg-bg/70 px-6 pt-3 pb-4 backdrop-blur">
-      <div class="mx-auto max-w-3xl">
+      <div class="relative mx-auto max-w-3xl">
+        {#if attached.files.length > 0}
+          <div class="mb-2"><AttachedList compact files={attached.files} onremove={(path) => attached.remove(path)} onattach={() => void attached.choose()} /></div>
+        {/if}
+        {#if attached.dropping}
+          <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-accent bg-accent-soft text-base font-medium text-accent" role="status">
+            <span class="inline-flex items-center gap-2"><Icon name="paperclip" size={16} />{tr("attach.dropFilesToAttach")}</span>
+          </div>
+        {/if}
+        <AtMenu field={composerField} bind:value={draft} placement="above" onchoose={(path) => void attached.add([path])} />
         <Composer
           bind:value={draft}
+          bind:field={composerField}
           onsend={send}
           busy={sending || !ready}
           disabled={!!agents.error}
@@ -322,6 +344,7 @@
           label={tr("agents.agentChat.message", { name: spec.name })}
         >
           {#snippet tools()}
+            <button type="button" onclick={() => void attached.choose()} aria-label={tr("attach.attachFiles")} class="grid size-7 place-items-center rounded-lg text-muted transition hover:bg-hover hover:text-fg"><Icon name="paperclip" size={15} /></button>
             {#if team}<Badge tone="info" dot>{tr("agents.agentChat.team", { name: team.team.name })}</Badge>{/if}
             <Badge tone="muted">{spec.models.default}</Badge>
             <Badge tone="accent">v{detail.agent.current_version}</Badge>

@@ -1,5 +1,6 @@
 // The only file that talks to the Rust side. Types mirror what the engine sends (serde JSON).
 import { Channel, invoke } from "@tauri-apps/api/core";
+import type { CheckedFile } from "./attach.ts";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { t as tr } from "./i18n/index.ts";
 
@@ -142,6 +143,8 @@ export interface StartRun {
   conversation?: string;
   /** What the run may use from memory. Left out: everything. */
   memory?: { conversation: boolean; long_term: boolean; knowledge: boolean; operations: boolean };
+  /** Files the run is given to read, by path: at most ten, each checked before the run exists. */
+  attachments?: string[];
   /** The servers and services the run may reach. Each entry means what the matching `--allow-…` flag means. */
   integrations?: Partial<Record<"mcp" | "http" | "repo" | "jira" | "chat" | "db" | "code", string[]>>;
 }
@@ -346,6 +349,26 @@ export interface OcrStatus {
   /** Bytes the download will have. */
   total: number;
 }
+
+/** Check files as they are chosen or dropped: nothing is read, and a refusal comes back as a sentence. */
+export const attachmentsCheck = (paths: string[], workspace?: string) =>
+  invoke<CheckedFile[]>("attachments_check", { paths, workspace: workspace ?? null });
+
+/** One file the `@` menu offers. */
+export interface AttachCandidate {
+  path: string;
+  name: string;
+  folder: string;
+}
+
+/** What the `@` menu lists for what was typed: indexed documents, and files of the workspace folder. */
+export interface AttachCandidates {
+  documents: AttachCandidate[];
+  files: AttachCandidate[];
+}
+
+export const attachmentCandidates = (query: string, workspace?: string) =>
+  invoke<AttachCandidates>("attachment_candidates", { query, workspace: workspace ?? null });
 
 export const ocrStatus = () => invoke<OcrStatus>("ocr_status");
 /** Turn reading scans on (downloading the models the first time) or off. Resolves when it is done. */
@@ -749,6 +772,8 @@ export interface AskAgent {
   max_cost_micros?: number;
   max_seconds?: number;
   max_iterations?: number;
+  /** Files the run is given to read, by path. */
+  attachments?: string[];
 }
 
 export const agentsList = (includeArchived = false) => invoke<AgentCard[]>("agents_list", { includeArchived });
