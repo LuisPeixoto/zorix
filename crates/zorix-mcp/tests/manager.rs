@@ -124,6 +124,35 @@ async fn a_server_that_starts_offers_nothing_until_a_person_approves_what_it_lis
 }
 
 #[tokio::test]
+async fn a_server_that_names_no_folder_starts_in_one_of_its_own() {
+    let rig = rig();
+    let under = tempfile::tempdir().unwrap();
+    let server = add(&rig, "fake", &["--era", "modern"], vec![]).await;
+    let manager = McpManager::with(
+        rig.store.clone(),
+        rig.registry.clone(),
+        rig.secrets.clone(),
+        rig.tenant.clone(),
+        Arc::new(zorix_mcp::DefaultConnector),
+        Arc::new(zorix_core::SystemClock),
+        ManagerOptions {
+            backoff: vec![],
+            probe_timeout: Duration::from_millis(800),
+            work_dir: Some(under.path().join("mcp")),
+        },
+    );
+    manager.start(server.id).await.unwrap();
+    until_manager(&manager, server.id, |s| s.state == ServerState::Ready).await;
+    manager.review(server.id, "env", PinAction::approve(), "luis").await.unwrap();
+    let tool = rig.registry.get("mcp.fake.env").unwrap();
+    let said = tool.call(&ctx(), json!({"name": "<cwd>"})).await.unwrap();
+    let here = std::fs::canonicalize(said["content"][0]["text"].as_str().unwrap()).unwrap();
+    let own = std::fs::canonicalize(under.path().join("mcp").join(server.id.to_string())).unwrap();
+    assert_eq!(here, own, "not the folder ZORIX was started from");
+    manager.shutdown().await;
+}
+
+#[tokio::test]
 async fn what_a_person_approved_is_what_they_were_shown() {
     let rig = rig();
     let server = add(&rig, "fake", &["--era", "modern"], vec![]).await;

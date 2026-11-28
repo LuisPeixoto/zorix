@@ -113,7 +113,8 @@ pub struct ManagerOptions {
     pub backoff: Vec<Duration>,
     /// How long the probe waits before assuming a legacy server.
     pub probe_timeout: Duration,
-    /// Where servers are started when they name no folder.
+    /// Where servers are started when they name no folder: each gets a folder of its own under this one, named by its id, so a server
+    /// never starts in the folder ZORIX itself was started from. `None` leaves it to the program's own folder (tests only).
     pub work_dir: Option<PathBuf>,
 }
 
@@ -172,11 +173,25 @@ impl Connector for DefaultConnector {
                     };
                     resolved.push((var.name.clone(), value));
                 }
+                let folder = match (cwd, &options.work_dir) {
+                    (Some(own), _) => Some(PathBuf::from(own)),
+                    (None, Some(under)) => {
+                        let own = under.join(server.id.to_string());
+                        std::fs::create_dir_all(&own).map_err(|e| {
+                            McpError::Spawn(format!(
+                                "the folder for the server ({}) could not be made: {e}",
+                                own.display()
+                            ))
+                        })?;
+                        Some(own)
+                    }
+                    (None, None) => None,
+                };
                 let transport = StdioTransport::spawn(StdioConfig {
                     command: command.clone(),
                     args: args.clone(),
                     env: resolved,
-                    cwd: cwd.as_ref().map(PathBuf::from).or_else(|| options.work_dir.clone()),
+                    cwd: folder,
                 })?;
                 Ok(Arc::new(transport))
             }

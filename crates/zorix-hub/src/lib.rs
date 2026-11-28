@@ -91,7 +91,16 @@ impl Hub {
     ) -> Result<Self, HubError> {
         let store = Arc::new(SqliteIntegrationStore::open(&database_path(home))?);
         let dyn_store: Arc<dyn IntegrationStore> = store.clone();
-        let manager = McpManager::new(dyn_store.clone(), registry.clone(), secrets.clone(), tenant.clone());
+        // A stdio server that names no folder starts in one of its own under the data folder, not wherever ZORIX was started from.
+        let manager = McpManager::with(
+            dyn_store.clone(),
+            registry.clone(),
+            secrets.clone(),
+            tenant.clone(),
+            Arc::new(zorix_mcp::DefaultConnector),
+            Arc::new(zorix_core::SystemClock),
+            zorix_mcp::ManagerOptions { work_dir: Some(home.join("mcp")), ..zorix_mcp::ManagerOptions::default() },
+        );
         let sandbox = Arc::new(Sandbox::new(home)?);
         let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone() });
         let agents = Arc::new(SqliteAgentStore::open(&database_path(home))?);
