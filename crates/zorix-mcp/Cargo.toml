@@ -17,6 +17,7 @@ doc = false
 
 [dependencies]
 zorix-core.workspace = true
+zorix-net.workspace = true
 zorix-providers.workspace = true
 async-trait.workspace = true
 parking_lot.workspace = true

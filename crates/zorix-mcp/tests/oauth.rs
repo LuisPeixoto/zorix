@@ -116,6 +116,8 @@ struct Consent {
     /// Builds the query the "browser" brings back, from the state and the issuer.
     answer: Answer,
     knock_first: bool,
+    /// Queries other programs on this computer send to the redirect address before the real answer ("{iss}" is the issuer).
+    strangers: Vec<String>,
 }
 
 impl Consent {
@@ -125,11 +127,24 @@ impl Consent {
             seen: Mutex::new(None),
             answer: Box::new(move |state, _| format!("code=abc&state={state}&iss={issuer}")),
             knock_first: true,
+            strangers: Vec::new(),
+        })
+    }
+
+    /// The real answer, after strangers sent theirs to the same address.
+    fn after_strangers(issuer: &str, strangers: &[&str]) -> Arc<Self> {
+        let issuer = issuer.to_string();
+        let strangers = strangers.iter().map(|q| q.replace("{iss}", &issuer)).collect();
+        Arc::new(Self {
+            seen: Mutex::new(None),
+            answer: Box::new(move |state, _| format!("code=abc&state={state}&iss={issuer}")),
+            knock_first: false,
+            strangers,
         })
     }
 
     fn with(answer: impl Fn(&str, &str) -> String + Send + Sync + 'static) -> Arc<Self> {
-        Arc::new(Self { seen: Mutex::new(None), answer: Box::new(answer), knock_first: false })
+        Arc::new(Self { seen: Mutex::new(None), answer: Box::new(answer), knock_first: false, strangers: Vec::new() })
     }
 
     fn param(&self, name: &str) -> Option<String> {
@@ -149,11 +164,16 @@ impl BrowserOpener for Consent {
         *self.seen.lock().unwrap() = Some(url.clone());
         let target = format!("{redirect}?{}", (self.answer)(&state, &redirect));
         let knock = self.knock_first;
+        let strangers = self.strangers.clone();
         let origin = redirect.trim_end_matches("/callback").to_string();
+        let callback = redirect.clone();
         tokio::spawn(async move {
             if knock {
                 // Something else on this computer knocks first; it is turned away and the sign-in goes on waiting.
                 let _ = reqwest::get(format!("{origin}/favicon.ico")).await;
+            }
+            for query in strangers {
+                let _ = reqwest::get(format!("{callback}?{query}")).await;
             }
             let _ = reqwest::get(target).await;
         });
@@ -305,14 +325,21 @@ async fn a_refresh_the_server_refuses_forgets_the_sign_in_and_says_how_to_sign_i
 #[tokio::test]
 async fn an_answer_that_does_not_match_what_was_asked_is_ignored_and_no_code_is_spent() {
     let issuer_of = |rig: &Rig| rig.server.uri();
-    // The wrong state.
+    // The wrong state: the answer is not for this sign-in, so it is turned away and the sign-in goes on waiting (until the person
+    // cancels), and the code in it is never sent anywhere.
     let rig_a = rig(Behaviour::default()).await;
     let iss = issuer_of(&rig_a);
-    let error = rig_a
-        .login(&Consent::with(move |_, _| format!("code=abc&state=forged&iss={iss}")), OAuthSettings::default())
-        .await
-        .unwrap_err();
-    assert!(matches!(&error, McpError::Protocol(m) if m.contains("did not match")), "{error:?}");
+    let cancel = CancellationToken::new();
+    let browser: Arc<dyn BrowserOpener> = Consent::with(move |_, _| format!("code=abc&state=forged&iss={iss}"));
+    let waiting = {
+        let (client, url, cancel) = (rig_a.client(), rig_a.url(), cancel.clone());
+        tokio::spawn(async move { client.login(&url, &OAuthSettings::default(), browser.as_ref(), &cancel).await })
+    };
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(!waiting.is_finished(), "a forged answer must not end the sign-in");
+    cancel.cancel();
+    let error = tokio::time::timeout(Duration::from_secs(5), waiting).await.unwrap().unwrap().unwrap_err();
+    assert!(matches!(error, McpError::Cancelled), "{error:?}");
     assert!(rig_a.requests_to("/token").await.is_empty(), "the code was never sent anywhere");
     // The wrong issuer (a mix-up attack).
     let rig_b = rig(Behaviour::default()).await;
@@ -518,5 +545,42 @@ fn the_resource_is_the_servers_address_without_a_trailing_slash_fragment_or_quer
         ("https://mcp.example.com:8443/server/mcp/?x=1", "https://mcp.example.com:8443/server/mcp"),
     ] {
         assert_eq!(canonical_resource(&Url::parse(given).unwrap()), want, "{given}");
+    }
+}
+
+#[tokio::test]
+async fn another_program_on_this_computer_cannot_end_a_sign_in_by_knocking_on_its_port() {
+    let rig = rig(Behaviour::default()).await;
+    let iss = rig.server.uri();
+    // A request with no answer in it, a failure with no state, a code with someone else's state and a code with no state at all:
+    // none ends the wait, and none is used. Then the real answer comes, and the sign-in finishes.
+    let browser = Consent::after_strangers(
+        &iss,
+        &["", "error=access_denied", "code=evil&state=forged&iss={iss}", "code=evil2", "state=&code=evil3"],
+    );
+    rig.login(&browser, OAuthSettings::default()).await.unwrap();
+    let tokens = rig.requests_to("/token").await;
+    assert_eq!(tokens.len(), 1, "only the real code was spent");
+    assert_eq!(form_value(&tokens[0], "code").as_deref(), Some("abc"));
+}
+
+#[tokio::test]
+async fn a_server_on_the_internet_cannot_send_the_sign_in_to_a_private_address() {
+    // The "server" here is on this computer, which would let it name private addresses; a host that signs in only to the internet
+    // refuses that, so the address its challenge names (its own, a loopback one) is never contacted.
+    let rig = rig(Behaviour::default()).await;
+    let browser = Consent::approve(&rig.server.uri());
+    let browser: Arc<dyn BrowserOpener> = browser;
+    let error = rig
+        .client()
+        .internet_only()
+        .login(&rig.url(), &OAuthSettings::default(), browser.as_ref(), &CancellationToken::new())
+        .await
+        .unwrap_err();
+    assert!(matches!(&error, McpError::Protocol(m) if m.contains("may not send it there")), "{error:?}");
+    for path in
+        ["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-authorization-server", "/register", "/token"]
+    {
+        assert!(rig.requests_to(path).await.is_empty(), "{path} must not have been contacted");
     }
 }

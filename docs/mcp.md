@@ -63,6 +63,15 @@ are refreshed before they expire, and are sent only to the server they were issu
 *Sign in*. Use `--client-id` for servers that need a client registered in advance (Slack and GitHub, for example; the catalogue
 uses a personal access token for GitHub). Client ID metadata documents are not implemented.
 
+**Where a sign-in may reach.** The addresses used to sign in (the metadata address in the server's challenge, the authorization
+server, its registration, token and revocation endpoints) are named by the *server*. A server on the internet may not name an
+address on your own network: this computer's services, the cloud metadata address or a private network. Every name is resolved
+by ZORIX, every answer is checked and the connection goes to the address that was checked, so a name that answers with a
+private address is refused as well. A server that is itself on a private network (a company's own host, or a server on this
+computer) may name private addresses. A sign-in goes straight out, not through a proxy, unless the environment names one
+(`HTTPS_PROXY`, `ALL_PROXY`); then the name is still checked, but the connection is the proxy's. The browser's answer ends the
+wait only when it carries this sign-in's `state`: another program knocking on the port is turned away.
+
 ## Limits
 
 | Limit | Value |

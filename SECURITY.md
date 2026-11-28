@@ -73,7 +73,7 @@ These notes grow with each feature that handles data, files, network or permissi
   tools are pinned: nothing is offered until you approve what it says, a changed description withdraws the tool until you
   review it, and a run keeps the definitions it started with. Every MCP tool asks first; the server's own hints never grant.
   What a server returns is data. ZORIX refuses sampling, elicitation and roots. OAuth uses PKCE, a state value, the resource
-  indicator and issuer checks; tokens are in the keychain, sent only to their server, and never logged. Details in
+  indicator and issuer checks, only the answer that carries its `state` ends a sign-in, and a server on the internet cannot send a sign-in to a private address; tokens are in the keychain, sent only to their server, and never logged. Details in
   [docs/mcp.md](docs/mcp.md).
 - **Native integrations are bounded by grants.** A tool needs `use_tool` and a permission on the resource, and writes ask. Web
   requests are HTTPS-only, resolve and check every address (SSRF and DNS rebinding), follow granted redirects only, use no

@@ -8451,6 +8451,7 @@ dependencies = [
  "tracing",
  "wiremock",
  "zorix-core",
+ "zorix-net",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sim",

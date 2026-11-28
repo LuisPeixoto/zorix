@@ -21,6 +21,7 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{Clock, Secret, redact_text};
+use zorix_net::{NetError, forbidden, resolve};
 use zorix_providers::{SecretStore, get_async, is_loopback};
 
 use crate::auth::AuthProvider;
@@ -235,6 +236,72 @@ pub fn parse_challenge(header: &str) -> Challenge {
     challenge
 }
 
+/// How far a sign-in may reach. Discovery and the token calls follow addresses that the *server* names (the metadata address in its
+/// challenge, the authorization server, its endpoints), so a server on the internet could otherwise send ZORIX to this computer's
+/// own services, the cloud metadata address or the local network. A server that is itself on a private network (a loopback address, a
+/// company's own host) may name private addresses; any other may not, and a name that resolves to one is refused as well.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Reach {
+    private_ok: bool,
+}
+
+impl Reach {
+    /// The reach of a sign-in to `server`: private addresses are allowed only when the server's own address is private.
+    pub async fn of(server: &Url) -> Self {
+        let Some(host) = server.host_str() else { return Self::internet_only() };
+        let port = server.port_or_known_default().unwrap_or(443);
+        let private = match resolve(host, port, true).await {
+            Ok(addresses) => addresses.iter().any(|a| forbidden(a.ip()).is_some()),
+            Err(_) => false,
+        };
+        Self { private_ok: private }
+    }
+
+    /// Public addresses only, whatever the server's own address is.
+    pub fn internet_only() -> Self {
+        Self { private_ok: false }
+    }
+
+    /// Whether private addresses may be reached.
+    pub fn allows_private(&self) -> bool {
+        self.private_ok
+    }
+
+    /// A client for one request to `url`: the name is resolved here, every answer is checked, and the connection goes to the address
+    /// that was checked, so a second DNS answer cannot rebind it. Redirects are never followed.
+    async fn client(&self, url: &Url) -> Result<Client, McpError> {
+        let host = url.host_str().ok_or_else(|| McpError::Protocol("a sign-in address has no host".into()))?;
+        let port = url.port_or_known_default().unwrap_or(443);
+        let addresses = resolve(host, port, self.private_ok).await.map_err(|e| match e {
+            NetError::Private { host, why, .. } => McpError::Protocol(format!(
+                "the server asked ZORIX to contact {host}, which is {why}, and a server that is not on your own network may not send it there, so the sign-in was stopped"
+            )),
+            NetError::NotFound(host) => McpError::Transport(format!("{host} could not be found")),
+        })?;
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let mut builder = Client::builder()
+            .connect_timeout(Duration::from_secs(15))
+            .user_agent(concat!("zorix/", env!("CARGO_PKG_VERSION")))
+            .redirect(reqwest::redirect::Policy::none());
+        if through_a_proxy() {
+            // A proxy resolves names itself, so the connection cannot be pinned; the name was still checked above.
+        } else {
+            builder = builder.no_proxy();
+            if host.trim_start_matches('[').trim_end_matches(']').parse::<std::net::IpAddr>().is_err() {
+                builder = builder.resolve_to_addrs(host, &addresses);
+            }
+        }
+        builder.build().map_err(|e| McpError::Spawn(format!("could not start the HTTP client: {e}")))
+    }
+}
+
+/// Whether the environment names a proxy for web requests.
+fn through_a_proxy() -> bool {
+    ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
+        .iter()
+        .any(|v| std::env::var(v).is_ok_and(|p| !p.is_empty()))
+}
+
 fn endpoint(text: &str, what: &str) -> Result<Url, McpError> {
     let url = Url::parse(text)
         .map_err(|_| McpError::Protocol(format!("the authorization server's {what} is not a valid address")))?;
@@ -259,8 +326,10 @@ async fn read_json(response: reqwest::Response) -> Result<Value, McpError> {
     serde_json::from_slice(&body).map_err(|_| McpError::Protocol("a sign-in response was not JSON".into()))
 }
 
-async fn get_json(http: &Client, url: &Url) -> Result<Option<Value>, McpError> {
-    let response = http
+async fn get_json(reach: &Reach, url: &Url) -> Result<Option<Value>, McpError> {
+    let response = reach
+        .client(url)
+        .await?
         .get(url.clone())
         .header("Accept", "application/json")
         .timeout(Duration::from_secs(15))
@@ -336,11 +405,11 @@ fn as_metadata_urls(issuer: &Url) -> Vec<Url> {
 }
 
 /// Follow the discovery chain from a server's challenge to its authorization server's endpoints.
-pub async fn discover(http: &Client, server: &Url, challenge: &Challenge) -> Result<Discovered, McpError> {
+pub async fn discover(reach: &Reach, server: &Url, challenge: &Challenge) -> Result<Discovered, McpError> {
     let ours = canonical_resource(server);
     let mut prm = None;
     for url in prm_urls(server, challenge) {
-        if let Some(found) = get_json(http, &url).await? {
+        if let Some(found) = get_json(reach, &url).await? {
             prm = Some(found);
             break;
         }
@@ -374,7 +443,7 @@ pub async fn discover(http: &Client, server: &Url, challenge: &Challenge) -> Res
     let issuer_url = endpoint(&issuer_text, "issuer")?;
     let mut meta = None;
     for url in as_metadata_urls(&issuer_url) {
-        if let Some(found) = get_json(http, &url).await? {
+        if let Some(found) = get_json(reach, &url).await? {
             meta = Some(found);
             break;
         }
@@ -435,7 +504,12 @@ async fn respond(stream: &mut tokio::net::TcpStream, status: &str, body: &str) {
 }
 
 /// Wait for the browser to come back to `http://127.0.0.1:<port>/callback`. Anything else that knocks is turned away.
-async fn wait_for_callback(listener: TcpListener, port: u16, cancel: &CancellationToken) -> Result<Callback, McpError> {
+async fn wait_for_callback(
+    listener: TcpListener,
+    port: u16,
+    state: &str,
+    cancel: &CancellationToken,
+) -> Result<Callback, McpError> {
     let deadline = tokio::time::sleep(LOGIN_TIMEOUT);
     tokio::pin!(deadline);
     loop {
@@ -478,6 +552,14 @@ async fn wait_for_callback(listener: TcpListener, port: u16, cancel: &Cancellati
         let params: HashMap<String, String> = Url::parse(&format!("http://127.0.0.1{target}"))
             .map(|u| u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect())
             .unwrap_or_default();
+        // Only the answer to *this* sign-in ends the wait: its `state` is a number nobody else has. Another program on this computer
+        // that knocks on the port cannot cut a sign-in short, and a person is not told they are signed in by a stranger's request. An
+        // error that carries no state is shown the failure page, and the wait goes on until the person cancels or the time is up.
+        if params.get("state").map(String::as_str) != Some(state) {
+            let page = if params.contains_key("error") { FAILED_PAGE } else { "" };
+            respond(&mut stream, if page.is_empty() { "400 Bad Request" } else { "200 OK" }, page).await;
+            continue;
+        }
         respond(&mut stream, "200 OK", if params.contains_key("code") { PAGE } else { FAILED_PAGE }).await;
         return Ok(Callback { params });
     }
@@ -498,8 +580,10 @@ fn form_body(pairs: &[(&str, String)]) -> String {
     url.query().unwrap_or("").to_string()
 }
 
-async fn token_request(http: &Client, endpoint: &Url, form: &[(&str, String)]) -> Result<TokenResponse, McpError> {
-    let response = http
+async fn token_request(reach: &Reach, endpoint: &Url, form: &[(&str, String)]) -> Result<TokenResponse, McpError> {
+    let response = reach
+        .client(endpoint)
+        .await?
         .post(endpoint.clone())
         .header("Accept", "application/json")
         .header("Content-Type", "application/x-www-form-urlencoded")
@@ -555,6 +639,8 @@ pub struct OAuthClient {
     http: Client,
     vault: Vault,
     clock: Arc<dyn Clock>,
+    /// A reach chosen by the host instead of the one the server's own address gives.
+    reach: Option<Reach>,
 }
 
 fn http_client() -> Result<Client, McpError> {
@@ -570,7 +656,14 @@ fn http_client() -> Result<Client, McpError> {
 impl OAuthClient {
     /// A sign-in client that keeps its tokens in `vault`.
     pub fn new(vault: Vault, clock: Arc<dyn Clock>) -> Result<Self, McpError> {
-        Ok(Self { http: http_client()?, vault, clock })
+        Ok(Self { http: http_client()?, vault, clock, reach: None })
+    }
+
+    /// Never let the server send the sign-in to a private address, even when the server's own address is private. For a host that
+    /// signs in only to servers on the internet (and for tests).
+    pub fn internet_only(mut self) -> Self {
+        self.reach = Some(Reach::internet_only());
+        self
     }
 
     /// Ask the server what it wants, with no token, and read its challenge.
@@ -604,6 +697,7 @@ impl OAuthClient {
 
     async fn register(
         &self,
+        reach: &Reach,
         found: &Discovered,
         redirect: &str,
         settings: &OAuthSettings,
@@ -622,8 +716,9 @@ impl OAuthClient {
                 "this server does not register clients by itself. Register ZORIX with it and give the client id with --client-id.".into(),
             ));
         };
-        let response = self
-            .http
+        let response = reach
+            .client(endpoint)
+            .await?
             .post(endpoint.clone())
             .header("Accept", "application/json")
             .timeout(Duration::from_secs(30))
@@ -661,13 +756,17 @@ impl OAuthClient {
         cancel: &CancellationToken,
     ) -> Result<LoginSummary, McpError> {
         let challenge = self.challenge(server).await?;
-        let found = discover(&self.http, server, &challenge).await?;
+        let reach = match self.reach {
+            Some(reach) => reach,
+            None => Reach::of(server).await,
+        };
+        let found = discover(&reach, server, &challenge).await?;
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .map_err(|e| McpError::Transport(format!("could not listen for the sign-in: {e}")))?;
         let port = listener.local_addr().map_err(|e| McpError::Transport(e.to_string()))?.port();
         let redirect = format!("http://127.0.0.1:{port}/callback");
-        let (client_id, client_secret) = self.register(&found, &redirect, settings).await?;
+        let (client_id, client_secret) = self.register(&reach, &found, &redirect, settings).await?;
 
         let (verifier, code_challenge) = pkce_pair();
         let state = random_token::<24>();
@@ -695,7 +794,7 @@ impl OAuthClient {
             McpError::Transport(format!("the browser could not be opened ({e}); open this address yourself: {url}"))
         })?;
 
-        let callback = wait_for_callback(listener, port, cancel).await?.params;
+        let callback = wait_for_callback(listener, port, &state, cancel).await?.params;
         // The issuer was recorded from validated metadata before the browser opened (RFC 9207).
         match (callback.get("iss"), found.iss_supported) {
             (Some(iss), _) if iss != &found.issuer => return Err(McpError::Protocol("the sign-in came back from a different authorization server than the one ZORIX started with, so it was ignored".into())),
@@ -722,7 +821,7 @@ impl OAuthClient {
         if let Some(secret) = &client_secret {
             form.push(("client_secret", secret.clone()));
         }
-        let tokens = token_request(&self.http, &found.token_endpoint, &form).await?;
+        let tokens = token_request(&reach, &found.token_endpoint, &form).await?;
         let now = self.clock.now().millis();
         let refreshable = tokens.refresh_token.is_some();
         self.vault
@@ -755,14 +854,21 @@ impl OAuthClient {
             && let (Some(endpoint), Some(token)) =
                 (reg.revocation_endpoint.as_deref().and_then(|e| Url::parse(e).ok()), reg.refresh_token.clone())
         {
-            let _ = self
-                .http
-                .post(endpoint)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .timeout(Duration::from_secs(10))
-                .body(form_body(&[("token", token), ("client_id", reg.client_id.clone())]))
-                .send()
-                .await;
+            // The address was stored from a sign-in that already passed the checks; it is held to them again.
+            let reach = match (self.reach, Url::parse(&reg.resource)) {
+                (Some(reach), _) => reach,
+                (None, Ok(resource)) => Reach::of(&resource).await,
+                (None, Err(_)) => Reach::internet_only(),
+            };
+            if let Ok(client) = reach.client(&endpoint).await {
+                let _ = client
+                    .post(endpoint)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .timeout(Duration::from_secs(10))
+                    .body(form_body(&[("token", token), ("client_id", reg.client_id.clone())]))
+                    .send()
+                    .await;
+            }
         }
         self.vault.forget().await;
     }
@@ -770,7 +876,6 @@ impl OAuthClient {
 
 /// The sign-in of one server as the HTTP transport uses it: hands out the access token, refreshing it when it runs out.
 pub struct OAuthSession {
-    http: Client,
     vault: Vault,
     clock: Arc<dyn Clock>,
     cache: Mutex<Option<Access>>,
@@ -780,7 +885,7 @@ pub struct OAuthSession {
 impl OAuthSession {
     /// A session over the tokens in `vault`. `hint` names the server in messages ("zorix mcp login github").
     pub fn new(vault: Vault, clock: Arc<dyn Clock>, hint: &str) -> Result<Self, McpError> {
-        Ok(Self { http: http_client()?, vault, clock, cache: Mutex::new(None), hint: hint.to_string() })
+        Ok(Self { vault, clock, cache: Mutex::new(None), hint: hint.to_string() })
     }
 
     fn needs_login(&self, why: &str) -> McpError {
@@ -806,7 +911,11 @@ impl OAuthSession {
         if let Some(secret) = &registration.client_secret {
             form.push(("client_secret", secret.clone()));
         }
-        let tokens = match token_request(&self.http, &endpoint, &form).await {
+        let reach = match Url::parse(&registration.resource) {
+            Ok(resource) => Reach::of(&resource).await,
+            Err(_) => Reach::internet_only(),
+        };
+        let tokens = match token_request(&reach, &endpoint, &form).await {
             Ok(tokens) => tokens,
             Err(McpError::NeedsLogin(why)) => {
                 self.vault.forget().await;
@@ -861,5 +970,53 @@ impl AuthProvider for OAuthSession {
         }
         let mut cache = self.cache.lock().await;
         self.refresh(&mut cache).await.map(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_sign_in_that_is_not_on_a_private_network_cannot_be_sent_to_one() {
+        let internet = Reach::internet_only();
+        for address in [
+            "http://127.0.0.1:9/x",
+            "https://127.0.0.1/x",
+            "https://localhost/x",
+            "https://[::1]/x",
+            "https://169.254.169.254/latest/meta-data",
+            "https://10.0.0.5/x",
+            "https://192.168.1.1/x",
+            "https://172.16.0.1/x",
+            "https://100.64.0.1/x",
+            "https://[::ffff:127.0.0.1]/x",
+            "https://[fd00::1]/x",
+            "https://0.0.0.0/x",
+        ] {
+            let url = Url::parse(address).unwrap();
+            let error = internet.client(&url).await.map(|_| ()).unwrap_err();
+            assert!(
+                matches!(&error, McpError::Protocol(m) if m.contains("may not send it there")),
+                "{address}: {error:?}"
+            );
+        }
+        // The same addresses are fine for a sign-in that is itself on a private network.
+        let private = Reach { private_ok: true };
+        for address in ["http://127.0.0.1:9/x", "https://10.0.0.5/x", "https://localhost/x"] {
+            assert!(private.client(&Url::parse(address).unwrap()).await.is_ok(), "{address}");
+        }
+        // And an ordinary public address is fine for both (nothing is contacted: only the client is built).
+        assert!(internet.client(&Url::parse("https://1.1.1.1/x").unwrap()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn the_reach_of_a_sign_in_follows_the_address_of_its_server() {
+        assert!(Reach::of(&Url::parse("http://127.0.0.1:8080/mcp").unwrap()).await.allows_private());
+        assert!(Reach::of(&Url::parse("https://localhost/mcp").unwrap()).await.allows_private());
+        assert!(Reach::of(&Url::parse("https://10.1.2.3/mcp").unwrap()).await.allows_private());
+        assert!(!Reach::of(&Url::parse("https://1.1.1.1/mcp").unwrap()).await.allows_private());
+        // A name that cannot be found gives no reach to private addresses.
+        assert!(!Reach::of(&Url::parse("https://nothing.invalid/mcp").unwrap()).await.allows_private());
     }
 }

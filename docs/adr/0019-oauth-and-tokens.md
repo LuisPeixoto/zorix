@@ -6,6 +6,17 @@ Status: accepted (Phase 4)
 
 Remote MCP servers (GitHub, Linear, Notion, Atlassian…) use OAuth 2.1. A desktop app is a public client with a loopback redirect.
 
+## Amendment (Phase 12): where a sign-in may reach
+
+The audit of Phase 12 found two gaps in what this ADR decided. Discovery followed any HTTPS address the server named, so a remote
+server could make ZORIX send GET and POST requests to private addresses (this computer's services, the cloud metadata address);
+and the one-shot listener ended on the first request to `/callback`, whatever its `state`. Now every request that an address from
+the server leads to goes through `zorix-net`: the name is resolved, every answer is checked and the connection is pinned to
+the checked address, unless the server's own address is private (a loopback or company host), in which case private addresses are
+allowed as well. The listener keeps waiting until it gets a request with this sign-in's `state`; an error answer without a state is
+shown the failure page and the wait goes on, so a person cancels it. Tests: a server on the internet cannot name a private
+address (`oauth.rs` unit tests and `tests/oauth.rs`), and strangers knocking on the port do not end a sign-in.
+
 ## Decision
 
 - Discovery: Protected Resource Metadata from `WWW-Authenticate` (or the well-known URL), then authorization server metadata via
