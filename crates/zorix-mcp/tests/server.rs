@@ -436,3 +436,47 @@ async fn a_modern_answer_counts_once_and_only_for_the_call_it_was_asked_about() 
     assert!(said(&again).contains("another question"), "an answer is used once: {again}");
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+#[tokio::test]
+async fn after_a_no_the_same_call_can_be_asked_again_and_questions_do_not_pile_up() {
+    let (mut rig, calls) = confirming().await;
+    let params = |extra: Value| {
+        let mut params = json!({"name": "test.confirmed", "arguments": {"text": "x"}, "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}}});
+        for (key, value) in extra.as_object().cloned().unwrap_or_default() {
+            params[key] = value;
+        }
+        params
+    };
+    for (action, runs) in [("decline", 0), ("accept", 1)] {
+        let asked = rig.ask(1, "tools/call", params(json!({}))).await;
+        let answer = json!({"confirm": {"action": action, "content": {"confirm": true}}});
+        let result = rig
+            .ask(
+                2,
+                "tools/call",
+                params(json!({"inputResponses": answer, "requestState": asked["result"]["requestState"]})),
+            )
+            .await;
+        assert_eq!(calls.load(Ordering::SeqCst), runs, "{action}: {result}");
+    }
+
+    let (mut rig, _) = confirming().await;
+    rig.ask(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {"elicitation": {}}})).await;
+    for id in 0..=MAX_IN_FLIGHT {
+        rig.send(json!({"jsonrpc": "2.0", "id": 10 + id, "method": "tools/call", "params": {"name": "test.confirmed", "arguments": {}}})).await;
+    }
+    let mut questions = 0;
+    let mut refused = 0;
+    for _ in 0..=MAX_IN_FLIGHT {
+        let line = rig.read().await;
+        if line["method"] == "elicitation/create" {
+            questions += 1;
+        } else {
+            assert!(said(&line).contains("waiting for your answer"), "{line}");
+            refused += 1;
+        }
+    }
+    assert_eq!((questions, refused), (MAX_IN_FLIGHT, 1));
+}

@@ -105,7 +105,7 @@ struct Session {
     elicits: AtomicBool,
     /// Questions sent to the client and not yet answered, by their id.
     asked: Mutex<HashMap<String, oneshot::Sender<Value>>>,
-    /// States of modern questions already used, so one answer is not used twice.
+    /// States of modern questions already answered, so one answer is not used twice.
     spent: Mutex<HashSet<String>>,
     next_question: AtomicU64,
     out: mpsc::Sender<String>,
@@ -480,15 +480,17 @@ fn said_yes(answer: &Value) -> bool {
 }
 
 impl McpServer {
-    /// A state that binds a modern answer to this very call and question.
-    fn state(&self, name: &str, args: &Value, question: &str) -> String {
+    /// A state that binds a modern answer to this very call and question. The number makes each asking its own, so a call that
+    /// was refused can be asked about again while no answer counts twice.
+    fn state(&self, number: &str, name: &str, args: &Value, question: &str) -> String {
         let mut hash = Sha256::new();
-        for part in [name, &args.to_string(), question] {
+        for part in [number, name, &args.to_string(), question] {
             hash.update(self.secret);
             hash.update((part.len() as u64).to_le_bytes());
             hash.update(part.as_bytes());
         }
-        hash.finalize().iter().map(|b| format!("{b:02x}")).collect()
+        let hex: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        format!("{number}.{hex}")
     }
 
     async fn confirmed(
@@ -508,8 +510,9 @@ impl McpServer {
             if !can {
                 return Confirmed::No(CANNOT_ASK);
             }
-            let state = self.state(name, args, question);
             let Some(answer) = params["inputResponses"].get("confirm") else {
+                let number = session.next_question.fetch_add(1, Ordering::SeqCst).to_string();
+                let state = self.state(&number, name, args, question);
                 return Confirmed::Ask(json!({
                     "resultType": "input_required",
                     "inputRequests": {"confirm": {"method": "elicitation/create", "params": elicitation(question)}},
@@ -517,7 +520,9 @@ impl McpServer {
                 }));
             };
             // The answer must come with the state of this call and this question, and be used once.
-            if params["requestState"] != state.as_str() || !session.spent.lock().insert(state) {
+            let given = params["requestState"].as_str().unwrap_or("");
+            let number = given.split_once('.').map_or("", |(number, _)| number);
+            if given != self.state(number, name, args, question) || !session.spent.lock().insert(given.to_string()) {
                 return Confirmed::No("That answer belongs to another question, so nothing was done.");
             }
             return if said_yes(answer) { Confirmed::Yes } else { Confirmed::No(REFUSED) };
@@ -527,7 +532,13 @@ impl McpServer {
         }
         let id = format!("zorix-{}", session.next_question.fetch_add(1, Ordering::SeqCst));
         let (tx, rx) = oneshot::channel();
-        session.asked.lock().insert(id.clone(), tx);
+        {
+            let mut asked = session.asked.lock();
+            if asked.len() >= MAX_IN_FLIGHT {
+                return Confirmed::No("Too many questions are already waiting for your answer. Nothing was done.");
+            }
+            asked.insert(id.clone(), tx);
+        }
         let request =
             json!({"jsonrpc": "2.0", "id": id, "method": "elicitation/create", "params": elicitation(question)});
         if session.out.send(request.to_string()).await.is_err() {
