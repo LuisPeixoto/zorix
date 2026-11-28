@@ -60,6 +60,7 @@ start of its branch and dropped, with a note here, if the test cannot show it.
 | F30 | 11 | About 170 validation sentences of these areas are text, not codes | Low | [#26](https://github.com/LuisPeixoto/zorix/issues/26) | `refactor/reasons-tools-integrations` |
 | F31 | 3 | An `npx` server was taken for the first `npx` entry of the catalogue (they all share `-y`): it showed that entry's mark and the catalogue marked it as added. Found while pinning the catalogue | Low | [#81](https://github.com/LuisPeixoto/zorix/issues/81) | `fix/mcp-catalogue-match` |
 | F32 | 8, 12 | A server that dies before it answers is reported as "The server is not running" with an empty log, although it wrote why. Found while trying the catalogue | Medium | [#82](https://github.com/LuisPeixoto/zorix/issues/82) | `fix/mcp-start-diagnostics` |
+| F33 | 2, 8 | On Windows, `workspace.read` could refuse a file (*outside the workspace*, or *no such file*) while another run was writing it, because replacing a file is not instant there. Found by the concurrency test of F7, on the Windows runner | Medium | [#83](https://github.com/LuisPeixoto/zorix/issues/83) | `fix/workspace-windows-concurrency` |
 
 The audit keeps going while the fixes are written. A new row is added, with its issue, whenever a fix or a feature shows one.
 Still to look at: MCP conformance against both eras beyond the rows above, the output cap of every tool, OAuth refresh under
