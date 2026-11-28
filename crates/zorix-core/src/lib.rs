@@ -5,6 +5,7 @@
 pub mod access;
 pub mod agent;
 pub mod approval;
+pub mod ask;
 pub mod autonomy;
 pub mod context;
 pub mod delegation;
@@ -42,6 +43,11 @@ pub use agent::{
     validate_model_pattern,
 };
 pub use approval::{Approval, ApprovalDecision, ApprovalStatus, call_hash, canonical_hash};
+pub use ask::{
+    ASK_TIMEOUT, Answer, CallHost, ElicitReply, FieldKind, FormField, MAX_ASKS_PER_CALL, MAX_CHOICES, MAX_FIELDS,
+    MAX_QUESTION_BYTES, MAX_SAMPLE_BYTES, MAX_SAMPLE_MESSAGES, MAX_SAMPLE_TOKENS, PendingAsk, Question, SampleMessage,
+    SampleReply, SampleRequest, SampleRole, ServerAsk,
+};
 pub use autonomy::{Autonomy, AutonomyLevel};
 pub use context::{ContextBuilder, ContextSegment, ContextSource, ExecutionView, Priority};
 pub use delegation::{
@@ -57,8 +63,9 @@ pub use execution::{
     MAX_ATTACHMENTS, MAX_ATTACHMENTS_CHARS, NewExecution, TaskRequest, Usage,
 };
 pub use ids::{
-    AgentId, ApprovalId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError, KnowledgeRootId,
-    McpServerId, MemoryId, OrgReportId, ProjectId, TaskId, TenantId, ToolCallId, WaitId, WorkflowId, WorkflowRunId,
+    AgentId, ApprovalId, AskId, ConnectionId, ConversationId, EvalCaseId, EvalRunId, ExecutionId, IdError,
+    KnowledgeRootId, McpServerId, MemoryId, OrgReportId, ProjectId, TaskId, TenantId, ToolCallId, WaitId, WorkflowId,
+    WorkflowRunId,
 };
 pub use integrations::{
     Connection, ConnectionKind, ConnectionPatch, ConnectionTest, EnvValue, EnvVar, HttpAuth, IntegrationStore,
