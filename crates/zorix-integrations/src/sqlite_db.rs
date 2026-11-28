@@ -95,6 +95,9 @@ pub fn query_within(path: &str, sql: &str, max_rows: usize, limit: Duration) -> 
     let mut conn = open(path, false)?;
     let deadline = Instant::now() + limit;
     conn.progress_handler(1000, Some(move || Instant::now() > deadline)).map_err(|e| failed(e.to_string()))?;
+    if is_vacuum(sql) {
+        return Err(failed("VACUUM is not a query."));
+    }
     let mut statement = conn.prepare(sql).map_err(|e| failed(format!("SQLite rejected the statement: {e}")))?;
     if !statement.readonly() {
         return Err(failed("That statement changes data. Use db.execute for it."));
@@ -133,8 +136,30 @@ pub fn query_within(path: &str, sql: &str, max_rows: usize, limit: Duration) -> 
     Ok(json!({"columns": columns, "rows": out, "row_count": out.len(), "truncated": truncated}))
 }
 
+/// Whether a statement starts with `VACUUM`, skipping spaces and comments. `VACUUM INTO 'path'` writes a copy of the database to any
+/// place the program can write, which no authorizer action covers.
+fn is_vacuum(sql: &str) -> bool {
+    let mut rest = sql.trim_start();
+    loop {
+        if let Some(after) = rest.strip_prefix("--") {
+            rest = after.split_once('\n').map(|(_, r)| r).unwrap_or("").trim_start();
+        } else if let Some(after) = rest.strip_prefix("/*") {
+            rest = after.split_once("*/").map(|(_, r)| r).unwrap_or("").trim_start();
+        } else {
+            break;
+        }
+    }
+    rest.get(..6).is_some_and(|w| w.eq_ignore_ascii_case("vacuum"))
+        && rest[6..].chars().next().is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_')
+}
+
 /// Run one statement that changes data.
 pub fn execute(path: &str, sql: &str) -> Result<Value, ToolError> {
+    if is_vacuum(sql) {
+        return Err(failed(
+            "VACUUM is not run through db.execute: VACUUM INTO writes a copy of the database wherever it is told, and a plain VACUUM changes no data.",
+        ));
+    }
     let mut conn = open(path, true)?;
     let deadline = Instant::now() + STATEMENT_TIMEOUT;
     conn.progress_handler(1000, Some(move || Instant::now() > deadline)).map_err(|e| failed(e.to_string()))?;

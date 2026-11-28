@@ -191,3 +191,24 @@ async fn encryption_cannot_be_switched_off_for_another_computer_and_a_server_wit
         assert!(error.contains("could not be reached"), "{error}");
     }
 }
+
+#[tokio::test]
+async fn an_answer_is_read_as_it_arrives_and_cut_at_the_limits() {
+    let Some((settings, password)) = settings() else { return };
+    let rig = rig("pg", settings, &password).await;
+    // Forty rows of one megabyte: the byte limit stops the reading after a few, without all forty being collected first.
+    let big = rig
+        .call(
+            "db.query",
+            json!({"connection": "pg", "sql": "SELECT repeat('x', 1000000) AS big FROM generate_series(1, 40)", "max_rows": 1000}),
+        )
+        .await
+        .unwrap();
+    assert_eq!(big["truncated"], true);
+    assert!(big["row_count"].as_u64().unwrap() <= 6, "{}", big["row_count"]);
+    // SHOW ALL has hundreds of rows: the row limit holds for it too.
+    let all = rig.call("db.query", json!({"connection": "pg", "sql": "SHOW ALL", "max_rows": 10})).await.unwrap();
+    assert_eq!((all["row_count"].as_u64(), all["truncated"].as_bool()), (Some(10), Some(true)));
+    // What was not wanted did not wedge anything: the next query on a new connection is fine.
+    assert_eq!(rig.sql("db.query", "SELECT 1 AS n").await.unwrap()["rows"][0][0], 1);
+}
