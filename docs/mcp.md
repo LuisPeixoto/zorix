@@ -8,6 +8,16 @@ that safe, and what it does not do. The design is in ADR [0018](adr/0018-mcp-cli
 
 ![The Integrations screen with four servers](screenshots-0.4.0/integrations-connected-light.png)
 
+## The catalogue
+
+`zorix mcp catalog` (or the *Catalogue* tab) lists 22 servers that were tried against their real address or package on the date the
+list says: remote ones from the service itself (GitHub, Linear, Notion, Atlassian, Sentry, Figma, Neon, Supabase, Vercel, Asana,
+Stripe, DeepWiki, Cloudflare docs, Hugging Face, Context7) and local ones that run on your computer (the reference *Filesystem*,
+*Fetch*, *Git*, *Memory*, *Sequential thinking* and *Time* servers, and Playwright). A local entry names **one exact version** of its
+package, so what you approve the tools of is what runs; newer versions arrive with ZORIX releases. A server you added before keeps
+the command it was added with (`@latest` included): remove and add it again to pin it. Being listed is not an endorsement: every
+server is added off, and nothing it offers is used before you approve it.
+
 ## Using a server
 
 1. **Add it.** From the catalogue (`zorix mcp add --catalog github`, or the Catalogue tab), from a command

@@ -9,6 +9,8 @@ Phase 12: the tools, integrations and sandbox audited against the engineering gu
 
 ### Added
 
+- **Eleven more MCP servers in the catalogue** (22 in all): Neon, Supabase, Vercel, Asana, Stripe, Hugging Face, Context7, and the reference *Git*, *Memory*, *Sequential thinking* and *Time* servers, each tried against its real address or package on the day.
+- **Local catalogue servers are pinned to one exact version** (`@playwright/mcp` was `@latest`, the others unpinned), so the code behind the tools you approved does not change under you. A server added before keeps its command ([#75](https://github.com/LuisPeixoto/zorix/issues/75)).
 - **Sandbox escape tests on every system**: paths that name the host, links that lead out of a folder the program was shown, mounts that try to take another's place and writes where only reading was allowed are tried by a program inside the sandbox, on macOS, Linux and Windows ([#79](https://github.com/LuisPeixoto/zorix/issues/79)). None found a way out.
 
 ### Fixed

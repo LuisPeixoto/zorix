@@ -124,6 +124,13 @@ Writing commands need the data folder to themselves, so they fail while the desk
 Open the server's **Logs** tab, or run `zorix mcp logs <name>`. Servers started with `npx` need Node installed and may download
 their package the first time (the start waits up to 30 seconds). Remote servers need to be reachable over HTTPS.
 
+## A Python MCP server (`uvx`) fails on a Mac with an Intel processor
+
+The Python servers depend on a library (`cryptography`) whose recent versions are only published ready-built for Apple Silicon.
+On an Intel Mac `uv` builds it from source, which needs Rust (`rustup`, then `rustup default stable`), and the first build can take
+longer than ZORIX waits for a server to start. Run the server once in a terminal (the command is in `zorix mcp show <name>`, end it
+with Ctrl-C once it is waiting) so `uv` builds and keeps it, then start it again in ZORIX.
+
 ## A server says "Sign in"
 
 `zorix mcp login <name>` (or the **Sign in** button) opens your browser. If the browser cannot open, the address to open is
