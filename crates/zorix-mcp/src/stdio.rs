@@ -236,10 +236,16 @@ impl StdioTransport {
                 confinement.prepare()?;
                 // The program is found before it is confined: the sandbox must know where it sits to let it be read, and a name that
                 // is not there is reported as such instead of as whatever the wrapper would say.
-                let name = resolve(&config.command);
-                let program = crate::sandbox::find_program(&name, config.cwd.as_deref())
-                    .ok_or_else(|| McpError::Spawn(format!("“{}” was not found on the PATH.", config.command)))?;
-                confinement.command(&program, &config.args)?
+                // A container has its own programs; only a native sandbox needs the one here.
+                let program = if confinement.container.is_some() {
+                    PathBuf::from(&config.command)
+                } else {
+                    let name = resolve(&config.command);
+                    crate::sandbox::find_program(&name, config.cwd.as_deref())
+                        .ok_or_else(|| McpError::Spawn(format!("“{}” was not found on the PATH.", config.command)))?
+                };
+                let forward: Vec<String> = config.env.iter().map(|(name, _)| name.clone()).collect();
+                confinement.command(&program, &config.args, &forward)?
             }
             None => {
                 let mut command = Command::new(resolve(&config.command));
@@ -256,6 +262,14 @@ impl StdioTransport {
         if let Some(confinement) = &confinement {
             for (name, value) in confinement.environment() {
                 command.env(name, value);
+            }
+            // Where the container program finds its daemon.
+            if confinement.container.is_some() {
+                for name in ["DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT", "CONTAINER_HOST", "XDG_RUNTIME_DIR"] {
+                    if let Some(value) = std::env::var_os(name) {
+                        command.env(name, value);
+                    }
+                }
             }
         }
         for (name, value) in &config.env {
@@ -391,6 +405,9 @@ impl StdioTransport {
             (None, _) => None,
         };
 
+        // Ending the container program does not end its container, so the container is removed once the program is gone.
+        let cleanup = confinement.as_ref().and_then(Confinement::cleanup);
+
         // Waiter: owns the child, ends it when asked, and says when it is gone.
         let for_waiter = shared.clone();
         tokio::spawn(async move {
@@ -427,6 +444,15 @@ impl StdioTransport {
             }
             #[cfg(not(unix))]
             let _ = pid;
+            if let Some((runtime, args)) = cleanup {
+                let removal = Command::new(runtime)
+                    .args(args)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = tokio::time::timeout(Duration::from_secs(15), removal).await;
+            }
             // Its last words are still in the pipe when the process is already gone.
             let _ = tokio::time::timeout(Duration::from_millis(500), read_to_the_end.cancelled()).await;
             if let Some(status) = left_by_itself.filter(|status| !status.success()) {

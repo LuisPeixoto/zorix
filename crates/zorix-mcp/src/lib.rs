@@ -31,7 +31,7 @@ pub use manager::{
 };
 pub use oauth::{BrowserOpener, LoginSummary, OAuthClient, OAuthSession, OAuthSettings, SystemBrowser, Vault};
 pub use protocol::{Era, LEGACY_VERSIONS, MODERN_VERSION};
-pub use sandbox::{Confinement, Enforced, enforced};
+pub use sandbox::{Confinement, Enforced, NODE_IMAGE, UV_IMAGE, container_launcher, container_runtime, enforced};
 pub use server::{MAX_IN_FLIGHT, MAX_REQUEST_BYTES, McpServer, ServerConfig};
 pub use stdio::{StdioConfig, StdioTransport};
 pub use tool::{McpCaller, McpTool, tool_id};

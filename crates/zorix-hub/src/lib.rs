@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Clock, EnvValue, Grants, IntegrationStore, McpServer, McpTransport, NewMcpServer, Permission, SandboxFolder,
-    Secret, ServerSandbox, SystemClock, TenantId, Timestamp,
+    SandboxMode, Secret, ServerSandbox, SystemClock, TenantId, Timestamp,
 };
 use zorix_integrations::{Services, db_tools, discord_tools, forge_tools, http_tools, jira_tools, slack_tools};
 use zorix_mcp::catalog::SecretNeeded;
@@ -226,9 +226,14 @@ impl Hub {
     /// Choose how a local server is confined (ADR-0050). The server is stopped if it runs, so it starts again confined as chosen.
     pub async fn set_sandbox(&self, name: &str, sandbox: ServerSandbox) -> Result<McpServer, HubError> {
         let server = self.server(name).await?;
-        if matches!(server.transport, McpTransport::Http { .. }) {
+        let McpTransport::Stdio { command, .. } = &server.transport else {
             return Err(HubError(format!(
                 "{name} is a remote server: it runs elsewhere, so there is nothing here to confine."
+            )));
+        };
+        if sandbox.mode == SandboxMode::Container && zorix_mcp::container_launcher(command).is_none() {
+            return Err(HubError(format!(
+                "A container runs servers started with npx, node, uvx, uv or python; {name} is started with {command}."
             )));
         }
         let changed = self.store.set_mcp_sandbox(&self.tenant, server.id, Some(sandbox), self.now()).await?;
