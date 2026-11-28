@@ -254,15 +254,25 @@ async fn a_server_that_crashes_is_restarted_and_its_approved_tools_come_back() {
     let mut states = rig.manager.subscribe();
     let crash = rig.registry.get("mcp.fake.crash").unwrap();
     assert!(crash.call(&ctx(), json!({})).await.is_err(), "the call that crashed it fails");
-    until(&rig, server.id, "restarting or ready again", |s| {
-        matches!(s.state, ServerState::Restarting { .. }) || s.state == ServerState::Ready
-    })
-    .await;
+    // Right after the crash the state can still say `Ready` (the manager has not noticed yet), which proves nothing: wait for it
+    // to announce a change, then for an answer only a new process can give (the old one is dead).
+    tokio::time::timeout(Duration::from_secs(10), states.recv())
+        .await
+        .expect("state changes are announced")
+        .expect("the manager is still there");
+    let mut echo = None;
+    for _ in 0..400 {
+        if let Some(tool) = rig.registry.get("mcp.fake.echo")
+            && let Ok(answer) = tool.call(&ctx(), json!({"text": "back"})).await
+        {
+            echo = Some(answer);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(echo.expect("the server was started again")["content"][0]["text"], "back");
     until(&rig, server.id, "ready again", |s| s.state == ServerState::Ready).await;
-    assert!(states.try_recv().is_ok(), "state changes are announced");
     assert_eq!(mcp_ids(&rig).len(), 8, "tools approved before the crash are offered again, with no new approval");
-    let echo = rig.registry.get("mcp.fake.echo").unwrap().call(&ctx(), json!({"text": "back"})).await.unwrap();
-    assert_eq!(echo["content"][0]["text"], "back");
     rig.manager.shutdown().await;
 }
 
