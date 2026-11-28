@@ -259,6 +259,8 @@ sandbox. It uses no account of yours.
 
 ### Orchestration
 
+`tools/live-tests.sh phase11` runs the real command line on a throwaway data folder and checks, by section: **ocr** (downloads the real OCR models from their real address, checks their hashes, turns reading scans on, reads a PDF that is a picture of text, finds its words with the page cited, and shows that a model file changed on disk is refused); **watch** (a watched folder reads a new file by itself); **attach** (a file given to a run is kept with it with a secret removed, a private name is refused, and, only when Ollama already runs, a real local model answers from the file); and **telemetry** (a run's spans reach a collector on this computer and the prompt is not in them). It never starts Ollama and uses the demo model for everything else. The opt-in Rust tests that need the models (`the_real_engine_reads_a_scanned_page`, `the_real_models_still_hash_to_the_pinned_values`) run with `--ignored`; see [reading scans](knowledge.md#reading-scans).
+
 `tools/live-tests.sh orchestration` runs the real command line on a throwaway data folder and always checks, with a scripted model: the research desk installs; a lead asks two members at once and
 the tree, the list of roots and the cost roll-up are right; delegation nests three levels and an agent outside the lead's access is refused with a reason; a sub-run's approval is answered from the
 run you started; cancelling the root cancels the sub-run; and a tool call made by a sub-run counts against the parent's limit. The scripted model is shared by a whole run, so each script lists the turns of the
