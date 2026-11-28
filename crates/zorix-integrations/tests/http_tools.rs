@@ -138,6 +138,35 @@ async fn a_granted_host_is_read_and_the_answer_is_shaped_for_the_model() {
 }
 
 #[tokio::test]
+async fn an_address_with_a_port_is_granted_by_its_host_or_by_its_host_and_that_port() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/ok"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("ok", "text/plain"))
+        .mount(&server)
+        .await;
+    let rig = rig();
+    let port = server.address().port();
+    let url = format!("{}/ok", server.uri());
+    // The host alone covers any port (that is what `--allow-http host` says), and the host with this very port covers it too: a step
+    // of a workflow names the port it was written with.
+    for granted in ["127.0.0.1".to_string(), format!("127.0.0.1:{port}")] {
+        let got = rig
+            .call("http.get", grants(&[&granted]), json!({"url": url}))
+            .await
+            .unwrap_or_else(|e| panic!("{granted}: {e:?}"));
+        assert_eq!(got["body"], "ok", "{granted}");
+    }
+    // Another port, or another host with that port, is not covered.
+    let other = format!("127.0.0.1:{}", if port == 1 { 2 } else { port - 1 });
+    assert!(
+        message(rig.call("http.get", grants(&[&other]), json!({"url": url})).await.unwrap_err())
+            .contains("no permission to reach")
+    );
+    assert!(rig.call("http.get", grants(&[&format!("example.com:{port}")]), json!({"url": url})).await.is_err());
+}
+
+#[tokio::test]
 async fn a_request_may_not_carry_credentials_of_its_own_and_other_headers_pass() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

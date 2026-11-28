@@ -122,7 +122,11 @@ pub fn send_call(service: zorix_core::Service, connection: Option<&str>, channel
         zorix_core::Service::Slack => "slack.send_message",
         zorix_core::Service::Discord => "discord.send_message",
     };
-    let mut arguments = json!({"channel": channel, "text": text});
+    // The two tools name their arguments differently: Slack's are `channel` and `text`, Discord's `channel_id` and `content`.
+    let mut arguments = match service {
+        zorix_core::Service::Slack => json!({"channel": channel, "text": text}),
+        zorix_core::Service::Discord => json!({"channel_id": channel, "content": text}),
+    };
     if let Some(connection) = connection {
         arguments["connection"] = json!(connection);
     }
@@ -181,7 +185,7 @@ pub fn grants_for(call: &ToolCall) -> Result<Grants, String> {
             permissions.push(Permission::new(Action::Read, format!("slack:#{}", channel.trim_start_matches('#'))));
         }
         "discord.send_message" => {
-            let channel = call.arguments["channel"].as_str().unwrap_or_default();
+            let channel = call.arguments["channel_id"].as_str().unwrap_or_default();
             permissions.push(Permission::new(Action::Write, format!("discord:{channel}")));
         }
         other => return Err(format!("A workflow does not call {other}.")),
@@ -352,7 +356,10 @@ mod tests {
         let call = send_call(Service::Slack, Some("acme"), "#incidents", "hello");
         assert_eq!(call.tool, "slack.send_message");
         assert_eq!(call.arguments, json!({"channel": "#incidents", "text": "hello", "connection": "acme"}));
-        assert_eq!(send_call(Service::Discord, None, "123", "hi").tool, "discord.send_message");
+        let discord = send_call(Service::Discord, Some("guild"), "123456789", "hi");
+        assert_eq!(discord.tool, "discord.send_message");
+        // The Discord tool reads `channel_id` and `content`; arguments it does not know would fail the schema every time.
+        assert_eq!(discord.arguments, json!({"channel_id": "123456789", "content": "hi", "connection": "guild"}));
     }
 
     #[test]
@@ -364,6 +371,13 @@ mod tests {
         let slack = grants_for(&send_call(Service::Slack, None, "#ops", "x")).unwrap();
         assert!(slack.allows(&Permission::new(Action::Write, "slack:ops")));
         assert!(!slack.allows(&Permission::new(Action::Write, "slack:other")));
+        let discord = grants_for(&send_call(Service::Discord, None, "123456789", "x")).unwrap();
+        assert!(discord.allows(&Permission::new(Action::Write, "discord:123456789")));
+        assert!(!discord.allows(&Permission::new(Action::Write, "discord:987654321")));
+        // An explicit port is part of what the step names.
+        let ported = grants_for(&http_call("GET", "http://127.0.0.1:8080/x", None)).unwrap();
+        assert!(ported.allows(&Permission::new(Action::Network, "http:127.0.0.1:8080")));
+        assert!(!ported.allows(&Permission::new(Action::Network, "http:127.0.0.1:9090")));
         assert!(grants_for(&http_call("GET", "not a url", None)).is_err());
         assert!(grants_for(&ToolCall { tool: "db.execute".into(), arguments: json!({}) }).is_err());
     }
