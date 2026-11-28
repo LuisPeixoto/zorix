@@ -180,7 +180,7 @@ Connect ZORIX to [MCP servers](mcp.md), or serve ZORIX over MCP.
 | `mcp logs <NAME>` | Start briefly and show what the server wrote on its error stream |
 | `mcp sandbox <name> [--mode native\|off] [--network on\|off] [--folder DIR] [--folder-write DIR] [--clear-folders]` | Show or choose how a local server is sandboxed ([MCP](mcp.md#the-sandbox-of-a-local-server)) |
 | `mcp doctor` | What a sandboxed server is kept from on this computer |
-| `mcp serve [--allow-runs] [--allow-read-runs] [--project DIR] [--model M] [--allow TOOL] [--allow-read P] [--allow-write P]` | Serve ZORIX over MCP on standard input and output. Read-only unless `--allow-runs` |
+| `mcp serve [--allow-runs] [--allow-approvals] [--allow-read-runs] [--project DIR] [--model M] [--allow TOOL] [--allow-read P] [--allow-write P]` | Serve ZORIX over MCP on standard input and output. Read-only unless `--allow-runs` |
 
 `mcp serve` and the commands that only read (`mcp list`, `show`, `catalog`) take no lock.
 
