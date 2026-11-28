@@ -130,7 +130,7 @@ run that used the fact, and whatever a cloud provider received. The app lists th
 | Query | 32 terms, 2,000 characters |
 | Search results given to a run | 10 per search |
 | Past-work record | 500 characters of prompt, 500 of outcome, 200 per tool digest |
-| Vectors per tenant and model | 200,000 pieces (brute-force search; fine for a desktop) |
+| Vectors per tenant and model | 500,000 pieces of documents (an [index of one-bit codes](adr/0047-index-of-document-vectors.md) above 20,000 visible pieces; facts and past work are compared exactly) |
 
 Out of scope for 0.3: summarising long conversations (the oldest exchanges are dropped with a note), moving a project's memory,
 sharing memory between people.

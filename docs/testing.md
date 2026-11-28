@@ -172,7 +172,7 @@ Full-size numbers, in milliseconds (the median of 15 runs, release build, an Int
 | The Inbox: runs waiting for a person, and the approvals of fifty of them | 0.3 and 1 | 0.4 and 1 |
 | Keyword search over 5,000 facts | 2 | 2 |
 | Keyword search over 50,000 pieces of documents | 67 | 66 |
-| Search by meaning over 50,000 pieces (every vector is read) | 190 | 188 |
+| Search by meaning over 50,000 pieces | 190 (every vector read) | 7 (through the [index](adr/0047-index-of-document-vectors.md); 19 over 200,000 and 49 over 490,000, `--pieces`) |
 | Counting the pieces that still need a vector, over 50,000 | (loaded every text to count them) | 224 |
 | Writing one file of fifty pieces, with 50,000 in the store | (counted every piece first) | 5 |
 | Opening the store again | 0.5 | 0.5 |
@@ -181,8 +181,9 @@ The last two rows were added in Phase 11, when the audit found that a sync loade
 
 The first full-size run showed three lists that read and sorted every match (an agent's runs, the runs in one state, a conversation's); schema 10 gives each an index that ends in the order of the list, and a test checks the planner uses it.
 
-Search by meaning grows with the number of vectors, since each is compared with the query; at the product's limit of 200,000 pieces it would be about four times as long. An on-disk index for large collections is planned
-([roadmap](roadmap.md), Phase 11).
+Search by meaning used to compare the question with every vector, so it grew with their number. Above 20,000 visible pieces it now ranks one-bit codes kept in memory and in a file, and rereads only the best few
+hundred vectors for the exact order ([ADR-0047](adr/0047-index-of-document-vectors.md)). `--pieces N` builds a collection of another size (`--scale 0.1 --pieces 490000`); the benchmark also prints how much of the exact top ten the index keeps
+(0.96 at 50,000 and at 200,000, 0.985 at 490,000, on clustered vectors) and how long the first search takes, which makes the index.
 
 ## Fuzzing
 
