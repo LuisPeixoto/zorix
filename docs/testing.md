@@ -173,11 +173,13 @@ Full-size numbers, in milliseconds (the median of 15 runs, release build, an Int
 | Keyword search over 5,000 facts | 2 | 2 |
 | Keyword search over 50,000 pieces of documents | 67 | 66 |
 | Search by meaning over 50,000 pieces | 190 (every vector read) | 7 (through the [index](adr/0047-index-of-document-vectors.md); 19 over 200,000 and 49 over 490,000, `--pieces`) |
-| Counting the pieces that still need a vector, over 50,000 | (loaded every text to count them) | 224 |
+| Counting the pieces that still need a vector, over 50,000 | (loaded every text to count them) | 217 |
 | Writing one file of fifty pieces, with 50,000 in the store | (counted every piece first) | 5 |
 | Opening the store again | 0.5 | 0.5 |
+| Retention: what a pass would compact, over the 10,000 runs and a million events (the preview in Settings) | n/a | 334 |
+| Retention: compacting all 10,000 runs in one pass (the first pass after a number of days is set; later ones touch only what became old) | n/a | 2,573 |
 
-The last two rows were added in Phase 11, when the audit found that a sync loaded the text of every piece that needed a vector only to count them, and that every file written counted every piece of the tenant first: neither is a measurement the first column can show, because both grew with the size of the collection and are now bounded by what they read (one hash per piece, one row per file).
+The last four rows were added in Phase 11. The two about documents, because the audit found that a sync loaded the text of every piece that needed a vector only to count them, and that every file written counted every piece of the tenant first: neither is a measurement the first column can show, because both grew with the size of the collection and are now bounded by what they read (one hash per piece, one row per file). The two about retention, because retention is new: they show that previewing is cheap and that the first pass after a number of days is set is a matter of seconds, not minutes.
 
 The first full-size run showed three lists that read and sorted every match (an agent's runs, the runs in one state, a conversation's); schema 10 gives each an index that ends in the order of the list, and a test checks the planner uses it.
 
