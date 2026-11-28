@@ -14,5 +14,5 @@ pub use callback::{LOGIN_TIMEOUT, wait_for_callback};
 pub use error::OAuthError;
 pub use reach::{Reach, endpoint, get_json, read_json};
 pub use session::{Renewable, Session};
-pub use token::{TokenResponse, form_body, pkce_pair, random_token, token_request};
+pub use token::{TokenResponse, form_body, pkce_pair, random_token, token_request, token_request_json};
 pub use vault::{Access, Vault};
