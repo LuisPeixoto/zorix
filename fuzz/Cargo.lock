@@ -5668,7 +5668,7 @@ dependencies = [
  "async-trait",
  "axum",
  "getrandom 0.3.4",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "jiff",
  "parking_lot",
  "serde",
