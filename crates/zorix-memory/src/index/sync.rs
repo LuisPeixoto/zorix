@@ -83,6 +83,29 @@ pub struct SyncReport {
 pub struct Indexer {
     store: Arc<dyn MemoryStore>,
     embedder: Option<Arc<Embedder>>,
+    /// Reads the text of a scanned PDF, when reading scans is on and its models are there.
+    ocr: Option<Arc<dyn super::PageReader>>,
+}
+
+/// The kind of a document that was read from pictures.
+pub use zorix_core::OCR_KIND;
+
+/// Read a file's text; for a PDF that is a scan, read its pictures when there is something to read them with. The second answer says it was read that way.
+fn extract_or_scan(
+    kind: super::walk::Kind,
+    bytes: &[u8],
+    #[allow(unused_variables)] ocr: Option<Arc<dyn super::PageReader>>,
+) -> (Result<super::extract::Extracted, Unreadable>, bool) {
+    let first = extract(kind, bytes);
+    #[cfg(feature = "ocr")]
+    if kind == super::walk::Kind::Pdf
+        && let Err(Unreadable::Skip(why)) = &first
+        && why.starts_with(super::pdf::SCAN)
+        && let Some(reader) = ocr
+    {
+        return (super::pdf::read_scan(bytes, reader, super::pdf::OCR_BUDGET), true);
+    }
+    (first, false)
 }
 
 fn now() -> Timestamp {
@@ -93,7 +116,13 @@ fn now() -> Timestamp {
 impl Indexer {
     /// An indexer over `store`. Without an embedder only keyword search is prepared.
     pub fn new(store: Arc<dyn MemoryStore>, embedder: Option<Arc<Embedder>>) -> Self {
-        Self { store, embedder }
+        Self { store, embedder, ocr: None }
+    }
+
+    /// Read scanned PDFs with `reader` (or, with `None`, leave them out with the reason).
+    pub fn with_ocr(mut self, reader: Option<Arc<dyn super::PageReader>>) -> Self {
+        self.ocr = reader;
+        self
     }
 
     /// Add a folder. The path is made absolute and must be a folder that exists. `scope` is `Global` or `Project`.
@@ -151,6 +180,19 @@ impl Indexer {
         report.scanned = walked.files.len() as u64;
         let known = self.store.document_states(root.id).await?;
         let total = walked.files.len() as u64;
+        // Scans that were left out because nothing could read them are tried again once something can. One that was tried and failed is not,
+        // until its file changes, so a sync does not spend minutes on the same page again.
+        let waiting: std::collections::HashSet<String> = if self.ocr.is_some() {
+            self.store
+                .problem_documents(root.id)
+                .await?
+                .into_iter()
+                .filter(|(_, status, why)| *status == DocStatus::Skipped && why.starts_with(zorix_core::SCAN_NOTE))
+                .map(|(file, _, _)| file)
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
 
         // ---- phase 1: text ----
         for (index, file) in walked.files.iter().enumerate() {
@@ -159,8 +201,9 @@ impl Indexer {
                 break;
             }
             say(Phase::Indexing, index as u64, total, Some(&file.rel_path), report.failed);
-            let unchanged =
-                known.get(&file.rel_path).is_some_and(|k| k.size == file.size && k.mtime_ns == file.mtime_ns);
+            let unchanged = known.get(&file.rel_path).is_some_and(|k| {
+                k.size == file.size && k.mtime_ns == file.mtime_ns && !waiting.contains(&file.rel_path)
+            });
             if unchanged {
                 report.unchanged += 1;
                 continue;
@@ -207,9 +250,11 @@ impl Indexer {
                             report.unchanged += 1;
                             continue;
                         }
-                        let extracted = tokio::task::spawn_blocking(move || extract(kind, &bytes))
-                            .await
-                            .map_err(|e| zorix_core::Error::Internal(e.to_string()))?;
+                        let ocr = self.ocr.clone();
+                        let (extracted, via_ocr) =
+                            tokio::task::spawn_blocking(move || extract_or_scan(kind, &bytes, ocr))
+                                .await
+                                .map_err(|e| zorix_core::Error::Internal(e.to_string()))?;
                         match extracted {
                             Err(Unreadable::Skip(why)) => {
                                 report.skipped += 1;
@@ -234,7 +279,9 @@ impl Indexer {
                                     .then(|| format!("only the first {} pieces were indexed", cut.chunks.len()));
                                 report.indexed += 1;
                                 report.chunks += cut.chunks.len() as u64;
-                                self.write_of(root, file, kind.as_str(), hash, DocStatus::Indexed, note, cut.chunks)
+                                // What was read from pictures is marked, so the screens can say how many files came from a scan.
+                                let label = if via_ocr { OCR_KIND } else { kind.as_str() };
+                                self.write_of(root, file, label, hash, DocStatus::Indexed, note, cut.chunks)
                             }
                         }
                     }
