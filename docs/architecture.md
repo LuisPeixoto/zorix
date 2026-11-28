@@ -125,7 +125,7 @@ wiring both the CLI and the desktop use. The store is behind a `MemoryStore` tra
 `zorix-store`, and embeddings are one more method on `ModelGateway`, so any provider can supply them. Token counts are
 calibrated from real usage in the runtime. See [memory](memory.md), [knowledge](knowledge.md) and ADR-0013 to ADR-0017.
 
-## Integrations (zorix-mcp, zorix-integrations, zorix-sandbox, zorix-hub)
+## Integrations (zorix-mcp, zorix-integrations, zorix-net, zorix-sandbox, zorix-hub)
 
 Everything that reaches outside plugs in through the same `Tool` contract and a registry that can change while ZORIX runs
 (`unregister`, `replace`, a `generation` counter). A tool carries its **source** (built in, memory, an MCP server, an
@@ -135,6 +135,8 @@ and hash of every tool it was offered when it starts, so a server changing a too
 - **`zorix-mcp`** is the MCP client (both protocol eras, stdio and Streamable HTTP, OAuth) with the manager that supervises
   servers, pins their tool definitions and registers approved tools; it is also the MCP server behind `zorix mcp serve`.
 - **`zorix-integrations`** holds the native tools and the SSRF-guarded HTTP client they share.
+- **`zorix-net`** is the network guard both of them use: which addresses a request that came from a model, a file or a server may
+  reach, and how to connect to the address that was checked, so a second DNS answer cannot redirect it.
 - **`zorix-sandbox`** runs JavaScript and Python in WebAssembly.
 - **`zorix-hub`** assembles them once (store, keychain, registry, manager, sandbox) and turns flags such as `--allow-repo` into
   grants; the CLI and the desktop app both use it.
