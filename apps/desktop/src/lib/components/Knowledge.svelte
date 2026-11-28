@@ -3,12 +3,15 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { onDestroy, onMount } from "svelte";
 
-  import { type FileRow, type Found, type RootRow, type SyncProgress, addRoot, cancelSync, errorText, listRoots, onKnowledge, removeRoot, rootFiles, setRootWatch, syncRoot, tryQuery } from "../api.ts";
+  import { type FileRow, type Found, type RootRow, type SyncProgress, addRoot, cancelSync, errorText, listRoots, ocrStatus, onKnowledge, removeRoot, rootFiles, setRootWatch, syncRoot, tryQuery } from "../api.ts";
   import { ago } from "../format.ts";
   import { toast } from "../stores/toast.svelte.ts";
   import { Badge, Button, Callout, Card, EmptyState, Field, Icon, Input, Modal, Switch } from "../ui/index.ts";
+  import ReadingScans from "./documents/ReadingScans.svelte";
 
   let roots = $state<RootRow[]>([]);
+  /** Whether reading scans is on: a scan that is still left out then failed, and its reason is in Files, not here. */
+  let ocrOn = $state(false);
   let progress = $state<Record<string, SyncProgress["progress"]>>({});
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -19,6 +22,7 @@
   async function load() {
     try {
       roots = await listRoots();
+      ocrOn = (await ocrStatus()).enabled;
     } catch (e) {
       error = errorText(e);
     }
@@ -186,6 +190,8 @@
             <Badge tone="ok" dot>{root.indexed} indexed</Badge>
             {#if root.skipped}<Badge tone="muted">{t("knowledge.leftOut", { skipped: root.skipped })}</Badge>{/if}
             {#if root.failed}<Badge tone="err" dot>{root.failed} failed</Badge>{/if}
+            {#if root.ocr_read}<Badge tone="accent">{t("knowledge.viaOcr", { count: root.ocr_read })}</Badge>{/if}
+            {#if root.scans_unread}<Badge tone="warn" dot>{t("knowledge.scansNotRead", { count: root.scans_unread })}</Badge>{/if}
             {#if root.auto_sync}<Badge tone="muted">{t("knowledge.checkedAtStart")}</Badge>{/if}
             {#if root.watching === "watching"}<Badge tone="info" live>{t("knowledge.watching")}</Badge>
             {:else if root.watching === "polling"}<Badge tone="muted">{t("knowledge.checkedEveryTenMinutes")}</Badge>
@@ -197,6 +203,9 @@
           {#if root.watching === "polling" && root.watch_note}<p class="mt-1 text-xs text-muted">{t("knowledge.theSystemCannotWatch")} {root.watch_note}</p>{/if}
           {#if root.last_sync?.degraded}<p class="mt-1 text-xs text-warn">{root.last_sync.degraded}</p>{/if}
           {#if root.last_sync?.too_many_files}<p class="mt-1 text-xs text-warn">{t("knowledge.theFolderHasMore")}</p>{/if}
+          {#if root.scans_unread && !ocrOn}
+            <Callout tone="warn" icon="info" class="mt-2.5" title={t("knowledge.scansWereNotRead", { count: root.scans_unread })}>{t("knowledge.theseHaveNoText", { count: root.scans_unread })}</Callout>
+          {/if}
         </div>
         <div class="flex shrink-0 flex-wrap justify-end gap-1.5">
           {#if p || root.syncing}
@@ -217,6 +226,8 @@
       {/if}
     </Card>
   {/each}
+
+  <ReadingScans onchange={() => void load()} />
 
   <Card title={t("knowledge.tryAQuestion")} icon="search">
     <p class="mb-3 text-sm text-muted">{t("knowledge.seeWhatARun")}</p>
