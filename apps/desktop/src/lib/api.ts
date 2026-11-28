@@ -465,6 +465,8 @@ export interface ServerRow {
   tools_to_review: number;
   auth: "none" | "bearer" | "oauth" | null;
   signed_in: boolean;
+  /** The id of the catalogue entry it came from, when there is one. */
+  catalog: string | null;
   logo: string | null;
 }
 

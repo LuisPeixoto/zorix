@@ -48,7 +48,7 @@
         (!query.trim() || `${e.name} ${e.summary} ${e.category}`.toLowerCase().includes(query.trim().toLowerCase())),
     ),
   );
-  const added = (entry: CatalogEntry) => integrations.servers.some((s) => s.logo === entry.logo);
+  const added = (entry: CatalogEntry) => integrations.servers.some((s) => s.catalog === entry.id);
 
   function addFrom(entry: CatalogEntry | null) {
     addEntry = entry;
