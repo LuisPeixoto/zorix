@@ -16,6 +16,7 @@ use zorix_mcp::{Confirmation, ResourceInfo, Resources};
 use zorix_store::SqliteAgentStore;
 
 use super::{MAX_WAIT_SECONDS, RunShared, failed, parse_id};
+use crate::render::visible as plain;
 
 /// The most runs one listing names.
 const MAX_RUNS: usize = 50;
@@ -26,20 +27,6 @@ const MAX_APPROVALS: usize = 20;
 const MAX_SHOWN: usize = 4_000;
 /// The most text of a result a resource carries, in bytes.
 const MAX_RESOURCE_TEXT: usize = 32 * 1024;
-
-/// Text for a person, with the characters that could hide or reorder it written out.
-fn plain(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\n' => "\n".to_string(),
-            '\u{200b}'..='\u{200f}' | '\u{2028}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}' => {
-                format!("\\u{{{:x}}}", c as u32)
-            }
-            c if c.is_control() => format!("\\u{{{:x}}}", c as u32),
-            c => c.to_string(),
-        })
-        .collect()
-}
 
 fn cut(text: &str, max: usize) -> String {
     match text.char_indices().nth(max) {
@@ -445,7 +432,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hidden_and_reordering_characters_are_written_out() {
+    fn hidden_and_reordering_characters_are_written_out_and_long_text_is_cut() {
         assert_eq!(plain("a\u{202e}b\u{200b}c\r\u{1b}d\ne"), "a\\u{202e}b\\u{200b}c\\u{d}\\u{1b}d\ne");
         assert_eq!(cut("ééé", 2), "éé…");
         assert_eq!(cut("ok", 2), "ok");
