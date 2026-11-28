@@ -23,8 +23,11 @@ definition that was shown and is refused when the server lists another one (`Pin
   (HTTPS only, size and idle limits, redacted errors). The trust layer sits between the transport and the `Tool` adapter, and an SDK would be in the way.
 - **Dual-era.** stdio: probe `server/discover`, fall back to `initialize` on any non-modern answer. HTTP: try a modern request,
   inspect a `400` body, fall back to `initialize`. The **deprecated 2024-11-05 HTTP+SSE transport is not supported** in 0.4
-  (it is deprecated since 2025-03-26 and servers that only speak it are rare). The era is cached per process or origin and
-  re-probed when it fails.
+  (it is deprecated since 2025-03-26 and servers that only speak it are rare). The era is probed each time a server starts: it is recorded
+  for display, and not used to skip the probe (a legacy server that ignores `server/discover` costs up to the probe timeout at each
+  start). A legacy HTTP session the server forgot (a 404 to a request that carries its id) ends the connection, so the manager starts a
+  new one with a new `initialize`; a request that is given up on is cancelled with `notifications/cancelled` (never `initialize`), and a
+  server may echo a request's id as a string.
 - **Changes to tools.** A modern server announces them only to a client that opened `subscriptions/listen`, so the client opens one
   (and waits for its acknowledgement before it is returned, so no change is missed between listing and listening) and opens it
   again, telling listeners to look again, if it ends. Legacy stdio servers announce unasked. A legacy HTTP server's changes are
