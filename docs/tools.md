@@ -69,7 +69,7 @@ call:
 
 1. **The grant** must cover `workspace:<relative path>` for `read` or `write`.
 2. **The path** must be relative, with forward slashes and no `..`, no drive letter, no backslash, no control
-   characters, no names Windows reserves (`CON`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, `CONIN$`, `CONOUT$`, the superscript forms, with or without an extension or spaces before it), none of the characters Windows does not allow in names (`< > " | ? *`), no name written like a short Windows name (`PROGRA~1`, which on some volumes is another file's name, `.zorix` included), and not inside the reserved `.zorix` folder (in any case: `.ZORIX` is the same folder on macOS and Windows). After that the real
+   characters, no names Windows reserves (`CON`, `NUL`, `COM0` to `COM9`, `LPT0` to `LPT9`, `CONIN$`, `CONOUT$`, the superscript forms, with or without an extension or spaces before it), none of the characters Windows does not allow in names (`< > " | ? *`), no name written like a short Windows name (`PROGRA~1`, which on some volumes is another file's name, `.zorix` included), and not inside the reserved `.zorix` folder (in any case: `.ZORIX` is the same folder on macOS and Windows). Nothing is **written** inside a `.git` folder, at any depth: git would run or obey it (reading there is allowed with a grant). After that the real
    path (following symbolic links) must still be inside the workspace. A link that points outside is not followed, and
    ZORIX will not write *through* a link. **A link inside the workspace is held to the place it leads to**: that place needs
    its own grant (`docs/shortcut` pointing at `private/notes.txt` is read only if `workspace:private/notes.txt` is granted
