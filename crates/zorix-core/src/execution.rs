@@ -293,6 +293,7 @@ impl NewExecution {
         if self.request.model.trim().is_empty() {
             return bad("Choose a model.");
         }
+        validate_attachments(&self.request.attachments)?;
         if let Some(key) = &self.idempotency_key
             && (key.trim().is_empty() || key.len() > 128)
         {
@@ -310,6 +311,33 @@ impl NewExecution {
         }
         self.limits.validate()
     }
+}
+
+/// The limits on attached files, whoever made the request: how many, how long a name, how much text, and nothing but a file's name as the name.
+fn validate_attachments(files: &[Attachment]) -> Result<()> {
+    let bad = |what: String| Err(Error::InvalidInput(what));
+    if files.len() > MAX_ATTACHMENTS {
+        return bad(format!("At most {MAX_ATTACHMENTS} files can be attached to a run."));
+    }
+    let mut total = 0usize;
+    for file in files {
+        let name = file.name.trim();
+        if name.is_empty()
+            || file.name.chars().count() > 255
+            || file.name.chars().any(|c| c.is_control() || c == '/' || c == '\\')
+        {
+            return bad("An attached file needs a name of up to 255 characters, with no folders in it.".into());
+        }
+        let length = file.text.chars().count();
+        if length > MAX_ATTACHMENT_CHARS {
+            return bad(format!("“{name}” is too long to attach ({MAX_ATTACHMENT_CHARS} characters at most)."));
+        }
+        total += length;
+    }
+    if total > MAX_ATTACHMENTS_CHARS {
+        return bad(format!("The attached files are too long together ({MAX_ATTACHMENTS_CHARS} characters at most)."));
+    }
+    Ok(())
 }
 
 /// One execution, as stored.
@@ -437,6 +465,34 @@ impl Execution {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn with_files(files: Vec<Attachment>) -> NewExecution {
+        let mut new = request();
+        new.request.attachments = files;
+        new
+    }
+
+    fn file(name: &str, text: &str) -> Attachment {
+        Attachment { name: name.into(), text: text.into(), bytes: text.len() as u64, truncated: false }
+    }
+
+    #[test]
+    fn attached_files_are_limited_in_number_name_and_size_for_every_way_a_run_is_made() {
+        assert!(with_files(vec![file("a.md", "x")]).validate().is_ok());
+        let many: Vec<Attachment> = (0..=MAX_ATTACHMENTS).map(|i| file(&format!("f{i}.md"), "x")).collect();
+        assert!(with_files(many).validate().unwrap_err().to_string().contains("At most 10 files"));
+        for name in ["", "  ", "a/b.md", "a\\b.md", "line\nbreak.md", &"n".repeat(256)] {
+            let error = with_files(vec![file(name, "x")]).validate().unwrap_err().to_string();
+            assert!(error.contains("needs a name"), "{name:?}: {error}");
+        }
+        let long = "x".repeat(MAX_ATTACHMENT_CHARS + 1);
+        assert!(
+            with_files(vec![file("big.txt", &long)]).validate().unwrap_err().to_string().contains("too long to attach")
+        );
+        let each = "x".repeat(MAX_ATTACHMENT_CHARS);
+        let together = vec![file("a", &each), file("b", &each), file("c", &each), file("d", "x")];
+        assert!(with_files(together).validate().unwrap_err().to_string().contains("together"));
+    }
 
     #[test]
     fn a_request_stored_before_attachments_still_reads_and_writes_the_same() {
