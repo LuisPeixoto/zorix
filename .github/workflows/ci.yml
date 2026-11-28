@@ -44,6 +44,9 @@ jobs:
           echo "ZORIX_PYTHON_WASM=$RUNNER_TEMP/python.wasm" >> "$GITHUB_ENV"
       - name: Test
         run: cargo test --workspace --exclude zorix-desktop
+        env:
+          # The Linux runner has Docker, so the container sandbox is tried for real there (it pulls a pinned image).
+          ZORIX_TEST_CONTAINER: ${{ runner.os == 'Linux' && '1' || '' }}
 
   audit:
     # Known vulnerabilities, licences, banned and unknown sources (deny.toml). Runs on every change, and the advisory
