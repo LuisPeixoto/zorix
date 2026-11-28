@@ -116,6 +116,9 @@ pub struct StartRun {
     /// The conversation this run continues. Left out: a new conversation is started.
     #[serde(default)]
     conversation: Option<String>,
+    /// Files the run is given to read (ADR-0049): at most ten, each checked before the run exists.
+    #[serde(default)]
+    attachments: Vec<String>,
     /// What the run may use from memory. Left out: everything.
     #[serde(default)]
     memory: Option<MemoryChoice>,
@@ -223,12 +226,14 @@ pub async fn start_run(state: State<'_, AppState>, request: StartRun) -> Result<
     if let Some(seconds) = request.max_seconds.filter(|s| *s > 0) {
         limits.max_active_ms = seconds.saturating_mul(1_000);
     }
+    let attachments = crate::attachment_commands::read(services, &request.attachments).await?;
     let new = NewExecution {
         tenant: Some(services.tenant.clone()),
         request: TaskRequest {
             instructions: request.instructions.filter(|text| !text.trim().is_empty()),
             prompt: request.prompt,
             model: model_for(services, request.model.as_deref())?,
+            attachments,
             ..TaskRequest::default()
         },
         limits,

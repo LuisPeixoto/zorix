@@ -2,6 +2,7 @@
 
 mod agent_commands;
 mod app_settings_commands;
+mod attachment_commands;
 mod commands;
 mod integration_commands;
 mod knowledge_commands;
@@ -74,6 +75,8 @@ pub fn run() {
             app_settings_commands::retention_preview,
             app_settings_commands::retention_run,
             app_settings_commands::estimate_run,
+            attachment_commands::attachments_check,
+            attachment_commands::attachment_candidates,
             ocr_commands::ocr_status,
             ocr_commands::ocr_set,
             workflow_commands::workflow_host,
