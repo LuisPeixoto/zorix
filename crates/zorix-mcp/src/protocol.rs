@@ -42,18 +42,27 @@ pub fn client_info() -> Value {
     json!({"name": "zorix", "version": env!("CARGO_PKG_VERSION")})
 }
 
-/// The metadata every modern request carries. ZORIX declares no client capabilities: it answers no sampling, elicitation or
-/// roots requests, so it does not claim to.
+/// The metadata every modern request carries, with no client capabilities (discovery before signing in).
 pub fn modern_meta() -> Value {
+    modern_meta_with(json!({}))
+}
+
+/// The same, declaring what ZORIX can do for the server.
+pub fn modern_meta_with(capabilities: Value) -> Value {
     json!({
         "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
         "io.modelcontextprotocol/clientInfo": client_info(),
-        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientCapabilities": capabilities,
     })
 }
 
 /// `params` with the modern metadata added under `_meta`.
 pub fn with_modern_meta(params: Value) -> Value {
+    with_meta(params, modern_meta())
+}
+
+/// `params` with `meta` under `_meta`.
+pub fn with_meta(params: Value, meta: Value) -> Value {
     let mut object = match params {
         Value::Object(map) => map,
         Value::Null => serde_json::Map::new(),
@@ -63,7 +72,7 @@ pub fn with_modern_meta(params: Value) -> Value {
             map
         }
     };
-    object.insert("_meta".into(), modern_meta());
+    object.insert("_meta".into(), meta);
     Value::Object(object)
 }
 

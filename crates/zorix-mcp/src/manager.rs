@@ -13,8 +13,8 @@ use serde_json::Value;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
-    Clock, EnvValue, IntegrationStore, McpServer, McpServerId, McpToolPin, McpTransport, ObservedTool, PinAction,
-    PinStatus, Result as CoreResult, SystemClock, TenantId, ToolRegistry, ToolTrust,
+    CallHost, Clock, EnvValue, IntegrationStore, McpServer, McpServerId, McpToolPin, McpTransport, ObservedTool,
+    PinAction, PinStatus, Result as CoreResult, SystemClock, TenantId, ToolRegistry, ToolTrust,
 };
 use zorix_providers::{SecretStore, get_async};
 
@@ -143,6 +143,8 @@ pub struct ManagerOptions {
     pub work_dir: Option<PathBuf>,
     /// ZORIX's data folder, which a confined server may never read.
     pub data_home: Option<PathBuf>,
+    /// Whether servers may ask for sampling and elicitation during a call: only when runs give their calls somewhere to ask.
+    pub answers_requests: bool,
 }
 
 impl Default for ManagerOptions {
@@ -152,6 +154,7 @@ impl Default for ManagerOptions {
             probe_timeout: crate::client::PROBE_TIMEOUT,
             work_dir: None,
             data_home: None,
+            answers_requests: false,
         }
     }
 }
@@ -305,10 +308,15 @@ impl McpCaller for Handle {
         arguments: Value,
         timeout: Duration,
         cancel: &CancellationToken,
+        host: Option<Arc<dyn CallHost>>,
     ) -> Result<CallOutput, McpError> {
         let client = self.runtime.client.read().clone();
         match client {
-            Some(client) if client.alive() => client.call_tool(tool, arguments, timeout, cancel).await,
+            Some(client) if client.alive() => {
+                let name = self.runtime.status.lock().name.clone();
+                let asking = host.map(|host| (name.as_str(), host));
+                client.call_tool_asking(tool, arguments, timeout, cancel, asking).await
+            }
             _ => Err(McpError::Closed),
         }
     }
@@ -676,11 +684,12 @@ impl McpManager {
         stop: &CancellationToken,
     ) -> Result<(), McpError> {
         let transport = self.inner.connector.connect(server, &self.inner.secrets, &self.inner.options).await?;
-        let client = McpClient::connect_with(
+        let client = McpClient::connect_asking(
             transport.clone(),
             stop,
             self.inner.options.probe_timeout,
             crate::client::HANDSHAKE_TIMEOUT,
+            self.inner.options.answers_requests,
         )
         .await;
         let client = match client {

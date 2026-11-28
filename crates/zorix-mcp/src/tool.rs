@@ -9,7 +9,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
-use zorix_core::{Tool, ToolAnnotations, ToolContext, ToolError, ToolSource, ToolSpec, ToolTrust};
+use zorix_core::{CallHost, Tool, ToolAnnotations, ToolContext, ToolError, ToolSource, ToolSpec, ToolTrust};
 
 use crate::client::{CallOutput, McpToolDef};
 use crate::error::McpError;
@@ -38,6 +38,7 @@ pub trait McpCaller: Send + Sync {
         arguments: Value,
         timeout: Duration,
         cancel: &CancellationToken,
+        host: Option<Arc<dyn CallHost>>,
     ) -> Result<CallOutput, McpError>;
 }
 
@@ -190,7 +191,8 @@ impl Tool for McpTool {
     }
 
     async fn call(&self, ctx: &ToolContext, args: Value) -> Result<Value, ToolError> {
-        let output = self.caller.call(&self.remote_name, args, CALL_TIMEOUT, &ctx.cancel).await.map_err(|error| {
+        let call = self.caller.call(&self.remote_name, args, CALL_TIMEOUT, &ctx.cancel, ctx.host.clone());
+        let output = call.await.map_err(|error| {
             // A call is only repeated when it is safe to repeat.
             if error.is_retryable() && self.spec.annotations.idempotent {
                 ToolError::Retryable(error.to_string())
@@ -224,7 +226,14 @@ mod tests {
 
     #[async_trait]
     impl McpCaller for Nobody {
-        async fn call(&self, _: &str, _: Value, _: Duration, _: &CancellationToken) -> Result<CallOutput, McpError> {
+        async fn call(
+            &self,
+            _: &str,
+            _: Value,
+            _: Duration,
+            _: &CancellationToken,
+            _: Option<Arc<dyn CallHost>>,
+        ) -> Result<CallOutput, McpError> {
             Err(McpError::Closed)
         }
     }

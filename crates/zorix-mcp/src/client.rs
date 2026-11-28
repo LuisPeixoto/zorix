@@ -7,16 +7,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use zorix_core::integrations::MAX_TOOLS_PER_SERVER;
+use zorix_core::{ASK_TIMEOUT, CallHost, MAX_ASKS_PER_CALL, time_left};
 
 use crate::error::{METHOD_NOT_FOUND, McpError, UNSUPPORTED_VERSION};
 use crate::headers::{Mirror, mirrors as header_mirrors, param_headers};
-use crate::protocol::{Era, LEGACY_VERSIONS, MODERN_VERSION, client_info, with_modern_meta};
-use crate::transport::{ServerEvent, Transport};
+use crate::protocol::{Era, LEGACY_VERSIONS, MODERN_VERSION, client_info, modern_meta_with, with_meta};
+use crate::requests;
+use crate::transport::{Responder, ServerEvent, Transport};
 
 /// How long to wait for the probe before assuming a server speaks the legacy protocol.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
@@ -131,6 +134,53 @@ fn parse_tool(raw: &Value) -> Result<McpToolDef, (String, String)> {
     })
 }
 
+/// How many times a modern call may come back asking for something before it is given up.
+const MAX_ROUNDS: usize = 5;
+
+/// A tool call that may be asked things: whose server it is and who passes the requests on.
+#[derive(Clone)]
+struct Asking {
+    server: String,
+    host: Arc<dyn CallHost>,
+}
+
+/// The calls running now that may be asked things. Legacy servers do not say which call a request belongs to.
+#[derive(Default)]
+struct Running {
+    calls: Mutex<Vec<(u64, Asking)>>,
+    next: std::sync::atomic::AtomicU64,
+}
+
+#[async_trait]
+impl Responder for Running {
+    async fn respond(&self, method: &str, params: Value) -> Result<Value, (i64, String)> {
+        let one = match self.calls.lock().as_slice() {
+            [(_, asking)] => Some(asking.clone()),
+            _ => None,
+        };
+        let Some(asking) = one else {
+            return Err((
+                -32600,
+                "ZORIX answers a server only while exactly one of its tool calls runs, so it knows which run asks."
+                    .into(),
+            ));
+        };
+        requests::answer(&asking.server, &*asking.host, method, &params).await
+    }
+}
+
+/// Takes a call off the list when it ends, however it ends.
+struct Listed<'a> {
+    running: &'a Running,
+    number: u64,
+}
+
+impl Drop for Listed<'_> {
+    fn drop(&mut self) {
+        self.running.calls.lock().retain(|(number, _)| *number != self.number);
+    }
+}
+
 /// A connection to one server whose era is known.
 pub struct McpClient {
     transport: Arc<dyn Transport>,
@@ -146,6 +196,9 @@ pub struct McpClient {
     acked: Arc<tokio::sync::Notify>,
     /// A subscription was asked for.
     listening: bool,
+    /// Whether ZORIX said it can pass the server's requests on.
+    answers: bool,
+    running: Arc<Running>,
 }
 
 impl McpClient {
@@ -161,7 +214,19 @@ impl McpClient {
         probe: Duration,
         handshake: Duration,
     ) -> Result<Self, McpError> {
-        match transport.request("server/discover", with_modern_meta(Value::Null), probe, cancel).await {
+        Self::connect_asking(transport, cancel, probe, handshake, false).await
+    }
+
+    /// The same, saying whether the server may ask for sampling and elicitation during a call (ADR-0051).
+    pub async fn connect_asking(
+        transport: Arc<dyn Transport>,
+        cancel: &CancellationToken,
+        probe: Duration,
+        handshake: Duration,
+        answers: bool,
+    ) -> Result<Self, McpError> {
+        let discover = with_meta(Value::Null, modern_meta_with(requests::capabilities(answers)));
+        match transport.request("server/discover", discover, probe, cancel).await {
             Ok(result) => {
                 let versions: Vec<&str> = result
                     .get("supportedVersions")
@@ -169,13 +234,13 @@ impl McpClient {
                     .map(|a| a.iter().filter_map(Value::as_str).collect())
                     .unwrap_or_default();
                 if versions.contains(&MODERN_VERSION) {
-                    return Ok(Self::ready(transport, Era::Modern, info_from(&result)).settle().await);
+                    return Ok(Self::ready(transport, Era::Modern, info_from(&result), answers).settle().await);
                 }
                 if versions.is_empty() {
-                    return Self::legacy(transport, cancel, handshake).await;
+                    return Self::legacy(transport, cancel, handshake, answers).await;
                 }
                 if let Some(version) = LEGACY_VERSIONS.iter().find(|v| versions.contains(v)) {
-                    return Self::legacy_at(transport, cancel, handshake, version).await;
+                    return Self::legacy_at(transport, cancel, handshake, version, answers).await;
                 }
                 Err(McpError::Protocol(format!(
                     "the server speaks {} and ZORIX speaks {MODERN_VERSION} and {}",
@@ -192,7 +257,7 @@ impl McpClient {
                     .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
                     .unwrap_or_default();
                 match LEGACY_VERSIONS.iter().find(|v| supported.iter().any(|s| s == *v)) {
-                    Some(version) => Self::legacy_at(transport, cancel, handshake, version).await,
+                    Some(version) => Self::legacy_at(transport, cancel, handshake, version, answers).await,
                     None => Err(McpError::Protocol(format!(
                         "the server supports {}, which ZORIX does not speak (it speaks {MODERN_VERSION} and {})",
                         supported.join(", "),
@@ -209,7 +274,7 @@ impl McpClient {
                 | McpError::NeedsLogin(_)),
             ) => Err(e),
             // Any other answer, or none: a legacy server (the fallback must not depend on one error code).
-            Err(_) => Self::legacy(transport, cancel, handshake).await,
+            Err(_) => Self::legacy(transport, cancel, handshake, answers).await,
         }
     }
 
@@ -217,8 +282,9 @@ impl McpClient {
         transport: Arc<dyn Transport>,
         cancel: &CancellationToken,
         handshake: Duration,
+        answers: bool,
     ) -> Result<Self, McpError> {
-        Self::legacy_at(transport, cancel, handshake, LEGACY_VERSIONS[0]).await
+        Self::legacy_at(transport, cancel, handshake, LEGACY_VERSIONS[0], answers).await
     }
 
     async fn legacy_at(
@@ -226,8 +292,10 @@ impl McpClient {
         cancel: &CancellationToken,
         handshake: Duration,
         version: &str,
+        answers: bool,
     ) -> Result<Self, McpError> {
-        let params = json!({"protocolVersion": version, "capabilities": {}, "clientInfo": client_info()});
+        let capabilities = requests::capabilities(answers);
+        let params = json!({"protocolVersion": version, "capabilities": capabilities, "clientInfo": client_info()});
         let result = transport.request("initialize", params, handshake, cancel).await?;
         let agreed = result.get("protocolVersion").and_then(Value::as_str).unwrap_or("");
         if !LEGACY_VERSIONS.contains(&agreed) {
@@ -237,10 +305,11 @@ impl McpClient {
             )));
         }
         transport.notify("notifications/initialized", Value::Null).await?;
-        Ok(Self::ready(transport, Era::Legacy { version: agreed.to_string() }, info_from(&result)).settle().await)
+        let era = Era::Legacy { version: agreed.to_string() };
+        Ok(Self::ready(transport, era, info_from(&result), answers).settle().await)
     }
 
-    fn ready(transport: Arc<dyn Transport>, era: Era, info: ServerInfo) -> Self {
+    fn ready(transport: Arc<dyn Transport>, era: Era, info: ServerInfo, answers: bool) -> Self {
         let (events, _) = broadcast::channel(256);
         let stop = CancellationToken::new();
         let listening = era == Era::Modern && info.capabilities["tools"]["listChanged"] == true;
@@ -253,7 +322,12 @@ impl McpClient {
             stop,
             acked: Arc::new(tokio::sync::Notify::new()),
             listening,
+            answers,
+            running: Arc::default(),
         };
+        if answers {
+            client.transport.set_responder(client.running.clone());
+        }
         client.forward_events();
         if listening {
             client.listen_for_changes();
@@ -300,6 +374,7 @@ impl McpClient {
         let transport = self.transport.clone();
         let stop = self.stop.clone();
         let events = self.events.clone();
+        let capabilities = requests::capabilities(self.answers);
         tokio::spawn(async move {
             let mut wait = Duration::from_secs(1);
             let mut first = true;
@@ -314,7 +389,10 @@ impl McpClient {
                     });
                 }
                 first = false;
-                let params = with_modern_meta(json!({"notifications": {"toolsListChanged": true}}));
+                let params = with_meta(
+                    json!({"notifications": {"toolsListChanged": true}}),
+                    modern_meta_with(capabilities.clone()),
+                );
                 let started = std::time::Instant::now();
                 match transport
                     .request("subscriptions/listen", params, Duration::from_secs(30 * 24 * 3600), &stop)
@@ -372,6 +450,41 @@ impl McpClient {
         self.transport.drained().await;
     }
 
+    /// One `tools/call` request. When the call may be asked things, `timeout` is its working time, which stops while it waits
+    /// for the person.
+    async fn timed_call(
+        &self,
+        params: Value,
+        headers: &[(String, String)],
+        timeout: Duration,
+        cancel: &CancellationToken,
+        asking: Option<&Asking>,
+    ) -> Result<Value, McpError> {
+        let Some(asking) = asking else {
+            return self.request_with("tools/call", params, headers, timeout, cancel).await;
+        };
+        let stop = cancel.child_token();
+        let longest = timeout + ASK_TIMEOUT * MAX_ASKS_PER_CALL as u32;
+        let call = self.request_with("tools/call", params, headers, longest, &stop);
+        tokio::pin!(call);
+        let started = tokio::time::Instant::now();
+        loop {
+            let Some(left) = time_left(Some(&*asking.host), started.elapsed(), timeout) else {
+                // The transport tells the server to stop, and the answer says why.
+                stop.cancel();
+                let _ = call.await;
+                return Err(McpError::Timeout(format!(
+                    "tools/call took longer than {} seconds",
+                    timeout.as_secs().max(1)
+                )));
+            };
+            tokio::select! {
+                result = &mut call => return result,
+                _ = tokio::time::sleep(left) => {}
+            }
+        }
+    }
+
     async fn request(
         &self,
         method: &str,
@@ -391,7 +504,7 @@ impl McpClient {
         cancel: &CancellationToken,
     ) -> Result<Value, McpError> {
         let params = match self.era {
-            Era::Modern => with_modern_meta(params),
+            Era::Modern => with_meta(params, modern_meta_with(requests::capabilities(self.answers))),
             Era::Legacy { .. } => params,
         };
         self.transport.request_with(method, params, headers, timeout, cancel).await
@@ -447,27 +560,63 @@ impl McpClient {
         timeout: Duration,
         cancel: &CancellationToken,
     ) -> Result<CallOutput, McpError> {
+        self.call_tool_asking(name, arguments, timeout, cancel, None).await
+    }
+
+    /// Call a tool whose server may ask for sampling or elicitation meanwhile; `asking` is its configured name and who passes
+    /// those on. Time spent waiting for the person does not count against `timeout`.
+    pub async fn call_tool_asking(
+        &self,
+        name: &str,
+        arguments: Value,
+        timeout: Duration,
+        cancel: &CancellationToken,
+        asking: Option<(&str, Arc<dyn CallHost>)>,
+    ) -> Result<CallOutput, McpError> {
+        let asking = asking.filter(|_| self.answers).map(|(server, host)| Asking { server: server.to_string(), host });
+        let _listed = asking.as_ref().map(|asking| {
+            let number = self.running.next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.running.calls.lock().push((number, asking.clone()));
+            Listed { running: &self.running, number }
+        });
         let headers = self.mirrors.lock().get(name).map(|m| param_headers(m, &arguments)).unwrap_or_default();
-        let result = self
-            .request_with("tools/call", json!({"name": name, "arguments": arguments}), &headers, timeout, cancel)
-            .await?;
-        if result.get("resultType").and_then(Value::as_str) == Some("input_required") {
-            let wanted: Vec<String> = result
-                .get("inputRequests")
-                .and_then(Value::as_object)
-                .map(|requests| {
-                    requests
-                        .values()
-                        .filter_map(|r| r.get("method").and_then(Value::as_str))
-                        .map(|m| m.split('/').next().unwrap_or(m).to_string())
-                        .collect()
-                })
-                .unwrap_or_default();
-            return Err(McpError::Refused(format!(
-                "{name} needs more input from you or access to a model ({}). ZORIX does not let servers ask for that, so the call was not completed.",
-                if wanted.is_empty() { "unspecified".to_string() } else { wanted.join(", ") }
-            )));
-        }
+        let mut params = json!({"name": name, "arguments": arguments});
+        let mut asked = 0;
+        let result = loop {
+            let result = self.timed_call(params.clone(), &headers, timeout, cancel, asking.as_ref()).await?;
+            if result.get("resultType").and_then(Value::as_str) != Some("input_required") {
+                break result;
+            }
+            let wanted = result.get("inputRequests").and_then(Value::as_object).cloned().unwrap_or_default();
+            let kinds: Vec<String> = wanted
+                .values()
+                .filter_map(|r| r.get("method").and_then(Value::as_str))
+                .map(|m| m.split('/').next().unwrap_or(m).to_string())
+                .collect();
+            let refused = |why: &str| {
+                let kinds = if kinds.is_empty() { "unspecified".to_string() } else { kinds.join(", ") };
+                McpError::Refused(format!("{name} needs more input from you or access to a model ({kinds}). {why}"))
+            };
+            let Some(asking) = &asking else {
+                return Err(refused("ZORIX cannot pass that on here, so the call was not completed."));
+            };
+            asked += wanted.len();
+            if wanted.is_empty() || asked > MAX_ROUNDS {
+                return Err(refused("It asked too many times, so the call was not completed."));
+            }
+            let mut responses = serde_json::Map::new();
+            for (key, request) in wanted {
+                let method = request["method"].as_str().unwrap_or("");
+                match requests::answer(&asking.server, &*asking.host, method, &request["params"]).await {
+                    Ok(response) => responses.insert(key, response),
+                    Err((_, why)) => return Err(refused(&why)),
+                };
+            }
+            params["inputResponses"] = Value::Object(responses);
+            if let Some(state) = result.get("requestState") {
+                params["requestState"] = state.clone();
+            }
+        };
         let content = result.get("content").and_then(Value::as_array).cloned().unwrap_or_default();
         let structured = result.get("structuredContent").filter(|s| !s.is_null()).cloned();
         if content.is_empty() && structured.is_none() && result.get("isError").is_none() {
@@ -495,6 +644,13 @@ fn info_from(result: &Value) -> ServerInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_server_is_answered_only_while_exactly_one_call_of_it_runs() {
+        let running = Running::default();
+        let error = running.respond("elicitation/create", json!({"message": "m"})).await.unwrap_err();
+        assert!(error.1.contains("exactly one"), "{error:?}");
+    }
 
     #[test]
     fn tool_names_follow_the_spec_and_bad_tools_are_skipped_with_a_reason() {

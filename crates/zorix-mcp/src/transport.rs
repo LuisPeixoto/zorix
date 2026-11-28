@@ -33,6 +33,13 @@ pub enum ServerEvent {
     Closed(String),
 }
 
+/// Answers what a server asks while it works (sampling, elicitation). The error is a JSON-RPC code and message.
+#[async_trait]
+pub trait Responder: Send + Sync {
+    /// Answer one request.
+    async fn respond(&self, method: &str, params: Value) -> Result<Value, (i64, String)>;
+}
+
 /// A connection to one MCP server.
 #[async_trait]
 pub trait Transport: Send + Sync {
@@ -59,6 +66,9 @@ pub trait Transport: Send + Sync {
 
     /// Send a notification.
     async fn notify(&self, method: &str, params: Value) -> Result<(), McpError>;
+
+    /// Who answers the server's own requests from now on. Without one, they are refused.
+    fn set_responder(&self, _responder: std::sync::Arc<dyn Responder>) {}
 
     /// Follow what the server does besides answering.
     fn subscribe(&self) -> broadcast::Receiver<ServerEvent>;

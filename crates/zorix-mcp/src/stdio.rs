@@ -21,7 +21,7 @@ use zorix_core::redact_text;
 
 use crate::error::{METHOD_NOT_FOUND, McpError};
 use crate::sandbox::Confinement;
-use crate::transport::{LOG_BYTES, MAX_MESSAGE_BYTES, ServerEvent, Transport};
+use crate::transport::{LOG_BYTES, MAX_MESSAGE_BYTES, Responder, ServerEvent, Transport};
 use crate::wire::{self, Incoming, RpcError};
 
 /// Variables passed to every server, because programs cannot start without them. Nothing else of ours is.
@@ -86,6 +86,8 @@ struct Shared {
     events: broadcast::Sender<ServerEvent>,
     log: Mutex<Ring>,
     writer: Mutex<Option<mpsc::Sender<String>>>,
+    /// Answers what the server asks, when ZORIX can.
+    responder: Mutex<Option<Arc<dyn Responder>>>,
     kill: CancellationToken,
     /// Cancelled once the process is gone and what it wrote on its error stream has been read.
     settled: CancellationToken,
@@ -310,6 +312,7 @@ impl StdioTransport {
             events,
             log: Mutex::new(Ring { lines: VecDeque::new(), bytes: 0 }),
             writer: Mutex::new(Some(write_tx)),
+            responder: Mutex::new(None),
             kill: CancellationToken::new(),
             settled: CancellationToken::new(),
             exited: Notify::new(),
@@ -473,15 +476,34 @@ impl StdioTransport {
                     let _ = sender.send(result);
                 }
             }
-            Ok(Incoming::Request { id, method, .. }) => {
-                // Legacy servers may ask things of us. We answer `ping` and nothing else (ADR-0018).
-                let line = if method == "ping" {
-                    wire::result_line(&id, &json!({}))
-                } else {
-                    let _ = shared.events.send(ServerEvent::Refused { method: method.clone() });
-                    wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.")
-                };
-                let _ = shared.send(line).await;
+            Ok(Incoming::Request { id, method, params }) => {
+                // Legacy servers may ask things of us. `ping` is answered here, the rest by whoever answers (ADR-0051).
+                let responder = shared.responder.lock().clone();
+                match responder {
+                    _ if method == "ping" => {
+                        let _ = shared.send(wire::result_line(&id, &json!({}))).await;
+                    }
+                    // Answered on a task of its own: a person may take minutes, and the pipe must keep being read.
+                    Some(responder) => {
+                        let shared = shared.clone();
+                        tokio::spawn(async move {
+                            let line = match responder.respond(&method, params).await {
+                                Ok(result) => wire::result_line(&id, &result),
+                                Err((code, message)) => {
+                                    let _ = shared.events.send(ServerEvent::Refused { method });
+                                    wire::error_line(&id, code, &message)
+                                }
+                            };
+                            let _ = shared.send(line).await;
+                        });
+                    }
+                    None => {
+                        let _ = shared.events.send(ServerEvent::Refused { method: method.clone() });
+                        let line =
+                            wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.");
+                        let _ = shared.send(line).await;
+                    }
+                }
             }
             Ok(Incoming::Notification { method, params }) => {
                 let _ = shared.events.send(ServerEvent::Notification { method, params });
@@ -538,6 +560,10 @@ impl Transport for StdioTransport {
 
     async fn notify(&self, method: &str, params: Value) -> Result<(), McpError> {
         self.shared.send(wire::notification(method, &params)).await
+    }
+
+    fn set_responder(&self, responder: Arc<dyn Responder>) {
+        *self.shared.responder.lock() = Some(responder);
     }
 
     fn subscribe(&self) -> broadcast::Receiver<ServerEvent> {
