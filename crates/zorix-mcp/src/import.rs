@@ -299,7 +299,7 @@ pub async fn apply(
     tenant: &TenantId,
     now: Timestamp,
 ) -> Vec<Result<Imported, (String, String)>> {
-    let existing: HashSet<String> =
+    let mut existing: HashSet<String> =
         store.mcp_servers(tenant).await.map(|s| s.into_iter().map(|s| s.name).collect()).unwrap_or_default();
     let mut results = Vec::new();
     for found in preview.importable().filter(|e| names.iter().any(|n| n == &e.name || n == &e.original_name)) {
@@ -311,7 +311,11 @@ pub async fn apply(
             n += 1;
         }
         let added = match store.add_mcp_server(tenant, NewMcpServer { name: name.clone(), transport }, now).await {
-            Ok(server) => server,
+            Ok(server) => {
+                // The next entry of this same import must not take the name just given out.
+                existing.insert(server.name.clone());
+                server
+            }
             Err(e) => {
                 results.push(Err((found.original_name.clone(), e.to_string())));
                 continue;

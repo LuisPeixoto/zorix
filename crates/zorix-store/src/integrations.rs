@@ -241,6 +241,9 @@ impl IntegrationStore for SqliteIntegrationStore {
                 new.name
             )));
         }
+        if let McpTransport::Stdio { env, .. } = &new.transport {
+            zorix_core::integrations::validate_env(env).map_err(invalid)?;
+        }
         self.with(|conn| {
             let count: i64 = conn
                 .query_row("SELECT COUNT(*) FROM mcp_servers WHERE tenant = ?1", params![tenant.as_str()], |r| r.get(0))
@@ -275,6 +278,9 @@ impl IntegrationStore for SqliteIntegrationStore {
     }
 
     async fn update_mcp_server(&self, tenant: &TenantId, server: McpServer, now: Timestamp) -> Result<McpServer> {
+        if let McpTransport::Stdio { env, .. } = &server.transport {
+            zorix_core::integrations::validate_env(env).map_err(invalid)?;
+        }
         self.with(|conn| {
             let changed = conn
                 .execute(
