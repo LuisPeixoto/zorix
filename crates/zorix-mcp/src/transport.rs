@@ -71,4 +71,8 @@ pub trait Transport: Send + Sync {
 
     /// End the connection politely, then firmly.
     async fn close(&self);
+
+    /// Wait (briefly) until the last of what the server wrote to its error stream has been read, so that [`log`](Self::log) holds its
+    /// last words. A transport without such a stream returns at once.
+    async fn drained(&self) {}
 }

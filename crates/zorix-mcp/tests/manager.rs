@@ -153,6 +153,34 @@ async fn a_server_that_names_no_folder_starts_in_one_of_its_own() {
 }
 
 #[tokio::test]
+async fn a_server_that_dies_before_it_answers_leaves_its_reason_and_its_log() {
+    let rig = rig();
+    // What a missing dependency or a wrong argument looks like: the program says why on its error stream and ends.
+    let why = "Error: the module was not found; key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+    let server = add(&rig, "broken", &["--die", why], vec![]).await;
+    let only_once = ManagerOptions { backoff: vec![], probe_timeout: Duration::from_millis(1500), work_dir: None };
+    let strict = McpManager::with(
+        rig.store.clone(),
+        rig.registry.clone(),
+        rig.secrets.clone(),
+        rig.tenant.clone(),
+        Arc::new(zorix_mcp::DefaultConnector),
+        Arc::new(zorix_core::SystemClock),
+        only_once,
+    );
+    strict.start(server.id).await.unwrap();
+    let status = until_manager(&strict, server.id, |s| matches!(s.state, ServerState::Failed { .. })).await;
+    let ServerState::Failed { reason } = status.state else { panic!("failed") };
+    assert!(reason.contains("stopped before it answered"), "{reason}");
+    assert!(reason.contains("the module was not found"), "{reason}");
+    assert!(reason.contains('3'), "the status it ended with: {reason}");
+    assert!(!reason.contains("sk-ant-api03"), "a secret it printed is not repeated: {reason}");
+    let log = strict.log(server.id).join("\n");
+    assert!(log.contains("the module was not found") && log.contains("[the program ended with"), "{log}");
+    assert!(!log.contains("sk-ant-api03"), "{log}");
+}
+
+#[tokio::test]
 async fn what_a_person_approved_is_what_they_were_shown() {
     let rig = rig();
     let server = add(&rig, "fake", &["--era", "modern"], vec![]).await;

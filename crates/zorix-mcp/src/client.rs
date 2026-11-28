@@ -367,6 +367,11 @@ impl McpClient {
         self.transport.close().await;
     }
 
+    /// Wait (briefly) for the last of the server's error stream, so [`log`](Self::log) is complete.
+    pub async fn drained(&self) {
+        self.transport.drained().await;
+    }
+
     async fn request(
         &self,
         method: &str,

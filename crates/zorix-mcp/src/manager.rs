@@ -29,6 +29,30 @@ use crate::stdio::{StdioConfig, StdioTransport};
 use crate::tool::{McpCaller, McpTool};
 use crate::transport::{ServerEvent, Transport};
 
+/// How many of a failed server's last lines go into the reason, and how much of each.
+const LAST_LINES: usize = 3;
+const LAST_LINE_CHARS: usize = 160;
+
+/// Keep what a server that never connected wrote, and, when it simply ended, say so with the end of it.
+async fn last_words(runtime: &ServerRuntime, transport: &dyn Transport, error: McpError) -> McpError {
+    transport.close().await;
+    transport.drained().await;
+    let log = transport.log();
+    let ended = matches!(error, McpError::Closed)
+        || matches!(&error, McpError::Transport(why) if why.contains("stopped reading"));
+    let mut said: Vec<String> = log
+        .iter()
+        .rev()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .take(LAST_LINES)
+        .map(|line| line.chars().take(LAST_LINE_CHARS).collect())
+        .collect();
+    said.reverse();
+    *runtime.last_log.lock() = log;
+    if ended { McpError::Died { said: (!said.is_empty()).then(|| said.join(" / ")) } } else { error }
+}
+
 /// The start of every keychain entry of a server. Names are limited to lowercase letters, digits, `-`, `_` and `.`, so the
 /// id is shortened to its random tail.
 pub fn secret_base(server: McpServerId) -> String {
@@ -533,8 +557,9 @@ impl McpManager {
     async fn drop_connection(&self, runtime: &ServerRuntime) {
         let client = runtime.client.write().take();
         if let Some(client) = client {
-            *runtime.last_log.lock() = client.log();
             client.close().await;
+            client.drained().await;
+            *runtime.last_log.lock() = client.log();
         }
     }
 
@@ -638,7 +663,7 @@ impl McpManager {
     ) -> Result<(), McpError> {
         let transport = self.inner.connector.connect(server, &self.inner.secrets, &self.inner.options).await?;
         let client = McpClient::connect_with(
-            transport,
+            transport.clone(),
             stop,
             self.inner.options.probe_timeout,
             crate::client::HANDSHAKE_TIMEOUT,
@@ -646,7 +671,8 @@ impl McpManager {
         .await;
         let client = match client {
             Ok(client) => Arc::new(client),
-            Err(error) => return Err(error),
+            // There is no connection to keep, and what the server wrote about why must not go with it.
+            Err(error) => return Err(last_words(runtime, &*transport, error).await),
         };
         let mut events = client.events();
         *runtime.client.write() = Some(client.clone());
