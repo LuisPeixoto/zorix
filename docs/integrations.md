@@ -51,6 +51,12 @@ without asking; everything else asks. Limits: 30 s, 2 MB of response, 1 MB of re
 `<timestamp>.<body>`, with the timestamp in `X-Zorix-Timestamp` and the event name in `X-Zorix-Event`, so a receiver can
 recompute it and reject old messages; a person approves every send.
 
+**The address of a connection** (GitHub Enterprise, a self-managed GitLab, Jira) is the one you typed, so it may be on a private
+network or on this computer, over HTTPS (plain HTTP only to this computer). It may not be an address where no service lives: the
+cloud metadata address and the other link-local, multicast, broadcast and reserved ranges are refused when you add the
+connection and again, as what its name resolves to, before each request, so a token is never sent there. These calls use the system
+proxy; a proxy that resolves names this computer cannot does not stop them.
+
 **GitHub and GitLab.** Reads work without a token on public data; writes (create or update an issue, comment) need a token
 in a connection, a `:write` grant, and your approval, which shows the target and the text. Pagination is bounded per call.
 
