@@ -183,7 +183,7 @@ in the app ([#51](https://github.com/LuisPeixoto/zorix/issues/51)) · about 170 
 
 ## Phase 12 — Tools, integrations and sandbox · v0.12.0
 
-Audit and complete Phase 4.
+Audit and complete Phase 4. In progress: [the audit](audits/phase-12-tools-integrations-sandbox.md) lists 30 findings, each an issue in the milestone.
 
 - **Audit focus:** SSRF and redirects in HTTP, path confinement, MCP conformance for both protocol eras, OAuth token storage and refresh, sandbox escape tests on all three systems (including the Windows WASI case fixed in 0.9.x), and output caps.
 - **Completion:** sandboxing of stdio MCP servers · MCP **sampling** and **elicitation** · **OAuth** for the native integrations · more catalogue entries · a **git tool** (branch, commit, push, through grants and approvals) · a **pull request** tool for GitHub and GitLab · **polling** of integrations for new events, which the "new ticket" workflow event needs · an **MCP server that exposes ZORIX itself** (runs, approvals, agents), beside the read-only memory.
