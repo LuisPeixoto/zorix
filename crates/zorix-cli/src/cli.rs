@@ -166,9 +166,52 @@ pub enum McpCommand {
     Import(McpImportArgs),
     /// Start a server briefly and show what it wrote on its error stream.
     Logs(McpNameArg),
+    /// Show or choose how a local server is sandboxed: what it may read and write, and whether it has the network.
+    Sandbox(McpSandboxArgs),
+    /// What the sandbox of a local server enforces on this computer.
+    Doctor,
     /// Serve ZORIX over MCP on standard input and output, for Claude Code, Cursor and other MCP clients. Read-only by
     /// default: memory, documents and past work can be searched, never changed.
     Serve(McpServeArgs),
+}
+
+/// Options for `mcp sandbox`.
+#[derive(Debug, Args)]
+pub struct McpSandboxArgs {
+    /// The server.
+    pub name: String,
+    /// Confine the server (`native`) or not (`off`).
+    #[arg(long, value_enum)]
+    pub mode: Option<McpSandboxMode>,
+    /// Whether it may open network connections (`on` or `off`).
+    #[arg(long, value_name = "on|off", value_parser = parse_on_off)]
+    pub network: Option<bool>,
+    /// A folder it may read. Repeat for more.
+    #[arg(long = "folder", value_name = "DIR")]
+    pub folders: Vec<PathBuf>,
+    /// A folder it may read and write. Repeat for more.
+    #[arg(long = "folder-write", value_name = "DIR")]
+    pub folders_write: Vec<PathBuf>,
+    /// Take away the folders it was given before adding these.
+    #[arg(long)]
+    pub clear_folders: bool,
+}
+
+/// How a local server is confined.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum McpSandboxMode {
+    /// With what this operating system can enforce.
+    Native,
+    /// Not confined: it runs as you.
+    Off,
+}
+
+fn parse_on_off(text: &str) -> Result<bool, String> {
+    match text {
+        "on" => Ok(true),
+        "off" => Ok(false),
+        other => Err(format!("write on or off, not {other}")),
+    }
 }
 
 /// A server name.
@@ -218,7 +261,7 @@ pub struct McpAddArgs {
     /// A value the catalogue entry asks for, as NAME=VALUE (a folder, for example). Repeat for more.
     #[arg(long = "input", value_name = "NAME=VALUE", requires = "catalog")]
     pub inputs: Vec<String>,
-    /// A program to run as the server. It runs as you, without a sandbox.
+    /// A program to run as the server. It starts sandboxed: see `zorix mcp sandbox`.
     #[arg(long, value_name = "PROGRAM", conflicts_with = "url")]
     pub command: Option<String>,
     /// An argument for the program. Repeat for more.

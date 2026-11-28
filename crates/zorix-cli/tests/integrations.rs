@@ -96,6 +96,15 @@ impl Zorix {
             "ZORIX_SECRETS=env",
         ]);
         assert_eq!(code(&added), 0, "{}", all(&added));
+        // A sandboxed server may not read ZORIX's data folder, and this one is meant to serve it: a person turns its sandbox off.
+        assert!(
+            text(&added.stderr).contains("Sandbox    native"),
+            "a new local server starts sandboxed: {}",
+            all(&added)
+        );
+        let off = self.run(&["mcp", "sandbox", "self", "--mode", "off"]);
+        assert_eq!(code(&off), 0, "{}", all(&off));
+        assert!(text(&off.stdout).contains("Sandbox    off"), "{}", all(&off));
     }
 }
 
@@ -420,4 +429,29 @@ fn the_value_of_a_telemetry_header_goes_to_the_keychain_and_never_to_the_databas
     assert_eq!(code(&z.run(&["settings", "set", "telemetry.header", "off"])), 0);
     assert!(!std::fs::read_to_string(z.dir.path().join("secrets.json")).unwrap_or_default().contains("s3cret"));
     assert!(text(&z.run(&["settings", "show"]).stdout).contains("telemetry.header     off"));
+}
+
+#[test]
+fn a_servers_sandbox_is_shown_and_changed_from_the_command_line() {
+    let z = Zorix::new();
+    let folder = z.dir.path().join("notes");
+    std::fs::create_dir_all(&folder).unwrap();
+    assert_eq!(code(&z.run(&["mcp", "add", "files", "--command", "npx", "--arg", "-y", "--arg", "some-server"])), 0);
+    let shown = z.run(&["mcp", "sandbox", "files"]);
+    assert!(text(&shown.stdout).contains("Sandbox    native, network on"), "{}", all(&shown));
+    let changed =
+        z.run(&["mcp", "sandbox", "files", "--network", "off", "--folder-write", &folder.display().to_string()]);
+    assert_eq!(code(&changed), 0, "{}", all(&changed));
+    let out = text(&changed.stdout);
+    assert!(out.contains("network off") && out.contains("reads and writes") && out.contains("notes"), "{out}");
+    // A folder of credentials is never given, and a remote server has nothing to confine.
+    let secrets = z.dir.path().join(".ssh");
+    std::fs::create_dir_all(&secrets).unwrap();
+    let refused = z.run(&["mcp", "sandbox", "files", "--folder", &secrets.display().to_string()]);
+    assert_ne!(code(&refused), 0, "{}", all(&refused));
+    assert!(text(&refused.stderr).contains("credentials"), "{}", all(&refused));
+    assert_eq!(code(&z.run(&["mcp", "add", "web", "--url", "https://mcp.example.com/mcp"])), 0);
+    assert_ne!(code(&z.run(&["mcp", "sandbox", "web", "--mode", "off"])), 0);
+    let doctor = z.run(&["mcp", "doctor"]);
+    assert!(text(&doctor.stdout).contains("Files") && text(&doctor.stdout).contains("Processes"), "{}", all(&doctor));
 }

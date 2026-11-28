@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Clock, ConnectionKind, EnvValue, EnvVar, HttpAuth, IntegrationStore, McpServer, McpTransport, NewMcpServer,
-    PinAction, PinStatus, Secret, TenantId, ToolTrust,
+    PinAction, PinStatus, SandboxFolder, SandboxMode, Secret, ServerSandbox, TenantId, ToolTrust,
 };
 use zorix_hub::Hub;
 use zorix_hub::connections::ConnectRequest;
@@ -25,7 +25,7 @@ use zorix_store::DataDirLock;
 use crate::app::{CliError, load_config, secrets};
 use crate::cli::{
     ConnectAdd, ConnectCommand, ImportSourceArg, McpAddArgs, McpAuthArg, McpCommand, McpEnableArgs, McpImportArgs,
-    McpReviewArgs, McpTrustArgs, SandboxCommand, SandboxInstall, SecretArgs,
+    McpReviewArgs, McpSandboxArgs, McpSandboxMode, McpTrustArgs, SandboxCommand, SandboxInstall, SecretArgs,
 };
 use crate::follow::{Exit, Printer};
 use crate::render::shorten;
@@ -140,6 +140,8 @@ pub async fn mcp(home: &Path, tenant: TenantId, printer: Printer, command: McpCo
         }
         McpCommand::Tools(arg) => tools(home, &tenant, printer, &arg.name, false).await,
         McpCommand::Logs(arg) => tools(home, &tenant, printer, &arg.name, true).await,
+        McpCommand::Sandbox(args) => server_sandbox(home, &tenant, printer, args).await,
+        McpCommand::Doctor => doctor(printer),
         McpCommand::Review(args) => review(home, &tenant, printer, args).await,
         McpCommand::Trust(args) => trust(home, &tenant, printer, args).await,
         McpCommand::Enable(args) => enable(home, &tenant, printer, args).await,
@@ -199,7 +201,7 @@ fn kv(text: &str, what: &str) -> Result<(String, String), CliError> {
 fn describe(transport: &McpTransport) -> String {
     match transport {
         McpTransport::Stdio { command, args, .. } => {
-            format!("runs `{} {}` on this computer, as you", command, args.join(" ")).trim_end().to_string()
+            format!("runs `{} {}` on this computer", command, args.join(" ")).trim_end().to_string()
         }
         McpTransport::Http { url, auth } => format!(
             "connects to {url} ({})",
@@ -309,6 +311,9 @@ async fn add_server(home: &Path, tenant: &TenantId, printer: Printer, args: McpA
         return Ok(Exit::Done);
     }
     eprintln!("Added {name}. It is off for now: it {what}.");
+    for line in sandbox_lines(&server) {
+        eprintln!("  {line}");
+    }
     for note in notes {
         eprintln!("  {note}");
     }
@@ -376,12 +381,126 @@ async fn show_server(home: &Path, tenant: &TenantId, printer: Printer, name: &st
             println!("Folder     {cwd}");
         }
     }
+    for line in sandbox_lines(&server) {
+        println!("{line}");
+    }
     for pin in pins.iter().filter(|p| p.listed) {
         println!(
             "Tool       {:<28} {:<9} {}",
             pin.tool,
             pin.status.as_str(),
             if pin.trust == ToolTrust::Ask { "asks" } else { "no ask" }
+        );
+    }
+    Ok(Exit::Done)
+}
+
+/// The sandbox of a server, in lines a person reads.
+fn sandbox_lines(server: &McpServer) -> Vec<String> {
+    if !matches!(server.transport, McpTransport::Stdio { .. }) {
+        return Vec::new();
+    }
+    let Some(sandbox) = &server.sandbox else {
+        return vec![format!(
+            "Sandbox    not chosen: it was added before sandboxes and runs as you. `zorix mcp sandbox {} --mode native` confines it.",
+            server.name
+        )];
+    };
+    if sandbox.mode == SandboxMode::Off {
+        return vec!["Sandbox    off: it runs as you".to_string()];
+    }
+    let here = zorix_mcp::enforced();
+    let mut lines = vec![format!(
+        "Sandbox    native, network {}{}",
+        if sandbox.network { "on" } else { "off" },
+        if here.files { "" } else { " (on this computer files and network are not confined: see `zorix mcp doctor`)" }
+    )];
+    lines.extend(
+        sandbox
+            .folders
+            .iter()
+            .map(|f| format!("Sandbox    {} {}", if f.write { "reads and writes" } else { "reads" }, f.path)),
+    );
+    lines
+}
+
+async fn server_sandbox(
+    home: &Path,
+    tenant: &TenantId,
+    printer: Printer,
+    args: McpSandboxArgs,
+) -> Result<Exit, CliError> {
+    let changes = args.mode.is_some()
+        || args.network.is_some()
+        || !args.folders.is_empty()
+        || !args.folders_write.is_empty()
+        || args.clear_folders;
+    let session = open(home, tenant, changes)?;
+    let mut server = session.hub.server(&args.name).await?;
+    if changes {
+        let command = match &server.transport {
+            McpTransport::Stdio { command, .. } => command.clone(),
+            McpTransport::Http { .. } => {
+                return Err(CliError(format!("{} is a remote server: there is nothing here to confine.", args.name)));
+            }
+        };
+        let mut chosen = server.sandbox.clone().unwrap_or_else(|| ServerSandbox::for_new(&command));
+        if let Some(mode) = args.mode {
+            chosen.mode = match mode {
+                McpSandboxMode::Native => SandboxMode::Native,
+                McpSandboxMode::Off => SandboxMode::Off,
+            };
+        }
+        if let Some(network) = args.network {
+            chosen.network = network;
+        }
+        if args.clear_folders {
+            chosen.folders.clear();
+        }
+        for (dir, write) in args.folders.iter().map(|d| (d, false)).chain(args.folders_write.iter().map(|d| (d, true)))
+        {
+            let path = std::fs::canonicalize(dir)
+                .map_err(|e| CliError(format!("The folder {} cannot be used: {e}", dir.display())))?
+                .to_string_lossy()
+                .into_owned();
+            chosen.folders.retain(|f| f.path != path);
+            chosen.folders.push(SandboxFolder { path, write });
+        }
+        server = session.hub.set_sandbox(&args.name, chosen).await?;
+    }
+    if printer.json {
+        out(&server.sandbox)?;
+        return Ok(Exit::Done);
+    }
+    for line in sandbox_lines(&server) {
+        println!("{line}");
+    }
+    if !matches!(server.transport, McpTransport::Stdio { .. }) {
+        eprintln!("{} is a remote server: it runs elsewhere.", args.name);
+    }
+    Ok(Exit::Done)
+}
+
+fn doctor(printer: Printer) -> Result<Exit, CliError> {
+    let here = zorix_mcp::enforced();
+    if printer.json {
+        out(
+            &json!({"files": here.files, "network": here.network, "credentials": here.credentials, "processes": here.processes}),
+        )?;
+        return Ok(Exit::Done);
+    }
+    let word = |enforced: bool| if enforced { "enforced" } else { "NOT enforced" };
+    println!("A sandboxed local MCP server on this computer ({}):", std::env::consts::OS);
+    println!("  Files          {:<13} reads and writes only where it is allowed", word(here.files));
+    println!("  Network        {:<13} no connections when it is off", word(here.network));
+    println!(
+        "  Credentials    {:<13} keys, tokens, ZORIX's data and local services out of reach",
+        word(here.credentials)
+    );
+    println!("  Processes      {:<13} what it starts ends with it", word(here.processes));
+    if !here.files {
+        println!(
+            "On Windows a sandbox ends everything the server starts and limits its memory and processes; it does not confine files or the network."
         );
     }
     Ok(Exit::Done)
