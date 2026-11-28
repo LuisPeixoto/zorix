@@ -102,6 +102,7 @@ pub fn validate(spec: &WorkflowSpec) -> Result<(), String> {
                 template_ok(spec, id, text, false)?;
             }
             StepKind::Http { url, body, .. } => {
+                crate::launcher::authority_is_literal(url).map_err(|e| format!("Step {id}: {e}"))?;
                 template_ok(spec, id, url, false)?;
                 if let Some(body) = body {
                     template_ok(spec, id, body, false)?;
@@ -164,6 +165,22 @@ mod tests {
         assert!(validate(&spec).unwrap_err().contains("does not run before"));
         let spec = chain(vec![agent("a", "{{steps.a.output}}")]);
         assert!(validate(&spec).unwrap_err().contains("does not run before"));
+    }
+
+    #[test]
+    fn the_host_of_an_http_step_cannot_come_from_data() {
+        let http = |url: &str| {
+            step("call", StepKind::Http { method: "POST".into(), url: url.into(), body: None, ask: Ask::Never })
+        };
+        validate(&chain(vec![http("https://hooks.example.com/{{trigger.payload.id}}")])).unwrap();
+        for bad in [
+            "https://{{trigger.payload.host}}/x",
+            "{{trigger.payload.url}}",
+            "https://hooks.example.com{{trigger.payload.p}}",
+        ] {
+            let error = validate(&chain(vec![http(bad)])).unwrap_err();
+            assert!(error.starts_with("Step call:") && error.contains("HTTP step"), "{bad}: {error}");
+        }
     }
 
     #[test]

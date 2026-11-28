@@ -17,7 +17,7 @@ use zorix_core::{
 
 use crate::expr::Expr;
 use crate::graph::{Readiness, readiness};
-use crate::launcher::{Outcome, RunStart, StepLauncher, Target, ToolCall, http_call, send_call};
+use crate::launcher::{Outcome, RunStart, StepLauncher, Target, ToolCall, authority_is_literal, http_call, send_call};
 use crate::schedule::next_time_of_day;
 use crate::template::{render, render_prompt, render_value};
 
@@ -951,6 +951,8 @@ impl WorkflowEngine {
                 Ok(send_call(*service, connection.as_deref(), &fill(channel)?, &fill(text)?))
             }
             StepKind::Http { method, url, body, .. } => {
+                // Checked here as well as when publishing: a workflow stored before the rule existed is held to it too.
+                authority_is_literal(url)?;
                 let body = body.as_deref().map(fill).transpose()?;
                 Ok(http_call(method, &fill(url)?, body.as_deref()))
             }

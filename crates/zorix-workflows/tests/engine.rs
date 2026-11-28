@@ -468,6 +468,47 @@ async fn a_failing_action_fails_the_step_and_its_error_is_kept() {
 }
 
 #[tokio::test]
+async fn an_http_step_never_sends_to_a_host_that_data_named() {
+    // A workflow stored before publishing checked this is held to it when it runs: a webhook payload must not choose where an
+    // unattended request goes (this computer's own services and the local network are reachable from here).
+    for (url, sent) in [
+        ("https://{{trigger.payload.host}}/hook", false),
+        ("{{trigger.payload.url}}", false),
+        ("https://hooks.example.com{{trigger.payload.path}}", false),
+        ("https://hooks.example.com/{{trigger.payload.path}}", true),
+    ] {
+        let rig = rig();
+        let mut s = spec(vec![post("post", Ask::Never)], vec![edge("start", "post", None)]);
+        s.steps[1].kind =
+            StepKind::Http { method: "POST".into(), url: url.into(), body: Some("{}".into()), ask: Ask::Never };
+        let id = rig.publish(s).await;
+        let started = rig
+            .engine
+            .start(StartRequest::manual(
+                id,
+                json!({"host": "169.254.169.254", "url": "http://localhost:9/x", "path": "/x"}),
+            ))
+            .await;
+        if sent {
+            let run = started.unwrap();
+            assert_eq!(run.state, RunState::Completed, "{url}: {:?}", run.error);
+            assert_eq!(rig.fake.calls().len(), 1, "{url}");
+        } else {
+            // Refused when the run starts (the stored workflow is checked again), and had it started, when the step runs.
+            let reason = match started {
+                Err(error) => error.to_string(),
+                Ok(run) => {
+                    assert_eq!(run.state, RunState::Failed, "{url}");
+                    run.error.unwrap_or_default()
+                }
+            };
+            assert!(reason.contains("HTTP step"), "{url}: {reason}");
+            assert!(rig.fake.calls().is_empty(), "{url} must not reach the launcher");
+        }
+    }
+}
+
+#[tokio::test]
 async fn an_answer_must_name_what_the_person_was_shown_and_counts_once() {
     let rig = rig();
     let s = spec(
