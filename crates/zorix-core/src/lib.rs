@@ -67,8 +67,8 @@ pub use integrations::{
 pub use memory::{
     ChunkView, Corpus, DocState, DocStatus, DocumentWrite, KnowledgeRoot, MemoryFilter, MemoryItem, MemoryKind,
     MemoryOptions, MemoryOrigin, MemoryPatch, MemorySettings, MemoryStatus, MemoryStore, NewChunk, NewMemory, NewRoot,
-    OperationRecord, RecallMode, RecallSnapshot, Remembered, Scope, TextHit, VectorHit, Visibility, bytes_hash,
-    chunk_key, memory_key, operation_key, text_hash,
+    OCR_KIND, OperationRecord, RecallMode, RecallSnapshot, Remembered, SCAN_NOTE, SCAN_UNREAD_NOTE, ScanCounts, Scope,
+    TextHit, VectorHit, Visibility, bytes_hash, chunk_key, memory_key, operation_key, text_hash,
 };
 pub use message::{Message, NativeTurn, Provenance, Role, ToolCallRequest};
 pub use model::{

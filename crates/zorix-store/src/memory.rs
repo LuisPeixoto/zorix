@@ -18,8 +18,9 @@ use serde_json::Value;
 use zorix_core::{
     AgentId, ChunkView, ConversationId, Corpus, DocState, DocStatus, DocumentWrite, Error, ExecutionId, KnowledgeRoot,
     KnowledgeRootId, MemoryFilter, MemoryId, MemoryItem, MemoryKind, MemoryPatch, MemorySettings, MemoryStatus,
-    MemoryStore, NewMemory, NewRoot, OperationRecord, RecallSnapshot, Remembered, Result, Scope, TenantId, TextHit,
-    Timestamp, VectorHit, Visibility, chunk_key, memory_key, operation_key, text_hash,
+    MemoryStore, NewMemory, NewRoot, OCR_KIND, OperationRecord, RecallSnapshot, Remembered, Result, SCAN_NOTE,
+    SCAN_UNREAD_NOTE, ScanCounts, Scope, TenantId, TextHit, Timestamp, VectorHit, Visibility, chunk_key, memory_key,
+    operation_key, text_hash,
 };
 
 /// Most active long-term items per tenant.
@@ -1293,6 +1294,20 @@ impl MemoryStore for SqliteMemoryStore {
                 tx.execute("DELETE FROM knowledge_documents WHERE id = ?1", params![id]).map_err(storage)?;
             }
             tx.commit().map_err(storage)
+        })
+        .await
+    }
+
+    async fn scan_counts(&self, root: KnowledgeRootId) -> Result<ScanCounts> {
+        self.run(move |conn| {
+            conn.query_row(
+                "SELECT COALESCE(SUM(kind = ?2), 0),
+                        COALESCE(SUM(status = 'skipped' AND (error LIKE ?3 OR error LIKE ?4)), 0)
+                 FROM knowledge_documents WHERE root_id = ?1",
+                params![root.to_string(), OCR_KIND, format!("{SCAN_NOTE}%"), format!("{SCAN_UNREAD_NOTE}%")],
+                |r| Ok(ScanCounts { read: r.get::<_, i64>(0)? as u64, unread: r.get::<_, i64>(1)? as u64 }),
+            )
+            .map_err(storage)
         })
         .await
     }

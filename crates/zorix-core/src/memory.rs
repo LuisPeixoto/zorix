@@ -449,6 +449,22 @@ impl DocStatus {
     }
 }
 
+/// The kind a document gets when its text was read from the pictures of its pages (a scanned PDF read by OCR).
+pub const OCR_KIND: &str = "pdf-ocr";
+/// How the reason starts for a PDF with no text layer that was left out because nothing reads scans (or reading scans is off).
+pub const SCAN_NOTE: &str = "it is a scan, with no text to read";
+/// How the reason starts for a scan that reading was tried on and failed or gave nothing.
+pub const SCAN_UNREAD_NOTE: &str = "the scan";
+
+/// How many documents of a folder are scans: the ones read from pictures and the ones left out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScanCounts {
+    /// Documents whose text came from reading pictures.
+    pub read: u64,
+    /// Scanned PDFs that are left out: reading scans is off, or the reading failed.
+    pub unread: u64,
+}
+
 /// What is known about an indexed file, to tell whether it changed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocState {
@@ -720,6 +736,10 @@ pub trait MemoryStore: Send + Sync {
     async fn touch_document(&self, root: KnowledgeRootId, rel_path: &str, size: u64, mtime_ns: i64) -> Result<()>;
     /// Forget files that are gone.
     async fn remove_documents(&self, root: KnowledgeRootId, rel_paths: &[String]) -> Result<()>;
+    /// How many documents of a folder were read from pictures, and how many scans were left out.
+    async fn scan_counts(&self, _root: KnowledgeRootId) -> Result<ScanCounts> {
+        Ok(ScanCounts::default())
+    }
     /// Files of a folder that failed or were skipped, with the reason.
     async fn problem_documents(&self, root: KnowledgeRootId) -> Result<Vec<(String, DocStatus, String)>>;
     /// Chunks by id.
