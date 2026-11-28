@@ -1029,3 +1029,63 @@ fn a_watched_folder_is_read_again_by_itself_a_few_seconds_after_a_file_changes()
 fn interrupt(pid: u32) {
     let _ = Command::new("kill").args(["-INT", &pid.to_string()]).status();
 }
+
+/// A PDF of one empty page: no text layer and nothing to read, the shape a scan has for the text reader.
+fn empty_page_pdf() -> Vec<u8> {
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (number, body) in [
+        (1, "<< /Type /Catalog /Pages 2 0 R >>"),
+        (2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+        (3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>"),
+    ] {
+        offsets.push(out.len());
+        out.extend(format!("{number} 0 obj\n{body}\nendobj\n").into_bytes());
+    }
+    let xref = out.len();
+    out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).into_bytes());
+    for offset in &offsets {
+        out.extend(format!("{offset:010} 00000 n \n").into_bytes());
+    }
+    out.extend(
+        format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", offsets.len() + 1).into_bytes(),
+    );
+    out
+}
+
+#[test]
+fn a_scan_is_left_out_with_the_reason_and_a_setting_that_is_on_without_its_models_says_so() {
+    use zorix_core::{AppSettings, KnowledgeSettings, SettingsStore, TenantId};
+
+    let z = Zorix::new();
+    let docs = z.dir.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(docs.join("notes.md"), "# Notes\nThe archive is on the second floor.\n").unwrap();
+    std::fs::write(docs.join("scan.pdf"), empty_page_pdf()).unwrap();
+
+    // Reading scans is off: the file is left out, and the reason says what to do about it.
+    let added = z.run(&["knowledge", "add", docs.to_str().unwrap()]);
+    assert_eq!(code(&added), 0, "{}", text(&added.stderr));
+    let files = z.run(&["knowledge", "files", docs.to_str().unwrap(), "--failed"]);
+    let shown = text(&files.stdout);
+    assert!(shown.contains("scan.pdf") && shown.contains("it is a scan, with no text to read"), "{shown}");
+
+    // The setting is on but the models were never downloaded (no network is used here): a sentence says so, and the command carries on.
+    let database = zorix_store::database_path(&z.home());
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    runtime.block_on(async {
+        let store = zorix_store::SqliteSettingsStore::open(&database).unwrap();
+        let settings = AppSettings { knowledge: KnowledgeSettings { ocr: true }, ..AppSettings::default() };
+        store.put_settings(&TenantId::local(), &settings).await.unwrap();
+    });
+    let synced = z.run(&["knowledge", "sync"]);
+    assert_eq!(code(&synced), 0, "{}", text(&synced.stderr));
+    assert!(text(&synced.stderr).contains("its models are not on this computer"), "{}", text(&synced.stderr));
+    let still = z.run(&["knowledge", "files", docs.to_str().unwrap(), "--failed"]);
+    assert!(text(&still.stdout).contains("scan.pdf"), "the scan is still left out: {}", text(&still.stdout));
+
+    // Turned off again, it is quiet.
+    z.run(&["settings", "set", "knowledge.ocr", "off"]);
+    let quiet = z.run(&["knowledge", "sync"]);
+    assert!(!text(&quiet.stderr).contains("models"), "{}", text(&quiet.stderr));
+}
