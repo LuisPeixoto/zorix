@@ -14,7 +14,7 @@ and the one-shot listener ended on the first request to `/callback`, whatever it
 the server leads to goes through `zorix-net`: the name is resolved, every answer is checked and the connection is pinned to
 the checked address, unless the server's own address is private (a loopback or company host), in which case private addresses are
 allowed as well. The listener keeps waiting until it gets a request with this sign-in's `state`; an error answer without a state is
-shown the failure page and the wait goes on, so a person cancels it. Tests: a server on the internet cannot name a private
+shown the failure page and the wait goes on, so a person cancels it. Step-up, which this ADR also describes, was not done: a `403 insufficient_scope` only said to sign in again, and the new sign-in asked for the same scopes that had been refused. The missing scope is now remembered with the sign-in and the next one asks for what was granted and what was missing (a person's own choice of scopes still wins, and the memory is cleared once they are granted). The step is still a person's: it opens the browser, so it is not done in the middle of a call. A dynamic registration is reused with the loopback port of the first sign-in; RFC 8252 section 7.3 requires an authorization server to accept any port there, so this is not worked around. Tests: a server on the internet cannot name a private
 address (`oauth.rs` unit tests and `tests/oauth.rs`), and strangers knocking on the port do not end a sign-in.
 
 ## Decision
