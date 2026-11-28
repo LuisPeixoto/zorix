@@ -240,3 +240,60 @@ async fn a_pass_follows_the_settings_and_is_off_without_a_number_of_days() {
     assert_eq!((done.runs, done.compacted), (1, 1));
     assert_eq!(done, preview);
 }
+
+/// A run that was given a file to read, with a distinctive sentence in it.
+async fn run_with_file(world: &World) -> zorix_core::Execution {
+    let new = NewExecution {
+        request: TaskRequest {
+            prompt: "Summarise the attached notes".into(),
+            model: "demo".into(),
+            attachments: vec![zorix_core::Attachment {
+                name: "board-minutes.md".into(),
+                text: "The acquisition of Zebracorn Ltd is confidential. ".repeat(200),
+                bytes: 9_800,
+                truncated: false,
+            }],
+            ..TaskRequest::default()
+        },
+        ..NewExecution::default()
+    };
+    let started = world.engine.submit(new).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(10), world.engine.settle(&tenant(), started.id)).await.unwrap().unwrap()
+}
+
+#[tokio::test]
+async fn compacting_drops_the_text_of_attached_files_and_keeps_their_names_and_sizes() {
+    let w = world();
+    let done = run_with_file(&w).await;
+    assert_eq!(done.state, S::Completed);
+    assert!(
+        count(&w, "SELECT COUNT(*) FROM executions WHERE doc LIKE '%Zebracorn%'") == 1,
+        "the text is stored with the run"
+    );
+
+    let preview = w.retention.preview(&tenant(), later(), RetentionMode::Compact).await.unwrap();
+    assert!(preview.bytes >= 9_800, "the preview counts the text of the files: {preview:?}");
+    let report = w.retention.apply(&tenant(), later(), RetentionMode::Compact).await.unwrap();
+    assert_eq!(report, preview);
+
+    assert_eq!(
+        count(&w, "SELECT COUNT(*) FROM executions WHERE doc LIKE '%Zebracorn%'"),
+        0,
+        "what was in the file is not kept after compaction"
+    );
+    let after = w.repository.get(&tenant(), done.id).await.unwrap().expect("the run stays");
+    assert_eq!(after.request.prompt, "Summarise the attached notes", "the person's own words stay");
+    assert_eq!(after.request.attachments.len(), 1);
+    let file = &after.request.attachments[0];
+    assert_eq!((file.name.as_str(), file.bytes, file.text.as_str()), ("board-minutes.md", 9_800, ""));
+    assert_eq!(after.result, done.result);
+}
+
+#[tokio::test]
+async fn deleting_a_run_takes_its_attached_text_with_it() {
+    let w = world();
+    run_with_file(&w).await;
+    w.retention.apply(&tenant(), later(), RetentionMode::Delete).await.unwrap();
+    assert_eq!(count(&w, "SELECT COUNT(*) FROM executions"), 0);
+    assert_eq!(count(&w, "SELECT COUNT(*) FROM executions WHERE doc LIKE '%Zebracorn%'"), 0);
+}
