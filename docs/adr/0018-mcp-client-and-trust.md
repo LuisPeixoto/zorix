@@ -8,6 +8,15 @@ MCP revision 2026-07-28 removed the `initialize` handshake, sessions and server-
 them. Most servers will speak the old shape for a while. A server is arbitrary code or an arbitrary remote service, and its tool
 descriptions are read by the model ([research](../research/integrations-landscape.md)).
 
+## Amendment (Phase 12): what an approval is of, and what may skip asking
+
+The audit found that an approval took whatever definition was current at the click, so a server that changed a tool between the
+person reading it and pressing *Approve* got the new text approved unseen; and that "don't ask" was allowed for a read-only tool that
+said nothing about `openWorldHint`, which the specification defaults to true. Now an approval from a screen carries the hash of the
+definition that was shown and is refused when the server lists another one (`PinAction::Approve { hash }`; `--approve` and
+`--approve-all` on the command line stay "what is listed now", as the flags say), and a tool may skip asking only when it reports
+`readOnlyHint: true` and `openWorldHint: false`; an earlier choice that the rule no longer allows is withdrawn when the tools are next read.
+
 ## Decision
 
 - **Hand-written client**, not `rmcp`: JSON-RPC 2.0, **stdio** and **Streamable HTTP**, on the HTTP client the providers use

@@ -26,11 +26,18 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
 ## What ZORIX does to keep it safe
 
 - **Every MCP tool asks first.** The tool's own hints (`readOnlyHint` and so on) describe, they never grant. For a tool the
-  server reports as read-only (and not destructive or open-world) a person may choose *Don't ask before using it*
-  (`zorix mcp trust <name> --tool <tool> --read-only-without-asking`); the call still shows in the run.
+  server reports as read-only, not destructive, and **says in so many words that it stays inside the server**
+  (`readOnlyHint: true` and `openWorldHint: false`; the specification's default for a tool that says nothing is that it reaches
+  outside) a person may choose *Don't ask before using it* (`zorix mcp trust <name> --tool <tool> --read-only-without-asking`);
+  the call still shows in the run. A choice made earlier for a tool that does not say so is taken back the next time the server's
+  tools are read.
 - **Tool definitions are pinned.** The hash of a tool's name, description and schemas is stored when you approve it. If the
   server later lists something different (a "rug pull", or a description with instructions added) the tool is withdrawn, its
   trust goes back to *ask*, and the screen shows exactly what changed (`DiffView`, or `zorix mcp review`) until you decide.
+  **An approval is for what you were shown**: the screen sends the hash of the definition on display with the click, and if the
+  server changed the tool in between, nothing is approved and you are told to read it again (`Approve all` does the same for each
+  tool, and leaves a changed one waiting). `zorix mcp review --approve TOOL` and `--approve-all` approve what the server lists at
+  that moment, which is what those flags say.
 - **A running execution keeps what it started with.** A run pins the tool definitions it was offered; a server changing a tool
   mid-run cannot change what that run sees or what it may call (ADR-0020).
 - **Results are data.** What a server returns is labelled as the result of a tool and never followed as an instruction;
