@@ -1276,6 +1276,15 @@ pub enum KnowledgeCommand {
     Remove(KnowledgeRootArg),
     /// Search the indexed documents.
     Search(KnowledgeSearchArgs),
+    /// Keep the folders that are marked to be watched up to date until Ctrl-C: a change is read again a few seconds after it happens.
+    Watch(KnowledgeWatchArgs),
+}
+
+/// Options for `knowledge watch`.
+#[derive(Debug, Args)]
+pub struct KnowledgeWatchArgs {
+    /// Watch only this folder (by id or path), whether or not it is marked to be watched.
+    pub folder: Option<String>,
 }
 
 /// Options for `knowledge add`.
@@ -1298,6 +1307,9 @@ pub struct KnowledgeAddArgs {
     /// Look for changes whenever the desktop app starts.
     #[arg(long)]
     pub auto_sync: bool,
+    /// Mark it to be kept up to date while a program that watches runs (the desktop app, or `zorix knowledge watch`).
+    #[arg(long)]
+    pub watch: bool,
     /// Add it without indexing it now.
     #[arg(long)]
     pub no_sync: bool,

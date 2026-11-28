@@ -963,3 +963,69 @@ fn a_cost_limit_in_dollars_is_taken_and_a_nonsense_amount_is_refused() {
     let ok = z.run(&["run", "What is 17*23?", "--allow", "math.evaluate", "--approve", "never", "--max-cost", "$0.50"]);
     assert_eq!(code(&ok), 0, "{}", text(&ok.stderr));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_watched_folder_is_read_again_by_itself_a_few_seconds_after_a_file_changes() {
+    use std::io::{BufRead, BufReader};
+
+    let z = Zorix::new();
+    let docs = z.dir.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(docs.join("first.md"), "# Handbook\nThe platform team deploys on Thursdays.\n").unwrap();
+    let added = z.run(&["knowledge", "add", docs.to_str().unwrap(), "--watch"]);
+    assert_eq!(code(&added), 0, "{}", text(&added.stderr));
+    let listed = z.run(&["knowledge", "list"]);
+    assert!(text(&listed.stdout).contains(", watched"), "{}", text(&listed.stdout));
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_zorix"))
+        .arg("--home")
+        .arg(z.home())
+        .args(["knowledge", "watch"])
+        .env_remove("ZORIX_HOME")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start zorix");
+    // It says when it is waiting, which is after it has caught up.
+    let stderr = child.stderr.take().unwrap();
+    let (said, lines) = mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            let _ = said.send(line);
+        }
+    });
+    let started = std::time::Instant::now();
+    loop {
+        let line = lines.recv_timeout(Duration::from_secs(30)).expect("it says it is waiting");
+        if line.starts_with("Waiting for changes") {
+            break;
+        }
+        assert!(started.elapsed() < Duration::from_secs(30));
+    }
+
+    // A new file appears; a few seconds later it can be found, without anyone running a sync.
+    std::thread::sleep(Duration::from_millis(700));
+    std::fs::write(docs.join("second.md"), "# Notes\nThe zebracorn migration finished on Friday.\n").unwrap();
+    let began = std::time::Instant::now();
+    let mut found = false;
+    while began.elapsed() < Duration::from_secs(40) {
+        let out = z.run(&["knowledge", "search", "zebracorn", "--json"]);
+        if text(&out.stdout).contains("zebracorn") {
+            found = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    interrupt(child.id());
+    let status = child.wait().unwrap();
+    assert!(found, "the new file was not read within 40 seconds");
+    assert_eq!(status.code(), Some(4), "Ctrl-C ends it as cancelled");
+}
+
+/// SIGINT, as Ctrl-C sends it.
+#[cfg(unix)]
+fn interrupt(pid: u32) {
+    let _ = Command::new("kill").args(["-INT", &pid.to_string()]).status();
+}
