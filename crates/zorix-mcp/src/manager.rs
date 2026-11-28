@@ -25,6 +25,7 @@ use crate::client::{CallOutput, McpClient, McpToolDef, ToolListing};
 use crate::error::McpError;
 use crate::http::HttpTransport;
 use crate::oauth::{OAuthSession, Vault};
+use crate::sandbox::Confinement;
 use crate::stdio::{StdioConfig, StdioTransport};
 use crate::tool::{McpCaller, McpTool};
 use crate::transport::{ServerEvent, Transport};
@@ -140,6 +141,8 @@ pub struct ManagerOptions {
     /// Where servers are started when they name no folder: each gets a folder of its own under this one, named by its id, so a server
     /// never starts in the folder ZORIX itself was started from. `None` leaves it to the program's own folder (tests only).
     pub work_dir: Option<PathBuf>,
+    /// ZORIX's data folder, which a confined server may never read.
+    pub data_home: Option<PathBuf>,
 }
 
 impl Default for ManagerOptions {
@@ -148,6 +151,7 @@ impl Default for ManagerOptions {
             backoff: [1, 2, 4, 8, 16].into_iter().map(Duration::from_secs).collect(),
             probe_timeout: crate::client::PROBE_TIMEOUT,
             work_dir: None,
+            data_home: None,
         }
     }
 }
@@ -211,12 +215,19 @@ impl Connector for DefaultConnector {
                     }
                     (None, None) => None,
                 };
-                let transport = StdioTransport::spawn(StdioConfig {
-                    command: command.clone(),
-                    args: args.clone(),
-                    env: resolved,
-                    cwd: folder,
-                })?;
+                // A confined server has a folder of its own to be its home, even where servers have none otherwise (tests).
+                let confinement = server.sandbox.as_ref().and_then(|sandbox| {
+                    let own = options
+                        .work_dir
+                        .clone()
+                        .unwrap_or_else(|| std::env::temp_dir().join("zorix-mcp"))
+                        .join(server.id.to_string());
+                    Confinement::of(sandbox, own, options.data_home.as_deref())
+                });
+                let transport = StdioTransport::spawn_confined(
+                    StdioConfig { command: command.clone(), args: args.clone(), env: resolved, cwd: folder },
+                    confinement,
+                )?;
                 Ok(Arc::new(transport))
             }
             McpTransport::Http { url, auth } => {

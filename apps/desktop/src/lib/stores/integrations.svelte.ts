@@ -1,6 +1,7 @@
 // What the Integrations screens show: MCP servers, the catalogue, connections and the sandbox. The Rust side decides
 // everything; this keeps the latest answers and runs the actions, with a toast for the outcome.
 import {
+  type ServerSandbox,
   type AddServer,
   type CatalogEntry,
   type ConnectionKind,
@@ -14,6 +15,7 @@ import {
   errorText,
   mcpAdd,
   mcpApproveAll,
+  mcpSetSandbox,
   mcpCatalog,
   mcpList,
   mcpLogin,
@@ -161,6 +163,12 @@ class IntegrationsStore {
   async approveAll(name: string, shown: [string, string][]): Promise<void> {
     const n = await this.#act(() => mcpApproveAll(name, shown));
     if (n !== undefined) toast.ok(t("stores.integrations.approvedToolS", { n }));
+  }
+
+  /** Choose how a local server is confined. A running server starts again with the choice. */
+  async setSandbox(name: string, sandbox: ServerSandbox): Promise<boolean> {
+    const done = await this.#act(() => mcpSetSandbox(name, sandbox).then(() => true));
+    return done === true;
   }
 
   async trust(name: string, tool: string, skipAsking: boolean): Promise<void> {

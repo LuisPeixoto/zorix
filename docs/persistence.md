@@ -104,6 +104,12 @@ Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuse
 
 `app_settings` holds one record per tenant, written whole: whether long conversations are summarised, how long finished runs are kept and what retention does to them, the address of a telemetry collector, and whether scanned pages are read. A setting missing from a record reads with its default, so adding one needs no migration. Nothing in it is a secret (the headers a collector may need go to the system keychain). Both programs read it through the same store; the desktop app also keeps the current value in memory, so a change takes effect at once. Opening a schema-12 database adds the table, empty; a 0.10 program refuses a schema-13 database.
 
+### The sandbox of a local server (schema 17)
+
+`mcp_servers` has a `sandbox` column (JSON: mode, network, folders), empty for remote servers and for local ones added before, which
+run as before until a person chooses. Every new local server gets one when it is added. The version bump also keeps an older ZORIX,
+which would not read the column, from opening data whose servers are meant to be confined: a 0.11 program refuses a schema-17 database.
+
 ### Watched folders (schema 16)
 
 `knowledge_roots` gains `watch` (0 or 1): the folder is kept up to date while the app runs ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)). Folders that were there before are 0. Opening a schema-15 database adds it; a 0.10 program refuses a schema-16 database.

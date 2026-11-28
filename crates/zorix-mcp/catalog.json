@@ -145,7 +145,7 @@
         ]
       },
       "requires": "Node.js (npx)",
-      "notes": "It runs as you. ZORIX's own workspace tools are confined to one folder per run and ask before writing; this server decides for itself."
+      "notes": "It reads and writes the folder you choose (its sandbox lets it in). ZORIX's own workspace tools are confined per run and ask before writing; this server decides for itself."
     },
     {
       "id": "fetch",
@@ -330,7 +330,7 @@
         "inputs": []
       },
       "requires": "Node.js (npx)",
-      "notes": "Meant to need no files and no network; like any local server it runs as you."
+      "notes": "Meant to need no files and no network; sandboxed like any local server."
     },
     {
       "id": "git",
@@ -358,7 +358,7 @@
         ]
       },
       "requires": "uv (uvx)",
-      "notes": "It can commit in that repository, and like any local server it runs as you."
+      "notes": "It can commit in that repository, which its sandbox lets it write."
     },
     {
       "id": "time",
@@ -378,7 +378,7 @@
         "inputs": []
       },
       "requires": "uv (uvx)",
-      "notes": "Meant to need no files and no network; like any local server it runs as you."
+      "notes": "Meant to need no files and no network; sandboxed like any local server."
     }
   ]
 }

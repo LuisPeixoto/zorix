@@ -6,6 +6,8 @@
 //! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`),
 //! `--input-required` (modern: answers `echo` with an input request), `--noise` (writes to stderr, including a secret-looking token),
 //! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading),
+//! An unlisted tool `probe` tries what its arguments name (`read`, `write`, `resolve`, `connect`, `unix`, `home`) and says how each went, for the
+//! sandbox tests.
 //! `--die TEXT` (writes TEXT to its error stream and exits with status 3 before answering anything),
 //! `--string-ids` (answers with each request's id written as a string, which JSON-RPC allows a server to do),
 //! `--child FILE` (starts a grandchild of this very program that writes a growing number into FILE ten times a second, as a server that
@@ -64,6 +66,41 @@ fn tool(name: &str, description: &str, annotations: Value) -> Value {
         "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}, "name": {"type": "string"}}, "additionalProperties": true},
         "annotations": annotations,
     })
+}
+
+/// Try what the arguments name, one line per attempt.
+fn probe(args: &Value) -> String {
+    let mut out = Vec::new();
+    let word = |ok: bool| if ok { "ok" } else { "denied" };
+    let list = |name: &str| -> Vec<String> {
+        args[name]
+            .as_array()
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default()
+    };
+    for path in list("read") {
+        out.push(format!("read {path}={}", word(std::fs::read(&path).is_ok())));
+    }
+    for path in list("write") {
+        out.push(format!("write {path}={}", word(std::fs::write(&path, b"x").is_ok())));
+    }
+    for path in list("resolve") {
+        out.push(format!("resolve {path}={}", word(std::fs::canonicalize(&path).is_ok())));
+    }
+    for address in list("connect") {
+        let ok = address
+            .parse()
+            .is_ok_and(|a| std::net::TcpStream::connect_timeout(&a, std::time::Duration::from_secs(2)).is_ok());
+        out.push(format!("connect {address}={}", word(ok)));
+    }
+    #[cfg(unix)]
+    for path in list("unix") {
+        out.push(format!("unix {path}={}", word(std::os::unix::net::UnixStream::connect(&path).is_ok())));
+    }
+    if args["home"] == true {
+        out.push(format!("home={}", std::env::var("HOME").unwrap_or_default()));
+    }
+    out.join("\n")
 }
 
 fn main() {
@@ -288,6 +325,7 @@ fn main() {
                         keys.sort();
                         reply(&id, text(&keys.join(",")));
                     }
+                    "probe" => reply(&id, text(&probe(&args))),
                     "cancelled" => reply(&id, text(&cancelled.to_string())),
                     "hang" => {}
                     "crash" => std::process::exit(3),

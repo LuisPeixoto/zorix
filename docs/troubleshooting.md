@@ -119,6 +119,13 @@ continues with keyword search and its context says so.
 
 Writing commands need the data folder to themselves, so they fail while the desktop app is open. Close it, or use the app.
 
+## A local MCP server stopped working after it was sandboxed
+
+Its log usually says `EPERM` or `Operation not permitted`. Give it the folder it needs (`zorix mcp sandbox <name> --folder-write
+<dir>`), turn the network on if it talks to the internet (`--network on`), or, if you trust the program, `--mode off`. A server that
+compiles something on first start (a Python package without a ready build, for example) may need to be started once with the
+sandbox off. On Linux, "this Linux cannot confine the server" means the kernel has no Landlock (before 5.13, or switched off).
+
 ## An MCP server is "Starting" for a long time, or "Failed"
 
 A server that ends before it answers says so, with the last lines it wrote on its error stream (secrets removed) and the status it

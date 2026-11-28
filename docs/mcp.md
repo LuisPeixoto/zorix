@@ -54,7 +54,8 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
   size limits apply.
 - **Servers are asked for nothing and answer little.** ZORIX answers `ping` and refuses everything else a server may ask of a
   client: sampling (spending your model tokens), elicitation, and roots. A server cannot read your workspace through ZORIX.
-- **A stdio server is a program running as you.** There is no sandbox around it. ZORIX starts it without a shell, with a clean
+- **A stdio server is a program on your computer, and it starts sandboxed** ([below](#the-sandbox-of-a-local-server)). ZORIX starts
+  it without a shell, with a clean
   environment plus the variables you named (secrets from the keychain), in a folder of its own (`<data folder>/mcp/<server id>`
   unless you named one, never the folder ZORIX was started from), and keeps the last 1 MB of what it wrote on its error stream,
   with secrets removed. The interface says all of this before you turn one on.
@@ -66,6 +67,30 @@ Tool ids are `mcp.<server>.<tool>`; the server name is the one you chose.
 - **A server's variables are plain names that differ by more than case.** `FOO` and `foo` are one variable to Windows and one secret to ZORIX, so a server that lists both is refused (adding, importing and changing all check it).
 - **Secrets stay in the keychain.** Environment secrets and bearer tokens are stored by name in the system keychain;
   the database holds only that a secret exists.
+
+## The sandbox of a local server
+
+A local server you add now starts **sandboxed** ([ADR-0050](adr/0050-sandbox-of-local-mcp-servers.md)): it reads the system and the
+language toolchains it runs on, its own folder and the folders you give it, and writes only in its own folder and the folders given
+for writing. Your SSH keys, cloud credentials, keychain and ZORIX's data are out of reach, and so are other programs' services (the
+keyring, Docker, the SSH agent). The **network** is on for servers started with `npx` or `uvx`, which download their package, and off
+for others. A server you added before keeps running as before until you choose.
+
+In the app: the server's drawer, *Details › Sandbox*. On the command line:
+
+```bash
+zorix mcp sandbox files                              # what it has
+zorix mcp sandbox files --folder-write ~/notes       # give it a folder (--folder to read only)
+zorix mcp sandbox files --network off                # no connections
+zorix mcp sandbox files --mode off                   # run it as you, if you trust it
+zorix mcp doctor                                     # what is enforced on this computer
+```
+
+| System | Files | Network | Processes |
+|---|---|---|---|
+| macOS | Seatbelt (`sandbox-exec`) | refused when off | end with the server |
+| Linux | Landlock (a kernel without it refuses to start the server) | seccomp, refused when off | end with the server |
+| Windows | **not confined** | **not confined** | Job Object: end with the server, memory and number limited |
 
 ## Both protocol eras
 
