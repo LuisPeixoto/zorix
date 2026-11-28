@@ -82,7 +82,7 @@ jobs:
       - name: Say it per crate
         run: node tools/coverage-summary.mjs coverage.json --markdown >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: |
@@ -102,7 +102,7 @@ jobs:
         run: cargo run --release -p zorix-bench -- --scale 0.1 --json bench.json --check crates/zorix-bench/limits.json
       - name: Keep the numbers
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench
           path: bench.json
