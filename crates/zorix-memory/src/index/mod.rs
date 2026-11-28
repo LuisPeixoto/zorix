@@ -6,5 +6,6 @@ pub mod extract;
 pub mod pdf;
 pub mod sync;
 pub mod walk;
+pub mod watch;
 
 pub use sync::{Indexer, Phase, Progress, SyncReport};

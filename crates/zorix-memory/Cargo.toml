@@ -22,6 +22,7 @@ globset.workspace = true
 html2text = { workspace = true, optional = true }
 pdf-extract = { workspace = true, optional = true }
 ignore.workspace = true
+notify.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
