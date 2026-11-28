@@ -141,10 +141,7 @@ fn require(grants: &Grants, action: Action, path: &RelativePath) -> Result<(), T
 /// speak of. A link can lead somewhere the text of the request does not say: the grant and the `.zorix` reservation are about
 /// the place the bytes are, so they are checked there too.
 fn real_relative(root: &Path, real: &Path) -> Result<RelativePath, ToolError> {
-    let inside = real.strip_prefix(root).map_err(|_| {
-        eprintln!("DIAG relative real={real:?} root={root:?}");
-        failed("That path leads outside the workspace.")
-    })?;
+    let inside = real.strip_prefix(root).map_err(|_| failed("That path leads outside the workspace."))?;
     let mut text = Vec::new();
     for part in inside.components() {
         let name = part.as_os_str().to_str().ok_or_else(|| failed("That path has a name ZORIX cannot read."))?;
@@ -175,11 +172,36 @@ fn require_real(grants: &Grants, action: Action, asked: &RelativePath, real: &Re
     }
 }
 
+/// How many more times a file's real place is asked for when the answer is not under the workspace.
+const RESOLVE_RETRIES: u32 = 5;
+
+/// Ask where a file really is, and ask again, a few times, when the answer is not under `root` or the file cannot be opened yet.
+///
+/// On Windows a file that another write has just replaced is, for a moment, kept under `\$Extend\$Deleted` while a handle to it is
+/// open, so asking where it is can answer with a place outside the workspace (or refuse access) although the name never left it;
+/// asking again finds the file that is there now. A link that really leads outside answers the same way every time, so it stays
+/// refused, and every answer that is used has passed the same check.
+fn real_place(root: &Path, mut ask: impl FnMut() -> std::io::Result<PathBuf>) -> std::io::Result<PathBuf> {
+    let mut answer = ask();
+    for attempt in 0..RESOLVE_RETRIES {
+        let settled = match &answer {
+            Ok(real) => real.starts_with(root),
+            Err(error) => error.kind() != std::io::ErrorKind::PermissionDenied,
+        };
+        if settled {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1 << attempt));
+        answer = ask();
+    }
+    answer
+}
+
 /// Resolve an existing path and prove, after following links, that it is inside the root and that the place it leads to is
 /// granted and not reserved.
 fn resolve_existing(root: &Path, grants: &Grants, action: Action, path: &RelativePath) -> Result<PathBuf, ToolError> {
     let joined = path.join_onto(root);
-    let real = fs::canonicalize(&joined).map_err(|e| match e.kind() {
+    let real = real_place(root, || fs::canonicalize(&joined)).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound => failed(format!("There is no such file or folder: {}.", path.display())),
         _ => failed(format!("Cannot open {}: {e}", path.display())),
     })?;
@@ -199,12 +221,10 @@ fn resolve_for_write(root: &Path, grants: &Grants, path: &RelativePath) -> Resul
     // The deepest ancestor that exists must resolve inside the root.
     let mut ancestor = target.parent().unwrap_or(root).to_path_buf();
     while !ancestor.exists() {
-        eprintln!("DIAG missing ancestor {ancestor:?} metadata={:?} root={root:?}", fs::metadata(&ancestor).map(|m| m.is_dir()));
         ancestor = ancestor.parent().ok_or_else(|| failed("That path leads outside the workspace."))?.to_path_buf();
     }
     let real = fs::canonicalize(&ancestor).map_err(|e| failed(format!("Cannot use that location: {e}")))?;
     if !real.starts_with(root) {
-        eprintln!("DIAG resolve real={real:?} root={root:?} ancestor={ancestor:?}");
         return Err(failed("That path leads outside the workspace."));
     }
     // Where the file would really be: the folder a link leads to, then what is left of the path. That place needs its own grant
@@ -292,7 +312,6 @@ pub fn write(root: &Path, grants: &Grants, path: &str, content: &str) -> Result<
         // Created folders could not be links, but check again: another process may have raced us.
         let real = fs::canonicalize(parent).map_err(|e| failed(format!("Cannot use that location: {e}")))?;
         if !real.starts_with(&root) {
-            eprintln!("DIAG after-create real={real:?} root={root:?} parent={parent:?}");
             return Err(failed("That path leads outside the workspace."));
         }
     }
@@ -749,22 +768,59 @@ mod tests {
         let writers: Vec<_> = (0..8)
             .map(|n| {
                 let root = root.clone();
-                std::thread::spawn(move || {
+                std::thread::spawn(move || -> Result<(), String> {
                     let (name, body) = if n % 2 == 0 { ("a.txt", "text") } else { ("a.md", "markdown") };
-                    for _ in 0..40 {
-                        write(&root, &grants(), name, body).unwrap();
-                        assert_eq!(read(&root, &grants(), name).unwrap()["content"], body);
+                    for round in 0..40 {
+                        write(&root, &grants(), name, body).map_err(|e| format!("write {name} #{round}: {e:?}"))?;
+                        let got = read(&root, &grants(), name).map_err(|e| format!("read {name} #{round}: {e:?}"))?;
+                        if got["content"] != body {
+                            return Err(format!("{name} #{round} held {}", got["content"]));
+                        }
                     }
+                    Ok(())
                 })
             })
             .collect();
-        for writer in writers {
-            writer.join().unwrap();
-        }
+        // Every thread is waited for before anything is asserted, so the folder is not removed under the ones still working (which would
+        // hide the first failure behind others).
+        let failures: Vec<String> =
+            writers.into_iter().filter_map(|writer| writer.join().expect("a writer panicked").err()).collect();
+        assert!(failures.is_empty(), "{failures:#?}");
         let mut left: Vec<String> =
             fs::read_dir(dir.path()).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
         left.sort();
         assert_eq!(left, ["a.md", "a.txt"], "no temporary file is left behind");
+    }
+
+    #[test]
+    fn a_files_place_is_asked_for_again_only_while_the_answer_could_be_passing() {
+        use std::io::{Error, ErrorKind};
+        let root = Path::new("/ws");
+        let answers = |mut script: Vec<std::io::Result<PathBuf>>| {
+            let mut asked = 0;
+            let got = real_place(root, || {
+                asked += 1;
+                if script.len() > 1 {
+                    script.remove(0)
+                } else {
+                    script[0].as_ref().map(Clone::clone).map_err(|e| e.kind().into())
+                }
+            });
+            (got.map_err(|e| e.kind()), asked)
+        };
+        let inside = || Ok(PathBuf::from("/ws/a.txt"));
+        let outside = || Ok(PathBuf::from("/$Extend/$Deleted/0001"));
+        // A file being replaced: outside, or refused, for a moment, then where it should be.
+        assert_eq!(answers(vec![outside(), outside(), inside()]), (Ok(PathBuf::from("/ws/a.txt")), 3));
+        assert_eq!(
+            answers(vec![Err(Error::from(ErrorKind::PermissionDenied)), inside()]),
+            (Ok(PathBuf::from("/ws/a.txt")), 2)
+        );
+        // A link that really leads outside answers the same every time and is still outside after the last try.
+        assert_eq!(answers(vec![outside()]), (Ok(PathBuf::from("/$Extend/$Deleted/0001")), 1 + RESOLVE_RETRIES));
+        // Inside the first time, or a file that is not there: asked once.
+        assert_eq!(answers(vec![inside()]).1, 1);
+        assert_eq!(answers(vec![Err(Error::from(ErrorKind::NotFound))]), (Err(ErrorKind::NotFound), 1));
     }
 
     #[test]
