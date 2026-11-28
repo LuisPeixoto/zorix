@@ -152,9 +152,21 @@ zorix mcp serve --allow-runs --allow math.evaluate --model anthropic/claude-opus
 It speaks MCP on standard input and output, in both eras, and writes nothing else to standard output (logs go to standard
 error). By default it is **read-only** and takes no lock on the data folder, so it works while the desktop app is open:
 an outside agent can *read* what you told ZORIX to remember, never change it. `--allow-runs` adds `zorix.run`,
-`zorix.status` and `zorix.result`; it takes the data-folder lock for as long as it runs, runs use the tools, files and limits
-the flags give them, and a run that needs an approval waits for it **in ZORIX**: no MCP client can approve a call. In Claude
-Code, for example: `claude mcp add zorix -- zorix mcp serve`.
+`zorix.status`, `zorix.result`, `zorix.runs`, `zorix.approvals` and `zorix.cancel`; it takes the data-folder lock for as long as
+it runs, runs use the tools, files and limits the flags give them, and a run that needs an approval waits for it **in ZORIX**
+unless you also give `--allow-approvals`. In Claude Code, for example: `claude mcp add zorix -- zorix mcp serve`. The app builds
+the command for you in *Settings › General › Use ZORIX from other tools*.
+
+**Answering approvals from the client.** `--allow-approvals` (with `--allow-runs`) adds `zorix.answer_approval`
+`{execution_id, approval_id, call_hash, approve, note?, wait_seconds?}`; `zorix.approvals` gives the ids and the hash. Every
+answer is first put to **you** by the client (MCP *elicitation*): the tool, the run, why it needs a person and the whole
+arguments. Without your yes nothing happens, and a client that cannot ask is refused. A call whose arguments are too long to show
+whole can only be refused here, and tools that must be seen in ZORIX (memory writes, for example) are never approved this way.
+ZORIX cannot see whether a client really asks you: turn this on only for a client you trust to do so.
+
+**Seeing and stopping runs.** A client sees the runs this server started; `--allow-read-runs` also shows the others, but
+`zorix.cancel` stops only the server's own. The same runs are resources (`zorix://runs/{id}`), and so are your agents
+(`zorix://agents/{name}`, without their instructions).
 
 **Agents.** `zorix.agents` is always there: it lists the agents you made (name, description, default model, version and the names of
 their skills; never their instructions). With `--allow-runs`, **`zorix.run_agent`** `{agent, prompt, input?, model?, wait_seconds?}` runs one and
@@ -166,7 +178,7 @@ example `--allow 'skill.*' --allow-access code:python`. `zorix.status` and `zori
 
 **Teams.** `zorix.agents` also lists the teams (name, description, lead, members), and `zorix.run_agent` takes `team`: the run is the lead's, and the lead may ask the members
 ([teams](teams.md)). The same `--allow` flags apply to the lead and, intersected, to every sub-run. `zorix.status` reports `sub_runs` (state, agent, cost) so a client can show
-progress; an approval asked by a sub-run still waits in ZORIX.
+progress; an approval asked by a sub-run is listed on the run you started, and answered like any other.
 
 ## Troubleshooting
 

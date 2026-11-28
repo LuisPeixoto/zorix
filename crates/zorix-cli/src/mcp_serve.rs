@@ -1,4 +1,5 @@
-//! `zorix mcp serve`: ZORIX's memory (and, when asked, its runs) as an MCP server over stdio (ADR-0023).
+//! `zorix mcp serve`: ZORIX's memory (and, when asked, its runs and approvals) as an MCP server over stdio (ADR-0023,
+//! ADR-0052).
 //!
 //! stdout carries only protocol messages. Nothing here writes memory.
 
@@ -23,6 +24,8 @@ use crate::app::{App, CliError, open_engine, open_reader, open_router};
 use crate::cli::{McpServeArgs, ModelArgs};
 use crate::follow::Exit;
 
+mod control;
+
 /// The read-only tools every server offers.
 const READ_TOOLS: [&str; 3] = ["memory.search", "knowledge.search", "history.search"];
 /// The longest a `zorix.run` call waits for the run, in seconds.
@@ -43,6 +46,8 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
 
     let mut tools: Vec<Arc<dyn Tool>> = Vec::new();
     let mut app: Option<Arc<App>> = None;
+    let mut runs: Option<Arc<RunShared>> = None;
+    let agent_store: Arc<SqliteAgentStore>;
     let mut grants = Grants::none();
     let mut instructions = String::from(
         "ZORIX's memory and records of past work. memory.search finds what the person told ZORIX to remember, \
@@ -56,10 +61,18 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         let registry = Arc::new(InMemoryToolRegistry::new());
         opened.stack.register_tools(&*registry)?;
         collect_read_tools(&*registry, &mut tools);
-        let run_grants = run_grants(&args);
-        for tool in run_tools(opened.clone(), tenant.clone(), run_grants, project.clone(), args.allow_read_runs) {
-            tools.push(tool);
-        }
+        let shared = Arc::new(RunShared {
+            app: opened.clone(),
+            tenant: tenant.clone(),
+            grants: run_grants(&args),
+            workspace: project.clone(),
+            started: parking_lot::Mutex::new(std::collections::HashSet::new()),
+            read_all_runs: args.allow_read_runs,
+            answers: args.allow_approvals,
+        });
+        tools.extend(run_tools(shared.clone()));
+        agent_store = opened.hub.agents.clone();
+        runs = Some(shared);
         tools.push(Arc::new(AgentsTool {
             store: opened.hub.agents.clone(),
             tenant: tenant.clone(),
@@ -68,8 +81,14 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         instructions.push_str(
             " zorix.run starts an activity in ZORIX, and zorix.run_agent starts one of the agents zorix.agents lists; \
              both run with only what the person allowed when they started this server. One that needs a person's \
-             approval waits for it in ZORIX and cannot be approved through MCP. zorix.status and zorix.result follow it.",
+             approval waits for it. zorix.status and zorix.result follow a run, zorix.runs lists them, zorix.approvals says \
+             what waits, and zorix.cancel stops one.",
         );
+        instructions.push_str(if args.allow_approvals {
+            " zorix.answer_approval answers a waiting call; the person is asked to confirm every answer."
+        } else {
+            " Approvals are answered in ZORIX, never through MCP."
+        });
         app = Some(opened);
     } else {
         // Reading takes no lock, so this works while the desktop app is open.
@@ -82,14 +101,15 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         let registry = Arc::new(InMemoryToolRegistry::new());
         stack.register_tools(&*registry)?;
         collect_read_tools(&*registry, &mut tools);
-        let agents = Arc::new(SqliteAgentStore::open(&database)?);
-        tools.push(Arc::new(AgentsTool { store: agents, tenant: tenant.clone(), spec: agents_spec() }));
+        agent_store = Arc::new(SqliteAgentStore::open(&database)?);
+        tools.push(Arc::new(AgentsTool { store: agent_store.clone(), tenant: tenant.clone(), spec: agents_spec() }));
     }
     instructions.push_str(" zorix.agents lists the agents a person made: who they are and what they are for.");
     for tool in &tools {
         grants = grants.with(Permission::use_tool(&tool.spec().id));
     }
-    let server = Arc::new(McpServer::new(
+    let resources = control::ZorixResources { agents: agent_store, tenant: tenant.clone(), runs: runs.clone() };
+    let mut server = McpServer::new(
         ServerConfig {
             name: "zorix".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -99,7 +119,14 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
             workspace_root: project,
         },
         tools,
-    ));
+    )
+    .with_resources(Arc::new(resources));
+    if args.allow_approvals
+        && let Some(shared) = runs
+    {
+        server = server.confirming("zorix.answer_approval", Arc::new(control::AnswerQuestion(shared)));
+    }
+    let server = Arc::new(server);
     eprintln!("zorix: serving {} over stdio. Press Ctrl-C to stop.", server.tool_ids().join(", "));
 
     let cancel = CancellationToken::new();
@@ -144,27 +171,20 @@ fn run_grants(args: &McpServeArgs) -> Grants {
     grants
 }
 
-fn run_tools(
-    app: Arc<App>,
-    tenant: TenantId,
-    grants: Grants,
-    workspace: Option<PathBuf>,
-    read_all_runs: bool,
-) -> Vec<Arc<dyn Tool>> {
-    let shared = Arc::new(RunShared {
-        app,
-        tenant,
-        grants,
-        workspace,
-        started: parking_lot::Mutex::new(std::collections::HashSet::new()),
-        read_all_runs,
-    });
-    vec![
+fn run_tools(shared: Arc<RunShared>) -> Vec<Arc<dyn Tool>> {
+    let mut tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(RunTool { shared: shared.clone(), spec: run_spec() }),
         Arc::new(RunAgentTool { shared: shared.clone(), spec: run_agent_spec() }),
         Arc::new(StatusTool { shared: shared.clone(), spec: status_spec() }),
-        Arc::new(ResultTool { shared, spec: result_spec() }),
-    ]
+        Arc::new(ResultTool { shared: shared.clone(), spec: result_spec() }),
+        Arc::new(control::RunsTool::new(shared.clone())),
+        Arc::new(control::ApprovalsTool::new(shared.clone())),
+        Arc::new(control::CancelTool::new(shared.clone())),
+    ];
+    if shared.answers {
+        tools.push(Arc::new(control::AnswerTool::new(shared)));
+    }
+    tools
 }
 
 struct RunShared {
@@ -176,6 +196,8 @@ struct RunShared {
     /// data folder (their prompts, their answers) are the person's own unless they said otherwise with `--allow-read-runs`.
     started: parking_lot::Mutex<std::collections::HashSet<ExecutionId>>,
     read_all_runs: bool,
+    /// Whether a client may pass the person's answer to an approval on.
+    answers: bool,
 }
 
 fn failed(message: impl Into<String>) -> ToolError {
@@ -244,10 +266,13 @@ impl RunShared {
         }
         if !pending.is_empty() {
             out["waiting_for_approval"] = json!(pending);
-            out["note"] = json!(
+            out["note"] = json!(if self.answers {
+                "A person has to answer this: zorix.approvals shows the call, and zorix.answer_approval asks them to \
+                 confirm the answer."
+            } else {
                 "A person has to approve this in ZORIX. It cannot be approved through MCP, and while this server runs \
                  it holds the data folder: stop it, then use `zorix approve` or the desktop app."
-            );
+            });
         }
         if execution.state == ExecutionState::Completed
             && with_result

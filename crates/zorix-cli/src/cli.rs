@@ -546,6 +546,12 @@ pub struct McpServeArgs {
     #[arg(long, requires = "allow_runs")]
     pub allow_read_runs: bool,
 
+    /// With --allow-runs: offer `zorix.answer_approval`. Every answer is first put to you through the client (MCP
+    /// elicitation), naming the exact call; a client that cannot ask is refused. Turn it on only for a client you trust to show
+    /// you that question rather than answer it itself.
+    #[arg(long, requires = "allow_runs")]
+    pub allow_approvals: bool,
+
     /// The project whose memories are visible and whose folder runs work in.
     #[arg(long, value_name = "DIR")]
     pub project: Option<PathBuf>,

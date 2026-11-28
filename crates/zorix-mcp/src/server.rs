@@ -1,20 +1,22 @@
 //! ZORIX as an MCP server (ADR-0023): any set of [`Tool`]s served over a pair of byte streams (stdio for `zorix mcp serve`).
 //!
 //! It speaks both protocol eras: a request that carries the modern `_meta` is served statelessly, and `initialize` selects a
-//! legacy revision. It never asks the client for anything (no sampling, elicitation or roots), never announces changes (the
-//! tool set is fixed for the life of the process) and never runs a tool that needs a person's approval: approval happens in
-//! ZORIX, not through the client.
+//! legacy revision. It never announces changes (the tool set is fixed for the life of the process) and never runs a tool that needs a
+//! person's approval. The one thing it asks the client for is a person's yes, for a tool set up with a [`Confirmation`] (ADR-0052):
+//! through `elicitation/create`, or an `input_required` result in the modern revision. A client that cannot ask is refused.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
+use async_trait::async_trait;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{Semaphore, mpsc};
+use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use zorix_core::{ExecutionId, Grants, TenantId, Tool, ToolCallId, ToolContext, ToolError};
@@ -51,10 +53,44 @@ pub struct ServerConfig {
     pub workspace_root: Option<PathBuf>,
 }
 
+/// How long a person has to answer a question asked through the client.
+const CONFIRM_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// A person's yes, asked through the client before a tool runs.
+#[async_trait]
+pub trait Confirmation: Send + Sync {
+    /// What to ask, naming exactly what the call would do, or why it is refused without asking.
+    async fn question(&self, args: &Value) -> Result<String, String>;
+}
+
+/// A read-only resource the server offers.
+#[derive(Clone, Debug)]
+pub struct ResourceInfo {
+    /// Its address.
+    pub uri: String,
+    /// Its name.
+    pub name: String,
+    /// What it is.
+    pub description: String,
+}
+
+/// Read-only data the server offers as resources.
+#[async_trait]
+pub trait Resources: Send + Sync {
+    /// What there is to read.
+    async fn list(&self) -> Vec<ResourceInfo>;
+    /// One resource as JSON text, or `None` when there is none by that address.
+    async fn read(&self, uri: &str) -> Option<String>;
+}
+
 /// A server over a fixed set of tools.
 pub struct McpServer {
     config: ServerConfig,
     tools: BTreeMap<String, Entry>,
+    confirmations: HashMap<String, Arc<dyn Confirmation>>,
+    resources: Option<Arc<dyn Resources>>,
+    /// A secret of this process, so a modern client cannot make up the state that binds a person's answer to a call.
+    secret: [u8; 32],
 }
 
 struct Entry {
@@ -65,6 +101,14 @@ struct Entry {
 struct Session {
     /// A legacy client has sent `initialize`.
     initialized: AtomicBool,
+    /// A legacy client said at `initialize` that it can ask the person.
+    elicits: AtomicBool,
+    /// Questions sent to the client and not yet answered, by their id.
+    asked: Mutex<HashMap<String, oneshot::Sender<Value>>>,
+    /// States of modern questions already answered, so one answer is not used twice.
+    spent: Mutex<HashSet<String>>,
+    next_question: AtomicU64,
+    out: mpsc::Sender<String>,
     in_flight: Mutex<HashMap<String, CancellationToken>>,
     slots: Arc<Semaphore>,
     cancel: CancellationToken,
@@ -80,7 +124,22 @@ impl McpServer {
                 map.insert(spec.id.clone(), Entry { tool: tool.clone(), validator: Some(validator) });
             }
         }
-        Self { config, tools: map }
+        let mut secret = [0u8; 32];
+        // Without randomness no state can be trusted; a zero secret would make states guessable, so confirmations are refused instead.
+        let _ = getrandom::fill(&mut secret);
+        Self { config, tools: map, confirmations: HashMap::new(), resources: None, secret }
+    }
+
+    /// Ask the person through the client before `tool` runs.
+    pub fn confirming(mut self, tool: &str, confirmation: Arc<dyn Confirmation>) -> Self {
+        self.confirmations.insert(tool.to_string(), confirmation);
+        self
+    }
+
+    /// Offer these resources.
+    pub fn with_resources(mut self, resources: Arc<dyn Resources>) -> Self {
+        self.resources = Some(resources);
+        self
     }
 
     /// The ids of the tools it serves.
@@ -108,6 +167,11 @@ impl McpServer {
         });
         let session = Arc::new(Session {
             initialized: AtomicBool::new(false),
+            elicits: AtomicBool::new(false),
+            asked: Mutex::new(HashMap::new()),
+            spent: Mutex::new(HashSet::new()),
+            next_question: AtomicU64::new(1),
+            out: out.clone(),
             in_flight: Mutex::new(HashMap::new()),
             slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
             cancel: cancel.child_token(),
@@ -142,8 +206,12 @@ impl McpServer {
                         token.cancel();
                     }
                 }
-                // The server asks for nothing, so there is nothing to be answered.
-                Ok(Incoming::Response { .. }) => {}
+                Ok(Incoming::Response { id, result }) => {
+                    // The answer to a question this server asked; anything else is nothing it waits for.
+                    if let Some(waiting) = id.as_str().and_then(|id| session.asked.lock().remove(id)) {
+                        let _ = waiting.send(result.unwrap_or(Value::Null));
+                    }
+                }
                 Ok(Incoming::Request { id, method, params }) => {
                     let server = self.clone();
                     let session = session.clone();
@@ -162,6 +230,8 @@ impl McpServer {
         if tokio::time::timeout(Duration::from_secs(5), drain).await.is_err() {
             tasks.abort_all();
         }
+        // The session holds a way to write too; the writer ends only when every one is gone.
+        drop(session);
         let _ = writer_task.await;
         Ok(())
     }
@@ -191,15 +261,42 @@ impl McpServer {
                 let wanted = params.get("protocolVersion").and_then(Value::as_str).unwrap_or("");
                 let version = LEGACY_VERSIONS.iter().find(|v| **v == wanted).copied().unwrap_or(LEGACY_VERSIONS[0]);
                 session.initialized.store(true, Ordering::SeqCst);
+                session.elicits.store(params["capabilities"].get("elicitation").is_some(), Ordering::SeqCst);
                 let mut result = json!({
                     "protocolVersion": version,
-                    "capabilities": {"tools": {"listChanged": false}},
+                    "capabilities": self.capabilities(),
                     "serverInfo": {"name": self.config.name, "version": self.config.version},
                 });
                 if let Some(instructions) = &self.config.instructions {
                     result["instructions"] = json!(instructions);
                 }
                 Some(wire::result_line(id, &result))
+            }
+            "resources/list" | "resources/read" if self.resources.is_some() => {
+                if !is_modern && !session.initialized.load(Ordering::SeqCst) {
+                    return Some(wire::error_line(id, INVALID_REQUEST, "Initialize the session first."));
+                }
+                let resources = self.resources.as_ref()?;
+                if method == "resources/list" {
+                    let list: Vec<Value> = resources
+                        .list()
+                        .await
+                        .into_iter()
+                        .map(|r| json!({"uri": r.uri, "name": r.name, "description": r.description, "mimeType": "application/json"}))
+                        .collect();
+                    return Some(wire::result_line(id, &complete(json!({"resources": list}), is_modern)));
+                }
+                let uri = params.get("uri").and_then(Value::as_str).unwrap_or("");
+                Some(match resources.read(uri).await {
+                    Some(text) => wire::result_line(
+                        id,
+                        &complete(
+                            json!({"contents": [{"uri": uri, "mimeType": "application/json", "text": text}]}),
+                            is_modern,
+                        ),
+                    ),
+                    None => wire::error_line(id, INVALID_PARAMS, &format!("There is no resource at {uri}.")),
+                })
             }
             "tools/list" | "tools/call" => {
                 if !is_modern && !session.initialized.load(Ordering::SeqCst) {
@@ -219,13 +316,21 @@ impl McpServer {
         }
     }
 
+    fn capabilities(&self) -> Value {
+        let mut capabilities = json!({"tools": {"listChanged": false}});
+        if self.resources.is_some() {
+            capabilities["resources"] = json!({});
+        }
+        capabilities
+    }
+
     fn discover(&self) -> Value {
         let mut supported = vec![MODERN_VERSION];
         supported.extend(LEGACY_VERSIONS.iter().copied());
         let mut result = json!({
             "resultType": "complete",
             "supportedVersions": supported,
-            "capabilities": {"tools": {"listChanged": false}},
+            "capabilities": self.capabilities(),
             "_meta": {"io.modelcontextprotocol/serverInfo": {"name": self.config.name, "version": self.config.version}},
         });
         if let Some(instructions) = &self.config.instructions {
@@ -295,6 +400,17 @@ impl McpServer {
                 ),
             ));
         }
+        if let Some(confirmation) = self.confirmations.get(name) {
+            let question = match confirmation.question(&args).await {
+                Ok(question) => question,
+                Err(why) => return Some(tool_failure(id, modern, &why)),
+            };
+            match self.confirmed(session, name, &args, &question, &params, modern).await {
+                Confirmed::Yes => {}
+                Confirmed::Ask(result) => return Some(wire::result_line(id, &result)),
+                Confirmed::No(why) => return Some(tool_failure(id, modern, why)),
+            }
+        }
         let Ok(permit) = session.slots.clone().try_acquire_owned() else {
             return Some(wire::error_line(id, BUSY, "Too many calls are running; try again in a moment."));
         };
@@ -333,6 +449,110 @@ impl McpServer {
             Ok(Err(ToolError::Failed(message) | ToolError::Retryable(message))) => tool_failure(id, modern, &message),
             Ok(Ok(value)) => tool_success(id, modern, &value, spec.max_output_bytes),
         })
+    }
+}
+
+/// What came of asking the person.
+enum Confirmed {
+    Yes,
+    /// A modern result that asks the client to ask, and to call again with the answer.
+    Ask(Value),
+    No(&'static str),
+}
+
+const CANNOT_ASK: &str = "This client cannot ask you (it does not offer elicitation), so ZORIX does not do this through it. Nothing was done.";
+const REFUSED: &str = "You did not say yes, so nothing was done.";
+
+/// The question as an elicitation: one box to tick.
+fn elicitation(question: &str) -> Value {
+    json!({
+        "message": question,
+        "requestedSchema": {
+            "type": "object",
+            "properties": {"confirm": {"type": "boolean", "title": "Yes, do it"}},
+            "required": ["confirm"]
+        }
+    })
+}
+
+fn said_yes(answer: &Value) -> bool {
+    answer["action"] == "accept" && answer["content"]["confirm"] == true
+}
+
+impl McpServer {
+    /// A state that binds a modern answer to this very call and question. The number makes each asking its own, so a call that
+    /// was refused can be asked about again while no answer counts twice.
+    fn state(&self, number: &str, name: &str, args: &Value, question: &str) -> String {
+        let mut hash = Sha256::new();
+        for part in [number, name, &args.to_string(), question] {
+            hash.update(self.secret);
+            hash.update((part.len() as u64).to_le_bytes());
+            hash.update(part.as_bytes());
+        }
+        let hex: String = hash.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        format!("{number}.{hex}")
+    }
+
+    async fn confirmed(
+        &self,
+        session: &Session,
+        name: &str,
+        args: &Value,
+        question: &str,
+        params: &Value,
+        modern: bool,
+    ) -> Confirmed {
+        if self.secret == [0u8; 32] {
+            return Confirmed::No("ZORIX could not make a secure question, so nothing was done.");
+        }
+        if modern {
+            let can = params["_meta"]["io.modelcontextprotocol/clientCapabilities"].get("elicitation").is_some();
+            if !can {
+                return Confirmed::No(CANNOT_ASK);
+            }
+            let Some(answer) = params["inputResponses"].get("confirm") else {
+                let number = session.next_question.fetch_add(1, Ordering::SeqCst).to_string();
+                let state = self.state(&number, name, args, question);
+                return Confirmed::Ask(json!({
+                    "resultType": "input_required",
+                    "inputRequests": {"confirm": {"method": "elicitation/create", "params": elicitation(question)}},
+                    "requestState": state
+                }));
+            };
+            // The answer must come with the state of this call and this question, and be used once.
+            let given = params["requestState"].as_str().unwrap_or("");
+            let number = given.split_once('.').map_or("", |(number, _)| number);
+            if given != self.state(number, name, args, question) || !session.spent.lock().insert(given.to_string()) {
+                return Confirmed::No("That answer belongs to another question, so nothing was done.");
+            }
+            return if said_yes(answer) { Confirmed::Yes } else { Confirmed::No(REFUSED) };
+        }
+        if !session.elicits.load(Ordering::SeqCst) {
+            return Confirmed::No(CANNOT_ASK);
+        }
+        let id = format!("zorix-{}", session.next_question.fetch_add(1, Ordering::SeqCst));
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut asked = session.asked.lock();
+            if asked.len() >= MAX_IN_FLIGHT {
+                return Confirmed::No("Too many questions are already waiting for your answer. Nothing was done.");
+            }
+            asked.insert(id.clone(), tx);
+        }
+        let request =
+            json!({"jsonrpc": "2.0", "id": id, "method": "elicitation/create", "params": elicitation(question)});
+        if session.out.send(request.to_string()).await.is_err() {
+            return Confirmed::No(REFUSED);
+        }
+        let answer = tokio::select! {
+            _ = session.cancel.cancelled() => None,
+            answer = tokio::time::timeout(CONFIRM_TIMEOUT, rx) => answer.ok().and_then(Result::ok),
+        };
+        session.asked.lock().remove(&id);
+        match answer {
+            Some(answer) if said_yes(&answer) => Confirmed::Yes,
+            _ => Confirmed::No(REFUSED),
+        }
     }
 }
 

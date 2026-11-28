@@ -316,3 +316,167 @@ async fn closing_the_input_or_cancelling_ends_the_server_and_its_calls() {
     let ended = tokio::time::timeout(std::time::Duration::from_secs(10), rig.done).await;
     assert!(ended.expect("the server ended").unwrap().is_ok());
 }
+
+/// Asks about the text a call names, and refuses "forbidden" without asking.
+struct AskAbout;
+
+#[async_trait]
+impl zorix_mcp::Confirmation for AskAbout {
+    async fn question(&self, args: &Value) -> Result<String, String> {
+        match args["text"].as_str() {
+            Some("forbidden") => Err("That is never done here.".into()),
+            text => Ok(format!("Do the thing with {}?", text.unwrap_or("nothing"))),
+        }
+    }
+}
+
+async fn confirming() -> (Rig, Arc<AtomicUsize>) {
+    let (tool, calls) = probe("test.confirmed", Behaviour::Echo, |_| {});
+    let config = ServerConfig {
+        name: "zorix".into(),
+        version: "9.9.9".into(),
+        instructions: None,
+        tenant: TenantId::local(),
+        grants: Grants::none().with(Permission::use_tool("test.confirmed")),
+        workspace_root: None,
+    };
+    let server = Arc::new(McpServer::new(config, vec![tool]).confirming("test.confirmed", Arc::new(AskAbout)));
+    let (to_server, server_in) = tokio::io::duplex(1 << 20);
+    let (server_out, from_server) = tokio::io::duplex(1 << 20);
+    let cancel = CancellationToken::new();
+    let done = tokio::spawn(server.serve(server_in, server_out, cancel.clone()));
+    (Rig { to_server, from_server: BufReader::new(from_server), done, cancel, counters: Default::default() }, calls)
+}
+
+fn said(answer: &Value) -> String {
+    answer["result"]["content"][0]["text"].as_str().unwrap_or_default().to_string()
+}
+
+#[tokio::test]
+async fn a_legacy_client_that_cannot_ask_is_refused_and_one_that_can_is_asked_first() {
+    let (mut rig, calls) = confirming().await;
+    rig.ask(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {}})).await;
+    let refused = rig.ask(2, "tools/call", json!({"name": "test.confirmed", "arguments": {"text": "x"}})).await;
+    assert!(said(&refused).contains("cannot ask you"), "{refused}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    let (mut rig, calls) = confirming().await;
+    rig.ask(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {"elicitation": {}}})).await;
+    for (answer, runs) in [
+        (json!({"action": "decline"}), 0),
+        (json!({"action": "accept", "content": {"confirm": false}}), 0),
+        (json!({"action": "accept", "content": {"confirm": true}}), 1),
+    ] {
+        rig.send(json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "test.confirmed", "arguments": {"text": "x"}}})).await;
+        let question = rig.read().await;
+        assert_eq!(question["method"], "elicitation/create", "{question}");
+        assert_eq!(question["params"]["message"], "Do the thing with x?");
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "nothing happens before the answer");
+        rig.send(json!({"jsonrpc": "2.0", "id": question["id"], "result": answer})).await;
+        let result = rig.read().await;
+        assert_eq!(result["id"], 3);
+        assert_eq!(calls.load(Ordering::SeqCst), runs, "{answer}: {result}");
+        if runs == 0 {
+            assert!(said(&result).contains("did not say yes"), "{result}");
+        }
+    }
+    // A call refused before asking is not asked about.
+    let never = rig.ask(4, "tools/call", json!({"name": "test.confirmed", "arguments": {"text": "forbidden"}})).await;
+    assert_eq!(said(&never), "That is never done here.");
+    rig.cancel.cancel();
+    rig.done.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_modern_answer_counts_once_and_only_for_the_call_it_was_asked_about() {
+    let (mut rig, calls) = confirming().await;
+    let meta = |capabilities: Value| json!({"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "t", "version": "1"}, "io.modelcontextprotocol/clientCapabilities": capabilities});
+    let call = |text: &str, extra: Value, capabilities: Value| {
+        let mut params = json!({"name": "test.confirmed", "arguments": {"text": text}, "_meta": meta(capabilities)});
+        for (key, value) in extra.as_object().cloned().unwrap_or_default() {
+            params[key] = value;
+        }
+        params
+    };
+    let cannot = rig.ask(1, "tools/call", call("x", json!({}), json!({}))).await;
+    assert!(said(&cannot).contains("cannot ask you"), "{cannot}");
+    let asked = rig.ask(2, "tools/call", call("x", json!({}), json!({"elicitation": {}}))).await;
+    assert_eq!(asked["result"]["resultType"], "input_required", "{asked}");
+    assert_eq!(asked["result"]["inputRequests"]["confirm"]["method"], "elicitation/create");
+    let state = asked["result"]["requestState"].clone();
+    let yes = json!({"confirm": {"action": "accept", "content": {"confirm": true}}});
+    // The state of one call does not answer another, and a made-up state answers nothing.
+    for (text, given) in [("y", state.clone()), ("x", json!("00".repeat(32)))] {
+        let refused = rig
+            .ask(
+                3,
+                "tools/call",
+                call(text, json!({"inputResponses": yes, "requestState": given}), json!({"elicitation": {}})),
+            )
+            .await;
+        assert!(said(&refused).contains("another question"), "{text}: {refused}");
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let done = rig
+        .ask(
+            4,
+            "tools/call",
+            call("x", json!({"inputResponses": yes, "requestState": state}), json!({"elicitation": {}})),
+        )
+        .await;
+    assert_eq!(done["result"]["isError"], false, "{done}");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let again = rig
+        .ask(
+            5,
+            "tools/call",
+            call("x", json!({"inputResponses": yes, "requestState": state}), json!({"elicitation": {}})),
+        )
+        .await;
+    assert!(said(&again).contains("another question"), "an answer is used once: {again}");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn after_a_no_the_same_call_can_be_asked_again_and_questions_do_not_pile_up() {
+    let (mut rig, calls) = confirming().await;
+    let params = |extra: Value| {
+        let mut params = json!({"name": "test.confirmed", "arguments": {"text": "x"}, "_meta": {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}}});
+        for (key, value) in extra.as_object().cloned().unwrap_or_default() {
+            params[key] = value;
+        }
+        params
+    };
+    for (action, runs) in [("decline", 0), ("accept", 1)] {
+        let asked = rig.ask(1, "tools/call", params(json!({}))).await;
+        let answer = json!({"confirm": {"action": action, "content": {"confirm": true}}});
+        let result = rig
+            .ask(
+                2,
+                "tools/call",
+                params(json!({"inputResponses": answer, "requestState": asked["result"]["requestState"]})),
+            )
+            .await;
+        assert_eq!(calls.load(Ordering::SeqCst), runs, "{action}: {result}");
+    }
+
+    let (mut rig, _) = confirming().await;
+    rig.ask(1, "initialize", json!({"protocolVersion": "2025-11-25", "capabilities": {"elicitation": {}}})).await;
+    for id in 0..=MAX_IN_FLIGHT {
+        rig.send(json!({"jsonrpc": "2.0", "id": 10 + id, "method": "tools/call", "params": {"name": "test.confirmed", "arguments": {}}})).await;
+    }
+    let mut questions = 0;
+    let mut refused = 0;
+    for _ in 0..=MAX_IN_FLIGHT {
+        let line = rig.read().await;
+        if line["method"] == "elicitation/create" {
+            questions += 1;
+        } else {
+            assert!(said(&line).contains("waiting for your answer"), "{line}");
+            refused += 1;
+        }
+    }
+    assert_eq!((questions, refused), (MAX_IN_FLIGHT, 1));
+}

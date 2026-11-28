@@ -1,6 +1,6 @@
 # ADR-0023: ZORIX as an MCP server, read-only by default
 
-Status: accepted (Phase 4)
+Status: accepted (Phase 4), amended by [ADR-0052](0052-runs-and-approvals-over-mcp.md)
 
 ## Context
 
