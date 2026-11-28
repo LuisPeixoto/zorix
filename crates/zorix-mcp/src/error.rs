@@ -45,12 +45,18 @@ pub enum McpError {
     /// The connection is closed.
     #[error("The server is not running.")]
     Closed,
+    /// The server ended before it answered. `said` is the end of what it wrote on its error stream, with secrets removed.
+    #[error("The server stopped before it answered.{}", .said.as_deref().map(|s| format!(" It last wrote: {s}")).unwrap_or_default())]
+    Died {
+        /// The last lines it wrote, if any.
+        said: Option<String>,
+    },
 }
 
 impl McpError {
     /// True when asking again may work (the server may just have been slow or restarted).
     pub fn is_retryable(&self) -> bool {
-        matches!(self, McpError::Timeout(_) | McpError::Closed | McpError::Transport(_))
+        matches!(self, McpError::Timeout(_) | McpError::Closed | McpError::Transport(_) | McpError::Died { .. })
     }
 }
 

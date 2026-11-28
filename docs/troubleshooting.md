@@ -121,7 +121,8 @@ Writing commands need the data folder to themselves, so they fail while the desk
 
 ## An MCP server is "Starting" for a long time, or "Failed"
 
-Open the server's **Logs** tab, or run `zorix mcp logs <name>`. Servers started with `npx` need Node installed and may download
+A server that ends before it answers says so, with the last lines it wrote on its error stream (secrets removed) and the status it
+ended with. Open the server's **Logs** tab, or run `zorix mcp logs <name>`, for all of it. Servers started with `npx` need Node installed and may download
 their package the first time (the start waits up to 30 seconds). Remote servers need to be reachable over HTTPS.
 
 ## A Python MCP server (`uvx`) fails on a Mac with an Intel processor

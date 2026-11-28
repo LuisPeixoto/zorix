@@ -86,6 +86,8 @@ struct Shared {
     log: Mutex<Ring>,
     writer: Mutex<Option<mpsc::Sender<String>>>,
     kill: CancellationToken,
+    /// Cancelled once the process is gone and what it wrote on its error stream has been read.
+    settled: CancellationToken,
     exited: Notify,
 }
 
@@ -269,6 +271,7 @@ impl StdioTransport {
             log: Mutex::new(Ring { lines: VecDeque::new(), bytes: 0 }),
             writer: Mutex::new(Some(write_tx)),
             kill: CancellationToken::new(),
+            settled: CancellationToken::new(),
             exited: Notify::new(),
         });
 
@@ -321,7 +324,10 @@ impl StdioTransport {
 
         // Standard error: what the server says about itself. Kept, redacted, bounded.
         let for_log = shared.clone();
+        let read_to_the_end = CancellationToken::new();
+        let done = read_to_the_end.clone().drop_guard();
         tokio::spawn(async move {
+            let _done = done;
             let mut reader = BufReader::new(stderr);
             let mut buf = Vec::new();
             while let Ok(line) = read_line(&mut reader, &mut buf, 16 * 1024).await {
@@ -363,8 +369,9 @@ impl StdioTransport {
         let for_waiter = shared.clone();
         tokio::spawn(async move {
             let pid = child.id();
+            let mut left_by_itself = None;
             tokio::select! {
-                _ = child.wait() => {}
+                status = child.wait() => left_by_itself = status.ok(),
                 _ = for_waiter.kill.cancelled() => {
                     // Ask first, so a server and what it started can save what they hold; then make them.
                     #[cfg(unix)]
@@ -394,6 +401,12 @@ impl StdioTransport {
             }
             #[cfg(not(unix))]
             let _ = pid;
+            // Its last words are still in the pipe when the process is already gone.
+            let _ = tokio::time::timeout(Duration::from_millis(500), read_to_the_end.cancelled()).await;
+            if let Some(status) = left_by_itself.filter(|status| !status.success()) {
+                for_waiter.log.lock().push(format!("[the program ended with {status}]"));
+            }
+            for_waiter.settled.cancel();
             for_waiter.end(McpError::Closed);
             for_waiter.exited.notify_waiters();
         });
@@ -485,6 +498,10 @@ impl Transport for StdioTransport {
 
     fn log(&self) -> Vec<String> {
         self.shared.log.lock().lines.iter().cloned().collect()
+    }
+
+    async fn drained(&self) {
+        let _ = tokio::time::timeout(Duration::from_secs(2), self.shared.settled.cancelled()).await;
     }
 
     async fn close(&self) {

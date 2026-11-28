@@ -6,6 +6,7 @@
 //! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`),
 //! `--input-required` (modern: answers `echo` with an input request), `--noise` (writes to stderr, including a secret-looking token),
 //! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading),
+//! `--die TEXT` (writes TEXT to its error stream and exits with status 3 before answering anything),
 //! `--string-ids` (answers with each request's id written as a string, which JSON-RPC allows a server to do),
 //! `--child FILE` (starts a grandchild of this very program that writes a growing number into FILE ten times a second, as a server that
 //! starts helpers does; `--heartbeat FILE` is that grandchild). `env` with the name `<cwd>` answers the folder the server runs in.
@@ -87,6 +88,10 @@ fn main() {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn();
+    }
+    if let Some(why) = value("--die") {
+        eprintln!("{why}");
+        std::process::exit(3);
     }
     STRING_IDS.store(flag("--string-ids"), std::sync::atomic::Ordering::SeqCst);
     let era = value("--era").unwrap_or_else(|| "dual".into());
