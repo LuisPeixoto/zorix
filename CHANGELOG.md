@@ -5,6 +5,10 @@ project follows [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-27
+
+Phase 11: the runtime, providers and memory audited against the engineering guidelines (thirteen findings, [the audit](docs/audits/phase-11-runtime-providers-memory.md)) and completed.
+
 ### Added
 
 - **Files can be given to a run**: with the *Attach* button, with `@` in the prompt (a menu of indexed documents and files of the workspace folder), by dropping them on the window, or with `zorix run --attach FILE`, in New run and in the chat with an agent. Each file is checked before anything is read (a regular file, no private name even through a link, not under a folder of credentials, at most 1 MB of text or a 25 MB PDF, at most ten files), cleaned of secret-looking text, and given to the run after the task as an untrusted document that cannot close its wrapper or speak as you, cut in proportion when together they would take more than half the model's window. A file outside the workspace is allowed because you chose it, and the run still cannot open anything else. The estimate counts the files. Compacting an old run drops the text and keeps the name and the size ([ADR-0049](docs/adr/0049-files-attached-to-a-run.md)).
@@ -17,6 +21,13 @@ project follows [Semantic Versioning](https://semver.org).
 - **Long conversations are summarised** instead of cut: when the history of a run no longer fits the model's window, the oldest turns become a summary that stands where they were, written by the run's model, kept in the run's checkpoint (so a resume shows the same text), shown to the model as untrusted data, and counted in the run's usage and limits. An `execution.context.summarised` event says how much was folded and what it cost. On by default; `zorix settings set context.summaries off` turns it off ([ADR-0043](docs/adr/0043-summaries-of-long-conversations.md)).
 
 - A place for the program's settings in the database (schema 13), `zorix settings show` and `zorix settings set`, and the commands the desktop app will use: long-conversation summaries, how long runs are kept, a telemetry address and reading scanned pages. All of them are off, or conservative, until a person changes them.
+
+### Changed
+
+- **The database is upgraded to schema 16 the first time 0.11 opens it** (past work gets its agent, the records of past work are written again at the first start, three tables are added, and the document index and the watch switch get their columns). A 0.10 program refuses the upgraded data folder, so back it up first if you may go back ([persistence](docs/persistence.md)).
+- The reason a scanned PDF is left out reads *it is a scan, with no text to read (turn on reading scans in Settings to read it)*; a script that matched the old words (*a scan needs OCR, which is not included*) needs the new ones.
+- The limit of a model call is time **without progress**, not the whole call (see Fixed), and the interface's Settings > General holds the new cards (long conversations, how long runs are kept, telemetry).
+- The cost shown for a model with no known price is *cost unknown*, never $0.00.
 
 ### Fixed
 
