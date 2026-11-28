@@ -594,6 +594,28 @@ export const mcpImportApply = (source: string, path: string, names: string[]) =>
 export const connectionsList = () => invoke<ConnectionRow[]>("connections_list");
 export const connectionAdd = (request: { kind: ConnectionKind; name: string; settings: Record<string, unknown>; secret?: string }) =>
   invoke<ConnectionRow>("connection_add", { request });
+export interface SignInInfo {
+  builtin: boolean;
+  scopes: string;
+  redirect: string | null;
+  needs_secret: boolean;
+}
+export interface DeviceStep {
+  code: string;
+  url: string;
+}
+export const connectionSignInInfo = (kind: ConnectionKind) => invoke<SignInInfo | null>("connection_sign_in_info", { kind });
+export function connectionSignIn(
+  request: { kind: ConnectionKind; name: string; settings: Record<string, unknown> },
+  app: { clientId?: string; clientSecret?: string },
+  onStep: (step: DeviceStep) => void,
+): Promise<ConnectionRow> {
+  const steps = new Channel<DeviceStep>();
+  steps.onmessage = onStep;
+  return invoke<ConnectionRow>("connection_sign_in", { request, clientId: app.clientId ?? null, clientSecret: app.clientSecret ?? null, steps });
+}
+export const connectionSignInOpen = (name: string) => invoke<void>("connection_sign_in_open", { name });
+export const connectionSignInCancel = (name: string) => invoke<void>("connection_sign_in_cancel", { name });
 export const connectionTest = (name: string) => invoke<{ ok: boolean; note: string }>("connection_test", { name });
 export const connectionRemove = (name: string) => invoke<void>("connection_remove", { name });
 export const sandboxStatus = () => invoke<{ javascript: boolean; python: boolean; python_megabytes: number }>("sandbox_status");

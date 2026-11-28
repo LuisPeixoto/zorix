@@ -408,10 +408,26 @@ pub struct ConnectGit {
     #[arg(long, value_name = "URL")]
     pub base_url: Option<String>,
     /// Keep no token: public data only.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "oauth")]
     pub no_token: bool,
     #[command(flatten)]
     pub secret: SecretArgs,
+    #[command(flatten)]
+    pub sign_in: SignInArgs,
+}
+
+/// Signing in instead of giving a token.
+#[derive(Debug, Args)]
+pub struct SignInArgs {
+    /// Sign in: GitHub shows a code to enter, GitLab and Jira open your browser and come back to http://127.0.0.1:53682/callback.
+    #[arg(long, conflicts_with_all = ["secret_env", "secret_stdin"])]
+    pub oauth: bool,
+    /// With --oauth: your own app's client id (needed when this build has none of its own, and always for Jira).
+    #[arg(long, value_name = "ID", requires = "oauth")]
+    pub client_id: Option<String>,
+    /// With --oauth: read your app's client secret from this environment variable (Jira needs it; otherwise it is asked for).
+    #[arg(long, value_name = "VAR", requires = "oauth")]
+    pub client_secret_env: Option<String>,
 }
 
 /// A Jira connection.
@@ -426,10 +442,12 @@ pub struct ConnectJira {
     #[arg(long)]
     pub email: Option<String>,
     /// The token is a bearer token (Jira Server), not an API token with an email.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "oauth")]
     pub bearer: bool,
     #[command(flatten)]
     pub secret: SecretArgs,
+    #[command(flatten)]
+    pub sign_in: SignInArgs,
 }
 
 /// A Slack or Discord connection.

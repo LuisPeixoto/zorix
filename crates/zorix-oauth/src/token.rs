@@ -47,20 +47,42 @@ pub fn form_body(pairs: &[(&str, String)]) -> String {
     url.query().unwrap_or("").to_string()
 }
 
-/// Exchange a code or a refresh token for tokens.
+/// Exchange a code or a refresh token for tokens, sending the fields as a form.
 pub async fn token_request(
     reach: &Reach,
     endpoint: &Url,
     form: &[(&str, String)],
+) -> Result<TokenResponse, OAuthError> {
+    request_tokens(reach, endpoint, form, false).await
+}
+
+/// The same with a JSON body, for authorization servers that document one (Atlassian).
+pub async fn token_request_json(
+    reach: &Reach,
+    endpoint: &Url,
+    fields: &[(&str, String)],
+) -> Result<TokenResponse, OAuthError> {
+    request_tokens(reach, endpoint, fields, true).await
+}
+
+async fn request_tokens(
+    reach: &Reach,
+    endpoint: &Url,
+    form: &[(&str, String)],
+    json: bool,
 ) -> Result<TokenResponse, OAuthError> {
     let response = reach
         .client(endpoint)
         .await?
         .post(endpoint.clone())
         .header("Accept", "application/json")
-        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Content-Type", if json { "application/json" } else { "application/x-www-form-urlencoded" })
         .timeout(Duration::from_secs(30))
-        .body(form_body(form))
+        .body(if json {
+            Value::Object(form.iter().map(|(k, v)| (k.to_string(), Value::String(v.clone()))).collect()).to_string()
+        } else {
+            form_body(form)
+        })
         .send()
         .await
         .map_err(|e| OAuthError::Transport(redact_text(&e.without_url().to_string())))?;

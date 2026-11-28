@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use zorix_core::Clock;
 
 use crate::error::OAuthError;
-use crate::token::{TokenResponse, token_request};
+use crate::token::{TokenResponse, token_request, token_request_json};
 use crate::vault::{Access, Vault};
 use crate::{Reach, endpoint};
 
@@ -23,6 +23,10 @@ pub trait Renewable: Serialize + DeserializeOwned + Send + Sync {
     fn renewed(&mut self, tokens: &TokenResponse);
     /// The address of the thing signed in to, which decides what a token call may reach.
     fn resource(&self) -> &str;
+    /// Whether the token endpoint takes JSON rather than a form.
+    fn json(&self) -> bool {
+        false
+    }
 }
 
 /// One sign-in's tokens: hands out the access token and renews it when it runs out. Renewals are one at a time, so two callers
@@ -66,7 +70,12 @@ impl<R: Renewable> Session<R> {
             Ok(resource) => Reach::of(&resource).await,
             Err(_) => Reach::internet_only(),
         };
-        let tokens = match token_request(&reach, &url, &form).await {
+        let asked = if kept.json() {
+            token_request_json(&reach, &url, &form).await
+        } else {
+            token_request(&reach, &url, &form).await
+        };
+        let tokens = match asked {
             Ok(tokens) => tokens,
             Err(OAuthError::NeedsLogin(why)) => {
                 self.vault.forget().await;

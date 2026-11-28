@@ -17,8 +17,10 @@ use zorix_core::{
 };
 use zorix_hub::Hub;
 use zorix_hub::connections::ConnectRequest;
+use zorix_hub::connections::SignInApp;
+use zorix_integrations::signin::SignInUi;
 use zorix_mcp::catalog::SecretNeeded;
-use zorix_mcp::{ServerState, SystemBrowser, import};
+use zorix_mcp::{BrowserOpener, ServerState, SystemBrowser, import};
 use zorix_runtime::InMemoryToolRegistry;
 use zorix_store::DataDirLock;
 
@@ -876,6 +878,7 @@ pub async fn connect(
             say(printer, format!("Removed {} and its secret.", arg.name));
             Ok(Exit::Done)
         }
+        ConnectCommand::Add(add) if signs_in(&add) => sign_in(home, tenant, printer, add).await,
         ConnectCommand::Add(add) => {
             let (name, request, note) = build_connection(add)?;
             let session = open(home, &tenant, true)?;
@@ -892,6 +895,71 @@ pub async fn connect(
             Ok(Exit::Done)
         }
     }
+}
+
+fn signs_in(add: &ConnectAdd) -> bool {
+    match add {
+        ConnectAdd::Github(a) | ConnectAdd::Gitlab(a) => a.sign_in.oauth,
+        ConnectAdd::Jira(a) => a.sign_in.oauth,
+        _ => false,
+    }
+}
+
+/// The terminal's part of a sign-in: says what to do and opens the browser.
+struct Terminal;
+
+impl SignInUi for Terminal {
+    fn device_code(&self, code: &str, url: &str) {
+        eprintln!("Enter the code {code} at {url}\nWaiting (press Ctrl-C to stop)…");
+        let _ = SystemBrowser.open(url);
+    }
+
+    fn open(&self, url: &str) -> Result<(), String> {
+        eprintln!(
+            "Sign in to continue. If no browser opens, open this address:\n{url}\nWaiting (press Ctrl-C to stop)…"
+        );
+        // The address is printed, so a computer with no browser can still finish it.
+        let _ = SystemBrowser.open(url);
+        Ok(())
+    }
+}
+
+async fn sign_in(home: &Path, tenant: TenantId, printer: Printer, add: ConnectAdd) -> Result<Exit, CliError> {
+    let (kind, name, settings, args) = match add {
+        ConnectAdd::Github(a) => (ConnectionKind::Github, a.name, json!({"base_url": a.base_url}), a.sign_in),
+        ConnectAdd::Gitlab(a) => (ConnectionKind::Gitlab, a.name, json!({"base_url": a.base_url}), a.sign_in),
+        ConnectAdd::Jira(a) => (ConnectionKind::Jira, a.name, json!({"base_url": a.site}), a.sign_in),
+        _ => return Err(CliError("Only GitHub, GitLab and Jira connections are signed in to.".into())),
+    };
+    let client_secret = match (&args.client_secret_env, kind) {
+        (Some(var), _) => {
+            let value =
+                std::env::var(var).map_err(|_| CliError(format!("The environment variable {var} is not set.")))?;
+            Some(clean(value, "client secret")?)
+        }
+        (None, ConnectionKind::Jira) if std::io::stdin().is_terminal() => {
+            read_secret(&SecretArgs { secret_env: None, secret_stdin: false }, "client secret", false)?
+        }
+        (None, ConnectionKind::Jira) => {
+            return Err(CliError("Jira needs your app's client secret: give it with --client-secret-env VAR.".into()));
+        }
+        (None, _) => None,
+    };
+    let session = open(home, &tenant, true)?;
+    let cancel = CancellationToken::new();
+    let stop = cancel.clone();
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        stop.cancel();
+    });
+    let app = SignInApp { client_id: args.client_id, client_secret };
+    let connection = session.hub.sign_in(request(kind, &name, settings, None), app, &Terminal, &cancel).await?;
+    if printer.json {
+        out(&connection)?;
+    } else {
+        eprintln!("Signed in and added {name}. Check it with `zorix connect test {name}`.");
+    }
+    Ok(Exit::Done)
 }
 
 fn request(kind: ConnectionKind, name: &str, settings: Value, secret: Option<Secret>) -> ConnectRequest {

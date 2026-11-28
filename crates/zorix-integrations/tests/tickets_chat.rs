@@ -23,7 +23,8 @@ struct Rig {
 fn rig(make: fn(Arc<Services>) -> Vec<Arc<dyn Tool>>) -> Rig {
     let store = Arc::new(SqliteIntegrationStore::open_in_memory().unwrap());
     let secrets = Arc::new(MemoryStore::new());
-    let tools = make(Arc::new(Services { store: store.clone(), secrets: secrets.clone() }));
+    let tools =
+        make(Arc::new(Services { store: store.clone(), secrets: secrets.clone(), signins: Default::default() }));
     Rig { store, secrets, tools }
 }
 

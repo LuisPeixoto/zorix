@@ -455,3 +455,31 @@ fn a_servers_sandbox_is_shown_and_changed_from_the_command_line() {
     let doctor = z.run(&["mcp", "doctor"]);
     assert!(text(&doctor.stdout).contains("Files") && text(&doctor.stdout).contains("Processes"), "{}", all(&doctor));
 }
+
+#[test]
+fn signing_in_says_what_it_needs_before_opening_anything() {
+    let z = Zorix::new();
+    let jira = z.run(&[
+        "connect",
+        "add",
+        "jira",
+        "work",
+        "--site",
+        "https://acme.atlassian.net",
+        "--oauth",
+        "--client-id",
+        "a",
+    ]);
+    assert_ne!(code(&jira), 0);
+    assert!(text(&jira.stderr).contains("--client-secret-env"), "{}", all(&jira));
+    let slack = z.run(&["connect", "add", "slack", "team", "--oauth"]);
+    assert_ne!(code(&slack), 0, "Slack is not signed in to");
+    let both = z.run(&["connect", "add", "github", "gh", "--oauth", "--secret-env", "X"]);
+    assert!(text(&both.stderr).contains("cannot be used with"), "{}", all(&both));
+    if option_env!("ZORIX_GITHUB_CLIENT_ID").is_none() {
+        let none = z.run(&["connect", "add", "github", "gh", "--oauth"]);
+        assert_ne!(code(&none), 0);
+        assert!(text(&none.stderr).contains("client id"), "{}", all(&none));
+    }
+    assert!(text(&z.run(&["connect", "list"]).stderr).contains("No connections yet"));
+}

@@ -25,7 +25,8 @@ struct Rig {
 fn rig() -> Rig {
     let store = Arc::new(SqliteIntegrationStore::open_in_memory().unwrap());
     let secrets = Arc::new(MemoryStore::new());
-    let tools = forge_tools(Arc::new(Services { store: store.clone(), secrets: secrets.clone() }));
+    let tools =
+        forge_tools(Arc::new(Services { store: store.clone(), secrets: secrets.clone(), signins: Default::default() }));
     Rig { store, secrets, tools }
 }
 

@@ -37,7 +37,7 @@ async fn rig() -> Rig {
     let secrets = Arc::new(MemoryStore::new());
     let _ = secret_name; // secrets are not used by SQLite connections
     let _ = secrets.get("x");
-    let tools = db_tools(Arc::new(Services { store: store.clone(), secrets }));
+    let tools = db_tools(Arc::new(Services { store: store.clone(), secrets, signins: Default::default() }));
     let rig = Rig { dir, store, tools };
     rig.connect("app", file.to_str().unwrap()).await;
     rig

@@ -6,6 +6,7 @@ use zorix_core::{Connection, ConnectionKind, IntegrationStore, TenantId, ToolErr
 use zorix_providers::{SecretStore, get_async};
 
 use crate::secret_name;
+use crate::signin::SignIns;
 
 /// What integration tools need from the rest of ZORIX.
 pub struct Services {
@@ -13,6 +14,13 @@ pub struct Services {
     pub store: Arc<dyn IntegrationStore>,
     /// Where their secrets are kept.
     pub secrets: Arc<dyn SecretStore>,
+    /// The sessions of the connections that were signed in to.
+    pub signins: SignIns,
+}
+
+/// Whether a connection was signed in to, rather than given a token.
+pub fn signed_in(connection: &Connection) -> bool {
+    connection.settings["auth"] == "oauth"
 }
 
 fn failed(message: impl Into<String>) -> ToolError {
@@ -52,8 +60,28 @@ impl Services {
         }
     }
 
+    /// The credential of a connection and, for one signed in through a service's gateway, where its API answers.
+    pub async fn credential(&self, connection: &Connection) -> Result<(Option<String>, Option<String>), ToolError> {
+        if signed_in(connection) {
+            let (token, base) =
+                self.signins.current(self.secrets.clone(), connection.id, &connection.name).await.map_err(
+                    |e| match e {
+                        zorix_oauth::OAuthError::Transport(_) | zorix_oauth::OAuthError::Timeout(_) => {
+                            ToolError::Retryable(e.to_string())
+                        }
+                        other => failed(format!("The {} connection needs a new sign-in: {other}", connection.name)),
+                    },
+                )?;
+            return Ok((Some(token), base));
+        }
+        Ok((self.secret(connection).await?, None))
+    }
+
     /// The secret of a connection, if it has one.
     pub async fn secret(&self, connection: &Connection) -> Result<Option<String>, ToolError> {
+        if signed_in(connection) {
+            return Ok(Box::pin(self.credential(connection)).await?.0);
+        }
         if !connection.has_secret {
             return Ok(None);
         }

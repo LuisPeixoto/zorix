@@ -12,6 +12,7 @@ publish.workspace = true
 [dependencies]
 zorix-core.workspace = true
 zorix-net.workspace = true
+zorix-oauth.workspace = true
 zorix-providers.workspace = true
 async-trait.workspace = true
 base64 = "0.22"

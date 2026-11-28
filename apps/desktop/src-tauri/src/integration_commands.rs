@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::Arc;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
@@ -12,9 +13,12 @@ use zorix_core::{
     Clock, ConnectionKind, EnvValue, EnvVar, HttpAuth, IntegrationStore, McpServer, McpTransport, NewMcpServer,
     PinAction, PinStatus, Secret, ServerSandbox, SystemClock, ToolTrust,
 };
-use zorix_hub::connections::ConnectRequest;
+
+use parking_lot::Mutex;
+use zorix_hub::connections::{ConnectRequest, SignInApp};
+use zorix_integrations::signin::{self, SignInUi};
 use zorix_mcp::catalog::{CatalogTransport, SecretNeeded};
-use zorix_mcp::{McpManager, ServerState, SystemBrowser, Vault, import, secret_base, token_secret_name};
+use zorix_mcp::{BrowserOpener, McpManager, ServerState, SystemBrowser, Vault, import, secret_base, token_secret_name};
 
 use crate::state::{AppState, Services};
 use crate::ui_error::{IntoUi, UiError};
@@ -667,6 +671,106 @@ pub async fn connection_add(
     };
     let settings = if request.settings.is_object() { request.settings } else { json!({}) };
     services.hub.add_connection(ConnectRequest { kind, name: request.name, settings, secret }).await.map_err(text)
+}
+
+/// What signing in to a kind of connection needs, or `None` when it is given a token only.
+#[derive(Serialize)]
+pub struct SignInInfo {
+    /// ZORIX has an app of its own for it, so a client id is optional.
+    builtin: bool,
+    /// What is asked for.
+    scopes: String,
+    /// The address a person's own app must redirect to (GitHub uses a code instead).
+    redirect: Option<String>,
+    /// Whether the app's secret is needed.
+    needs_secret: bool,
+}
+
+#[tauri::command]
+pub fn connection_sign_in_info(kind: String) -> Option<SignInInfo> {
+    let kind = ConnectionKind::parse(&kind)?;
+    signin::can_sign_in(kind).then(|| SignInInfo {
+        builtin: signin::builtin_client_id(kind).is_some(),
+        scopes: signin::scopes(kind).to_string(),
+        redirect: (kind != ConnectionKind::Github).then(signin::redirect_uri),
+        needs_secret: kind == ConnectionKind::Jira,
+    })
+}
+
+/// GitHub's code for the person to enter.
+#[derive(Clone, Serialize)]
+pub struct DeviceStep {
+    code: String,
+    url: String,
+}
+
+struct DesktopSignIn {
+    name: String,
+    steps: Channel<DeviceStep>,
+    pages: Arc<Mutex<HashMap<String, String>>>,
+}
+
+impl SignInUi for DesktopSignIn {
+    fn device_code(&self, code: &str, url: &str) {
+        // Kept here: the window asks to open it by the connection's name, never by an address of its own.
+        self.pages.lock().insert(self.name.clone(), url.to_string());
+        let _ = self.steps.send(DeviceStep { code: code.to_string(), url: url.to_string() });
+    }
+
+    fn open(&self, url: &str) -> Result<(), String> {
+        SystemBrowser.open(url)
+    }
+}
+
+/// Sign in and add the connection. Resolves when the person is done, or `connection_sign_in_cancel` is called.
+#[tauri::command]
+pub async fn connection_sign_in(
+    state: State<'_, AppState>,
+    request: AddConnection,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    steps: Channel<DeviceStep>,
+) -> Result<zorix_core::Connection, UiError> {
+    let services = services(&state)?;
+    let kind = ConnectionKind::parse(&request.kind)
+        .ok_or_else(|| UiError::message(format!("“{}” is not a kind of connection.", request.kind)))?;
+    let client_secret = match client_secret.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(value) => Some(clean(value, "client secret")?),
+        None => None,
+    };
+    let settings = if request.settings.is_object() { request.settings } else { json!({}) };
+    let cancel = CancellationToken::new();
+    let key = format!("connection:{}", request.name);
+    if let Some(earlier) = services.logins.lock().insert(key.clone(), cancel.clone()) {
+        earlier.cancel();
+    }
+    let ui = DesktopSignIn { name: request.name.clone(), steps, pages: services.sign_in_pages.clone() };
+    let app = SignInApp { client_id, client_secret };
+    let name = request.name.clone();
+    let outcome = services
+        .hub
+        .sign_in(ConnectRequest { kind, name: request.name, settings, secret: None }, app, &ui, &cancel)
+        .await;
+    services.logins.lock().remove(&key);
+    services.sign_in_pages.lock().remove(&name);
+    outcome.map_err(text)
+}
+
+#[tauri::command]
+pub fn connection_sign_in_open(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
+    let page = services(&state)?.sign_in_pages.lock().get(&name).cloned();
+    match page {
+        Some(page) => SystemBrowser.open(&page).map_err(UiError::message),
+        None => Err(UiError::message("There is no sign-in waiting for that connection.")),
+    }
+}
+
+#[tauri::command]
+pub fn connection_sign_in_cancel(state: State<'_, AppState>, name: String) -> Result<(), UiError> {
+    if let Some(token) = services(&state)?.logins.lock().remove(&format!("connection:{name}")) {
+        token.cancel();
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
