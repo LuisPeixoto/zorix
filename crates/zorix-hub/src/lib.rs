@@ -107,7 +107,7 @@ impl Hub {
             },
         );
         let sandbox = Arc::new(Sandbox::new(home)?);
-        let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone() });
+        let services = Arc::new(Services { store: dyn_store, secrets: secrets.clone(), signins: Default::default() });
         let agents = Arc::new(SqliteAgentStore::open(&database_path(home))?);
         let skills = Arc::new(zorix_agents::SkillLibrary::new(home));
         Ok(Self { tenant, store, secrets, registry, manager, sandbox, agents, skills, services })

@@ -295,7 +295,7 @@ impl JiraTool {
             .pick(&ctx.tenant, ConnectionKind::Jira, name)
             .await?
             .ok_or_else(|| failed("There is no Jira connection. Add one with `zorix connect add jira <name>`."))?;
-        let token = self.services.secret(&connection).await?;
+        let (token, gateway) = self.services.credential(&connection).await?;
         if token.is_none() {
             return Err(failed(format!(
                 "The Jira connection {} has no token stored.{}",
@@ -304,11 +304,15 @@ impl JiraTool {
             )));
         }
         let token = token.unwrap_or_default();
-        let base = connection.settings["base_url"]
-            .as_str()
-            .ok_or_else(|| failed("The Jira connection has no site address."))?;
+        // A signed-in connection answers at Atlassian's gateway for its site, not at the site itself.
+        let base = match &gateway {
+            Some(gateway) => gateway.as_str(),
+            None => connection.settings["base_url"]
+                .as_str()
+                .ok_or_else(|| failed("The Jira connection has no site address."))?,
+        };
         let authorization = match connection.settings["auth"].as_str().unwrap_or("basic") {
-            "bearer" => format!("Bearer {token}"),
+            "bearer" | "oauth" => format!("Bearer {token}"),
             _ => {
                 let email = connection.settings["email"]
                     .as_str()

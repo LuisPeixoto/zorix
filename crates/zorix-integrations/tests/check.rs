@@ -24,7 +24,7 @@ async fn check(kind: ConnectionKind, settings: Value, token: Option<&str>) -> Ch
     if let Some(token) = token {
         secrets.set(&secret_name(connection.id), &Secret::new(token)).unwrap();
     }
-    test_connection(Arc::new(Services { store, secrets }), &connection).await
+    test_connection(Arc::new(Services { store, secrets, signins: Default::default() }), &connection).await
 }
 
 #[tokio::test]

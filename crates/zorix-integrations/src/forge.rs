@@ -393,6 +393,10 @@ impl ForgeTool {
         if let Some(token) = token {
             match self.forge {
                 Forge::Github => headers.push(("Authorization".into(), format!("Bearer {token}"))),
+                // A token from signing in is a bearer token; GitLab takes it only that way.
+                Forge::Gitlab if connection.as_ref().is_some_and(crate::connections::signed_in) => {
+                    headers.push(("Authorization".into(), format!("Bearer {token}")));
+                }
                 Forge::Gitlab => headers.push(("PRIVATE-TOKEN".into(), token)),
             }
         }

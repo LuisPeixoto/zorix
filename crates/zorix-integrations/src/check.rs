@@ -44,14 +44,14 @@ fn setting<'a>(connection: &'a zorix_core::Connection, key: &str) -> Option<&'a 
 
 /// Test one connection.
 pub async fn test_connection(services: Arc<Services>, connection: &zorix_core::Connection) -> Checked {
-    let token = match services.secret(connection).await {
-        Ok(token) => token,
+    let (token, gateway) = match services.credential(connection).await {
+        Ok(found) => found,
         Err(e) => return why(e),
     };
     match connection.kind {
         ConnectionKind::Github => github(connection, token).await,
         ConnectionKind::Gitlab => gitlab(connection, token).await,
-        ConnectionKind::Jira => jira(connection, token).await,
+        ConnectionKind::Jira => jira(connection, token, gateway).await,
         ConnectionKind::Slack => slack(connection, token).await,
         ConnectionKind::Discord => discord(connection, token).await,
         ConnectionKind::Postgres | ConnectionKind::Sqlite => database(services, connection).await,
@@ -103,7 +103,12 @@ async fn gitlab(connection: &zorix_core::Connection, token: Option<String>) -> C
         base.push_str("/api/v4");
     }
     let signed_in = token.is_some();
-    let headers = token.map(|t| vec![("PRIVATE-TOKEN".to_string(), t)]).unwrap_or_default();
+    let headers = token
+        .map(|t| match crate::connections::signed_in(connection) {
+            true => vec![("Authorization".to_string(), format!("Bearer {t}"))],
+            false => vec![("PRIVATE-TOKEN".to_string(), t)],
+        })
+        .unwrap_or_default();
     let api = match Api::new("GitLab", &base, headers) {
         Ok(api) => api,
         Err(e) => return why(e),
@@ -121,10 +126,12 @@ async fn gitlab(connection: &zorix_core::Connection, token: Option<String>) -> C
     }
 }
 
-async fn jira(connection: &zorix_core::Connection, token: Option<String>) -> Checked {
-    let Some(base) = setting(connection, "base_url") else { return bad("The connection has no site address.") };
+async fn jira(connection: &zorix_core::Connection, token: Option<String>, gateway: Option<String>) -> Checked {
+    let Some(base) = gateway.as_deref().or_else(|| setting(connection, "base_url")) else {
+        return bad("The connection has no site address.");
+    };
     let Some(token) = token else { return bad("No token is stored for this connection.") };
-    let authorization = if connection.settings["auth"].as_str() == Some("bearer") {
+    let authorization = if matches!(connection.settings["auth"].as_str(), Some("bearer" | "oauth")) {
         format!("Bearer {token}")
     } else {
         let Some(email) = setting(connection, "email") else { return bad("The connection has no account email.") };

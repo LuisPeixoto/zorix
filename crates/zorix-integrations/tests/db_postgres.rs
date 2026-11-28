@@ -44,7 +44,7 @@ async fn rig(name: &str, settings: Value, password: &str) -> Rig {
         .await
         .unwrap();
     secrets.set(&secret_name(connection.id), &Secret::new(password)).unwrap();
-    let tools = db_tools(Arc::new(Services { store, secrets }));
+    let tools = db_tools(Arc::new(Services { store, secrets, signins: Default::default() }));
     Rig { tools, table: format!("zorix_t_{}", std::process::id()) }
 }
 

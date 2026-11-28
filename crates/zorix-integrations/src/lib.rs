@@ -12,6 +12,7 @@ pub mod jira;
 /// The network guard moved to `zorix-net`, which the MCP client uses too; this path keeps working.
 pub use zorix_net as net;
 pub mod postgres_db;
+pub mod signin;
 pub mod slack;
 pub mod sqlite_db;
 
