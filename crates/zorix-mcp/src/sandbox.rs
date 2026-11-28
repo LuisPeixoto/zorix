@@ -36,6 +36,7 @@ const CREDENTIALS: &[&str] = &[
 ];
 
 /// Folders under a home where language toolchains live. A server written for Node or Python cannot start without reading them.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const TOOLCHAINS: &[&str] = &[
     ".nvm",
     ".volta",
@@ -218,6 +219,7 @@ impl Confinement {
     }
 
     /// The toolchain folders of the person that exist, and the folders the program itself sits in.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     fn toolchains(&self, program: &Path) -> Vec<PathBuf> {
         let mut found: Vec<PathBuf> =
             self.home.iter().flat_map(|h| TOOLCHAINS.iter().map(move |t| h.join(t))).filter(|p| p.exists()).collect();
