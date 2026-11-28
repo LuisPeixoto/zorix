@@ -203,6 +203,7 @@ Where the app deliberately differs from `design/screens`, and why. Each line is 
 | Toolbar, sidebar | No account avatar, no daily budget beside "Spend today" | No accounts or budget setting yet ([roadmap](roadmap.md#across-phases), Command Center) |
 | Run | "This run" lists the model, who started it and the cost, not the grants, what asks first and the limits | The run record does not return its grants and limits yet; the roadmap lists them |
 | Run | The work tree is the kit's TreeView (state, steps, time, cost bar), not a four-column table | Same facts; TreeView adds folding and keyboard navigation |
+| Documents | A *Watch* / *Stop watching* button sits beside *Sync* on each folder, and the Add-folder dialog has a *Keep it up to date* switch | The design shows the *Watching* badge only; a person has to be able to turn it on for a folder that was added before, and off |
 | New run | Budget, Time and Steps sit in a *Limits* card of their own (not in the Activity card); no "Always for this run"; no model field beside them, because the model is chosen in its own card | The rest of the form was built before the limits existed; "Always for this run" waits for the Command Center |
 | Providers | No price per million tokens, p95 latency or spend; routes show their names only | Prices and timings are not stored per model; routes live in `providers.toml` |
 | Integrations | Cards without a 24-hour history strip; filters are All and Needs attention, and Native sits on its own tab | No health history is recorded yet; `HealthGrid` is in the kit for when it is |

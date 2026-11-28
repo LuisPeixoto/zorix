@@ -104,6 +104,10 @@ Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuse
 
 `app_settings` holds one record per tenant, written whole: whether long conversations are summarised, how long finished runs are kept and what retention does to them, the address of a telemetry collector, and whether scanned pages are read. A setting missing from a record reads with its default, so adding one needs no migration. Nothing in it is a secret (the headers a collector may need go to the system keychain). Both programs read it through the same store; the desktop app also keeps the current value in memory, so a change takes effect at once. Opening a schema-12 database adds the table, empty; a 0.10 program refuses a schema-13 database.
 
+### Watched folders (schema 16)
+
+`knowledge_roots` gains `watch` (0 or 1): the folder is kept up to date while the app runs ([ADR-0048](adr/0048-watching-folders-and-reading-scans.md)). Folders that were there before are 0. Opening a schema-15 database adds it; a 0.10 program refuses a schema-16 database.
+
 ### The vector index (schema 15)
 
 `vector_generation` is a one-row counter that triggers raise whenever a piece of a document or a vector is added or removed. The index of document vectors ([ADR-0047](adr/0047-index-of-document-vectors.md)) is a cache in
