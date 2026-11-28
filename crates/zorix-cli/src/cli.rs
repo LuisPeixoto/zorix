@@ -180,7 +180,7 @@ pub enum McpCommand {
 pub struct McpSandboxArgs {
     /// The server.
     pub name: String,
-    /// Confine the server (`native`) or not (`off`).
+    /// Confine the server with the operating system (`native`), in a container (`container`), or not (`off`).
     #[arg(long, value_enum)]
     pub mode: Option<McpSandboxMode>,
     /// Whether it may open network connections (`on` or `off`).
@@ -202,6 +202,8 @@ pub struct McpSandboxArgs {
 pub enum McpSandboxMode {
     /// With what this operating system can enforce.
     Native,
+    /// In a container, with Docker or Podman.
+    Container,
     /// Not confined: it runs as you.
     Off,
 }

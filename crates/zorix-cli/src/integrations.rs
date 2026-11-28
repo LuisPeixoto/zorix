@@ -409,6 +409,21 @@ fn sandbox_lines(server: &McpServer) -> Vec<String> {
     if sandbox.mode == SandboxMode::Off {
         return vec!["Sandbox    off: it runs as you".to_string()];
     }
+    if sandbox.mode == SandboxMode::Container {
+        let mut lines = vec![format!(
+            "Sandbox    container ({}), network {}",
+            zorix_mcp::container_runtime()
+                .map_or("docker or podman not found".to_string(), |p| p.display().to_string()),
+            if sandbox.network { "on" } else { "off" }
+        )];
+        lines.extend(
+            sandbox
+                .folders
+                .iter()
+                .map(|f| format!("Sandbox    {} {}", if f.write { "reads and writes" } else { "reads" }, f.path)),
+        );
+        return lines;
+    }
     let here = zorix_mcp::enforced();
     let mut lines = vec![format!(
         "Sandbox    native, network {}{}",
@@ -448,6 +463,7 @@ async fn server_sandbox(
         if let Some(mode) = args.mode {
             chosen.mode = match mode {
                 McpSandboxMode::Native => SandboxMode::Native,
+                McpSandboxMode::Container => SandboxMode::Container,
                 McpSandboxMode::Off => SandboxMode::Off,
             };
         }
@@ -502,6 +518,19 @@ fn doctor(printer: Printer) -> Result<Exit, CliError> {
         println!(
             "On Windows a sandbox ends everything the server starts and limits its memory and processes; it does not confine files or the network."
         );
+    }
+    match zorix_mcp::container_runtime() {
+        Some(runtime) => {
+            let name = runtime.file_stem().and_then(|n| n.to_str()).unwrap_or("docker").to_string();
+            println!(
+                "A container sandbox uses {name}, which confines files, the network and credentials on every system. Pull its images once,"
+            );
+            println!("so that a first start is not slow:");
+            for image in [zorix_mcp::NODE_IMAGE, zorix_mcp::UV_IMAGE] {
+                println!("  {name} pull {image}");
+            }
+        }
+        None => println!("Neither docker nor podman was found: the container sandbox cannot be used here."),
     }
     Ok(Exit::Done)
 }
