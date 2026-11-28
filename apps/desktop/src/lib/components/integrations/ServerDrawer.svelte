@@ -2,6 +2,7 @@
   import { t as tr } from "../../i18n/index.ts";
   import type { McpToolRow } from "../../api.ts";
   import { integrations } from "../../stores/integrations.svelte.ts";
+  import SandboxSection from "./SandboxSection.svelte";
   import {
     Badge, BrandLogo, Button, Callout, CodeBlock, DiffView, Drawer, KeyValue, Modal, StatusPill, Switch, Tabs, ToggleRow, cn,
   } from "../../ui/index.ts";
@@ -163,7 +164,7 @@
           </div>
         {/if}
         {#if detail.kind === "stdio"}
-          <Callout tone="muted" icon="info">{tr("integrations.serverDrawer.thisProgramRunsAs")}</Callout>
+          <SandboxSection {detail} />
         {/if}
         <div class="flex flex-wrap gap-2">
           <Button icon="refresh" disabled={detail.state !== "ready"} onclick={() => integrations.refreshTools(detail.name)}>{tr("integrations.serverDrawer.refreshTools")}</Button>

@@ -129,6 +129,7 @@ pub fn run() {
             integration_commands::mcp_restart,
             integration_commands::mcp_refresh,
             integration_commands::mcp_review,
+            integration_commands::mcp_set_sandbox,
             integration_commands::mcp_approve_all,
             integration_commands::mcp_trust,
             integration_commands::mcp_login,

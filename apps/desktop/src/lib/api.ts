@@ -499,6 +499,28 @@ export interface ServerDetail extends ServerRow {
   env: [string, boolean, string | null][];
   cwd: string | null;
   url: string | null;
+  /** The sandbox of a local server; null for a remote one, and for one added before sandboxes. */
+  sandbox: ServerSandbox | null;
+  enforced: SandboxEnforced;
+}
+
+export interface SandboxFolder {
+  path: string;
+  write: boolean;
+}
+
+export interface ServerSandbox {
+  mode: "native" | "off";
+  network: boolean;
+  folders: SandboxFolder[];
+}
+
+export interface SandboxEnforced {
+  os: string;
+  files: boolean;
+  network: boolean;
+  credentials: boolean;
+  processes: boolean;
 }
 
 export interface CatalogEntry {
@@ -561,6 +583,7 @@ export const mcpRefresh = (name: string) => invoke<void>("mcp_refresh", { name }
 export const mcpReview = (name: string, tool: string, action: "approve" | "disable", hash: string | null = null) => invoke<void>("mcp_review", { name, tool, action, hash });
 export const mcpApproveAll = (name: string, shown: [string, string][]) => invoke<number>("mcp_approve_all", { name, shown });
 export const mcpTrust = (name: string, tool: string, skipAsking: boolean) => invoke<void>("mcp_trust", { name, tool, skipAsking });
+export const mcpSetSandbox = (name: string, sandbox: ServerSandbox) => invoke<void>("mcp_set_sandbox", { name, sandbox });
 export const mcpLogin = (name: string) => invoke<string>("mcp_login", { name });
 export const mcpLoginCancel = (name: string) => invoke<void>("mcp_login_cancel", { name });
 export const mcpLogout = (name: string) => invoke<void>("mcp_logout", { name });

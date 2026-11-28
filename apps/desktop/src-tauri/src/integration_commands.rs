@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, State};
 use tokio_util::sync::CancellationToken;
 use zorix_core::{
     Clock, ConnectionKind, EnvValue, EnvVar, HttpAuth, IntegrationStore, McpServer, McpTransport, NewMcpServer,
-    PinAction, PinStatus, Secret, SystemClock, ToolTrust,
+    PinAction, PinStatus, Secret, ServerSandbox, SystemClock, ToolTrust,
 };
 use zorix_hub::connections::ConnectRequest;
 use zorix_mcp::catalog::{CatalogTransport, SecretNeeded};
@@ -189,6 +189,42 @@ pub struct ServerDetail {
     env: Vec<(String, bool, Option<String>)>,
     cwd: Option<String>,
     url: Option<String>,
+    /// The sandbox of a local server; `None` for a remote one and for one added before sandboxes.
+    sandbox: Option<ServerSandbox>,
+    /// What the sandbox enforces on this computer.
+    enforced: EnforcedHere,
+}
+
+/// What native confinement enforces on this computer, so the screen promises nothing more.
+#[derive(Serialize)]
+pub struct EnforcedHere {
+    os: &'static str,
+    files: bool,
+    network: bool,
+    credentials: bool,
+    processes: bool,
+}
+
+fn enforced_here() -> EnforcedHere {
+    let here = zorix_mcp::enforced();
+    EnforcedHere {
+        os: std::env::consts::OS,
+        files: here.files,
+        network: here.network,
+        credentials: here.credentials,
+        processes: here.processes,
+    }
+}
+
+/// Choose how a local server is confined. A running server is started again with the choice.
+#[tauri::command]
+pub async fn mcp_set_sandbox(state: State<'_, AppState>, name: String, sandbox: ServerSandbox) -> Result<(), UiError> {
+    let services = services(&state)?;
+    let mut chosen = sandbox;
+    for folder in &mut chosen.folders {
+        folder.path = canonical_folder(&folder.path)?;
+    }
+    services.hub.set_sandbox(&name, chosen).await.map(|_| ()).map_err(text)
 }
 
 fn tool_row(pin: &zorix_core::McpToolPin) -> ToolRow {
@@ -269,6 +305,8 @@ pub async fn mcp_server(state: State<'_, AppState>, name: String) -> Result<Serv
         env,
         cwd,
         url,
+        sandbox: server.sandbox.clone(),
+        enforced: enforced_here(),
     })
 }
 
