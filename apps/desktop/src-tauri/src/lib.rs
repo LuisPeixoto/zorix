@@ -32,6 +32,9 @@ pub fn run() {
             // Folders marked "check at start" are brought up to date in the background.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move { crate::knowledge_commands::sync_at_start(handle).await });
+            // Folders set to be watched are, from now on.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { crate::knowledge_commands::start_watches(handle).await });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -182,6 +185,7 @@ pub fn run() {
             knowledge_commands::sync_root,
             knowledge_commands::cancel_sync,
             knowledge_commands::remove_root,
+            knowledge_commands::set_root_watch,
             knowledge_commands::root_files,
             knowledge_commands::try_query,
             knowledge_commands::embeddings_info,

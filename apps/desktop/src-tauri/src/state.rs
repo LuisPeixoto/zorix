@@ -59,6 +59,8 @@ pub struct Services {
     pub logins: Mutex<HashMap<String, CancellationToken>>,
     /// Knowledge syncs that are running, so they can be cancelled.
     pub syncs: Mutex<HashMap<zorix_core::KnowledgeRootId, CancellationToken>>,
+    /// How each folder of documents is kept up to date while the app runs: watched by the system, or checked on a timer.
+    pub watches: Mutex<HashMap<zorix_core::KnowledgeRootId, crate::knowledge_commands::Watching>>,
     /// The job that embeds everything again, when one is running.
     pub reembed_job: Mutex<Option<CancellationToken>>,
     /// Evaluations that are running, by agent, so they can be cancelled and not started twice.
@@ -139,6 +141,9 @@ impl AppState {
         }
         if let Ok(services) = &self.services {
             services.stop_background.cancel();
+            for (_, watching) in services.watches.lock().drain() {
+                watching.stop();
+            }
             if let Some(switch) = zorix_hub::telemetry::switch() {
                 switch.stop().await;
             }
@@ -273,6 +278,7 @@ async fn open(home: &Path) -> Result<Arc<Services>, UiError> {
         retention,
         stop_background,
         syncs: Mutex::new(HashMap::new()),
+        watches: Mutex::new(HashMap::new()),
         reembed_job: Mutex::new(None),
         evals: Mutex::new(HashMap::new()),
         _lock: lock,
