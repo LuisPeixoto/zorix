@@ -61,6 +61,7 @@ start of its branch and dropped, with a note here, if the test cannot show it.
 | F31 | 3 | An `npx` server was taken for the first `npx` entry of the catalogue (they all share `-y`): it showed that entry's mark and the catalogue marked it as added. Found while pinning the catalogue | Low | [#81](https://github.com/LuisPeixoto/zorix/issues/81) | `fix/mcp-catalogue-match` |
 | F32 | 8, 12 | A server that dies before it answers is reported as "The server is not running" with an empty log, although it wrote why. Found while trying the catalogue | Medium | [#82](https://github.com/LuisPeixoto/zorix/issues/82) | `fix/mcp-start-diagnostics` |
 | F33 | 2, 8 | On Windows, `workspace.read` could refuse a file (*outside the workspace*, or *no such file*) while another run was writing it, because replacing a file is not instant there. Found by the concurrency test of F7, on the Windows runner | Medium | [#83](https://github.com/LuisPeixoto/zorix/issues/83) | `fix/workspace-windows-concurrency` |
+| F34 | 5, 6 | `workspace.write` could write inside `.git` (`.git/hooks/pre-commit`, `.git/config`), which git runs or obeys the next time the person uses it. Found while designing the git tool | High | [#84](https://github.com/LuisPeixoto/zorix/issues/84) | `fix/workspace-git-folder` |
 
 The audit keeps going while the fixes are written. A new row is added, with its issue, whenever a fix or a feature shows one.
 Still to look at: MCP conformance against both eras beyond the rows above, the output cap of every tool, OAuth refresh under

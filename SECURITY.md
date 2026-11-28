@@ -47,7 +47,7 @@ These notes grow with each feature that handles data, files, network or permissi
   is waiting, and an answer that does not name the call's hash is refused (before 0.10.0 it was accepted). If the stored
   call is edited while it waits, the altered call does not run on the answer given to the original: it asks again with its own hash. A call that was running when the process stopped and cannot be repeated safely asks a person.
 - **File tools are confined to a workspace folder, per execution.** Paths must be relative, with forward slashes, no
-  `..`, no drive letters, no control characters, no Windows reserved names and nothing in `.zorix`. The real path,
+  `..`, no drive letters, no control characters, no Windows reserved names and nothing in `.zorix`; nothing is written inside a `.git` folder. The real path,
   after following links, must stay inside the root; links that point outside are not followed and files are not written
   through a link, and a link inside the workspace needs a grant for the place it leads to and cannot lead into `.zorix`. Writes go through a temporary file that is created new, with a name of its own, and a rename. Reads, listings and writes are size-limited. The check and the open are two steps, so a program that can change
   the workspace at that very moment could redirect one call; this is stated in the [tools guide](docs/tools.md), and a workspace should not be a
