@@ -527,6 +527,16 @@ const MIGRATIONS: &[&str] = &[
     "
     ALTER TABLE executions ADD COLUMN compacted INTEGER NOT NULL DEFAULT 0;
     ",
+    // 15: the vector index. A counter that goes up whenever a piece of a document or a vector is added or removed, so the index of the document
+    // vectors (a cache in a file next to the database, ADR-0047) knows when it no longer matches and is made again.
+    "
+    CREATE TABLE vector_generation (id INTEGER PRIMARY KEY CHECK (id = 1), n INTEGER NOT NULL);
+    INSERT INTO vector_generation (id, n) VALUES (1, 0);
+    CREATE TRIGGER vector_generation_chunk_added AFTER INSERT ON knowledge_chunks BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
+    CREATE TRIGGER vector_generation_chunk_removed AFTER DELETE ON knowledge_chunks BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
+    CREATE TRIGGER vector_generation_vector_added AFTER INSERT ON vectors BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
+    CREATE TRIGGER vector_generation_vector_removed AFTER DELETE ON vectors BEGIN UPDATE vector_generation SET n = n + 1 WHERE id = 1; END;
+    ",
 ];
 
 /// The newest schema version this build knows.
@@ -914,6 +924,46 @@ mod tests {
         let compacted: i64 =
             conn.query_row("SELECT compacted FROM executions WHERE id = 'e1'", [], |r| r.get(0)).unwrap();
         assert_eq!(compacted, 0, "a run that was there before is whole");
+    }
+
+    #[test]
+    fn a_database_of_schema_14_upgrades_to_a_counter_that_goes_up_with_every_piece_and_vector() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for (index, sql) in MIGRATIONS.iter().enumerate().take(14) {
+            conn.execute_batch(sql).unwrap();
+            conn.pragma_update(None, "user_version", index as u32 + 1).unwrap();
+        }
+        conn.execute(
+            "INSERT INTO vectors (model, text_hash, dims, vector) VALUES ('m', 'old', 2, x'0000803f00000000')",
+            [],
+        )
+        .unwrap();
+        migrate(&mut conn).unwrap();
+        assert_eq!(version(&conn), LATEST);
+        let generation =
+            |conn: &Connection| -> i64 { conn.query_row("SELECT n FROM vector_generation", [], |r| r.get(0)).unwrap() };
+        assert_eq!(generation(&conn), 0, "what was there before is not counted: nothing was made from it");
+        let old: u32 = conn.query_row("SELECT COUNT(*) FROM vectors", [], |r| r.get(0)).unwrap();
+        assert_eq!(old, 1, "the vector that was there is kept");
+
+        conn.execute(
+            "INSERT OR REPLACE INTO vectors (model, text_hash, dims, vector) VALUES ('m', 'a', 2, x'0000803f00000000')",
+            [],
+        )
+        .unwrap();
+        let after_vector = generation(&conn);
+        assert!(after_vector > 0);
+        conn.execute(
+            "INSERT INTO knowledge_chunks (document_id, ord, text, text_hash, tokens) VALUES ('d', 0, 't', 'a', 1)",
+            [],
+        )
+        .unwrap();
+        let after_chunk = generation(&conn);
+        assert!(after_chunk > after_vector);
+        conn.execute("DELETE FROM knowledge_chunks", []).unwrap();
+        assert!(generation(&conn) > after_chunk, "a removal counts too");
+        conn.execute("DELETE FROM vectors WHERE text_hash = 'a'", []).unwrap();
+        assert!(generation(&conn) > after_chunk + 1);
     }
 
     #[test]

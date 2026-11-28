@@ -104,6 +104,11 @@ Opening a schema-7 database upgrades it in one transaction; a 0.8 program refuse
 
 `app_settings` holds one record per tenant, written whole: whether long conversations are summarised, how long finished runs are kept and what retention does to them, the address of a telemetry collector, and whether scanned pages are read. A setting missing from a record reads with its default, so adding one needs no migration. Nothing in it is a secret (the headers a collector may need go to the system keychain). Both programs read it through the same store; the desktop app also keeps the current value in memory, so a change takes effect at once. Opening a schema-12 database adds the table, empty; a 0.10 program refuses a schema-13 database.
 
+### The vector index (schema 15)
+
+`vector_generation` is a one-row counter that triggers raise whenever a piece of a document or a vector is added or removed. The index of document vectors ([ADR-0047](adr/0047-index-of-document-vectors.md)) is a cache in
+`index/` next to the database, one file per tenant and model, made again whenever it was made at another number or is damaged; deleting the folder loses nothing. Opening a schema-14 database adds the counter; a 0.10 program refuses a schema-15 database.
+
 ### Past work belongs to its agent (schema 11)
 
 `operations` gains an `agent` column: the agent whose memory the record belongs to, set when the run was an agent's with memory of its own and empty otherwise ([memory](memory.md#agent-memory)). Opening a schema-10 database fills it for the records already stored from the run each came from, by the same rule; a 0.10 program refuses a schema-11 database.

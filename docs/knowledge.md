@@ -84,7 +84,7 @@ If the model is unavailable when a run starts, the run goes on with keyword sear
 | A text file | 2 MB |
 | A PDF | 25 MB, 500 pages, 30 seconds |
 | Pieces per file | 2,000 |
-| Pieces per installation | 200,000 |
+| Pieces per installation | 500,000 (search by meaning uses an [index](adr/0047-index-of-document-vectors.md) above 20,000 visible pieces) |
 
 ## Good to know
 
