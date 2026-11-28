@@ -33,7 +33,7 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 | `--allow-http HOST`, `--allow-repo REPO[:write]`, `--allow-jira KEY[:write]`, `--allow-chat CHANNEL[:write]`, `--allow-db NAME[:write]`, `--allow-code LANGUAGE` | What the run may reach beyond its own tools: each gives the permission on the resource **and** the right to use the tools that reach it ([integrations](integrations.md)). Writes always ask |
 | `--workspace <DIR>` | The folder file tools are confined to |
 | `--allow-read <PATTERN>`, `--allow-write <PATTERN>` | Paths file tools may read or write, relative to the workspace (`*`, `docs/*`) |
-| `--approve ask\|never\|yes\|no` | What to do when a call needs approval. `ask` prompts on the terminal; `never` leaves it waiting and exits; `yes` and `no` answer automatically (for demos and tests). Default: `ask` on a terminal, `never` otherwise |
+| `--approve ask\|never\|yes\|no` | What to do when a call needs approval. `ask` prompts on the terminal; `never` leaves it waiting and exits; `yes` and `no` answer automatically (for demos and tests). Default: `ask` on a terminal, `never` otherwise. Only `ask` can answer what an MCP server asks while its tool runs ([MCP](mcp.md#what-a-server-may-ask-while-its-tool-runs)) |
 | `--max-iterations N` (1–1000), `--max-tool-calls N`, `--max-seconds N` | Limits |
 | `--conversation ID` | The conversation this run belongs to. Earlier runs of the same conversation are given to the model ([memory](memory.md)) |
 | `--no-memory`, `--no-knowledge`, `--no-conversation` | Do not give this run facts and past work, indexed documents, or the earlier runs of the conversation |

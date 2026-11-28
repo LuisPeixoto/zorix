@@ -90,6 +90,8 @@ async fn a_server_that_asks_for_models_input_or_folders_is_refused_and_the_call_
     }
     methods.sort();
     assert_eq!(methods, ["elicitation/create", "roots/list", "sampling/createMessage"], "each refusal is reported");
+    let log = client.log().join("\n");
+    assert!(log.contains("refused the server's sampling/createMessage"), "and written in the server's log: {log}");
 }
 
 #[tokio::test]
@@ -98,7 +100,7 @@ async fn a_tool_that_needs_more_input_fails_with_an_explanation() {
     let error = call(&client, "echo", json!({})).await.unwrap_err();
     match error {
         McpError::Refused(message) => {
-            assert!(message.contains("elicitation") && message.contains("does not let servers ask"), "{message}")
+            assert!(message.contains("elicitation") && message.contains("cannot pass that on"), "{message}")
         }
         other => panic!("{other:?}"),
     }
@@ -283,4 +285,129 @@ async fn a_request_for_initialize_that_is_given_up_on_is_not_cancelled() {
     // Exactly one cancellation reached the server: the one for tools/list, not the one for initialize.
     assert_eq!(counted["content"][0]["text"], "1", "{counted}");
     transport.close().await;
+}
+
+/// Stands for the run: says yes or no to everything, after a while, and counts what it was asked.
+#[derive(Debug)]
+struct Host {
+    yes: bool,
+    takes: Duration,
+    asked: std::sync::atomic::AtomicUsize,
+    waiting: std::sync::atomic::AtomicBool,
+    waited: std::sync::Mutex<Duration>,
+}
+
+impl Host {
+    fn new(yes: bool, takes: Duration) -> Arc<Self> {
+        Arc::new(Self {
+            yes,
+            takes,
+            asked: Default::default(),
+            waiting: Default::default(),
+            waited: Default::default(),
+        })
+    }
+
+    async fn person(&self) {
+        use std::sync::atomic::Ordering::SeqCst;
+        self.asked.fetch_add(1, SeqCst);
+        self.waiting.store(true, SeqCst);
+        tokio::time::sleep(self.takes).await;
+        *self.waited.lock().unwrap() += self.takes;
+        self.waiting.store(false, SeqCst);
+    }
+
+    fn asked(&self) -> usize {
+        self.asked.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl zorix_core::CallHost for Host {
+    async fn sample(
+        &self,
+        server: &str,
+        request: zorix_core::SampleRequest,
+    ) -> Result<zorix_core::SampleReply, String> {
+        assert_eq!(server, "fake");
+        assert_eq!(request.messages[0].text, "Name a colour.");
+        self.person().await;
+        if !self.yes {
+            return Err("The person did not allow the model call.".into());
+        }
+        Ok(zorix_core::SampleReply { text: "teal".into(), model: "demo".into(), at_limit: false })
+    }
+
+    async fn ask(&self, _: &str, question: zorix_core::Question) -> Result<zorix_core::ElicitReply, String> {
+        assert!(matches!(question, zorix_core::Question::Form { .. }));
+        self.person().await;
+        let mut values = serde_json::Map::new();
+        values.insert("repo".into(), json!("zorix"));
+        Ok(if self.yes { zorix_core::ElicitReply::Accepted(values) } else { zorix_core::ElicitReply::Declined })
+    }
+
+    fn waiting(&self) -> bool {
+        self.waiting.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn waited(&self) -> Duration {
+        *self.waited.lock().unwrap()
+    }
+}
+
+async fn asking_client(args: &[&str]) -> McpClient {
+    let transport = Arc::new(StdioTransport::spawn(config(args)).unwrap());
+    let (probe, handshake) = (Duration::from_millis(600), Duration::from_secs(10));
+    McpClient::connect_asking(transport, &CancellationToken::new(), probe, handshake, true).await.unwrap()
+}
+
+async fn echo_asking(
+    client: &McpClient,
+    host: Arc<Host>,
+    timeout: Duration,
+) -> Result<zorix_mcp::CallOutput, McpError> {
+    let asking: (&str, Arc<dyn zorix_core::CallHost>) = ("fake", host);
+    client.call_tool_asking("echo", json!({"text": "done"}), timeout, &CancellationToken::new(), Some(asking)).await
+}
+
+#[tokio::test]
+async fn a_legacy_server_gets_what_the_person_allowed_and_nothing_more() {
+    let client = asking_client(&["--era", "legacy", "--ask"]).await;
+    let host = Host::new(true, Duration::ZERO);
+    let said = text_of(&echo_asking(&client, host.clone(), Duration::from_secs(10)).await.unwrap());
+    assert!(said.contains("s1=ok") && said.contains("model-said[teal]"), "{said}");
+    assert!(said.contains("action=accept content={\"repo\":\"zorix\"}"), "{said}");
+    assert!(said.contains("r1=refused"), "roots are still not given: {said}");
+    assert_eq!(host.asked(), 2);
+
+    let host = Host::new(false, Duration::ZERO);
+    let said = text_of(&echo_asking(&client, host.clone(), Duration::from_secs(10)).await.unwrap());
+    assert!(said.contains("s1=refused") && said.contains("action=decline"), "{said}");
+
+    // A call that was not given a host refuses, even on a connection that can ask.
+    let said = text_of(&call(&client, "echo", json!({"text": "done"})).await.unwrap());
+    assert!(said.contains("s1=refused") && said.contains("e1=refused"), "{said}");
+}
+
+#[tokio::test]
+async fn the_persons_time_does_not_count_against_the_call() {
+    let client = asking_client(&["--era", "legacy", "--ask"]).await;
+    let host = Host::new(true, Duration::from_millis(900));
+    let said = text_of(&echo_asking(&client, host, Duration::from_millis(1200)).await.unwrap());
+    assert!(said.contains("s1=ok"), "{said}");
+}
+
+#[tokio::test]
+async fn a_modern_call_is_made_again_with_the_answer_and_gives_up_when_asked_for_ever() {
+    let client = asking_client(&["--era", "modern", "--input-required"]).await;
+    let host = Host::new(true, Duration::ZERO);
+    let said = text_of(&echo_asking(&client, host.clone(), Duration::from_secs(10)).await.unwrap());
+    assert!(said.contains(r#""action":"accept""#) && said.contains(r#""repo":"zorix""#), "{said}");
+    assert!(said.ends_with("state=s"), "the state comes back: {said}");
+
+    let client = asking_client(&["--era", "modern", "--input-forever"]).await;
+    let host = Host::new(true, Duration::ZERO);
+    let error = echo_asking(&client, host.clone(), Duration::from_secs(10)).await.unwrap_err();
+    assert!(matches!(&error, McpError::Refused(why) if why.contains("too many times")), "{error:?}");
+    assert_eq!(host.asked(), 5);
 }

@@ -850,6 +850,7 @@ mod tests {
             workspace_root: None,
             conversation: None,
             agent: None,
+            host: None,
         };
         let error = ReadTool::new().call(&ctx, json!({"path": "a.txt"})).await.unwrap_err();
         assert!(matches!(error, ToolError::Failed(text) if text.contains("No workspace folder")));
@@ -867,6 +868,7 @@ mod tests {
             workspace_root: Some(dir.path().to_path_buf()),
             conversation: None,
             agent: None,
+            host: None,
         };
         WriteTool::new().call(&ctx, json!({"path": "x.txt", "content": "hi"})).await.unwrap();
         assert_eq!(ReadTool::new().call(&ctx, json!({"path": "x.txt"})).await.unwrap()["content"], "hi");

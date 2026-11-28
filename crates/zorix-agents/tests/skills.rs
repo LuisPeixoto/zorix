@@ -357,6 +357,7 @@ impl World {
             workspace_root: None,
             conversation: None,
             agent: if agent { self.binding.clone() } else { None },
+            host: None,
         }
     }
 

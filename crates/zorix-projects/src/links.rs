@@ -66,6 +66,7 @@ impl PullReader for HubPullReader {
             workspace_root: None,
             conversation: None,
             agent: None,
+            host: None,
         };
         let args = json!({"repo": repo, "number": number});
         let value: Value = zorix_runtime::ToolExecutor::run(&*tool, &ctx, args).await.ok()?;

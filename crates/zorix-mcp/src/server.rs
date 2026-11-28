@@ -427,6 +427,7 @@ impl McpServer {
             workspace_root: self.config.workspace_root.clone(),
             conversation: None,
             agent: None,
+            host: None,
         };
         let timeout = Duration::from_millis(spec.timeout_ms);
         let outcome = tokio::select! {

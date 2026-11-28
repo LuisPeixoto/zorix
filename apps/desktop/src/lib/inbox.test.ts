@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Approval, ServerRow, TreeApproval } from "./api.ts";
 import type { TaskNeed, WfWait } from "./api.ts";
-import { approvalItems, oldestFirst, serverItems, targetOf, taskItems, workflowItems } from "./inbox.ts";
+import { approvalItems, askItems, oldestFirst, serverItems, targetOf, taskItems, workflowItems } from "./inbox.ts";
 
 const approval = (id: string, at: number, status: Approval["status"] = "pending", args: unknown = { path: "notes/a.md" }): Approval => ({
   id,
@@ -95,4 +95,16 @@ test("a task that needs you is an item with its project and why, and sits among 
   assert.equal(first.why, "review");
   const ordered = oldestFirst([...items, ...workflowItems([wait("w", 20)]), ...serverItems([server("linear", { tools_to_review: 1 })])]);
   assert.deepEqual(ordered.map((i) => i.id), ["task:OPS-38", "w", "task:OPS-36", "server:linear"]);
+});
+
+test("a server's waiting request is listed with what it asks and the run that waits", () => {
+  const ask = (id: string, request: unknown) => ({ id, execution_id: "run-1", call_id: "c", server: "files", tool: "mcp.files.t", model: "demo", ask: request, hash: "h", asked_at: 5 });
+  const items = askItems([
+    ask("a", { kind: "model", messages: [], max_tokens: 1 }),
+    ask("b", { kind: "person", mode: "link", message: "Go", url: "https://example.com" }),
+  ] as Parameters<typeof askItems>[0]);
+  assert.deepEqual(items.map((i) => i.kind === "ask" && [i.id, i.what, i.execution, i.server]), [
+    ["a", "model", "run-1", "files"],
+    ["b", "link", "run-1", "files"],
+  ]);
 });

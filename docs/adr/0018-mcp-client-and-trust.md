@@ -1,6 +1,6 @@
 # ADR-0018: A dual-era MCP client with a trust layer of our own
 
-Status: accepted (Phase 4)
+Status: accepted (Phase 4); answering servers is amended by [ADR-0051](0051-sampling-and-elicitation.md)
 
 ## Context
 

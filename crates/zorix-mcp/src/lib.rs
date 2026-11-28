@@ -13,6 +13,7 @@ mod job;
 pub mod manager;
 pub mod oauth;
 pub mod protocol;
+mod requests;
 pub mod sandbox;
 pub mod server;
 pub mod stdio;
@@ -35,4 +36,4 @@ pub use sandbox::{Confinement, Enforced, NODE_IMAGE, UV_IMAGE, container_launche
 pub use server::{Confirmation, MAX_IN_FLIGHT, MAX_REQUEST_BYTES, McpServer, ResourceInfo, Resources, ServerConfig};
 pub use stdio::{StdioConfig, StdioTransport};
 pub use tool::{McpCaller, McpTool, tool_id};
-pub use transport::{ServerEvent, Transport};
+pub use transport::{Responder, ServerEvent, Transport};

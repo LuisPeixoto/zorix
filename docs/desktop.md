@@ -151,7 +151,7 @@ Memory, Documents) and **Operate** (Settings), and shows only what has shipped. 
 
 ![The Inbox](screenshots-0.6.1/inbox-light.png)
 
-- **Inbox** lists everything waiting for you, oldest first: tool approvals anywhere in a tree of runs (*Review* opens the run you started) and servers whose tools or sign-in need a review.
+- **Inbox** lists everything waiting for you, oldest first: tool approvals anywhere in a tree of runs (*Review* opens the run you started), what an [MCP server asks](mcp.md#what-a-server-may-ask-while-its-tool-runs) while a tool runs and servers whose tools or sign-in need a review.
 - **Runs** is the list of runs you started, with filters and the cost of what agents started for them. **A run** has the stat row, the tabs *Work tree*, *Steps*, *Events*, *Context* and
   *Cost*, approvals on the right above a *This run* panel. **New run** starts from *Run as* (plain run, agent or team), shows what the run may use with a mark on what asks, says which
   provider receives the conversation, and summarises it under *Before you start*; ⌘↵ starts it.

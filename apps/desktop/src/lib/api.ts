@@ -610,6 +610,41 @@ export function onMcpStatus(handler: () => void): Promise<UnlistenFn> {
 
 
 // ---------------------------------------------------------------------------------------------------------------------
+// What an MCP server asks of you while a tool runs (sampling and elicitation)
+
+export type AskFieldKind = { type: "text" | "number" | "integer" | "boolean" } | { type: "choice"; options: string[] };
+export interface AskField {
+  name: string;
+  title?: string;
+  description?: string;
+  kind: AskFieldKind;
+  required: boolean;
+}
+export type ServerRequest =
+  | { kind: "model"; system?: string; messages: { role: "user" | "assistant"; text: string }[]; max_tokens: number }
+  | { kind: "person"; mode: "form"; message: string; fields: AskField[] }
+  | { kind: "person"; mode: "link"; message: string; url: string };
+export interface PendingAsk {
+  id: string;
+  execution_id: string;
+  call_id: string;
+  server: string;
+  tool: string;
+  model: string;
+  ask: ServerRequest;
+  hash: string;
+  asked_at: number;
+}
+export type AskAnswer = { answer: "yes"; values: Record<string, unknown> } | { answer: "no" };
+
+export const serverAsks = () => invoke<PendingAsk[]>("server_asks");
+export const answerServerAsk = (id: string, hash: string, answer: AskAnswer) => invoke<void>("server_ask_answer", { id, hash, answer });
+/** Be told when the list of waiting requests changes. */
+export function onServerAsks(handler: () => void): Promise<UnlistenFn> {
+  return listen<null>("server-asks", () => handler());
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Agents, skills and evaluations
 
 export interface AgentCard {

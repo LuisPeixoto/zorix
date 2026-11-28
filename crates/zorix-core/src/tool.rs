@@ -229,6 +229,8 @@ pub struct ToolContext {
     pub conversation: Option<ConversationId>,
     /// The agent version the execution comes from, if an agent made it. Skill and memory tools use it.
     pub agent: Option<crate::agent::AgentBinding>,
+    /// What the call may ask of ZORIX on a server's behalf (sampling, questions to the person). Only a run gives one.
+    pub host: Option<std::sync::Arc<dyn crate::ask::CallHost>>,
 }
 
 /// A capability the model can ask for.

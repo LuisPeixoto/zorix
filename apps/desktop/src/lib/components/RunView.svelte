@@ -11,6 +11,8 @@
   import { buildTree, totals } from "../tree.ts";
   import TreeApprovals from "./agents/TreeApprovals.svelte";
   import ApprovalCard from "./ApprovalCard.svelte";
+  import ServerAskCard from "./ServerAskCard.svelte";
+  import { asks } from "../stores/asks.svelte.ts";
   import StatusBadge from "./StatusBadge.svelte";
   import Timeline from "./Timeline.svelte";
 
@@ -56,6 +58,8 @@
     };
   });
   const tree = $derived(family.length > 1 ? buildTree(family) : null);
+  // A server may ask during a tool call of this run or of one below it.
+  const asked = $derived(asks.list.filter((a) => a.execution_id === run?.id || family.some((e) => e.id === a.execution_id)));
   const sums = $derived(tree ? totals(tree) : null);
   const look = (e: Execution) => {
     const card = e.agent ? agents.card(e.agent.slug) : undefined;
@@ -259,6 +263,7 @@
         </div>
 
         <aside class="min-w-0 space-y-5" aria-label={t("runView.thisRun2")}>
+          {#each asked as ask (ask.id)}<ServerAskCard {ask} />{/each}
           {#each pending as approval (approval.id)}<ApprovalCard {approval} />{/each}
           <TreeApprovals items={waitingBelow} onanswered={() => { void loadFamily(); void store.select(run.id); }} />
           <Card title={t("runView.thisRun2")} icon="shield">

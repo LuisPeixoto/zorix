@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, WWW_AUTHENTICATE};
 use reqwest::{Client, Response, Url};
 use serde_json::{Value, json};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 use zorix_core::redact_text;
 use zorix_providers::sse::{MAX_EVENT, MAX_LINE, TooLong};
@@ -25,7 +25,7 @@ use zorix_providers::{SseParser, is_loopback};
 use crate::auth::AuthProvider;
 use crate::error::{METHOD_NOT_FOUND, McpError};
 use crate::headers::encode_value;
-use crate::transport::{LOG_BYTES, MAX_MESSAGE_BYTES, ServerEvent, Transport};
+use crate::transport::{LOG_BYTES, MAX_MESSAGE_BYTES, Responder, ServerEvent, Transport};
 use crate::wire::{self, Incoming, RpcError};
 
 const PROTOCOL_HEADER: &str = "mcp-protocol-version";
@@ -78,6 +78,8 @@ struct Inner {
     session: Mutex<Session>,
     events: broadcast::Sender<ServerEvent>,
     log: Mutex<Ring>,
+    /// Requests of the server, handed to the task that answers them.
+    asked: Mutex<Option<mpsc::UnboundedSender<(Value, String, Value)>>>,
     closed: AtomicBool,
 }
 
@@ -122,6 +124,7 @@ impl HttpTransport {
                 session: Mutex::new(Session::default()),
                 events,
                 log: Mutex::new(Ring { lines: VecDeque::new(), bytes: 0 }),
+                asked: Mutex::new(None),
                 closed: AtomicBool::new(false),
             }),
         })
@@ -214,12 +217,20 @@ impl Inner {
                 let _ = self.events.send(ServerEvent::Notification { method, params });
                 None
             }
-            Incoming::Request { id, method, .. } => {
-                let line = if method == "ping" {
-                    wire::result_line(&id, &json!({}))
-                } else {
-                    let _ = self.events.send(ServerEvent::Refused { method: method.clone() });
-                    wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.")
+            Incoming::Request { id, method, params } => {
+                let asked = self.asked.lock().clone();
+                let line = match asked {
+                    _ if method == "ping" => wire::result_line(&id, &json!({})),
+                    // Answered elsewhere: a person may take minutes, and the stream must keep being read.
+                    Some(asked) => {
+                        let _ = asked.send((id, method, params));
+                        return None;
+                    }
+                    None => {
+                        self.note(format!("[ZORIX refused the server's {method}: it does not answer that]"));
+                        let _ = self.events.send(ServerEvent::Refused { method: method.clone() });
+                        wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.")
+                    }
                 };
                 self.answer(line).await;
                 None
@@ -412,6 +423,31 @@ impl Transport for HttpTransport {
             return Err(ended);
         }
         if response.status().is_success() { Ok(()) } else { Err(self.inner.fail(response).await) }
+    }
+
+    fn set_responder(&self, responder: Arc<dyn Responder>) {
+        let (asked, mut requests) = mpsc::unbounded_channel::<(Value, String, Value)>();
+        *self.inner.asked.lock() = Some(asked);
+        // Weak: the task ends with the connection, and does not keep it alive.
+        let inner = Arc::downgrade(&self.inner);
+        tokio::spawn(async move {
+            while let Some((id, method, params)) = requests.recv().await {
+                let (inner, responder) = (inner.clone(), responder.clone());
+                tokio::spawn(async move {
+                    let outcome = responder.respond(&method, params).await;
+                    let Some(inner) = inner.upgrade() else { return };
+                    let line = match outcome {
+                        Ok(result) => wire::result_line(&id, &result),
+                        Err((code, message)) => {
+                            inner.note(format!("[ZORIX refused the server's {method}: {message}]"));
+                            let _ = inner.events.send(ServerEvent::Refused { method });
+                            wire::error_line(&id, code, &message)
+                        }
+                    };
+                    inner.answer(line).await;
+                });
+            }
+        });
     }
 
     fn subscribe(&self) -> broadcast::Receiver<ServerEvent> {

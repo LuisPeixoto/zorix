@@ -161,10 +161,18 @@ impl ToolExecutor {
         // A child token: timing out stops the tool without cancelling the whole execution.
         let call_ctx = ToolContext { cancel: ctx.cancel.child_token(), ..ctx.clone() };
         let guard: CancellationToken = call_ctx.cancel.clone();
-        let outcome = tokio::select! {
-            result = tool.call(&call_ctx, args) => Some(result),
-            _ = tokio::time::sleep(timeout) => None,
-            _ = ctx.cancel.cancelled() => return Err(CallError::Cancelled(spec.id.clone())),
+        let call = tool.call(&call_ctx, args);
+        tokio::pin!(call);
+        let started = tokio::time::Instant::now();
+        // A person asked during the call (ADR-0051) takes their own time: it does not count against the tool's.
+        let outcome = loop {
+            let host = call_ctx.host.as_deref();
+            let Some(left) = zorix_core::time_left(host, started.elapsed(), timeout) else { break None };
+            tokio::select! {
+                result = &mut call => break Some(result),
+                _ = tokio::time::sleep(left) => {}
+                _ = ctx.cancel.cancelled() => return Err(CallError::Cancelled(spec.id.clone())),
+            }
         };
         let Some(result) = outcome else {
             guard.cancel();
@@ -261,6 +269,7 @@ mod tests {
             workspace_root: None,
             conversation: None,
             agent: None,
+            host: None,
         }
     }
 

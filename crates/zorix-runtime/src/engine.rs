@@ -84,6 +84,7 @@ pub(crate) struct Inner {
     pub clock: Arc<dyn Clock>,
     pub bus: EventBus,
     pub live: crate::live::LiveBus,
+    pub asks: crate::asks::Asks,
     pub publishers: Vec<Arc<dyn EventPublisher>>,
     pub validators: Vec<Arc<dyn ResultValidator>>,
     pub planner: Option<Arc<dyn DelegationPlanner>>,
@@ -208,6 +209,7 @@ impl EngineBuilder {
         validators.extend(self.validators);
         let inner = Arc::new(Inner {
             repository: self.repository,
+            asks: crate::asks::Asks::default(),
             model: self.model,
             tools: self.tools.unwrap_or_else(|| Arc::new(InMemoryToolRegistry::new())),
             policy: self.policy.unwrap_or_else(|| Arc::new(DefaultPolicy::default())),
@@ -289,6 +291,11 @@ impl Engine {
     /// The event bus, for subscribers that want every execution.
     pub fn bus(&self) -> &EventBus {
         &self.inner.bus
+    }
+
+    /// The requests MCP servers make of the person while tools run (ADR-0051): follow them to be asked, and answer them.
+    pub fn asks(&self) -> &crate::asks::Asks {
+        &self.inner.asks
     }
 
     /// The tool registry.

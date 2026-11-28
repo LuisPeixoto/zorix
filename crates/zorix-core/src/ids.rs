@@ -139,6 +139,10 @@ fn is_slug(text: &str) -> bool {
 }
 
 uuid_id!(
+    /// A request an MCP server makes of the person while a tool runs.
+    AskId
+);
+uuid_id!(
     /// Identifies one execution: one run of one activity.
     ExecutionId
 );

@@ -2,6 +2,7 @@
 //!
 //! The contracts live in `zorix-core`; this crate holds the default implementations.
 
+mod asks;
 mod context;
 mod engine;
 mod events;
@@ -19,6 +20,7 @@ mod tools;
 mod validators;
 mod watchdog;
 
+pub use asks::Asks;
 pub use context::{
     DefaultContextBuilder, HistorySource, PREAMBLE, Placement, StaticSource, SystemSource, TaskSource, wrap_untrusted,
 };

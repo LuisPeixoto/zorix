@@ -86,6 +86,8 @@ pub(crate) struct Run {
     step: u64,
     control: Arc<RunControl>,
     tick: Timestamp,
+    /// Time a tool call spent waiting for the person, not yet taken off the active time.
+    waited_ms: u64,
     records: Vec<ToolCallRecord>,
     approvals: Vec<Approval>,
 }
@@ -239,7 +241,18 @@ impl Run {
         let records = repository.tool_calls(id).await?;
         let approvals = repository.approvals(id).await?;
         let tick = engine.now();
-        Ok(Some(Run { summaries_failed: false, engine, exec, state, step, control, tick, records, approvals }))
+        Ok(Some(Run {
+            summaries_failed: false,
+            engine,
+            exec,
+            state,
+            step,
+            control,
+            tick,
+            waited_ms: 0,
+            records,
+            approvals,
+        }))
     }
 
     fn event(&self, kind: EventKind, payload: Value) -> NewEvent {
@@ -281,7 +294,9 @@ impl Run {
 
     fn tick_time(&mut self) {
         let now = self.engine.now();
-        self.exec.active_ms = self.exec.active_ms.saturating_add(now.since(self.tick));
+        // Waiting for the person is not the run working.
+        let waited = std::mem::take(&mut self.waited_ms);
+        self.exec.active_ms = self.exec.active_ms.saturating_add(now.since(self.tick).saturating_sub(waited));
         self.tick = now;
     }
 
@@ -1067,6 +1082,25 @@ impl Run {
             self.commit(triggers, vec![started], Extras { tool_calls: vec![record.clone()], ..Extras::default() })
                 .await?;
 
+            let host = crate::asks::RunHost::new(
+                self.engine.inner.clone(),
+                crate::asks::CallScope {
+                    tenant: self.exec.tenant.clone(),
+                    execution_id: self.exec.id,
+                    call_id: call.id.clone(),
+                    tool: call.tool.clone(),
+                    model: self.exec.request.model.clone(),
+                    allowed_models: self.exec.agent.as_ref().map(|a| a.allowed_models.clone()).unwrap_or_default(),
+                    tokens_left: self
+                        .exec
+                        .limits
+                        .max_total_tokens
+                        .map(|max| max.saturating_sub(self.exec.usage.total_tokens())),
+                    spent: self.exec.limits.max_cost_micros.is_some_and(|max| self.exec.usage.cost_micros >= max),
+                    model_timeout: Duration::from_millis(self.exec.limits.model_timeout_ms),
+                },
+                &self.control.cancel,
+            );
             let context = ToolContext {
                 execution_id: self.exec.id,
                 tenant: self.exec.tenant.clone(),
@@ -1076,6 +1110,7 @@ impl Run {
                 workspace_root: self.exec.workspace.clone().or_else(|| self.engine.inner.config.workspace_root.clone()),
                 conversation: self.exec.conversation.clone(),
                 agent: self.exec.agent.clone(),
+                host: Some(host.clone()),
             };
             let began = self.engine.now();
             let span = tracing::info_span!(
@@ -1095,6 +1130,12 @@ impl Run {
                 Err(_) => span.record("zorix.tool.outcome", "failed").record("otel.status_code", "ERROR"),
             };
             let took_ms = self.engine.now().since(began);
+            // What a server's model call cost is the run's, whatever came of the tool call.
+            let (asked_usage, asked) = host.close();
+            self.exec.usage.add(&asked_usage);
+            let waited_ms = u64::try_from(zorix_core::CallHost::waited(&*host).as_millis()).unwrap_or(u64::MAX);
+            self.waited_ms = self.waited_ms.saturating_add(waited_ms);
+            let took_ms = took_ms.saturating_sub(waited_ms);
 
             let mut done = record;
             done.finished_at = Some(self.engine.now());
@@ -1104,10 +1145,11 @@ impl Run {
                     done.status = ToolCallStatus::Succeeded;
                     done.result = Some(value);
                     self.state.transcript.push(Message::tool_result(call.id.clone(), text.clone(), false));
-                    let event = self.event(
-                        EventKind::ToolCompleted,
-                        json!({ "call_id": call.id, "tool": call.tool, "duration_ms": took_ms, "output_bytes": text.len() }),
-                    );
+                    let mut payload = json!({ "call_id": call.id, "tool": call.tool, "duration_ms": took_ms, "output_bytes": text.len() });
+                    if !asked.is_empty() {
+                        payload["server_requests"] = json!(asked);
+                    }
+                    let event = self.event(EventKind::ToolCompleted, payload);
                     return self.finish_tool(call, done, event).await;
                 }
                 Err(CallError::Cancelled(_)) => return Err(self.cancelled_or_shutdown().await),
@@ -1129,10 +1171,11 @@ impl Run {
                     done.status = ToolCallStatus::Failed;
                     done.error = Some(message.clone());
                     self.state.transcript.push(Message::tool_result(call.id.clone(), message.clone(), true));
-                    let event = self.event(
-                        EventKind::ToolFailed,
-                        json!({ "call_id": call.id, "tool": call.tool, "duration_ms": took_ms, "error": message, "attempts": attempt }),
-                    );
+                    let mut payload = json!({ "call_id": call.id, "tool": call.tool, "duration_ms": took_ms, "error": message, "attempts": attempt });
+                    if !asked.is_empty() {
+                        payload["server_requests"] = json!(asked);
+                    }
+                    let event = self.event(EventKind::ToolFailed, payload);
                     return self.finish_tool(call, done, event).await;
                 }
             }

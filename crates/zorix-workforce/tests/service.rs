@@ -551,6 +551,7 @@ fn context(entries: &[&str], agent: Option<AgentBinding>) -> ToolContext {
         workspace_root: None,
         conversation: None,
         agent,
+        host: None,
     }
 }
 

@@ -434,6 +434,7 @@ fn context(entries: &[&str], slug: &str) -> ToolContext {
         workspace_root: None,
         conversation: None,
         agent: Some(binding(slug)),
+        host: None,
     }
 }
 

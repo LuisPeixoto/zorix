@@ -13,6 +13,21 @@ pub fn shorten(text: &str, max: usize) -> String {
     }
 }
 
+/// Text from somewhere else, with the characters that could draw on the terminal, hide or reorder it written out. Line breaks
+/// are kept.
+pub fn visible(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '\n' => "\n".to_string(),
+            '\u{200b}'..='\u{200f}' | '\u{2028}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}' => {
+                format!("\\u{{{:x}}}", c as u32)
+            }
+            c if c.is_control() => format!("\\u{{{:x}}}", c as u32),
+            c => c.to_string(),
+        })
+        .collect()
+}
+
 fn clock(at: Timestamp) -> String {
     // 2026-11-15T20:07:25.289Z -> 20:07:25.289
     let text = at.to_rfc3339();

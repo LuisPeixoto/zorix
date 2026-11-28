@@ -100,6 +100,7 @@ impl Hub {
             Arc::new(zorix_mcp::DefaultConnector),
             Arc::new(zorix_core::SystemClock),
             zorix_mcp::ManagerOptions {
+                answers_requests: true,
                 work_dir: Some(home.join("mcp")),
                 data_home: Some(home.to_path_buf()),
                 ..zorix_mcp::ManagerOptions::default()

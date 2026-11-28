@@ -1,6 +1,7 @@
 // What waits for a person. Approvals are fed by the runs store each time it refreshes; servers that want a review come from the Integrations store.
 import type { Execution, TaskNeed, TreeApproval, WfWait } from "../api.ts";
-import { type InboxItem, approvalItems, oldestFirst, serverItems, taskItems, workflowItems } from "../inbox.ts";
+import { type InboxItem, approvalItems, askItems, oldestFirst, serverItems, taskItems, workflowItems } from "../inbox.ts";
+import { asks } from "./asks.svelte.ts";
 import { integrations } from "./integrations.svelte.ts";
 import { workflows } from "./workflows.svelte.ts";
 
@@ -13,11 +14,11 @@ class InboxStore {
 
   /** Oldest ask first. */
   get all(): InboxItem[] {
-    return oldestFirst([...this.approvals, ...this.waits, ...this.tasks, ...serverItems(integrations.servers)]);
+    return oldestFirst([...this.approvals, ...askItems(asks.list), ...this.waits, ...this.tasks, ...serverItems(integrations.servers)]);
   }
 
   get count(): number {
-    return this.approvals.length + this.waits.length + this.tasks.length + serverItems(integrations.servers).length;
+    return this.approvals.length + asks.list.length + this.waits.length + this.tasks.length + serverItems(integrations.servers).length;
   }
 
   setWaits(waits: readonly WfWait[]): void {

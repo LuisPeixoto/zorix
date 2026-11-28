@@ -34,6 +34,7 @@ fn rig() -> Rig {
         probe_timeout: Duration::from_millis(800),
         work_dir: None,
         data_home: None,
+        answers_requests: false,
     };
     let manager = McpManager::with(
         store.clone(),
@@ -93,6 +94,7 @@ fn ctx() -> ToolContext {
         workspace_root: None,
         conversation: None,
         agent: None,
+        host: None,
     }
 }
 
@@ -141,6 +143,7 @@ async fn a_server_that_names_no_folder_starts_in_one_of_its_own() {
             probe_timeout: Duration::from_millis(800),
             work_dir: Some(under.path().join("mcp")),
             data_home: None,
+            answers_requests: false,
         },
     );
     manager.start(server.id).await.unwrap();
@@ -160,8 +163,13 @@ async fn a_server_that_dies_before_it_answers_leaves_its_reason_and_its_log() {
     // What a missing dependency or a wrong argument looks like: the program says why on its error stream and ends.
     let why = "Error: the module was not found; key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCD";
     let server = add(&rig, "broken", &["--die", why], vec![]).await;
-    let only_once =
-        ManagerOptions { backoff: vec![], probe_timeout: Duration::from_millis(1500), work_dir: None, data_home: None };
+    let only_once = ManagerOptions {
+        backoff: vec![],
+        probe_timeout: Duration::from_millis(1500),
+        work_dir: None,
+        data_home: None,
+        answers_requests: false,
+    };
     let strict = McpManager::with(
         rig.store.clone(),
         rig.registry.clone(),
@@ -312,8 +320,13 @@ async fn secrets_for_a_server_come_from_the_keychain_and_a_missing_one_is_named(
     ];
     let server = add(&rig, "fake", &["--era", "modern"], env).await;
     // Missing first: the reason says where to put it.
-    let only_once =
-        ManagerOptions { backoff: vec![], probe_timeout: Duration::from_millis(500), work_dir: None, data_home: None };
+    let only_once = ManagerOptions {
+        backoff: vec![],
+        probe_timeout: Duration::from_millis(500),
+        work_dir: None,
+        data_home: None,
+        answers_requests: false,
+    };
     let strict = McpManager::with(
         rig.store.clone(),
         rig.registry.clone(),
@@ -558,6 +571,7 @@ mod remote {
             probe_timeout: Duration::from_millis(300),
             work_dir: None,
             data_home: None,
+            answers_requests: false,
         };
         let strict = McpManager::with(
             rig.store.clone(),
