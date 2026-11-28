@@ -167,6 +167,8 @@ pub async fn mcp_list(state: State<'_, AppState>) -> Result<Vec<ServerRow>, UiEr
 #[derive(Serialize)]
 pub struct ToolRow {
     name: String,
+    /// The hash of the definition shown here: approving sends it back, so what is approved is what was on screen.
+    hash: String,
     status: &'static str,
     trust: &'static str,
     listed: bool,
@@ -223,6 +225,7 @@ fn tool_row(pin: &zorix_core::McpToolPin) -> ToolRow {
     };
     ToolRow {
         name: pin.tool.clone(),
+        hash: pin.seen_hash.clone(),
         status: pin.status.as_str(),
         trust: pin.trust.as_str(),
         listed: pin.listed,
@@ -451,11 +454,20 @@ pub async fn mcp_refresh(state: State<'_, AppState>, name: String) -> Result<(),
 
 /// Approve what a server lists for one tool, or turn it off.
 #[tauri::command]
-pub async fn mcp_review(state: State<'_, AppState>, name: String, tool: String, action: String) -> Result<(), UiError> {
+pub async fn mcp_review(
+    state: State<'_, AppState>,
+    name: String,
+    tool: String,
+    action: String,
+    hash: Option<String>,
+) -> Result<(), UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
     let action = match action.as_str() {
-        "approve" => PinAction::Approve,
+        "approve" => match hash {
+            Some(shown) => PinAction::approve_seen(shown),
+            None => return Err(UiError::message("Approving needs the definition that was shown.")),
+        },
         "disable" => PinAction::Disable,
         other => return Err(UiError::message(format!("“{other}” is not an action."))),
     };
@@ -463,10 +475,14 @@ pub async fn mcp_review(state: State<'_, AppState>, name: String, tool: String, 
 }
 
 #[tauri::command]
-pub async fn mcp_approve_all(state: State<'_, AppState>, name: String) -> Result<usize, UiError> {
+pub async fn mcp_approve_all(
+    state: State<'_, AppState>,
+    name: String,
+    shown: Vec<(String, String)>,
+) -> Result<usize, UiError> {
     let services = services(&state)?;
     let server = services.hub.server(&name).await.map_err(text)?;
-    services.hub.manager.approve_all(server.id, "desktop").await.map_err(text)
+    services.hub.manager.approve_shown(server.id, "desktop", &shown).await.map_err(text)
 }
 
 #[tauri::command]

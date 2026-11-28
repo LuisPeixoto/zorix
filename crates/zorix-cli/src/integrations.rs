@@ -488,7 +488,7 @@ async fn review(home: &Path, tenant: &TenantId, printer: Printer, args: McpRevie
     let acting = args.approve_all || !args.approve.is_empty() || !args.disable.is_empty();
     if acting {
         for tool in &args.approve {
-            session.hub.manager.review(server.id, tool, PinAction::Approve, &by).await?;
+            session.hub.manager.review(server.id, tool, PinAction::approve(), &by).await?;
             say(printer, format!("Approved {tool}."));
         }
         for tool in &args.disable {

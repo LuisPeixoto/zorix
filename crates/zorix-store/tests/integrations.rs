@@ -122,14 +122,14 @@ async fn a_tool_is_new_until_a_person_approves_exactly_what_the_server_lists() {
         .await
         .unwrap();
     assert!(pins.iter().all(|p| p.status == PinStatus::New && !p.usable() && p.trust == ToolTrust::Ask));
-    let approved = store.review_tool(&me, s.id, "read", PinAction::Approve, "luis", Timestamp(5)).await.unwrap();
+    let approved = store.review_tool(&me, s.id, "read", PinAction::approve(), "luis", Timestamp(5)).await.unwrap();
     assert_eq!(
         (approved.status, approved.approved_hash.as_deref(), approved.approved_by.as_deref()),
         (PinStatus::Pinned, Some("h1"), Some("luis"))
     );
     assert!(approved.usable() && approved.approved == Some(approved.seen.clone()));
     assert!(
-        store.review_tool(&me, s.id, "read", PinAction::Approve, "  ", Timestamp(5)).await.is_err(),
+        store.review_tool(&me, s.id, "read", PinAction::approve(), "  ", Timestamp(5)).await.is_err(),
         "someone has to be named"
     );
     // Observing the same definition again changes nothing.
@@ -151,9 +151,9 @@ async fn a_changed_definition_stops_being_offered_until_a_person_reviews_it() {
     let store = SqliteIntegrationStore::open_in_memory().unwrap();
     let me = tenant("local");
     let s = server(&store, &me, "svc").await;
-    let ro = json!({"readOnlyHint": true});
+    let ro = json!({"readOnlyHint": true, "openWorldHint": false});
     store.observe_tools(&me, s.id, vec![tool("read", "h1", ro.clone())], NOW).await.unwrap();
-    store.review_tool(&me, s.id, "read", PinAction::Approve, "luis", NOW).await.unwrap();
+    store.review_tool(&me, s.id, "read", PinAction::approve(), "luis", NOW).await.unwrap();
     store.set_tool_trust(&me, s.id, "read", ToolTrust::ReadOnlyNoAsk).await.unwrap();
 
     // The server quietly rewrites the description.
@@ -176,7 +176,7 @@ async fn a_changed_definition_stops_being_offered_until_a_person_reviews_it() {
 
     // Or a person approves the new definition.
     store.observe_tools(&me, s.id, vec![tool("read", "h3", ro)], NOW).await.unwrap();
-    let reviewed = store.review_tool(&me, s.id, "read", PinAction::Approve, "luis", NOW).await.unwrap();
+    let reviewed = store.review_tool(&me, s.id, "read", PinAction::approve(), "luis", NOW).await.unwrap();
     assert_eq!((reviewed.status, reviewed.approved_hash.as_deref()), (PinStatus::Pinned, Some("h3")));
 }
 
@@ -190,8 +190,10 @@ async fn not_asking_is_only_possible_for_an_approved_read_only_tool() {
             &me,
             s.id,
             vec![
-                tool("reader", "r", json!({"readOnlyHint": true})),
+                tool("reader", "r", json!({"readOnlyHint": true, "openWorldHint": false})),
                 tool("liar", "l", json!({"readOnlyHint": true, "openWorldHint": true})),
+                // Read-only, and silent about whether it reaches outside: the specification's default is that it does.
+                tool("unsaid", "u", json!({"readOnlyHint": true})),
                 tool("destroyer", "d", json!({"readOnlyHint": true, "destructiveHint": true})),
                 tool("silent", "s", json!({})),
             ],
@@ -201,14 +203,14 @@ async fn not_asking_is_only_possible_for_an_approved_read_only_tool() {
         .unwrap();
     // Not approved yet.
     assert!(store.set_tool_trust(&me, s.id, "reader", ToolTrust::ReadOnlyNoAsk).await.is_err());
-    for name in ["reader", "liar", "destroyer", "silent"] {
-        store.review_tool(&me, s.id, name, PinAction::Approve, "luis", NOW).await.unwrap();
+    for name in ["reader", "liar", "unsaid", "destroyer", "silent"] {
+        store.review_tool(&me, s.id, name, PinAction::approve(), "luis", NOW).await.unwrap();
     }
     assert_eq!(
         store.set_tool_trust(&me, s.id, "reader", ToolTrust::ReadOnlyNoAsk).await.unwrap().trust,
         ToolTrust::ReadOnlyNoAsk
     );
-    for name in ["liar", "destroyer", "silent"] {
+    for name in ["liar", "unsaid", "destroyer", "silent"] {
         assert!(store.set_tool_trust(&me, s.id, name, ToolTrust::ReadOnlyNoAsk).await.is_err(), "{name} always asks");
     }
     assert_eq!(store.set_tool_trust(&me, s.id, "reader", ToolTrust::Ask).await.unwrap().trust, ToolTrust::Ask);
@@ -217,8 +219,10 @@ async fn not_asking_is_only_possible_for_an_approved_read_only_tool() {
     let off = store.review_tool(&me, s.id, "reader", PinAction::Disable, "luis", NOW).await.unwrap();
     assert_eq!((off.status, off.trust), (PinStatus::Disabled, ToolTrust::Ask));
     // A disabled tool stays disabled when the server lists it again.
-    let still =
-        store.observe_tools(&me, s.id, vec![tool("reader", "r", json!({"readOnlyHint": true}))], NOW).await.unwrap();
+    let still = store
+        .observe_tools(&me, s.id, vec![tool("reader", "r", json!({"readOnlyHint": true, "openWorldHint": false}))], NOW)
+        .await
+        .unwrap();
     assert_eq!(still.iter().find(|p| p.tool == "reader").unwrap().status, PinStatus::Disabled);
 }
 
@@ -231,11 +235,14 @@ async fn tools_that_vanish_are_marked_and_unapproved_ones_are_forgotten() {
         .observe_tools(&me, s.id, vec![tool("kept", "k", json!({})), tool("junk", "j", json!({}))], NOW)
         .await
         .unwrap();
-    store.review_tool(&me, s.id, "kept", PinAction::Approve, "luis", NOW).await.unwrap();
+    store.review_tool(&me, s.id, "kept", PinAction::approve(), "luis", NOW).await.unwrap();
     let pins = store.observe_tools(&me, s.id, vec![], NOW).await.unwrap();
     assert_eq!(pins.len(), 1, "the never-approved tool is gone");
     assert!(!pins[0].listed && !pins[0].usable(), "an approved tool the server no longer lists is not offered");
-    assert!(store.review_tool(&me, s.id, "kept", PinAction::Approve, "luis", NOW).await.is_err(), "nothing to approve");
+    assert!(
+        store.review_tool(&me, s.id, "kept", PinAction::approve(), "luis", NOW).await.is_err(),
+        "nothing to approve"
+    );
     // Removing the server removes what is known about its tools.
     assert!(store.remove_mcp_server(&me, s.id).await.unwrap());
     assert!(store.tool_pins(&me, s.id).await.is_err());
@@ -318,4 +325,65 @@ async fn connections_are_named_tested_changed_and_kept_per_tenant() {
     assert_eq!(store.connections(&a).await.unwrap().len(), 1);
     assert!(store.remove_connection(&a, prod.id).await.unwrap());
     assert!(store.connections(&a).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_approval_is_for_the_definition_that_was_shown_and_for_no_other() {
+    let store = SqliteIntegrationStore::open_in_memory().unwrap();
+    let me = tenant("local");
+    let s = server(&store, &me, "svc").await;
+    store.observe_tools(&me, s.id, vec![tool("send", "h-shown", json!({}))], NOW).await.unwrap();
+    // The server changes the tool after the person looked and before the click.
+    store.observe_tools(&me, s.id, vec![tool("send", "h-swapped", json!({}))], NOW).await.unwrap();
+    let refused = store.review_tool(&me, s.id, "send", PinAction::approve_seen("h-shown"), "luis", NOW).await;
+    let message = refused.unwrap_err().to_string();
+    assert!(message.contains("changed send after you looked at it"), "{message}");
+    let pin = store.tool_pins(&me, s.id).await.unwrap().remove(0);
+    assert_eq!((pin.status, pin.approved_hash.clone()), (PinStatus::New, None), "nothing was approved");
+    // Approving what is shown now works, and records exactly that.
+    let approved =
+        store.review_tool(&me, s.id, "send", PinAction::approve_seen("h-swapped"), "luis", NOW).await.unwrap();
+    assert_eq!((approved.status, approved.approved_hash.as_deref()), (PinStatus::Pinned, Some("h-swapped")));
+    // A person who deliberately approves "what is pending" gives no hash and gets what is listed.
+    store.observe_tools(&me, s.id, vec![tool("send", "h-third", json!({}))], NOW).await.unwrap();
+    let blind = store.review_tool(&me, s.id, "send", PinAction::approve(), "luis", NOW).await.unwrap();
+    assert_eq!(blind.approved_hash.as_deref(), Some("h-third"));
+}
+
+#[tokio::test]
+async fn a_choice_not_to_ask_that_the_rule_no_longer_allows_is_taken_back() {
+    // Before a server had to *say* that a tool stays inside it, a read-only tool with no such hint could be set to run without asking.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("zorix.db");
+    let me = tenant("local");
+    let id;
+    {
+        let store = SqliteIntegrationStore::open(&path).unwrap();
+        let s = server(&store, &me, "svc").await;
+        id = s.id;
+        store.observe_tools(&me, s.id, vec![tool("old", "h", json!({"readOnlyHint": true}))], NOW).await.unwrap();
+        store.review_tool(&me, s.id, "old", PinAction::approve(), "luis", NOW).await.unwrap();
+    }
+    // The old behaviour, written straight into the file as it would have been.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute("UPDATE mcp_tool_pins SET trust = 'read_only_no_ask' WHERE tool = 'old'", [])
+        .unwrap();
+    let store = SqliteIntegrationStore::open(&path).unwrap();
+    assert_eq!(store.tool_pins(&me, id).await.unwrap()[0].trust, ToolTrust::ReadOnlyNoAsk, "as it was left");
+    // The next time the server's tools are read, the choice is taken back, and the tool stays approved.
+    let pins = store.observe_tools(&me, id, vec![tool("old", "h", json!({"readOnlyHint": true}))], NOW).await.unwrap();
+    assert_eq!((pins[0].status, pins[0].trust), (PinStatus::Pinned, ToolTrust::Ask));
+    // One that does say so keeps its choice.
+    store
+        .observe_tools(&me, id, vec![tool("ok", "g", json!({"readOnlyHint": true, "openWorldHint": false}))], NOW)
+        .await
+        .unwrap();
+    store.review_tool(&me, id, "ok", PinAction::approve(), "luis", NOW).await.unwrap();
+    store.set_tool_trust(&me, id, "ok", ToolTrust::ReadOnlyNoAsk).await.unwrap();
+    let again = store
+        .observe_tools(&me, id, vec![tool("ok", "g", json!({"readOnlyHint": true, "openWorldHint": false}))], NOW)
+        .await
+        .unwrap();
+    assert_eq!(again.iter().find(|p| p.tool == "ok").unwrap().trust, ToolTrust::ReadOnlyNoAsk);
 }

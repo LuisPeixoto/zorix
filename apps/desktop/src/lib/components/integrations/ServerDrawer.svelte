@@ -72,7 +72,7 @@
       {#if toReview.length > 0 && detail.enabled}
         <Callout tone="accent" icon="shield-check" title={tr("integrations.serverDrawer.toolsToReview", { count: toReview.length })}>
           {tr("integrations.serverDrawer.toolsAreNotOffered")} {#if toReview.some((t) => t.status === "changed")}<strong class="text-fg">{tr("integrations.serverDrawer.someChangedSinceYou")}</strong>{tr("integrations.serverDrawer.readWhatIsDifferent")}{/if}
-          {#snippet actions()}<Button size="sm" variant="primary" icon="check" onclick={() => integrations.approveAll(detail.name)}>{tr("integrations.serverDrawer.approveAll", { length: toReview.length })}</Button>{/snippet}
+          {#snippet actions()}<Button size="sm" variant="primary" icon="check" onclick={() => integrations.approveAll(detail.name, toReview.map((t) => [t.name, t.hash]))}>{tr("integrations.serverDrawer.approveAll", { length: toReview.length })}</Button>{/snippet}
         </Callout>
       {/if}
     </div>
@@ -101,11 +101,11 @@
                   <Switch
                     checked={tool.status === "pinned"}
                     aria-label={tr("integrations.serverDrawer.offerToRuns", { name: tool.name })}
-                    onchange={(e) => void integrations.review(detail.name, tool.name, e.currentTarget.checked ? "approve" : "disable")}
+                    onchange={(e) => void integrations.review(detail.name, tool.name, e.currentTarget.checked ? "approve" : "disable", tool.hash)}
                   />
                 {:else}
                   <div class="flex shrink-0 gap-1.5">
-                    <Button size="sm" variant="primary" aria-label={tool.status === "changed" ? tr("integrations.serverDrawer.approveTheChangeTo", { name: tool.name }) : tr("integrations.serverDrawer.approveTool", { name: tool.name })} onclick={() => integrations.review(detail.name, tool.name, "approve")}>{tool.status === "changed" ? tr("integrations.serverDrawer.approveChange") : tr("common.approve")}</Button>
+                    <Button size="sm" variant="primary" aria-label={tool.status === "changed" ? tr("integrations.serverDrawer.approveTheChangeTo", { name: tool.name }) : tr("integrations.serverDrawer.approveTool", { name: tool.name })} onclick={() => integrations.review(detail.name, tool.name, "approve", tool.hash)}>{tool.status === "changed" ? tr("integrations.serverDrawer.approveChange") : tr("common.approve")}</Button>
                     <Button size="sm" aria-label={tr("integrations.serverDrawer.turnOff", { name: tool.name })} onclick={() => integrations.review(detail.name, tool.name, "disable")}>{tr("integrations.serverDrawer.off")}</Button>
                   </div>
                 {/if}
