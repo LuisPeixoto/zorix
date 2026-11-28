@@ -62,7 +62,9 @@ pub struct ServerRow {
     auth: Option<&'static str>,
     /// A token or a browser sign-in is kept.
     signed_in: bool,
-    /// The catalogue entry it came from, when its command or address still matches one.
+    /// The id of the catalogue entry it came from, when its address or its package still says so.
+    catalog: Option<String>,
+    /// That entry's mark.
     logo: Option<String>,
 }
 
@@ -71,21 +73,6 @@ fn describe(transport: &McpTransport) -> String {
         McpTransport::Stdio { command, args, .. } => format!("{command} {}", args.join(" ")).trim_end().to_string(),
         McpTransport::Http { url, .. } => url.clone(),
     }
-}
-
-fn logo_for(transport: &McpTransport) -> Option<String> {
-    zorix_mcp::catalog()
-        .entries
-        .iter()
-        .find(|entry| match (&entry.transport, transport) {
-            (CatalogTransport::Http { url, .. }, McpTransport::Http { url: mine, .. }) => url == mine,
-            (
-                CatalogTransport::Stdio { command, args, .. },
-                McpTransport::Stdio { command: mine, args: my_args, .. },
-            ) => command == mine && args.first() == my_args.first() && args.iter().any(|a| my_args.contains(a)),
-            _ => false,
-        })
-        .map(|entry| entry.logo.clone())
 }
 
 fn state_parts(enabled: bool, state: &ServerState) -> (&'static str, Option<String>) {
@@ -126,6 +113,7 @@ async fn row(services: &Services, server: &McpServer) -> Result<ServerRow, UiErr
     let listed = pins.iter().filter(|p| p.listed).count();
     let ready = pins.iter().filter(|p| p.usable()).count();
     let review = pins.iter().filter(|p| p.listed && matches!(p.status, PinStatus::New | PinStatus::Changed)).count();
+    let entry = zorix_mcp::catalog().entry_for(&server.transport);
     Ok(ServerRow {
         name: server.name.clone(),
         kind: match server.transport {
@@ -149,7 +137,8 @@ async fn row(services: &Services, server: &McpServer) -> Result<ServerRow, UiErr
             McpTransport::Stdio { .. } => None,
         },
         signed_in: signed_in(services, server).await,
-        logo: logo_for(&server.transport),
+        catalog: entry.map(|e| e.id.clone()),
+        logo: entry.map(|e| e.logo.clone()),
     })
 }
 
