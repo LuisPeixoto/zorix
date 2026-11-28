@@ -510,13 +510,15 @@ export interface SandboxFolder {
 }
 
 export interface ServerSandbox {
-  mode: "native" | "off";
+  mode: "native" | "container" | "off";
   network: boolean;
   folders: SandboxFolder[];
 }
 
 export interface SandboxEnforced {
   os: string;
+  /** The container program found here, if any. */
+  container: string | null;
   files: boolean;
   network: boolean;
   credentials: boolean;

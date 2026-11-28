@@ -91,6 +91,12 @@ zorix mcp doctor                                     # what is enforced on this 
 | macOS | Seatbelt (`sandbox-exec`) | refused when off | end with the server |
 | Linux | Landlock (a kernel without it refuses to start the server) | seccomp, refused when off | end with the server |
 | Windows | **not confined** | **not confined** | Job Object: end with the server, memory and number limited |
+| Container (any of them) | only the server's folder and the folders given are mounted | none unless on | the container is removed |
+
+**Container mode** (`zorix mcp sandbox <name> --mode container`, or *Container* in the drawer) runs the server with Docker or
+Podman: read-only, without capabilities, in an official image fixed by its digest (Node for `npx` and `node`, Python with `uv` for
+`uvx`, `uv` and `python`; other commands are refused). It is the way to confine files and the network on Windows. The first start
+downloads the image, which can take longer than ZORIX waits: `zorix mcp doctor` prints the commands that fetch the images ahead.
 
 ## Both protocol eras
 

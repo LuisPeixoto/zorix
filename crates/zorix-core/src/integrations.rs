@@ -123,6 +123,8 @@ pub enum McpTransport {
 pub enum SandboxMode {
     /// Restricted with what this operating system can enforce.
     Native,
+    /// Run in a container with Docker or Podman: read-only, no capabilities, only the folders given mounted.
+    Container,
     /// Not restricted: the server runs as the person, as every server did before Phase 12.
     Off,
 }

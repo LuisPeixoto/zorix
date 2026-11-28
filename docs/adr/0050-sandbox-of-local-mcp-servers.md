@@ -10,7 +10,7 @@ limits what a *run* asks of it, not what the program itself does, and most serve
 
 ## Decision
 
-- **Two modes, `native` and `off`** (a container mode follows). A new local server starts `native`, decided by the store so no way
+- **Three modes: `native`, `container` and `off`.** A new local server starts `native`, decided by the store so no way
   of adding one (command line, catalogue, import, app) can forget it. A server added before has no choice recorded and keeps running
   as before, with a notice; the schema moved to 17 so an older ZORIX, which would ignore the column and run servers unconfined,
   refuses the data instead.
@@ -29,6 +29,13 @@ limits what a *run* asks of it, not what the program itself does, and most serve
 - **Windows:** the Job Object limits memory and the number of processes and ends them with the server. Files and the network are
   **not** confined, and the interface and `zorix mcp doctor` say so.
 
+- **Container:** Docker, else Podman. `--read-only`, `--cap-drop ALL`, `no-new-privileges`, process and memory limits, no network
+  unless chosen, only the server's folder and the given folders mounted (at their own paths; on Windows elsewhere, with the arguments
+  that name them rewritten), the server's variables handed in by name so no value is written on a command line, and the person's own
+  user id with Docker. Images are pinned by digest (`NODE_IMAGE` for `npx` and `node`, `UV_IMAGE` for `uvx`, `uv` and `python`),
+  reviewed with each release; other commands are refused. The container is removed when the server stops, because ending the
+  `docker` program does not end it. No container program: the server is refused with the reason, never started unconfined.
+
 ## Security review
 
 - **Escapes tried in tests** (`zorix-mcp/tests/sandbox.rs`, macOS and Linux in CI): reading keys, notes, ZORIX's database and
@@ -37,6 +44,11 @@ limits what a *run* asks of it, not what the program itself does, and most serve
   (it **did** start an application until services were refused by default), AppleScript, `launchctl`, the keychain and the pasteboard.
 - **Found while building it:** a Seatbelt rule for one operation wins over a later rule for its family, so refusing `file-read*`
   did not refuse the keys inside a given folder until the refusal named `file-read-data` too. A test holds it.
+- **Container, tried on Linux in CI** (`tests/container.rs`): a host file not given, a read-only folder, the system files and the
+  network are all refused, and no container is left behind. Not tried here: Docker Desktop on macOS and Windows, and Podman.
+- **Not covered:** a container shares the host's kernel, and the container program's daemon runs with its own privileges; anyone who
+  can start containers already can do more than a server in one. A ZORIX that is killed outright may leave a container running until
+  its input closes.
 - **Not covered:** it is a restriction, not a virtual machine; a kernel flaw is outside it. With the network on, a server can send
   anywhere what it can read, private addresses included. The toolchain folders it may read are listed in `sandbox.rs`. A package
   that must be compiled on first use may fail inside it (turn it off for that start). `sandbox-exec` is deprecated by Apple but

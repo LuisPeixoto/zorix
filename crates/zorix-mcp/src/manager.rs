@@ -216,14 +216,17 @@ impl Connector for DefaultConnector {
                     (None, None) => None,
                 };
                 // A confined server has a folder of its own to be its home, even where servers have none otherwise (tests).
-                let confinement = server.sandbox.as_ref().and_then(|sandbox| {
-                    let own = options
-                        .work_dir
-                        .clone()
-                        .unwrap_or_else(|| std::env::temp_dir().join("zorix-mcp"))
-                        .join(server.id.to_string());
-                    Confinement::of(sandbox, own, options.data_home.as_deref())
-                });
+                let confinement = match &server.sandbox {
+                    Some(sandbox) => {
+                        let own = options
+                            .work_dir
+                            .clone()
+                            .unwrap_or_else(|| std::env::temp_dir().join("zorix-mcp"))
+                            .join(server.id.to_string());
+                        Confinement::of(sandbox, command, own, options.data_home.as_deref())?
+                    }
+                    None => None,
+                };
                 let transport = StdioTransport::spawn_confined(
                     StdioConfig { command: command.clone(), args: args.clone(), env: resolved, cwd: folder },
                     confinement,

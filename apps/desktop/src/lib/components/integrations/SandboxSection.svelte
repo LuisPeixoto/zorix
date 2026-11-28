@@ -9,7 +9,7 @@
   /** How a local server is confined: the mode, the network, the folders, and what this computer really enforces. */
   let { detail }: { detail: ServerDetail } = $props();
 
-  let mode = $state<"native" | "off">("off");
+  let mode = $state<"native" | "container" | "off">("off");
   let network = $state(false);
   let folders = $state<SandboxFolder[]>([]);
   let saving = $state(false);
@@ -26,11 +26,13 @@
 
   const changed = $derived(detail.sandbox === null || JSON.stringify({ mode, network, folders }) !== stored);
   const word = (enforced: boolean) => (enforced ? tr("integrations.sandbox.enforced") : tr("integrations.sandbox.notEnforced"));
+  // A container confines files, the network and credentials whatever the system; natively it is what the system offers.
+  const confines = $derived(mode === "container" ? { files: true, network: true, credentials: true, processes: true } : detail.enforced);
   const rows = $derived([
-    { key: tr("integrations.sandbox.files"), value: `${word(detail.enforced.files)}: ${tr("integrations.sandbox.filesText")}` },
-    { key: tr("integrations.sandbox.network"), value: `${word(detail.enforced.network)}: ${tr("integrations.sandbox.networkText")}` },
-    { key: tr("integrations.sandbox.credentials"), value: `${word(detail.enforced.credentials)}: ${tr("integrations.sandbox.credentialsText")}` },
-    { key: tr("integrations.sandbox.processes"), value: `${word(detail.enforced.processes)}: ${tr("integrations.sandbox.processesText")}` },
+    { key: tr("integrations.sandbox.files"), value: `${word(confines.files)}: ${tr("integrations.sandbox.filesText")}` },
+    { key: tr("integrations.sandbox.network"), value: `${word(confines.network)}: ${tr("integrations.sandbox.networkText")}` },
+    { key: tr("integrations.sandbox.credentials"), value: `${word(confines.credentials)}: ${tr("integrations.sandbox.credentialsText")}` },
+    { key: tr("integrations.sandbox.processes"), value: `${word(confines.processes)}: ${tr("integrations.sandbox.processesText")}` },
   ]);
 
   async function add() {
@@ -55,13 +57,20 @@
     label={tr("integrations.sandbox.how")}
     options={[
       { value: "native", label: tr("integrations.sandbox.native") },
+      { value: "container", label: tr("integrations.sandbox.container") },
       { value: "off", label: tr("integrations.sandbox.off") },
     ]}
   />
   {#if mode === "off"}
     <Callout tone="muted" icon="info">{tr("integrations.sandbox.offText")}</Callout>
   {:else}
-    {#if !detail.enforced.files}
+    {#if mode === "container"}
+      {#if detail.enforced.container}
+        <Callout tone="muted" icon="info">{tr("integrations.sandbox.containerNote", { runtime: detail.enforced.container })}</Callout>
+      {:else}
+        <Callout tone="warn" icon="alert">{tr("integrations.sandbox.noRuntime")}</Callout>
+      {/if}
+    {:else if !detail.enforced.files}
       <Callout tone="warn" icon="alert">{tr("integrations.sandbox.windows")}</Callout>
     {/if}
     <ToggleRow class="px-0" label={tr("integrations.sandbox.network")} description={tr("integrations.sandbox.networkHint")} bind:checked={network} />

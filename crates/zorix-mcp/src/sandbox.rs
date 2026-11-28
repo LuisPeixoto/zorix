@@ -56,6 +56,54 @@ const TOOLCHAINS: &[&str] = &[
     "n",
 ];
 
+/// The images a container runs servers in, pinned by digest and reviewed with each release (read from the registries on 2026-11-28).
+pub const NODE_IMAGE: &str = "node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a";
+/// Python with `uv` and `uvx`.
+pub const UV_IMAGE: &str =
+    "ghcr.io/astral-sh/uv:python3.12-alpine@sha256:b6bb7deef90d036429b6e38719c5e77b82d09f799e5d6e6f9a5ce1f8aebdbe2e";
+
+/// Where the server's own folder is inside a container.
+const CONTAINER_HOME: &str = "/home/server";
+
+/// The program a command stands for inside a container and the image that has it, or `None` for a command containers do not run.
+pub fn container_launcher(command: &str) -> Option<(String, &'static str)> {
+    let name = command.rsplit(['/', '\\']).next().unwrap_or(command).to_ascii_lowercase();
+    let name = name.strip_suffix(".cmd").or_else(|| name.strip_suffix(".exe")).unwrap_or(&name).to_string();
+    let image = match name.as_str() {
+        "npx" | "node" => NODE_IMAGE,
+        "uvx" | "uv" | "python" | "python3" => UV_IMAGE,
+        _ => return None,
+    };
+    Some((name, image))
+}
+
+/// Docker, else Podman, when one is on `PATH`.
+pub fn container_runtime() -> Option<PathBuf> {
+    let find = |name: &str| find_program(&if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }, None);
+    find("docker").or_else(|| find("podman"))
+}
+
+/// How a server runs in a container.
+#[derive(Clone, Debug)]
+pub struct ContainerPlan {
+    /// The container program.
+    pub runtime: PathBuf,
+    /// The program inside the container.
+    pub program: String,
+    /// The image it runs in, by digest.
+    pub image: &'static str,
+    /// The name of the container, so it can be removed when the server stops.
+    pub name: String,
+}
+
+/// A name no other start of a server uses.
+fn container_name() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNT: AtomicU64 = AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+    format!("zorix-mcp-{}-{}-{:x}", std::process::id(), COUNT.fetch_add(1, Ordering::Relaxed), nanos as u64)
+}
+
 /// What a confined server may touch.
 #[derive(Clone, Debug)]
 pub struct Confinement {
@@ -71,6 +119,8 @@ pub struct Confinement {
     pub user_data: Vec<PathBuf>,
     /// The person's home, where toolchains are looked for.
     pub home: Option<PathBuf>,
+    /// Run it in a container instead of with the operating system's own restrictions.
+    pub container: Option<ContainerPlan>,
 }
 
 /// What this operating system enforces of a [`Confinement`], so nothing is promised that is not done.
@@ -101,11 +151,33 @@ fn user_home() -> Option<PathBuf> {
 }
 
 impl Confinement {
-    /// The confinement `sandbox` asks for, or `None` when the server is not confined. `data_home` is ZORIX's data folder.
-    pub fn of(sandbox: &ServerSandbox, server_dir: PathBuf, data_home: Option<&Path>) -> Option<Confinement> {
-        if sandbox.mode != SandboxMode::Native {
-            return None;
-        }
+    /// The confinement `sandbox` asks for the server started with `command`, or `None` when it is not confined. `data_home` is
+    /// ZORIX's data folder. A container needs a container program and a launcher it knows; without them the server is refused, never
+    /// started unconfined.
+    pub fn of(
+        sandbox: &ServerSandbox,
+        command: &str,
+        server_dir: PathBuf,
+        data_home: Option<&Path>,
+    ) -> Result<Option<Confinement>, McpError> {
+        let container = match sandbox.mode {
+            SandboxMode::Off => return Ok(None),
+            SandboxMode::Native => None,
+            SandboxMode::Container => {
+                let (program, image) = container_launcher(command).ok_or_else(|| {
+                    McpError::Spawn(format!(
+                        "a container runs servers started with npx, node, uvx, uv or python; “{command}” needs the native sandbox or none"
+                    ))
+                })?;
+                let runtime = container_runtime().ok_or_else(|| {
+                    McpError::Spawn(
+                        "the server is set to run in a container, and neither docker nor podman was found. Install one, or choose another sandbox."
+                            .into(),
+                    )
+                })?;
+                Some(ContainerPlan { runtime, program, image, name: container_name() })
+            }
+        };
         let home = user_home().map(|h| real(&h));
         let mut private: Vec<PathBuf> = home.iter().flat_map(|h| CREDENTIALS.iter().map(move |c| h.join(c))).collect();
         private.extend(data_home.map(real));
@@ -114,13 +186,14 @@ impl Confinement {
             user_data.extend(["/Users", "/Volumes"].map(PathBuf::from));
         }
         let folders = sandbox.folders.iter().map(|f| (real(Path::new(&f.path)), f.write)).collect();
-        Some(Confinement { server_dir, folders, network: sandbox.network, private, user_data, home })
+        Ok(Some(Confinement { server_dir, folders, network: sandbox.network, private, user_data, home, container }))
     }
 
     /// The variables that put the server's home, temporary files and caches in its own folder. Variables a person gave the server are set
     /// after these and win.
     pub fn environment(&self) -> Vec<(&'static str, PathBuf)> {
-        if !enforced().files {
+        // The container program keeps the environment it needs; the server's own variables are set inside the container.
+        if self.container.is_some() || !enforced().files {
             return Vec::new();
         }
         let own = &self.server_dir;
@@ -162,9 +235,91 @@ impl Confinement {
         found
     }
 
-    /// The command that runs `program` confined. `program` is the file that was found for the name a person wrote.
-    pub fn command(&self, program: &Path, args: &[String]) -> Result<Command, McpError> {
-        platform::command(self, program, args)
+    /// The command that runs `program` confined. `program` is the file that was found for the name a person wrote (unused in a
+    /// container, which has its own). `forward` names the variables a container has to hand to the server; their values stay in the
+    /// environment of the command and are never written on its command line.
+    pub fn command(&self, program: &Path, args: &[String], forward: &[String]) -> Result<Command, McpError> {
+        match &self.container {
+            Some(plan) => {
+                let mut command = Command::new(&plan.runtime);
+                command.args(self.container_arguments(plan, args, forward));
+                Ok(command)
+            }
+            None => platform::command(self, program, args),
+        }
+    }
+
+    /// The arguments after the container program.
+    fn container_arguments(&self, plan: &ContainerPlan, args: &[String], forward: &[String]) -> Vec<String> {
+        let text = |p: &Path| p.display().to_string();
+        let mut out: Vec<String> = [
+            "run",
+            "--rm",
+            "-i",
+            "--init",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges",
+            "--pids-limit",
+            "256",
+            "--memory",
+            "2g",
+            "--tmpfs",
+            "/tmp:rw,exec,size=512m",
+        ]
+        .map(str::to_string)
+        .to_vec();
+        out.extend(["--name".into(), plan.name.clone()]);
+        out.extend(["--network".into(), if self.network { "bridge" } else { "none" }.into()]);
+        // Files the server writes in a given folder stay the person's own.
+        #[cfg(unix)]
+        if plan.runtime.file_name().is_some_and(|n| n == "docker") {
+            // SAFETY: both calls only read the ids of this process.
+            let (user, group) = unsafe { (libc::getuid(), libc::getgid()) };
+            out.extend(["--user".into(), format!("{user}:{group}")]);
+        }
+        out.extend(["-v".into(), format!("{}:{CONTAINER_HOME}", text(&self.server_dir))]);
+        out.extend(["-w".into(), CONTAINER_HOME.into()]);
+        // A folder keeps its path inside, so the arguments that name it still mean it. A Windows path cannot be a path inside, so there
+        // the folder is mounted elsewhere and the arguments naming it are changed to match.
+        let inside: Vec<(String, String, bool)> = self
+            .folders
+            .iter()
+            .enumerate()
+            .map(|(i, (path, write))| {
+                let host = text(path);
+                let host = host.strip_prefix(r"\\?\").unwrap_or(&host).to_string();
+                let target = if cfg!(windows) { format!("/folders/{i}") } else { host.clone() };
+                (host, target, *write)
+            })
+            .collect();
+        for (host, target, write) in &inside {
+            out.extend(["-v".into(), format!("{host}:{target}{}", if *write { "" } else { ":ro" })]);
+        }
+        for (name, value) in [
+            ("HOME", CONTAINER_HOME.to_string()),
+            ("npm_config_cache", format!("{CONTAINER_HOME}/cache/npm")),
+            ("UV_CACHE_DIR", format!("{CONTAINER_HOME}/cache/uv")),
+            ("XDG_CACHE_HOME", format!("{CONTAINER_HOME}/cache")),
+        ] {
+            out.extend(["-e".into(), format!("{name}={value}")]);
+        }
+        for name in forward {
+            out.extend(["-e".into(), name.clone()]);
+        }
+        out.push(plan.image.to_string());
+        out.push(plan.program.clone());
+        out.extend(args.iter().map(|arg| {
+            inside.iter().find(|(host, _, _)| host == arg).map_or_else(|| arg.clone(), |(_, target, _)| target.clone())
+        }));
+        out
+    }
+
+    /// The command that removes the container, when there is one: ending the container program does not end the container.
+    pub fn cleanup(&self) -> Option<(PathBuf, Vec<String>)> {
+        self.container.as_ref().map(|plan| (plan.runtime.clone(), vec!["rm".into(), "-f".into(), plan.name.clone()]))
     }
 }
 
@@ -414,9 +569,9 @@ mod tests {
     #[test]
     fn only_a_native_sandbox_confines_and_credentials_and_the_data_folder_are_always_refused() {
         let own = std::env::temp_dir().join("zorix-sandbox-test");
-        assert!(Confinement::of(&sandbox(SandboxMode::Off), own.clone(), None).is_none());
+        assert!(Confinement::of(&sandbox(SandboxMode::Off), "node", own.clone(), None).unwrap().is_none());
         let data = std::env::temp_dir().join("zorix-data");
-        let confined = Confinement::of(&sandbox(SandboxMode::Native), own, Some(&data)).unwrap();
+        let confined = Confinement::of(&sandbox(SandboxMode::Native), "node", own, Some(&data)).unwrap().unwrap();
         assert!(confined.private.iter().any(|p| p.ends_with("zorix-data")), "{:?}", confined.private);
         if user_home().is_some() {
             assert!(confined.private.iter().any(|p| p.ends_with(".ssh")), "{:?}", confined.private);
@@ -434,6 +589,7 @@ mod tests {
             private: vec!["/Users/ana/.ssh".into(), "/Users/ana/Library/zorix".into()],
             user_data: vec!["/Users".into()],
             home: Some("/Users/ana".into()),
+            container: None,
         };
         let p = platform::profile(&c, Path::new("/usr/local/bin/node"));
         let at = |needle: &str| p.find(needle).unwrap_or_else(|| panic!("{needle} is not in:\n{p}"));
@@ -449,6 +605,54 @@ mod tests {
         assert!(
             !with_network.contains("(deny network*)")
                 && with_network.contains("(deny network-outbound (remote unix-socket))")
+        );
+    }
+
+    #[test]
+    fn a_container_is_read_only_without_capabilities_and_gets_only_what_was_given() {
+        assert_eq!(container_launcher("npx").map(|(p, i)| (p, i == NODE_IMAGE)), Some(("npx".into(), true)));
+        assert_eq!(container_launcher("C:\\x\\UVX.EXE").map(|(p, i)| (p, i == UV_IMAGE)), Some(("uvx".into(), true)));
+        assert!(container_launcher("./my-server").is_none() && container_launcher("sh").is_none());
+        for image in [NODE_IMAGE, UV_IMAGE] {
+            let (_, digest) = image.split_once("@sha256:").expect("pinned by digest");
+            assert!(digest.len() == 64 && digest.bytes().all(|b| b.is_ascii_hexdigit()), "{image}");
+        }
+        let given = if cfg!(windows) { r"C:\data" } else { "/data/given" };
+        let plan = ContainerPlan {
+            runtime: "/usr/bin/docker".into(),
+            program: "npx".into(),
+            image: NODE_IMAGE,
+            name: "zorix-mcp-1".into(),
+        };
+        let c = Confinement {
+            server_dir: "/zorix/mcp/1".into(),
+            folders: vec![(given.into(), false)],
+            network: false,
+            private: vec![],
+            user_data: vec![],
+            home: None,
+            container: Some(plan.clone()),
+        };
+        let args =
+            c.container_arguments(&plan, &["-y".into(), "pkg@1.0.0".into(), given.into()], &["API_TOKEN".into()]);
+        let line = args.join(" ");
+        for must in [
+            "run --rm -i --init --read-only --cap-drop ALL --security-opt no-new-privileges",
+            "--network none",
+            "--name zorix-mcp-1",
+            "-v /zorix/mcp/1:/home/server",
+            "-e API_TOKEN",
+        ] {
+            assert!(line.contains(must), "{must} in {line}");
+        }
+        // The folder is mounted read-only, the image is the pinned one and the argument naming the folder points inside.
+        let inside = if cfg!(windows) { "/folders/0" } else { given };
+        assert!(args.contains(&format!("{given}:{inside}:ro")), "{line}");
+        assert_eq!(&args[args.len() - 5..], [NODE_IMAGE, "npx", "-y", "pkg@1.0.0", inside], "{line}");
+        assert!(!line.contains("API_TOKEN="), "a value is never written on the command line");
+        assert_eq!(
+            c.cleanup(),
+            Some((PathBuf::from("/usr/bin/docker"), vec!["rm".into(), "-f".into(), "zorix-mcp-1".into()]))
         );
     }
 }

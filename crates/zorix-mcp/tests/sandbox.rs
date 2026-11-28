@@ -56,6 +56,7 @@ impl World {
             private: vec![self.root.join("home/.ssh"), self.root.join("data")],
             user_data: vec![self.root.clone()],
             home: Some(self.root.join("home")),
+            container: None,
         }
     }
 
