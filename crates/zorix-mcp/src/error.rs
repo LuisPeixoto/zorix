@@ -64,3 +64,18 @@ impl McpError {
 pub const METHOD_NOT_FOUND: i64 = -32601;
 /// The JSON-RPC code of "unsupported protocol version" in the 2026-07-28 revision.
 pub const UNSUPPORTED_VERSION: i64 = -32022;
+
+impl From<zorix_oauth::OAuthError> for McpError {
+    fn from(error: zorix_oauth::OAuthError) -> Self {
+        use zorix_oauth::OAuthError as O;
+        match error {
+            O::Transport(why) => McpError::Transport(why),
+            O::Timeout(why) => McpError::Timeout(why),
+            O::Cancelled => McpError::Cancelled,
+            O::Protocol(why) => McpError::Protocol(why),
+            O::NeedsLogin(why) => McpError::NeedsLogin(why),
+            O::Spawn(why) => McpError::Spawn(why),
+            O::TooLarge { limit } => McpError::TooLarge { limit },
+        }
+    }
+}

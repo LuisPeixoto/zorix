@@ -1,0 +1,25 @@
+[package]
+name = "zorix-oauth"
+description = "ZORIX's OAuth pieces: PKCE, the loopback answer, token calls that cannot be sent to a private address, and tokens kept in the keychain and renewed."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+zorix-core.workspace = true
+zorix-net.workspace = true
+zorix-providers.workspace = true
+base64 = "0.22"
+getrandom = "0.3"
+reqwest.workspace = true
+rustls.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true

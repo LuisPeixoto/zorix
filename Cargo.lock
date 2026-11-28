@@ -8476,6 +8476,7 @@ dependencies = [
  "wiremock",
  "zorix-core",
  "zorix-net",
+ "zorix-oauth",
  "zorix-providers",
  "zorix-runtime",
  "zorix-sim",
@@ -8519,6 +8520,25 @@ version = "0.11.0"
 dependencies = [
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "zorix-oauth"
+version = "0.11.0"
+dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.3.4",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "zorix-core",
+ "zorix-net",
+ "zorix-providers",
 ]
 
 [[package]]
