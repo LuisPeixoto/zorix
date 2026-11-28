@@ -230,7 +230,7 @@ mod tests {
     fn the_catalogue_that_ships_is_valid_and_every_entry_is_usable() {
         let catalog = catalog();
         assert_eq!(catalog.version, 1);
-        assert!(catalog.entries.len() >= 8);
+        assert!(catalog.entries.len() >= 20);
         let mut ids = std::collections::HashSet::new();
         for entry in &catalog.entries {
             assert!(ids.insert(entry.id.clone()), "{} appears twice", entry.id);
@@ -257,6 +257,52 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Whether a package spec names one exact version (`name@1.2.3`, `@scope/name@1.2.3`): not `latest`, not a range, not nothing.
+    fn names_a_version(spec: &str) -> bool {
+        let Some(at) = spec.rfind('@').filter(|at| *at > 0) else { return false };
+        let version = &spec[at + 1..];
+        version.split('.').count() >= 2
+            && version.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    }
+
+    #[test]
+    fn every_package_the_catalogue_fetches_is_pinned_to_one_version() {
+        for bad in ["pkg", "@scope/pkg", "pkg@latest", "@scope/pkg@latest", "pkg@^1.2.0", "pkg@1", "pkg@1.x", "pkg@"] {
+            assert!(!names_a_version(bad), "{bad}");
+        }
+        assert!(
+            names_a_version("pkg@1.2.3")
+                && names_a_version("@scope/pkg@0.0.86")
+                && names_a_version("mcp-server-time@2026.11.27")
+        );
+        // A launcher fetches what it runs, so what the entry names is what a person approved the tools of (ADR-0018).
+        for entry in &catalog().entries {
+            if let CatalogTransport::Stdio { command, args, .. } = &entry.transport {
+                assert!(
+                    matches!(command.as_str(), "npx" | "uvx"),
+                    "{}: say how a version is pinned for {command}",
+                    entry.id
+                );
+                let spec = args
+                    .iter()
+                    .find(|a| !a.starts_with('-'))
+                    .unwrap_or_else(|| panic!("{} names no package", entry.id));
+                assert!(names_a_version(spec), "{}: {spec} is not pinned to a version", entry.id);
+            }
+        }
+        // The day the entries were last tried against the real servers.
+        let checked = &catalog().checked;
+        assert!(
+            checked.len() == 10
+                && checked.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 {
+                    b == b'-'
+                } else {
+                    b.is_ascii_digit()
+                }),
+            "{checked:?}"
+        );
     }
 
     fn stdio(command: &str, args: &[&str]) -> McpTransport {

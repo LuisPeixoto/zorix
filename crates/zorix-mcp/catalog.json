@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "checked": "2026-11-19",
+  "checked": "2026-11-28",
   "entries": [
     {
       "id": "github",
@@ -10,7 +10,11 @@
       "homepage": "https://github.com/github/github-mcp-server",
       "logo": "github",
       "default_name": "github",
-      "transport": {"kind": "http", "url": "https://api.githubcopilot.com/mcp/", "auth": "bearer"},
+      "transport": {
+        "kind": "http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "auth": "bearer"
+      },
       "token_help": "Paste a personal access token (github.com/settings/personal-access-tokens). Give it only the repositories and permissions you want runs to have.",
       "notes": "GitHub's sign-in does not register clients by itself, so a token is the simplest way. For finer control over what a run may do on a repository, use ZORIX's own GitHub connection."
     },
@@ -22,7 +26,11 @@
       "homepage": "https://linear.app/docs/mcp",
       "logo": "linear",
       "default_name": "linear",
-      "transport": {"kind": "http", "url": "https://mcp.linear.app/mcp", "auth": "oauth"}
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.linear.app/mcp",
+        "auth": "oauth"
+      }
     },
     {
       "id": "notion",
@@ -32,7 +40,11 @@
       "homepage": "https://developers.notion.com/docs/mcp",
       "logo": "notion",
       "default_name": "notion",
-      "transport": {"kind": "http", "url": "https://mcp.notion.com/mcp", "auth": "oauth"}
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.notion.com/mcp",
+        "auth": "oauth"
+      }
     },
     {
       "id": "atlassian",
@@ -42,7 +54,11 @@
       "homepage": "https://www.atlassian.com/platform/remote-mcp-server",
       "logo": "atlassian",
       "default_name": "atlassian",
-      "transport": {"kind": "http", "url": "https://mcp.atlassian.com/v2/mcp", "auth": "oauth"},
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.atlassian.com/v2/mcp",
+        "auth": "oauth"
+      },
       "notes": "This is the current endpoint; the older /v1/mcp one is being retired."
     },
     {
@@ -53,7 +69,11 @@
       "homepage": "https://docs.sentry.io/product/sentry-mcp/",
       "logo": "sentry",
       "default_name": "sentry",
-      "transport": {"kind": "http", "url": "https://mcp.sentry.dev/mcp", "auth": "oauth"}
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.sentry.dev/mcp",
+        "auth": "oauth"
+      }
     },
     {
       "id": "figma",
@@ -63,7 +83,11 @@
       "homepage": "https://help.figma.com/hc/en-us/articles/32132100833559",
       "logo": "figma",
       "default_name": "figma",
-      "transport": {"kind": "http", "url": "https://mcp.figma.com/mcp", "auth": "oauth"}
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.figma.com/mcp",
+        "auth": "oauth"
+      }
     },
     {
       "id": "deepwiki",
@@ -73,7 +97,11 @@
       "homepage": "https://deepwiki.com",
       "logo": "deepwiki",
       "default_name": "deepwiki",
-      "transport": {"kind": "http", "url": "https://mcp.deepwiki.com/mcp", "auth": "none"},
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.deepwiki.com/mcp",
+        "auth": "none"
+      },
       "notes": "Public and read-only. Questions you ask are sent to DeepWiki."
     },
     {
@@ -84,7 +112,11 @@
       "homepage": "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/",
       "logo": "cloudflare",
       "default_name": "cloudflare-docs",
-      "transport": {"kind": "http", "url": "https://docs.mcp.cloudflare.com/mcp", "auth": "none"},
+      "transport": {
+        "kind": "http",
+        "url": "https://docs.mcp.cloudflare.com/mcp",
+        "auth": "none"
+      },
       "notes": "Public and read-only. Questions you ask are sent to Cloudflare."
     },
     {
@@ -98,9 +130,19 @@
       "transport": {
         "kind": "stdio",
         "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "{folder}"],
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem@2.4.1",
+          "{folder}"
+        ],
         "env": [],
-        "inputs": [{"name": "folder", "label": "The folder it may use", "kind": "folder"}]
+        "inputs": [
+          {
+            "name": "folder",
+            "label": "The folder it may use",
+            "kind": "folder"
+          }
+        ]
       },
       "requires": "Node.js (npx)",
       "notes": "It runs as you. ZORIX's own workspace tools are confined to one folder per run and ask before writing; this server decides for itself."
@@ -113,7 +155,15 @@
       "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
       "logo": "globe",
       "default_name": "fetch",
-      "transport": {"kind": "stdio", "command": "uvx", "args": ["mcp-server-fetch"], "env": [], "inputs": []},
+      "transport": {
+        "kind": "stdio",
+        "command": "uvx",
+        "args": [
+          "mcp-server-fetch@2026.11.27"
+        ],
+        "env": [],
+        "inputs": []
+      },
       "requires": "uv (uvx)",
       "notes": "It can reach any address your computer can, including private ones. ZORIX's own web tool refuses those."
     },
@@ -125,9 +175,210 @@
       "homepage": "https://github.com/microsoft/playwright-mcp",
       "logo": "playwright",
       "default_name": "browser",
-      "transport": {"kind": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"], "env": [], "inputs": []},
+      "transport": {
+        "kind": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@playwright/mcp@0.0.86"
+        ],
+        "env": [],
+        "inputs": []
+      },
       "requires": "Node.js (npx)",
       "notes": "A browser can sign in as you wherever you are signed in. Run it only for tasks that need it."
+    },
+    {
+      "id": "neon",
+      "name": "Neon",
+      "summary": "Postgres projects, branches and SQL on Neon, from Neon's own server.",
+      "category": "Data",
+      "homepage": "https://neon.com/docs/ai/neon-mcp-server",
+      "logo": "neon",
+      "default_name": "neon",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.neon.tech/mcp",
+        "auth": "oauth"
+      },
+      "notes": "It can change your databases. Tools that change something ask first, whatever the server says about them."
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "summary": "Projects, tables, SQL and logs on Supabase.",
+      "category": "Data",
+      "homepage": "https://supabase.com/docs/guides/getting-started/mcp",
+      "logo": "supabase",
+      "default_name": "supabase",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.supabase.com/mcp",
+        "auth": "oauth"
+      },
+      "notes": "Sign in with a project in mind: the server can reach what that account can."
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "summary": "Projects, deployments and logs on Vercel.",
+      "category": "Code",
+      "homepage": "https://vercel.com/docs/mcp",
+      "logo": "vercel",
+      "default_name": "vercel",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.vercel.com",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "asana",
+      "name": "Asana",
+      "summary": "Tasks, projects and comments in Asana.",
+      "category": "Projects",
+      "homepage": "https://developers.asana.com/docs/using-asanas-mcp-server",
+      "logo": "asana",
+      "default_name": "asana",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.asana.com/v2/mcp",
+        "auth": "oauth"
+      }
+    },
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "summary": "Customers, payments and docs on Stripe.",
+      "category": "Data",
+      "homepage": "https://docs.stripe.com/mcp",
+      "logo": "stripe",
+      "default_name": "stripe",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.stripe.com",
+        "auth": "bearer"
+      },
+      "token_help": "Paste a restricted API key (dashboard.stripe.com/apikeys) that has only the permissions you want runs to have. Start with test mode.",
+      "notes": "This can move money if the key allows it. Use a restricted key, and test mode first."
+    },
+    {
+      "id": "huggingface",
+      "name": "Hugging Face",
+      "summary": "Search models, datasets, Spaces and papers on the Hub.",
+      "category": "Search",
+      "homepage": "https://huggingface.co/docs/hub/hf-mcp-server",
+      "logo": "huggingface",
+      "default_name": "hf",
+      "transport": {
+        "kind": "http",
+        "url": "https://huggingface.co/mcp",
+        "auth": "none"
+      }
+    },
+    {
+      "id": "context7",
+      "name": "Context7",
+      "summary": "Up-to-date documentation and code examples for libraries.",
+      "category": "Search",
+      "homepage": "https://github.com/upstash/context7",
+      "logo": "context7",
+      "default_name": "context7",
+      "transport": {
+        "kind": "http",
+        "url": "https://mcp.context7.com/mcp",
+        "auth": "none"
+      }
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "summary": "A small knowledge graph a model can write to and read, kept in a file by the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+      "logo": "memory",
+      "default_name": "memory",
+      "transport": {
+        "kind": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-memory@2.2.2"
+        ],
+        "env": [],
+        "inputs": []
+      },
+      "requires": "Node.js (npx)",
+      "notes": "This is the server's own memory, separate from ZORIX's, which a person approves entry by entry."
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "Sequential thinking",
+      "summary": "A scratchpad for working through a problem in steps, through the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
+      "logo": "sequential-thinking",
+      "default_name": "thinking",
+      "transport": {
+        "kind": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-sequential-thinking@2.2.0"
+        ],
+        "env": [],
+        "inputs": []
+      },
+      "requires": "Node.js (npx)",
+      "notes": "Meant to need no files and no network; like any local server it runs as you."
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "summary": "Status, diffs, logs and commits of one repository, through the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+      "logo": "git",
+      "default_name": "git",
+      "transport": {
+        "kind": "stdio",
+        "command": "uvx",
+        "args": [
+          "mcp-server-git@2026.11.27",
+          "--repository",
+          "{folder}"
+        ],
+        "env": [],
+        "inputs": [
+          {
+            "name": "folder",
+            "label": "The repository it may use",
+            "kind": "folder"
+          }
+        ]
+      },
+      "requires": "uv (uvx)",
+      "notes": "It can commit in that repository, and like any local server it runs as you."
+    },
+    {
+      "id": "time",
+      "name": "Time",
+      "summary": "The current time in any time zone and conversions between them, through the reference server.",
+      "category": "Local",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+      "logo": "time",
+      "default_name": "time",
+      "transport": {
+        "kind": "stdio",
+        "command": "uvx",
+        "args": [
+          "mcp-server-time@2026.11.27"
+        ],
+        "env": [],
+        "inputs": []
+      },
+      "requires": "uv (uvx)",
+      "notes": "Meant to need no files and no network; like any local server it runs as you."
     }
   ]
 }
