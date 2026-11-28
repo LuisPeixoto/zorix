@@ -470,6 +470,8 @@ export interface ServerRow {
 
 export interface McpToolRow {
   name: string;
+  /** The hash of this definition: approving sends it back, so what is approved is what was shown. */
+  hash: string;
   status: "new" | "pinned" | "changed" | "disabled";
   trust: "ask" | "read_only_no_ask";
   listed: boolean;
@@ -554,8 +556,8 @@ export const mcpSetEnabled = (name: string, enabled: boolean) => invoke<ServerRo
 export const mcpRemove = (name: string) => invoke<void>("mcp_remove", { name });
 export const mcpRestart = (name: string) => invoke<ServerRow>("mcp_restart", { name });
 export const mcpRefresh = (name: string) => invoke<void>("mcp_refresh", { name });
-export const mcpReview = (name: string, tool: string, action: "approve" | "disable") => invoke<void>("mcp_review", { name, tool, action });
-export const mcpApproveAll = (name: string) => invoke<number>("mcp_approve_all", { name });
+export const mcpReview = (name: string, tool: string, action: "approve" | "disable", hash: string | null = null) => invoke<void>("mcp_review", { name, tool, action, hash });
+export const mcpApproveAll = (name: string, shown: [string, string][]) => invoke<number>("mcp_approve_all", { name, shown });
 export const mcpTrust = (name: string, tool: string, skipAsking: boolean) => invoke<void>("mcp_trust", { name, tool, skipAsking });
 export const mcpLogin = (name: string) => invoke<string>("mcp_login", { name });
 export const mcpLoginCancel = (name: string) => invoke<void>("mcp_login_cancel", { name });

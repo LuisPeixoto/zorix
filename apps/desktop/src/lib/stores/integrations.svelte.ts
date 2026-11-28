@@ -153,12 +153,13 @@ class IntegrationsStore {
     if (ok) toast.info(t("stores.integrations.askedForItsTools", { name }));
   }
 
-  async review(name: string, tool: string, action: "approve" | "disable"): Promise<void> {
-    await this.#act(() => mcpReview(name, tool, action));
+  /** Approving sends the hash of the definition that was on screen, so the server cannot change the tool between the look and the click. */
+  async review(name: string, tool: string, action: "approve" | "disable", hash: string | null = null): Promise<void> {
+    await this.#act(() => mcpReview(name, tool, action, hash));
   }
 
-  async approveAll(name: string): Promise<void> {
-    const n = await this.#act(() => mcpApproveAll(name));
+  async approveAll(name: string, shown: [string, string][]): Promise<void> {
+    const n = await this.#act(() => mcpApproveAll(name, shown));
     if (n !== undefined) toast.ok(t("stores.integrations.approvedToolS", { n }));
   }
 
