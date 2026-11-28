@@ -474,3 +474,108 @@ fn only_https_or_this_computer_is_accepted_and_never_with_credentials_in_the_add
         assert!(HttpTransport::new(bad, Arc::new(NoAuth)).is_err(), "{bad}");
     }
 }
+
+/// A server that keeps its stream open: it asks, waits for the answer to be posted, and only then gives the result.
+async fn asking_server() -> (String, tokio::sync::mpsc::UnboundedReceiver<Value>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+    let (seen, answers) = tokio::sync::mpsc::unbounded_channel();
+    let (answered, got) = tokio::sync::broadcast::channel::<Value>(8);
+    tokio::spawn(async move {
+        while let Ok((mut socket, _)) = listener.accept().await {
+            let (seen, answered) = (seen.clone(), answered.clone());
+            let mut got = got.resubscribe();
+            tokio::spawn(async move {
+                let mut data = Vec::new();
+                let mut buffer = [0u8; 4096];
+                let body: Value = loop {
+                    let n = socket.read(&mut buffer).await.unwrap_or(0);
+                    if n == 0 {
+                        return;
+                    }
+                    data.extend_from_slice(&buffer[..n]);
+                    let text = String::from_utf8_lossy(&data);
+                    if let Some((_, body)) = text.split_once("\r\n\r\n")
+                        && let Ok(body) = serde_json::from_str(body)
+                    {
+                        break body;
+                    }
+                };
+                let plain = |status: &str, body: &str| {
+                    format!(
+                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                };
+                let id = body["id"].clone();
+                let reply = |result: Value| json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string();
+                match body["method"].as_str() {
+                    Some("initialize") => {
+                        let result = reply(json!({"protocolVersion": "2025-11-25", "capabilities": {}}));
+                        let _ = socket.write_all(plain("200 OK", &result).as_bytes()).await;
+                    }
+                    Some("tools/call") => {
+                        let ask = json!({"jsonrpc": "2.0", "id": "e", "method": "elicitation/create", "params": {
+                            "message": "Which?", "requestedSchema": {"type": "object", "properties": {"repo": {"type": "string"}}}}});
+                        let head = "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n";
+                        let _ = socket.write_all(format!("{head}data: {ask}\n\n").as_bytes()).await;
+                        let answer = got.recv().await.unwrap_or(Value::Null);
+                        let done = reply(json!({"content": [{"type": "text", "text": answer["result"].to_string()}]}));
+                        let _ = socket.write_all(format!("data: {done}\n\n").as_bytes()).await;
+                    }
+                    None => {
+                        let _ = answered.send(body.clone());
+                        let _ = seen.send(body);
+                        let _ = socket.write_all(plain("202 Accepted", "").as_bytes()).await;
+                    }
+                    Some("notifications/initialized") => {
+                        let _ = socket.write_all(plain("202 Accepted", "").as_bytes()).await;
+                    }
+                    Some(_) => {
+                        let _ = socket.write_all(plain("404 Not Found", "").as_bytes()).await;
+                    }
+                }
+            });
+        }
+    });
+    (url, answers)
+}
+
+#[derive(Debug)]
+struct SaysYes;
+
+#[async_trait]
+impl zorix_core::CallHost for SaysYes {
+    async fn sample(&self, _: &str, _: zorix_core::SampleRequest) -> Result<zorix_core::SampleReply, String> {
+        Err("no".into())
+    }
+    async fn ask(&self, _: &str, _: zorix_core::Question) -> Result<zorix_core::ElicitReply, String> {
+        let mut values = serde_json::Map::new();
+        values.insert("repo".into(), json!("zorix"));
+        Ok(zorix_core::ElicitReply::Accepted(values))
+    }
+    fn waiting(&self) -> bool {
+        false
+    }
+    fn waited(&self) -> Duration {
+        Duration::ZERO
+    }
+}
+
+#[tokio::test]
+async fn a_remote_servers_question_in_the_stream_is_answered_during_the_call() {
+    let (url, mut answers) = asking_server().await;
+    let transport = Arc::new(HttpTransport::new(&url, Arc::new(NoAuth)).unwrap());
+    let (probe, handshake) = (Duration::from_secs(2), Duration::from_secs(5));
+    let client = McpClient::connect_asking(transport, &CancellationToken::new(), probe, handshake, true).await.unwrap();
+    let host: Arc<dyn zorix_core::CallHost> = Arc::new(SaysYes);
+    let out = client
+        .call_tool_asking("t", json!({}), Duration::from_secs(5), &CancellationToken::new(), Some(("remote", host)))
+        .await
+        .unwrap();
+    assert!(out.content[0]["text"].as_str().unwrap().contains("\"repo\":\"zorix\""), "{:?}", out.content);
+    let answer = answers.recv().await.unwrap();
+    assert_eq!(answer["id"], "e");
+    assert_eq!(answer["result"]["action"], "accept");
+}

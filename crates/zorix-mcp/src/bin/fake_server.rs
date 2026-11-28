@@ -3,8 +3,9 @@
 //! Usage: `zorix-fake-mcp [--era modern|legacy|dual] [flags]`. Flags:
 //! `--mutate` (the `echo` description changes after the first listing), `--list-changed` (announces a new tool after the first
 //! call), `--invalid-tools` (lists tools with bad names and schemas), `--many N` (lists N extra tools, 50 per page),
-//! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`),
-//! `--input-required` (modern: answers `echo` with an input request), `--noise` (writes to stderr, including a secret-looking token),
+//! `--ask` (legacy: asks the client for sampling, elicitation, roots and a ping before answering `echo`, and says what it got back),
+//! `--input-required` (modern: answers `echo` with an input request, then with what came back), `--input-forever` (never stops asking),
+//! `--noise` (writes to stderr, including a secret-looking token),
 //! `--silent-discover` (ignores `server/discover`, like some old servers), `--delay MS` (waits before reading),
 //! An unlisted tool `probe` tries what its arguments name (`read`, `write`, `resolve`, `connect`, `unix`, `home`) and says how each went, for the
 //! sandbox tests.
@@ -27,6 +28,7 @@ struct Opts {
     many: usize,
     ask: bool,
     input_required: bool,
+    input_forever: bool,
     noise: bool,
     silent_discover: bool,
 }
@@ -53,6 +55,11 @@ fn reply(id: &Value, result: Value) {
 
 fn fail(id: &Value, code: i64, message: &str) {
     out(&json!({"jsonrpc": "2.0", "id": wire_id(id), "error": {"code": code, "message": message}}));
+}
+
+/// The question the server asks, in both revisions.
+fn question() -> Value {
+    json!({"message": "Which repository?", "requestedSchema": {"type": "object", "properties": {"repo": {"type": "string"}}, "required": ["repo"]}})
 }
 
 fn text(text: &str) -> Value {
@@ -140,7 +147,8 @@ fn main() {
         invalid_tools: flag("--invalid-tools"),
         many: value("--many").and_then(|n| n.parse().ok()).unwrap_or(0),
         ask: flag("--ask"),
-        input_required: flag("--input-required"),
+        input_required: flag("--input-required") || flag("--input-forever"),
+        input_forever: flag("--input-forever"),
         noise: flag("--noise"),
         silent_discover: flag("--silent-discover"),
     };
@@ -277,21 +285,29 @@ fn main() {
                 match name {
                     "echo" => {
                         if opts.input_required {
-                            reply(
-                                &id,
-                                json!({"resultType": "input_required", "inputRequests": {"who": {"method": "elicitation/create", "params": {}}}, "requestState": "s"}),
-                            );
+                            let responses = &params["inputResponses"];
+                            if opts.input_forever || responses.is_null() {
+                                reply(
+                                    &id,
+                                    json!({"resultType": "input_required", "inputRequests": {"who": {"method": "elicitation/create", "params": question()}}, "requestState": "s"}),
+                                );
+                                continue;
+                            }
+                            let said =
+                                format!("{} state={}", responses["who"], params["requestState"].as_str().unwrap_or(""));
+                            reply(&id, text(&said));
                             continue;
                         }
                         let mut summary = String::new();
                         if opts.ask {
-                            for (rid, method) in [
-                                ("s1", "sampling/createMessage"),
-                                ("e1", "elicitation/create"),
-                                ("r1", "roots/list"),
-                                ("p1", "ping"),
+                            let sample = json!({"messages": [{"role": "user", "content": {"type": "text", "text": "Name a colour."}}], "maxTokens": 50});
+                            for (rid, method, params) in [
+                                ("s1", "sampling/createMessage", sample),
+                                ("e1", "elicitation/create", question()),
+                                ("r1", "roots/list", json!({})),
+                                ("p1", "ping", json!({})),
                             ] {
-                                out(&json!({"jsonrpc": "2.0", "id": rid, "method": method, "params": {}}));
+                                out(&json!({"jsonrpc": "2.0", "id": rid, "method": method, "params": params}));
                             }
                             let mut seen = 0;
                             while seen < 4 {
@@ -307,6 +323,13 @@ fn main() {
                                     answer["id"].as_str().unwrap_or("?"),
                                     if ok { "ok" } else { "refused" }
                                 ));
+                                let result = &answer["result"];
+                                if let Some(said) = result["content"]["text"].as_str() {
+                                    summary.push_str(&format!(" model-said[{said}]"));
+                                }
+                                if let Some(action) = result["action"].as_str() {
+                                    summary.push_str(&format!(" action={action} content={}", result["content"]));
+                                }
                             }
                         }
                         reply(&id, text(&format!("{}{}", args["text"].as_str().unwrap_or(""), summary)));
