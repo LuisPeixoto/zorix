@@ -55,6 +55,21 @@ struct Registration {
     resource: String,
     scope: Option<String>,
     refresh_token: Option<String>,
+    /// The scopes the next sign-in asks for, after a server said it needs more than were granted (step-up): what was granted and what
+    /// was missing. Cleared by the sign-in that gets them.
+    #[serde(default)]
+    wanted_scope: Option<String>,
+}
+
+/// Two lists of scopes written with spaces, as one list with each scope once, in the order they were first named.
+fn union_of_scopes(a: &str, b: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for scope in a.split_whitespace().chain(b.split_whitespace()) {
+        if !out.contains(&scope) {
+            out.push(scope);
+        }
+    }
+    out.join(" ")
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -770,10 +785,14 @@ impl OAuthClient {
 
         let (verifier, code_challenge) = pkce_pair();
         let state = random_token::<24>();
+        // What a person chose wins; then what a server said it needed after the last sign-in (step-up); then what the server's challenge
+        // or its metadata name.
+        let wanted =
+            self.vault.read::<Registration>(&self.vault.registration).await.ok().flatten().and_then(|r| r.wanted_scope);
         let scope = if !settings.scopes.is_empty() {
             Some(settings.scopes.join(" "))
         } else {
-            challenge.scope.clone().or_else(|| found.default_scope.clone())
+            wanted.or_else(|| challenge.scope.clone()).or_else(|| found.default_scope.clone())
         };
         let mut url = found.authorization_endpoint.clone();
         {
@@ -836,6 +855,7 @@ impl OAuthClient {
                     resource: found.resource.clone(),
                     scope: tokens.scope.clone().or(scope),
                     refresh_token: tokens.refresh_token,
+                    wanted_scope: None,
                 },
             )
             .await?;
@@ -965,6 +985,15 @@ impl AuthProvider for OAuthSession {
     async fn challenged(&self, status: u16, www_authenticate: Option<&str>) -> Result<(), McpError> {
         let challenge = www_authenticate.map(parse_challenge).unwrap_or_default();
         if status == 403 && challenge.error.as_deref() == Some("insufficient_scope") {
+            // Step-up: remember what is missing, so that signing in again asks for what was granted and what was missing, and not for the
+            // same thing that was refused.
+            if let Some(missing) = &challenge.scope
+                && let Ok(Some(mut registration)) = self.vault.read::<Registration>(&self.vault.registration).await
+            {
+                let granted = registration.scope.clone().unwrap_or_default();
+                registration.wanted_scope = Some(union_of_scopes(&granted, missing));
+                let _ = self.vault.write(&self.vault.registration, &registration).await;
+            }
             let needed = challenge.scope.unwrap_or_else(|| "more permission".into());
             return Err(self.needs_login(&format!("this needs more permission ({needed})")));
         }

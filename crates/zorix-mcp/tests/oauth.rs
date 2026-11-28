@@ -473,6 +473,20 @@ async fn more_permission_is_a_new_sign_in_and_logout_revokes_and_forgets() {
     let error =
         session.challenged(403, Some("Bearer error=\"insufficient_scope\", scope=\"files:write\"")).await.unwrap_err();
     assert!(matches!(&error, McpError::NeedsLogin(why) if why.contains("files:write")), "{error:?}");
+    // Signing in again asks for what was granted and what was missing, not for the same thing that was refused.
+    let again = Consent::approve(&rig.server.uri());
+    rig.login(&again, OAuthSettings::default()).await.unwrap();
+    assert_eq!(again.param("scope").as_deref(), Some("read files:write"), "step-up asks for the union");
+    // And once it is granted the memory of what was missing is gone: a later sign-in is back to what the server says.
+    let later = Consent::approve(&rig.server.uri());
+    rig.login(&later, OAuthSettings::default()).await.unwrap();
+    assert_eq!(later.param("scope").as_deref(), Some("read"));
+    // What a person chose is never overridden.
+    let session = rig.session();
+    session.challenged(403, Some("Bearer error=\"insufficient_scope\", scope=\"files:write\"")).await.unwrap_err();
+    let chosen = Consent::approve(&rig.server.uri());
+    rig.login(&chosen, OAuthSettings { scopes: vec!["only".into()], ..OAuthSettings::default() }).await.unwrap();
+    assert_eq!(chosen.param("scope").as_deref(), Some("only"));
     rig.client().logout().await;
     assert!(!rig.vault().signed_in().await);
     assert!(rig.secrets.get("mcp.abc123.access").unwrap().is_none());
