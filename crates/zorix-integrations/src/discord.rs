@@ -131,6 +131,15 @@ impl DiscordTool {
 
     async fn run(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let text = |name: &str| args.get(name).and_then(Value::as_str).filter(|s| !s.is_empty());
+        // The ids go into the path of a request. The schema says what they look like, and it is checked before a call; this holds
+        // for a caller that did not check it, so an id can never carry a `/`, a `..` or a `?` into the path.
+        for name in ["guild_id", "channel_id", "reply_to", "before"] {
+            if let Some(id) = text(name)
+                && !is_snowflake(id)
+            {
+                return Err(failed(format!("{name} is not an id (it has to be 5 to 25 digits).")));
+            }
+        }
         let api = self.api(ctx, args).await?;
         match self.op {
             Op::ListChannels => {
@@ -185,6 +194,11 @@ impl DiscordTool {
             }
         }
     }
+}
+
+/// A Discord id: 5 to 25 digits, nothing else.
+fn is_snowflake(id: &str) -> bool {
+    (5..=25).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit())
 }
 
 #[async_trait]

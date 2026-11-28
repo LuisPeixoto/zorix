@@ -106,14 +106,21 @@ fn check_target(ctx: &ToolContext, url: &Url) -> Result<(String, bool), ToolErro
         }
         other => return Err(failed(format!("Only https addresses can be used, not {other}."))),
     }
-    let needed = Permission::new(Action::Network, format!("http:{host}"));
-    if !ctx.grants.allows(&needed) {
+    // A grant names the host (`http:api.example.com`, any port), or the host and one port when the address has one written
+    // (`http:api.example.com:8443`): a step of a workflow names the port it was written with.
+    let by_host = Permission::new(Action::Network, format!("http:{host}"));
+    let by_port = url.port().map(|port| Permission::new(Action::Network, format!("http:{host}:{port}")));
+    let allowed = |p: &Permission| ctx.grants.allows(p);
+    if !(allowed(&by_host) || by_port.as_ref().is_some_and(allowed)) {
         return Err(failed(format!(
             "This execution has no permission to reach {host}. A person can grant it with `network http:{host}`."
         )));
     }
     // A private or special address needs the host named exactly: a wildcard does not count.
-    let exact = ctx.grants.iter().any(|g| g.action == Action::Network && g.resource == needed.resource);
+    let exact = ctx.grants.iter().any(|g| {
+        g.action == Action::Network
+            && (g.resource == by_host.resource || by_port.as_ref().is_some_and(|p| g.resource == p.resource))
+    });
     Ok((host, exact))
 }
 

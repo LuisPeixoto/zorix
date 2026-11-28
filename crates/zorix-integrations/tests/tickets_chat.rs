@@ -371,7 +371,7 @@ async fn discord_lists_only_readable_text_channels_reads_and_never_mentions_anyo
     Mock::given(method("GET")).and(path("/channels/1000001/messages")).and(query_param("limit", "5"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"id": "9", "author": {"username": "ana", "bot": false}, "timestamp": "t", "content": "hi @everyone"}]))).mount(&server).await;
     Mock::given(method("POST")).and(path("/channels/1000001/messages"))
-        .and(body_json(json!({"content": "Deploy done @everyone", "allowed_mentions": {"parse": []}, "message_reference": {"message_id": "9", "fail_if_not_exists": false}})))
+        .and(body_json(json!({"content": "Deploy done @everyone", "allowed_mentions": {"parse": []}, "message_reference": {"message_id": "123456789", "fail_if_not_exists": false}})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "10"}))).mount(&server).await;
     Mock::given(method("POST"))
         .and(path("/channels/1000004/messages"))
@@ -410,7 +410,7 @@ async fn discord_lists_only_readable_text_channels_reads_and_never_mentions_anyo
         .call(
             "discord.send_message",
             grant(Action::Write, "discord:1000001"),
-            json!({"channel_id": "1000001", "content": "Deploy done @everyone", "reply_to": "9"}),
+            json!({"channel_id": "1000001", "content": "Deploy done @everyone", "reply_to": "123456789"}),
         )
         .await
         .unwrap();
@@ -434,4 +434,31 @@ async fn discord_lists_only_readable_text_channels_reads_and_never_mentions_anyo
         .await
         .is_err()
     );
+}
+
+#[tokio::test]
+async fn a_discord_id_never_carries_anything_into_the_path_of_a_request() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/channels/123456789/messages"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": "42"})))
+        .mount(&server)
+        .await;
+    let rig = rig(discord_tools);
+    rig.connect(ConnectionKind::Discord, json!({"base_url": server.uri()}), Some("bot-token")).await;
+    let write = grant(Action::Write, "discord:*");
+    let sent = rig
+        .call("discord.send_message", write.clone(), json!({"channel_id": "123456789", "content": "hi"}))
+        .await
+        .unwrap();
+    assert_eq!(sent["id"], "42");
+    // Called with no schema check in front (as a workflow action once was), a hostile id still goes nowhere.
+    for hostile in ["123456789/../../guilds/1", "12345?x=1", "../123456789", "abc", "1234", "123456789 "] {
+        let error = rig
+            .call("discord.send_message", write.clone(), json!({"channel_id": hostile, "content": "hi"}))
+            .await
+            .unwrap_err();
+        assert!(matches!(&error, ToolError::Failed(m) if m.contains("is not an id")), "{hostile}: {error:?}");
+    }
+    assert_eq!(server.received_requests().await.unwrap().len(), 1, "only the good one was sent");
 }
