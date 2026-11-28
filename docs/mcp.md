@@ -113,7 +113,7 @@ answers like `zorix.run`, plus the agent and version that answered. A client's r
 whatever the agent can do in ZORIX: `--allow TOOL`, `--allow-read`, `--allow-write` and `--allow-access ENTRY` (an access entry such as
 `http:api.example.com`, `repo:acme/api`, `db:reports` or `code:python`) are **intersected** with the agent's own tools and access. With no
 `--allow` flags a client gets an agent with nothing to use, which is safe and usually not what you want: add what the agents need, for
-example `--allow 'skill.*' --allow-access code:python`. `zorix.status` and `zorix.result` follow either kind of run.
+example `--allow 'skill.*' --allow-access code:python`. `zorix.status` and `zorix.result` follow either kind of run, but only a run **this server started** (and the sub-runs below it): other runs of the data folder hold what you asked in ZORIX and its answers, and a client is not you. `--allow-read-runs` lets a client follow any run of the folder. A run that is not the client's gets the same refusal as one that does not exist, so a client cannot tell which ids are in use.
 
 **Teams.** `zorix.agents` also lists the teams (name, description, lead, members), and `zorix.run_agent` takes `team`: the run is the lead's, and the lead may ask the members
 ([teams](teams.md)). The same `--allow` flags apply to the lead and, intersected, to every sub-run. `zorix.status` reports `sub_runs` (state, agent, cost) so a client can show
