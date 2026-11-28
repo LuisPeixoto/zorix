@@ -23,6 +23,10 @@ pub const MAX_DESCRIPTION: usize = 4_000;
 pub const CALL_TIMEOUT: Duration = Duration::from_secs(60);
 /// The most text of one result item that is kept (the executor caps the whole result again).
 const ITEM_TEXT_CAP: usize = 200_000;
+/// The most content items of one result that are passed on. A body can hold hundreds of thousands of empty ones.
+const MAX_ITEMS: usize = 100;
+/// The most bytes of a result's `structuredContent` that are passed on; the content items carry what the server wrote.
+const MAX_STRUCTURED: usize = 32 * 1024;
 
 /// Whoever can make a call to the server a tool belongs to. The manager implements it over whatever connection is up.
 #[async_trait]
@@ -150,6 +154,35 @@ fn text_of(items: &[Value]) -> String {
     items.iter().filter_map(|i| i.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n")
 }
 
+/// What the model gets of a result: at most [`MAX_ITEMS`] items (saying how many were left out) and a `structuredContent` that is cut
+/// down to a note when it is bigger than [`MAX_STRUCTURED`]. The runtime caps the whole result again; this keeps a server from
+/// filling it with what the model cannot use, and from costing memory in between.
+fn shape(output: CallOutput) -> Result<Value, ToolError> {
+    let total = output.content.len();
+    let mut items: Vec<Value> = output.content.iter().take(MAX_ITEMS).map(item).collect();
+    if total > MAX_ITEMS {
+        items.push(json!({"type": "text", "text": format!("[{} more items were returned and are not shown to you.]", total - MAX_ITEMS)}));
+    }
+    if output.is_error {
+        let said = text_of(&items);
+        return Err(ToolError::Failed(if said.is_empty() {
+            "The tool reported an error without saying what it was.".into()
+        } else {
+            said
+        }));
+    }
+    let mut result = json!({"content": items});
+    if let Some(structured) = output.structured {
+        let bytes = structured.to_string().len();
+        result["structured"] = if bytes > MAX_STRUCTURED {
+            json!({"cut": true, "bytes": bytes, "note": "The structured result was too large to show; the content has what the server wrote."})
+        } else {
+            structured
+        };
+    }
+    Ok(result)
+}
+
 #[async_trait]
 impl Tool for McpTool {
     fn spec(&self) -> &ToolSpec {
@@ -165,20 +198,7 @@ impl Tool for McpTool {
                 ToolError::Failed(error.to_string())
             }
         })?;
-        let items: Vec<Value> = output.content.iter().map(item).collect();
-        if output.is_error {
-            let said = text_of(&items);
-            return Err(ToolError::Failed(if said.is_empty() {
-                "The tool reported an error without saying what it was.".into()
-            } else {
-                said
-            }));
-        }
-        let mut result = json!({"content": items});
-        if let Some(structured) = output.structured {
-            result["structured"] = structured;
-        }
-        Ok(result)
+        shape(output)
     }
 
     fn describe_call(&self, args: &Value) -> Option<String> {
@@ -304,6 +324,38 @@ mod tests {
         let shown = long["text"].as_str().unwrap();
         assert!(shown.contains("[cut: ") && shown.len() < 300_000);
         assert_eq!(item(&json!({"type": "weird"}))["type"], "weird");
+    }
+
+    #[test]
+    fn a_result_is_bounded_in_items_and_in_structured_content() {
+        let many = CallOutput {
+            content: (0..250_000).map(|_| json!({"type": "text", "text": ""})).collect(),
+            is_error: false,
+            structured: Some(json!({"rows": "x".repeat(MAX_STRUCTURED)})),
+        };
+        let shaped = shape(many).unwrap();
+        let items = shaped["content"].as_array().unwrap();
+        assert_eq!(items.len(), MAX_ITEMS + 1, "the first items, and one line that says how many were left out");
+        assert!(items[MAX_ITEMS]["text"].as_str().unwrap().contains("249900 more items"));
+        assert_eq!(shaped["structured"]["cut"], true, "{}", shaped["structured"]);
+        assert!(shaped["structured"]["bytes"].as_u64().unwrap() > MAX_STRUCTURED as u64);
+        // A result inside the limits is passed on exactly.
+        let small = CallOutput {
+            content: vec![json!({"type": "text", "text": "hi"})],
+            is_error: false,
+            structured: Some(json!({"n": 1})),
+        };
+        let shaped = shape(small).unwrap();
+        assert_eq!((shaped["content"].as_array().unwrap().len(), &shaped["structured"]), (1, &json!({"n": 1})));
+        // An error is still an error, with what the tool said, however many items came with it.
+        let failed = CallOutput {
+            content: std::iter::once(json!({"type": "text", "text": "it broke"}))
+                .chain((0..500).map(|_| json!({"type": "text", "text": "."})))
+                .collect(),
+            is_error: true,
+            structured: None,
+        };
+        assert!(matches!(shape(failed), Err(ToolError::Failed(text)) if text.starts_with("it broke")));
     }
 
     #[test]
