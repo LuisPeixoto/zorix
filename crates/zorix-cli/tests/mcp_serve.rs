@@ -237,6 +237,53 @@ async fn runs_are_offered_only_when_asked_and_approval_stays_in_zorix() {
     client.close().await;
 }
 
+#[tokio::test]
+async fn a_client_follows_only_the_runs_this_server_started_unless_the_person_allows_more() {
+    let home = Home::new();
+    // A run the person made in ZORIX earlier: its question and its answer are theirs, not the client's.
+    let earlier = home.zorix(&["run", "What is 17*23?", "--allow", "math.evaluate", "--json"]);
+    assert_eq!(code(&earlier), 0, "{}", text(&earlier.stderr));
+    let listed = home.zorix(&["list", "--json"]);
+    let earlier_id = serde_json::from_slice::<Value>(&listed.stdout).unwrap()[0]["id"].as_str().unwrap().to_string();
+
+    let client = home.client(&["--allow-runs", "--allow", "math.evaluate"]).await;
+    let own = call(&client, "zorix.run", json!({"prompt": "What is 17*23?", "wait_seconds": 60})).await;
+    let own_id = own.structured.expect("structured result")["execution_id"].as_str().unwrap().to_string();
+    // The one it started can be followed, and the one it did not start cannot (and the answer does not say whether it exists).
+    for tool in ["zorix.status", "zorix.result"] {
+        let mine = call(&client, tool, json!({"execution_id": own_id})).await;
+        assert!(!mine.is_error, "{tool}: {}", text_of(&mine));
+        let theirs = call(&client, tool, json!({"execution_id": earlier_id})).await;
+        assert!(
+            theirs.is_error && text_of(&theirs).contains("not started by this server"),
+            "{tool}: {}",
+            text_of(&theirs)
+        );
+        assert!(!text_of(&theirs).contains("391"), "the answer of another run must not leak: {}", text_of(&theirs));
+        let unknown = call(&client, tool, json!({"execution_id": zorix_core::ExecutionId::new().to_string()})).await;
+        assert_eq!(
+            text_of(&unknown),
+            text_of(&theirs).replace(&earlier_id, "X"),
+            "{tool}: a run that does not exist answers the same way"
+        );
+    }
+    client.close().await;
+
+    // With --allow-read-runs the person chose to let a client read any run of the folder.
+    let open = home.client(&["--allow-runs", "--allow", "math.evaluate", "--allow-read-runs"]).await;
+    let seen = call(&open, "zorix.result", json!({"execution_id": earlier_id})).await;
+    assert!(!seen.is_error && text_of(&seen).contains("391"), "{}", text_of(&seen));
+    open.close().await;
+}
+
+#[test]
+fn reading_every_run_needs_allow_runs_too() {
+    let home = Home::new();
+    let out = home.zorix(&["mcp", "serve", "--allow-read-runs"]);
+    assert_eq!(code(&out), 2, "{}", text(&out.stderr));
+    assert!(text(&out.stderr).contains("--allow-runs"));
+}
+
 #[test]
 fn run_options_need_allow_runs() {
     let home = Home::new();

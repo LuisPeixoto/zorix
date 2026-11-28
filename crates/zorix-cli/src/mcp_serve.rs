@@ -57,7 +57,7 @@ pub async fn serve(home: &Path, tenant: TenantId, args: McpServeArgs) -> Result<
         opened.stack.register_tools(&*registry)?;
         collect_read_tools(&*registry, &mut tools);
         let run_grants = run_grants(&args);
-        for tool in run_tools(opened.clone(), tenant.clone(), run_grants, project.clone()) {
+        for tool in run_tools(opened.clone(), tenant.clone(), run_grants, project.clone(), args.allow_read_runs) {
             tools.push(tool);
         }
         tools.push(Arc::new(AgentsTool {
@@ -144,8 +144,21 @@ fn run_grants(args: &McpServeArgs) -> Grants {
     grants
 }
 
-fn run_tools(app: Arc<App>, tenant: TenantId, grants: Grants, workspace: Option<PathBuf>) -> Vec<Arc<dyn Tool>> {
-    let shared = Arc::new(RunShared { app, tenant, grants, workspace });
+fn run_tools(
+    app: Arc<App>,
+    tenant: TenantId,
+    grants: Grants,
+    workspace: Option<PathBuf>,
+    read_all_runs: bool,
+) -> Vec<Arc<dyn Tool>> {
+    let shared = Arc::new(RunShared {
+        app,
+        tenant,
+        grants,
+        workspace,
+        started: parking_lot::Mutex::new(std::collections::HashSet::new()),
+        read_all_runs,
+    });
     vec![
         Arc::new(RunTool { shared: shared.clone(), spec: run_spec() }),
         Arc::new(RunAgentTool { shared: shared.clone(), spec: run_agent_spec() }),
@@ -159,6 +172,10 @@ struct RunShared {
     tenant: TenantId,
     grants: Grants,
     workspace: Option<PathBuf>,
+    /// The runs this server started: what a client may follow. A client of this server is not the person, and the other runs of the
+    /// data folder (their prompts, their answers) are the person's own unless they said otherwise with `--allow-read-runs`.
+    started: parking_lot::Mutex<std::collections::HashSet<ExecutionId>>,
+    read_all_runs: bool,
 }
 
 fn failed(message: impl Into<String>) -> ToolError {
@@ -173,8 +190,24 @@ fn parse_id(args: &Value) -> Result<ExecutionId, ToolError> {
 }
 
 impl RunShared {
+    /// Whether a client may follow this execution: one this server started, or a run below one it started (the sub-runs an agent
+    /// asked for, listed in the answer), or any run when the person allowed that. The answer is the same for a run that does not
+    /// exist, so a client cannot tell which ids are in use.
+    async fn may_follow(&self, id: ExecutionId) -> Result<(), ToolError> {
+        let refused = || failed("That execution was not started by this server, so it cannot be followed through it.");
+        if self.read_all_runs || self.started.lock().contains(&id) {
+            return Ok(());
+        }
+        let execution = self.app.engine.detail(&self.tenant, id).await.map_err(|_| refused())?.execution;
+        match execution.root {
+            Some(root) if self.started.lock().contains(&root) => Ok(()),
+            _ => Err(refused()),
+        }
+    }
+
     /// What a client needs to know about an execution right now.
     async fn snapshot(&self, id: ExecutionId, with_result: bool) -> Result<Value, ToolError> {
+        self.may_follow(id).await?;
         let engine = &self.app.engine;
         let detail = engine.detail(&self.tenant, id).await.map_err(|e| failed(e.to_string()))?;
         let execution = &detail.execution;
@@ -298,6 +331,7 @@ impl RunShared {
     /// Start a created execution and wait for it for a while; if the client gives up, so does the run.
     async fn start_and_wait(&self, ctx: &ToolContext, id: ExecutionId, wait: u64) -> Result<Value, ToolError> {
         let engine = &self.app.engine;
+        self.started.lock().insert(id);
         engine.start(&self.tenant, id).await.map_err(|e| failed(e.to_string()))?;
         let settled = tokio::select! {
             _ = ctx.cancel.cancelled() => None,
