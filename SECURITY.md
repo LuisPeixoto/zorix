@@ -89,6 +89,9 @@ These notes grow with each feature that handles data, files, network or permissi
   files, no sockets; workspace files are visible only if granted and then read-only. The Python runtime is downloaded on request
   and checked against a fixed SHA-256. See [docs/sandbox.md](docs/sandbox.md).
 - **`zorix mcp serve` is read-only by default** and holds no lock; with `--allow-runs` approvals still need a person in ZORIX, and a client follows and stops only the runs that server started (`--allow-read-runs` lets it follow, never stop, the others). `--allow-approvals` lets a client pass your answer on: each one is first asked of you through the client, with the exact call, and a client that cannot ask is refused. ZORIX cannot see whether the client really asks, so give the flag only to one you trust ([ADR-0052](docs/adr/0052-runs-and-approvals-over-mcp.md)).
+- **Git is run deaf to the repository** ([ADR-0054](docs/adr/0054-git-tool.md)): hooks and drivers off, a repository whose
+  configuration could run a program refused, only the repository kept in the workspace, files filtered by the run's grants, and a
+  push of one approved commit, never forced, that a person must approve.
 - **Data leaves the computer when a cloud provider is used.** The conversation, including tool results, is sent to that
   provider. `--local-only` (or `local_only = true` in `providers.toml`) restricts routing to servers on loopback addresses.
   Choosing a provider is a decision about where data goes; read the provider's terms.

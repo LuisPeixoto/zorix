@@ -32,6 +32,7 @@ Starts an activity and follows it until it finishes, needs you, or you press Ctr
 | `--allow 'mcp.<server>.*'` | Let the run use the tools of an MCP server (each tool still asks first; see [MCP](mcp.md)) |
 | `--allow-http HOST`, `--allow-repo REPO[:write]`, `--allow-jira KEY[:write]`, `--allow-chat CHANNEL[:write]`, `--allow-db NAME[:write]`, `--allow-code LANGUAGE` | What the run may reach beyond its own tools: each gives the permission on the resource **and** the right to use the tools that reach it ([integrations](integrations.md)). Writes always ask |
 | `--workspace <DIR>` | The folder file tools are confined to |
+| `--allow-git BRANCH[:write]`, `--allow-git-push REMOTE/BRANCH` | The [git tools](tools.md#git) on the workspace's repository. Every push asks |
 | `--allow-read <PATTERN>`, `--allow-write <PATTERN>` | Paths file tools may read or write, relative to the workspace (`*`, `docs/*`) |
 | `--approve ask\|never\|yes\|no` | What to do when a call needs approval. `ask` prompts on the terminal; `never` leaves it waiting and exits; `yes` and `no` answer automatically (for demos and tests). Default: `ask` on a terminal, `never` otherwise. Only `ask` can answer what an MCP server asks while its tool runs ([MCP](mcp.md#what-a-server-may-ask-while-its-tool-runs)) |
 | `--max-iterations N` (1–1000), `--max-tool-calls N`, `--max-seconds N` | Limits |
