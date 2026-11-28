@@ -490,6 +490,7 @@ impl StdioTransport {
                             let line = match responder.respond(&method, params).await {
                                 Ok(result) => wire::result_line(&id, &result),
                                 Err((code, message)) => {
+                                    shared.log.lock().push(format!("[ZORIX refused the server's {method}: {message}]"));
                                     let _ = shared.events.send(ServerEvent::Refused { method });
                                     wire::error_line(&id, code, &message)
                                 }
@@ -498,6 +499,10 @@ impl StdioTransport {
                         });
                     }
                     None => {
+                        shared
+                            .log
+                            .lock()
+                            .push(format!("[ZORIX refused the server's {method}: it does not answer that]"));
                         let _ = shared.events.send(ServerEvent::Refused { method: method.clone() });
                         let line =
                             wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.");

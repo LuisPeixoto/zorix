@@ -90,6 +90,8 @@ async fn a_server_that_asks_for_models_input_or_folders_is_refused_and_the_call_
     }
     methods.sort();
     assert_eq!(methods, ["elicitation/create", "roots/list", "sampling/createMessage"], "each refusal is reported");
+    let log = client.log().join("\n");
+    assert!(log.contains("refused the server's sampling/createMessage"), "and written in the server's log: {log}");
 }
 
 #[tokio::test]

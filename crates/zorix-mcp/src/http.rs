@@ -227,6 +227,7 @@ impl Inner {
                         return None;
                     }
                     None => {
+                        self.note(format!("[ZORIX refused the server's {method}: it does not answer that]"));
                         let _ = self.events.send(ServerEvent::Refused { method: method.clone() });
                         wire::error_line(&id, METHOD_NOT_FOUND, "ZORIX does not answer requests from servers.")
                     }
@@ -438,6 +439,7 @@ impl Transport for HttpTransport {
                     let line = match outcome {
                         Ok(result) => wire::result_line(&id, &result),
                         Err((code, message)) => {
+                            inner.note(format!("[ZORIX refused the server's {method}: {message}]"));
                             let _ = inner.events.send(ServerEvent::Refused { method });
                             wire::error_line(&id, code, &message)
                         }
