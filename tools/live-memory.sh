@@ -82,7 +82,8 @@ watch() {
   mkdir -p "$WORK/watched"
   echo "The platform team deploys on Thursdays." > "$WORK/watched/handbook.md"
   z knowledge add "$WORK/watched" --watch >/dev/null 2>&1
-  z knowledge watch >"$WORK/watch.out" 2>&1 &
+  # The program itself is started in the background (not the shell function that wraps it), so that the trap kills the process and not just a subshell.
+  "$ZORIX" --home "$HOME_DIR" knowledge watch >"$WORK/watch.out" 2>&1 &
   PIDS+=("$!"); disown "$!"
   sleep 4
   echo "The zebracorn migration happens on Friday." > "$WORK/watched/second.md"
