@@ -54,7 +54,7 @@ recompute it and reject old messages; a person approves every send.
 **GitHub and GitLab.** Reads work without a token on public data; writes (create or update an issue, comment) need a token
 in a connection, a `:write` grant, and your approval, which shows the target and the text. Pagination is bounded per call.
 
-**Jira.** Search runs JQL that is **always ANDed with the project you granted**, so a query cannot escape it. Writes ask.
+**Jira.** Search runs JQL that is **always ANDed with the project you granted**, so a query cannot escape it: a query whose parentheses or quotes do not close is refused (it is never repaired), and after `ORDER BY` only field names are accepted. Writes ask.
 
 **Slack and Discord.** Reading needs a read grant on the channel; sending needs a write grant and always asks. Slack refuses
 `@channel`, `@here` and `@everyone`; Discord messages are sent with `allowed_mentions` empty, so nothing is pinged.

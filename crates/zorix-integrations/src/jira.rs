@@ -184,13 +184,22 @@ pub fn adf_text(node: &Value) -> String {
 
 /// The JQL that limits `user` to `project`. A trailing `ORDER BY` stays at the end; the project is ANDed with everything else, so
 /// nothing in the user's part (an `OR`, another `project =`) can reach outside it.
-pub fn scoped_jql(project: &str, user: &str) -> String {
+///
+/// The user's part is wrapped in parentheses, so it must not be able to close them: a `)` with no `(` before it would end the wrap
+/// and let an `OR project = OTHER` stand beside the project. Parentheses and quotes are counted outside quoted text, and a part
+/// that does not balance is refused, not repaired.
+pub fn scoped_jql(project: &str, user: &str) -> Result<String, String> {
     let user = user.trim();
-    let lower = user.to_ascii_lowercase();
-    let (condition, order) = match lower.rfind("order by") {
+    let (condition, order) = match order_by_at(user)? {
         Some(at) => (user[..at].trim(), Some(user[at..].trim())),
         None => (user, None),
     };
+    if let Some(order) = order {
+        // A sort clause names fields; nothing in it needs a group or a quote, and nothing there may start a new condition.
+        if order.contains(['(', ')', '"', '\'', '=', '!', '~']) {
+            return Err("The sort part of that search (after ORDER BY) may only name fields.".into());
+        }
+    }
     let mut jql = format!("project = \"{project}\"");
     if !condition.is_empty() {
         jql.push_str(&format!(" AND ({condition})"));
@@ -199,7 +208,60 @@ pub fn scoped_jql(project: &str, user: &str) -> String {
         jql.push(' ');
         jql.push_str(order);
     }
-    jql
+    Ok(jql)
+}
+
+/// Where a top-level `ORDER BY` starts in `jql`, or an error when the parentheses or the quotes do not balance. Text inside quotes is
+/// skipped (a `\"` inside it does not end it), and only a keyword outside every group counts.
+fn order_by_at(jql: &str) -> Result<Option<usize>, String> {
+    let unbalanced = || "That search has parentheses or quotes that do not close. Fix them and try again.".to_string();
+    let bytes = jql.as_bytes();
+    let mut depth = 0usize;
+    let mut quote: Option<u8> = None;
+    let mut order = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match quote {
+            Some(q) => {
+                if b == b'\\' {
+                    i += 1;
+                } else if b == q {
+                    quote = None;
+                }
+            }
+            None => match b {
+                b'"' | b'\'' => quote = Some(b),
+                b'(' => depth += 1,
+                b')' => depth = depth.checked_sub(1).ok_or_else(unbalanced)?,
+                b'o' | b'O' if depth == 0 && order.is_none() => {
+                    let boundary_before = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+                    let rest = &jql[i..];
+                    if boundary_before
+                        && rest.len() >= 8
+                        && rest.is_char_boundary(8)
+                        && rest[..8].eq_ignore_ascii_case("order by")
+                    {
+                        order = Some(i);
+                    }
+                }
+                _ => {}
+            },
+        }
+        i += 1;
+    }
+    if depth != 0 || quote.is_some() {
+        return Err(unbalanced());
+    }
+    Ok(order)
+}
+
+/// A Jira project key: a letter, then letters, digits or underscores. It goes into a JQL string and into a path, so nothing else is let through.
+fn is_project_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        && key.len() <= 50
+        && chars.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn project_of_key(key: &str) -> Option<String> {
@@ -282,12 +344,15 @@ impl JiraTool {
             None => project_of_key(text("key").ok_or_else(|| failed("key is missing."))?)
                 .ok_or_else(|| failed("That is not an issue key (such as ABC-123)."))?,
         };
+        if !is_project_key(&project) {
+            return Err(failed("That is not a project key (such as ABC)."));
+        }
         self.need(ctx, action, &project)?;
         let api = self.api(ctx, args, self.op.writes()).await?;
         match self.op {
             Op::Search => {
                 let mut body = json!({
-                    "jql": scoped_jql(&project, text("jql").unwrap_or("")),
+                    "jql": scoped_jql(&project, text("jql").unwrap_or("")).map_err(failed)?,
                     "maxResults": args.get("max_results").and_then(Value::as_u64).unwrap_or(20).clamp(1, 50),
                     "fields": FIELDS,
                 });
@@ -441,17 +506,57 @@ impl Tool for JiraTool {
 mod tests {
     use super::*;
 
+    fn scoped(user: &str) -> String {
+        scoped_jql("ABC", user).unwrap()
+    }
+
     #[test]
     fn a_search_is_always_inside_its_project_whatever_the_user_part_says() {
-        assert_eq!(scoped_jql("ABC", ""), "project = \"ABC\"");
-        assert_eq!(scoped_jql("ABC", "status = Open"), "project = \"ABC\" AND (status = Open)");
+        assert_eq!(scoped(""), "project = \"ABC\"");
+        assert_eq!(scoped("status = Open"), "project = \"ABC\" AND (status = Open)");
         assert_eq!(
-            scoped_jql("ABC", "status = Open ORDER BY updated DESC"),
+            scoped("status = Open ORDER BY updated DESC"),
             "project = \"ABC\" AND (status = Open) ORDER BY updated DESC"
         );
-        assert_eq!(scoped_jql("ABC", "order by created"), "project = \"ABC\" order by created");
+        assert_eq!(scoped("order by created"), "project = \"ABC\" order by created");
         // An OR or another project inside cannot leave the outer condition.
-        assert_eq!(scoped_jql("ABC", "x = 1 OR project = OTHER"), "project = \"ABC\" AND (x = 1 OR project = OTHER)");
+        assert_eq!(scoped("x = 1 OR project = OTHER"), "project = \"ABC\" AND (x = 1 OR project = OTHER)");
+        // Groups of the person's own are fine when they close.
+        assert_eq!(scoped("(a = 1 OR b = 2) AND c = 3"), "project = \"ABC\" AND ((a = 1 OR b = 2) AND c = 3)");
+        // Parentheses and keywords inside quoted text are text.
+        assert_eq!(scoped("summary ~ \"a) b ORDER BY (\""), "project = \"ABC\" AND (summary ~ \"a) b ORDER BY (\")");
+        assert_eq!(scoped("summary ~ 'it\\'s )'"), "project = \"ABC\" AND (summary ~ 'it\\'s )')");
+        // A word that only contains the letters is not the keyword.
+        assert_eq!(scoped("reorder by = 1"), "project = \"ABC\" AND (reorder by = 1)");
+    }
+
+    #[test]
+    fn a_search_that_closes_the_group_early_is_refused_not_repaired() {
+        // The case that widened a search to other projects: the `)` ends the wrap and the `OR` stands beside the project.
+        for hostile in [
+            "x = 1) OR project = OTHER OR (x = 1",
+            "x = 1) OR project = OTHER OR (",
+            ") OR project = OTHER OR (",
+            "x = 1)) OR (project = OTHER",
+            "(x = 1",
+            "x = \"open",
+            "x = 'open",
+            "x = 1 ORDER BY a) OR (project = OTHER",
+            "x = 1 ORDER BY a, (project = OTHER)",
+            "x = 1 ORDER BY project = OTHER",
+        ] {
+            assert!(scoped_jql("ABC", hostile).is_err(), "{hostile} should be refused");
+        }
+    }
+
+    #[test]
+    fn only_a_project_key_goes_into_a_search() {
+        for good in ["ABC", "A", "A_B", "AB12", "OPS_2"] {
+            assert!(is_project_key(good), "{good}");
+        }
+        for bad in ["", "abc", "1AB", "A-B", "A B", "ABC\" OR project = \"Z", "ABC)", "../x", "A\u{b2}"] {
+            assert!(!is_project_key(bad), "{bad}");
+        }
     }
 
     #[test]
